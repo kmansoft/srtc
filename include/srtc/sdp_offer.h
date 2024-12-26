@@ -13,6 +13,7 @@
 namespace srtc {
 
 struct OfferConfig {
+    std::string cname;
 };
 
 struct VideoLayer {
@@ -27,7 +28,6 @@ struct VideoLayer {
 };
 
 struct VideoConfig {
-    std::string cname;
     std::vector<VideoLayer> layerList;
 };
 
