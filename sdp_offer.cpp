@@ -5,10 +5,12 @@
 
 namespace {
 
-const char* to_string(srtc::VideoCodec codec) {
+const char* to_string(srtc::Codec codec) {
     switch (codec) {
-        case srtc::VideoCodec::H264:
+        case srtc::Codec::H264:
             return "H264";
+        case srtc::Codec::Opus:
+            return "opus";
         default:
             assert(false);
             return "-";
@@ -63,16 +65,14 @@ Error SdpOffer::generate(std::string& outSdpOffer)
     ss << "a=sendonly" << std::endl;
     ss << "a=rtcp-mux" << std::endl;
     ss << "a=rtcp-rsize" << std::endl;
-    if (layer.codec == VideoCodec::H264) {
+    ss << "a=rtpmap:" << layerId << " " << to_string(layer.codec) << "/90000" << std::endl;
+    if (layer.codec == Codec::H264) {
         char buf[128];
         std::snprintf(buf, sizeof(buf), "%02x%04x", layer.profileId, layer.level);
 
-        ss << "a=rtpmap:" << layerId << " " << to_string(layer.codec) << "/90000" << std::endl;
         ss << "a=fmtp:" << layerId
            << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="
            << buf << std::endl;
-    } else {
-        ss << "a=rtpmap:" << layerId << " " << to_string(layer.codec) << "/90000" << std::endl;
     }
     ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
     ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;

@@ -4,14 +4,10 @@
 
 namespace srtc {
 
-enum class VideoCodec {
+enum class Codec {
     Unknown = 0,
-    H264 = 1
-};
-
-enum class AudioCodec {
-    Unknown = 0,
-    Opus = 1
+    H264 = 1,
+    Opus = 100
 };
 
 struct Host {
@@ -22,5 +18,7 @@ struct Host {
     } host;
     int port;
 };
+
+#define SRTC_GUARDED_BY(mutex) __attribute__((guarded_by(mutex)))
 
 }

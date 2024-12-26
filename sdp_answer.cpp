@@ -6,6 +6,7 @@
 
 #include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
+#include "srtc/track.h"
 
 namespace {
 
@@ -101,11 +102,13 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     ExtensionMap extensionMap;
     std::vector<Host> hostList;
 
-    int videoTrack = -1, videoPayloadType = -1;
-    int audioTrack = -1, audioPayloadType = -1;
+    int videoTrackId = -1, videoPayloadType = -1;
+    int audioTrackId = -1, audioPayloadType = -1;
 
-    auto videoCodec = srtc::VideoCodec::Unknown;
+    auto videoCodec = srtc::Codec::Unknown;
     int videoProfileId = -1, videoLevel = -1;
+
+    auto audioCodec = srtc::Codec::Unknown;
 
     while (!ss.eof()) {
         std::string line;
@@ -145,7 +148,17 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                             if (posSlash != std::string::npos) {
                                 const auto codec = props[0].substr(0, posSlash);
                                 if (codec == "H264") {
-                                    videoCodec = srtc::VideoCodec::H264;
+                                    videoCodec = srtc::Codec::H264;
+                                }
+                            }
+                        }
+                    } else if (parse_int(value) == audioPayloadType) {
+                        if (props.size() == 1) {
+                            const auto posSlash = props[0].find('/');
+                            if (posSlash != std::string::npos) {
+                                const auto codec = props[0].substr(0, posSlash);
+                                if (codec == "opus") {
+                                    audioCodec = srtc::Codec::Opus;
                                 }
                             }
                         }
@@ -195,12 +208,12 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                 // "m=video 0 UDP/TLS/RTP/SAVPF 100"
                 if (key == "video") {
                     if (props.size() >= 3) {
-                        videoTrack = parse_int(props[0]);
+                        videoTrackId = parse_int(props[0]);
                         videoPayloadType = parse_int(props[2]);
                     }
                 } else if (key == "audio") {
                     if (props.size() >= 3) {
-                        audioTrack = parse_int(props[0]);
+                        audioTrackId = parse_int(props[0]);
                         audioPayloadType = parse_int(props[2]);
                     }
                 }
@@ -214,14 +227,71 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     if (hostList.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }
-    if (videoTrack < 0) {
+    if (videoTrackId < 0) {
         return { Error::Code::InvalidData, "No video track" };
     }
-    if (videoCodec == VideoCodec::Unknown) {
+    if (videoCodec == Codec::Unknown) {
         return { Error::Code::InvalidData, "No video codec" };
     }
 
+    const auto videoTrack =
+            std::make_shared<Track>(videoTrackId, videoPayloadType, videoCodec,
+                                                    videoProfileId, videoLevel);
+    const auto audioTrack = audioTrackId >= 0 ?
+                            std::make_shared<Track>(audioTrackId, audioPayloadType, audioCodec) : nullptr;
+
+    outAnswer = std::make_shared<SdpAnswer>(iceUFrag, icePassword, extensionMap,
+                                            hostList,
+                                            videoTrack, audioTrack);
+
     return Error::OK;
+}
+
+SdpAnswer::SdpAnswer(const std::string& iceUFrag,
+                     const std::string& icePassword,
+                     const ExtensionMap& extensionMap,
+                     const std::vector<Host>& hostList,
+                     const std::shared_ptr<Track>& videoTrack,
+                     const std::shared_ptr<Track>& audioTrack)
+     : mIceUFrag(iceUFrag)
+     , mIcePassword(icePassword)
+     , mExtensionMap(extensionMap)
+     , mHostList(hostList)
+     , mVideoTrack(videoTrack)
+     , mAudioTrack(audioTrack)
+{
+}
+
+SdpAnswer::~SdpAnswer() = default;
+
+std::string SdpAnswer::getIceUFrag() const
+{
+    return mIceUFrag;
+}
+
+std::string SdpAnswer::getIcePassword() const
+{
+    return mIcePassword;
+}
+
+ExtensionMap SdpAnswer::getExtensionMap() const
+{
+    return mExtensionMap;
+}
+
+std::vector<Host> SdpAnswer::getHostList() const
+{
+    return mHostList;
+}
+
+std::shared_ptr<Track> SdpAnswer::getVideoTrack() const
+{
+    return mVideoTrack;
+}
+
+std::shared_ptr<Track> SdpAnswer::getAudioTrack() const
+{
+    return mAudioTrack;
 }
 
 }

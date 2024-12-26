@@ -17,7 +17,7 @@ struct OfferConfig {
 };
 
 struct VideoLayer {
-    VideoCodec codec;
+    Codec codec;
     uint32_t profileId;
     uint32_t level;
     // Below are for simulcast only
@@ -32,7 +32,7 @@ struct VideoConfig {
 };
 
 struct AudioConfig {
-    AudioCodec codec;
+    Codec codec;
 };
 
 class SdpOffer {

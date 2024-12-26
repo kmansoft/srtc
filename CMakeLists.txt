@@ -13,6 +13,7 @@ add_library(srtc STATIC
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
         include/srtc/srtc.h
+        include/srtc/track.h
         error.cpp
         extension_map.cpp
         peer_connection.cpp
@@ -20,6 +21,12 @@ add_library(srtc STATIC
         sdp_answer.cpp
         sdp_offer.cpp
         srtc.cpp
+        track.cpp
 )
 
 target_include_directories(srtc PUBLIC "./include")
+
+target_compile_options(srtc PRIVATE
+        "-Wthread-safety")
+target_compile_definitions(srtc PRIVATE
+        "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
