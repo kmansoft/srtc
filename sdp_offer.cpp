@@ -1,4 +1,5 @@
 #include <sstream>
+#include <cassert>
 
 #include "srtc/sdp_offer.h"
 
@@ -8,6 +9,9 @@ const char* to_string(srtc::VideoCodec codec) {
     switch (codec) {
         case srtc::VideoCodec::H264:
             return "H264";
+        default:
+            assert(false);
+            return "-";
     }
 }
 
@@ -71,7 +75,7 @@ Error SdpOffer::generate(std::string& outSdpOffer)
         ss << "a=rtpmap:" << layerId << " " << to_string(layer.codec) << "/90000" << std::endl;
     }
     ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
-    ss << "a=ssrc:" << mVideoSSRC << " msid:-" << mVideoMSID << std::endl;
+    ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
 
     outSdpOffer = ss.str();
 

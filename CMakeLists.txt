@@ -7,13 +7,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 add_library(srtc STATIC
         include/srtc/error.h
+        include/srtc/extension_map.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/sdp_offer.h
+        include/srtc/sdp_answer.h
         include/srtc/srtc.h
         error.cpp
+        extension_map.cpp
         peer_connection.cpp
         random_generator.cpp
+        sdp_answer.cpp
         sdp_offer.cpp
         srtc.cpp
 )
