@@ -1,10 +1,12 @@
 #pragma once
 
 #include "srtc/srtc.h"
+#include "srtc/byte_buffer.h"
 
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <queue>
 
 namespace srtc {
 
@@ -45,9 +47,12 @@ private:
 
     State mState SRTC_GUARDED_BY(mMutex) = { State::Inactive };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
+    Host mDestHost = { };
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
     int mSocketHandle SRTC_GUARDED_BY(mMutex) = { -1 };
+
+    std::queue<std::shared_ptr<ByteBuffer>> mSendQueue;
 };
 
 }

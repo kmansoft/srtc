@@ -1,6 +1,7 @@
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/track.h"
+#include "srtc/byte_buffer.h"
 
 #include <cassert>
 #include <iostream>
@@ -70,6 +71,8 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mAudioTrack = answer->getAudioTrack();
 
     if (mSdpOffer && mSdpAnswer) {
+        mDestHost = answer->getHostList()[0];
+
         mEventHandle = eventfd(0, EFD_NONBLOCK);
 
         mSocketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -121,10 +124,29 @@ void PeerConnection::networkThreadWorkerFunc()
         struct epoll_event epollEvent[2];
         const auto nfds = epoll_wait(epollHandle, epollEvent, 2, -1);
 
+        uint8_t recv_buf[2048];
+        size_t recv_n = 0;
+
+
         {
             std::lock_guard lock(mMutex);
             if (mState == State::Deactivating) {
                 break;
+            }
+
+            while (!mSendQueue.empty()) {
+                const auto buf = mSendQueue.front();
+                mSendQueue.pop();
+
+                struct sockaddr_in destAddr = {
+                        .sin_family = AF_INET,
+                        .sin_port = htons(mDestHost.port),
+                        .sin_addr = mDestHost.host.ipv4
+                };
+
+                sendto(mSocketHandle, buf->data(), buf->len(),
+                       0,
+                        (struct sockaddr *) &destAddr, sizeof(destAddr));
             }
 
             for (int i = 0; i < nfds; i += 1) {
@@ -134,17 +156,21 @@ void PeerConnection::networkThreadWorkerFunc()
                     eventfd_read(mEventHandle, &value);
                 } else if (epollEvent[i].data.fd == mSocketHandle) {
                     // Read from socket
-                    uint8_t buf[2048];
-
-                    struct iovec iov = { .iov_base  = buf, .iov_len = sizeof(buf) };
+                    struct iovec iov = { .iov_base  = recv_buf, .iov_len = sizeof(recv_buf) };
                     struct msghdr mh = { .msg_iov = &iov, .msg_iovlen = 1 };
 
                     const auto r = recvmsg(mSocketHandle, &mh, 0);
                     if (r > 0) {
                         std::cout << "Received " << r << " bytes" << std::endl;
+
+                        recv_n = r;
                     }
                 }
             }
+        }
+
+        if (recv_n > 0) {
+            ByteBuffer buf = { recv_buf, recv_n };
         }
     }
 

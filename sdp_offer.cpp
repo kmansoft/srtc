@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include "srtc/sdp_offer.h"
+#include "srtc/x509_certificate.h"
 
 namespace {
 
@@ -24,10 +25,10 @@ namespace srtc {
 SdpOffer::SdpOffer(const OfferConfig& config,
                    const srtc::VideoConfig& videoConfig,
                    const std::optional<AudioConfig>& audioConfig)
-   : mConfig(config)
+   : mRandomGenerator(0, 0x7fffffff)
+   , mConfig(config)
    , mVideoConfig(videoConfig)
    , mAudioConfig(audioConfig)
-   , mRandomGenerator(0, 0x7fffffff)
    , mOriginId((static_cast<int64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
    , mVideoSSRC(mRandomGenerator.next())
    , mAudioSSRC(mRandomGenerator.next())
@@ -35,6 +36,7 @@ SdpOffer::SdpOffer(const OfferConfig& config,
    , mAudioMSID(generateRandomUUID())
    , mIceUfrag(generateRandomString(8))
    , mIcePassword(generateRandomString(24))
+   , mCert(std::make_shared<X509Certificate>())
 {
 }
 
@@ -48,8 +50,7 @@ Error SdpOffer::generate(std::string& outSdpOffer)
     ss << "t=0 0" << std::endl;
     ss << "a=extmap-allow-mixed" << std::endl;
     ss << "a=msid-semantic: WMS" << std::endl;
-    // TODO generate for real
-    ss << "a=fingerprint:sha-256 3D:CA:CB:5C:57:0C:2E:B3:E1:ED:E1:31:45:15:DF:67:EF:26:E7:4A:3D:25:7C:C7:2F:0C:27:ED:06:EB:98:30" << std::endl;
+    ss << "a=fingerprint:sha-256 " << mCert->getSha256Fingerprint() << std::endl;
     ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
     ss << "a=ice-pwd:" << mIcePassword << std::endl;
 

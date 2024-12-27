@@ -207,6 +207,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                 }
             } else if (tag == "m") {
                 // "m=video 0 UDP/TLS/RTP/SAVPF 100"
+                if (props.size() < 2 || props[1] != "UDP/TLS/RTP/SAVPF") {
+                    return Error { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" };
+                }
+
                 if (key == "video") {
                     if (props.size() >= 3) {
                         videoTrackId = parse_int(props[0]);

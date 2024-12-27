@@ -12,6 +12,8 @@
 
 namespace srtc {
 
+class X509Certificate;
+
 struct OfferConfig {
     std::string cname;
 };
@@ -48,11 +50,11 @@ private:
     std::string generateRandomUUID();
     std::string generateRandomString(size_t len);
 
+    RandomGenerator<int32_t> mRandomGenerator;
+
     const OfferConfig mConfig;
     const VideoConfig mVideoConfig;
     const std::optional<AudioConfig> mAudioConfig;
-
-    RandomGenerator<int32_t> mRandomGenerator;
 
     const int64_t mOriginId;
 
@@ -64,6 +66,8 @@ private:
 
     const std::string mIceUfrag;
     const std::string mIcePassword;
+
+    const std::shared_ptr<X509Certificate> mCert;
 };
 
 }
