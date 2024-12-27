@@ -192,9 +192,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                                         host.family = AF_INET;
                                     }
                                 } else if (addrStr.find(':') != std::string::npos) {
-                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.host.ipv6) > 0) {
-                                        host.family = AF_INET6;
-                                    }
+                                    // TODO - add support for IPv6
+//                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.host.ipv6) > 0) {
+//                                        host.family = AF_INET6;
+//                                    }
                                 }
 
                                 if (host.family != AF_UNSPEC) {

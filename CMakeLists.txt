@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.22.1)
 
+include(ExternalProject)
+include(FetchContent)
+
 project("srtc")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
-add_library(srtc STATIC
+add_library(srtc SHARED
         include/srtc/error.h
         include/srtc/extension_map.h
         include/srtc/peer_connection.h
@@ -30,3 +33,24 @@ target_compile_options(srtc PRIVATE
         "-Wthread-safety")
 target_compile_definitions(srtc PRIVATE
         "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
+
+target_include_directories(srtc PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/include")
+
+target_link_libraries(
+        srtc
+        ssl crypto
+)
+
+target_link_directories(srtc PUBLIC
+        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/lib")
+
+ExternalProject_Add(
+        boringssl
+        GIT_REPOSITORY "https://github.com/google/boringssl.git"
+        GIT_TAG "origin/master"
+        SOURCE_DIR "external/boringssl"
+        CMAKE_ARGS -DOPENSSL_SMALL=TRUE -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DANDROID_ABI=${ANDROID_ABI} ANDROID_PLATFORM=android-29
+)
+
+add_dependencies(srtc boringssl)

@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <mutex>
+#include <thread>
 
 namespace srtc {
 
@@ -13,8 +14,8 @@ class Track;
 
 class PeerConnection {
 public:
-    PeerConnection() = default;
-    ~PeerConnection() = default;
+    PeerConnection();
+    ~PeerConnection();
 
     void setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
     void setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
@@ -33,6 +34,20 @@ private:
 
     std::shared_ptr<Track> mVideoTrack SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
+
+    void networkThreadWorkerFunc();
+
+    enum class State {
+        Inactive,
+        Active,
+        Deactivating
+    };
+
+    State mState SRTC_GUARDED_BY(mMutex) = { State::Inactive };
+    std::thread mThread SRTC_GUARDED_BY(mMutex);
+
+    int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
+    int mSocketHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 };
 
 }
