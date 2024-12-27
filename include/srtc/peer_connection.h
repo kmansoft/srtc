@@ -38,6 +38,7 @@ private:
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
 
     void networkThreadWorkerFunc();
+    void networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer, const Host host);
 
     enum class State {
         Inactive,

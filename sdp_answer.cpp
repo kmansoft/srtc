@@ -184,7 +184,7 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                     if (props.size() == 7) {
                         if (props[0] == "1" && props[1] == "udp" && props[5] == "typ" && props[6] == "host") {
                             if (const auto port = parse_int(props[4]); port > 0 && port < 63536) {
-                                Host host { .family = AF_UNSPEC };
+                                Host host { .family = AF_UNSPEC, .port = port };
 
                                 const auto& addrStr = props[3];
                                 if (addrStr.find('.') != std::string::npos) {

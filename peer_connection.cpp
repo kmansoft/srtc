@@ -1,7 +1,9 @@
 #include "srtc/peer_connection.h"
+#include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/track.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/x509_certificate.h"
 
 #include <cassert>
 #include <iostream>
@@ -11,6 +13,8 @@
 
 #include <openssl/x509.h>
 #include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/dtls1.h>
 
 namespace srtc {
 
@@ -79,7 +83,9 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
         const auto socketFlags = fcntl(mSocketHandle, F_GETFL, 0);
         fcntl(mSocketHandle, F_SETFL, socketFlags | O_NONBLOCK);
 
-        mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this);
+        // mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this);
+
+        mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
     }
 }
 
@@ -176,6 +182,168 @@ void PeerConnection::networkThreadWorkerFunc()
 
     close(epollHandle);
     epollHandle = -1;
+}
+
+// Custom BIO for DGRAM
+
+struct dgram_data {
+    struct sockaddr_in sin;
+};
+
+union anyaddr {
+    struct sockaddr_storage ss;
+    struct sockaddr_in sin_ipv4;
+    struct sockaddr_in6 sin_ipv6;
+};
+
+static bool bio_socket_should_retry(ssize_t ret) {
+    if (ret != -1) {
+        return false;
+    }
+
+    return errno == EWOULDBLOCK ||
+        errno == EINTR;
+}
+
+static int dgram_read(BIO *b, char *out, int outl)
+{
+    if (out == nullptr) {
+        return 0;
+    }
+
+    union anyaddr from = { };
+    socklen_t fromLen = sizeof(from);
+
+    const auto ret = recvfrom(b->num, out, outl,
+                       0,
+                       reinterpret_cast<struct sockaddr*>(&from), &fromLen);
+
+    BIO_clear_retry_flags(b);
+    if (ret <= 0) {
+        if (bio_socket_should_retry(ret)) {
+            BIO_set_retry_read(b);
+        }
+    }
+    return static_cast<int>(ret);
+}
+
+static int dgram_write(BIO *b, const char *in, int inl) {
+    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+
+    const auto ret = sendto(b->num, in, inl, 0,
+                            reinterpret_cast<const struct sockaddr*>(&data->sin), sizeof(data->sin));
+
+    BIO_clear_retry_flags(b);
+    if (ret <= 0) {
+        if (bio_socket_should_retry(ret)) {
+            BIO_set_retry_write(b);
+        }
+    }
+    return static_cast<int>(ret);
+}
+
+#define BIO_C_SET_ADDR 1000
+
+static long dgram_ctrl(BIO *b, int cmd, long num, void *ptr)
+{
+    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+
+    switch (cmd) {
+        case BIO_C_SET_FD:
+            if (b->num && b->shutdown) {
+                close(b->num);
+            }
+            b->num = *((int *)ptr);
+            b->shutdown = (int)num;
+            b->init = 1;
+            break;
+        case BIO_C_SET_ADDR:
+            std::memcpy(&data->sin, ptr, num);
+            break;
+        default:
+            break;
+    }
+
+    return 1;
+}
+
+static int dgram_free(BIO *bio)
+{
+    if (bio->shutdown) {
+        if (bio->init) {
+            close(bio->num);
+        }
+        bio->init = 0;
+        bio->flags = 0;
+    }
+    auto data = reinterpret_cast<dgram_data*>(bio->ptr);
+    delete data;
+    return 1;
+}
+
+static const BIO_METHOD methods_dgram = {
+        BIO_TYPE_DGRAM, "dgram",
+        dgram_write,      dgram_read,
+        nullptr /* puts */, nullptr /* gets, */,
+        dgram_ctrl,       nullptr /* create */,
+        dgram_free,       nullptr /* callback_ctrl */,
+};
+
+BIO *BIO_new_dgram(int fd, int close_flag) {
+    BIO *ret;
+
+    ret = BIO_new(&methods_dgram);
+    if (ret == nullptr) {
+        return nullptr;
+    }
+    BIO_set_fd(ret, fd, close_flag);
+
+    ret->ptr = new dgram_data{};
+
+    return ret;
+}
+
+static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
+    return 1;
+}
+
+void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer,
+                                               const Host host)
+{
+    const auto cert = offer->getCertificate();
+    const auto ctx = SSL_CTX_new(DTLS_client_method());
+
+    SSL_CTX_use_certificate(ctx, cert->getCertificate());
+    SSL_CTX_use_PrivateKey(ctx, cert->getPrivateKey());
+
+    if (!SSL_CTX_check_private_key (ctx)) {
+        printf("ERROR: invalid private key");
+        return;
+    }
+
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
+//    SSL_CTX_set_read_ahead(ctx, 1);
+
+    const auto fd = socket(AF_INET, SOCK_DGRAM, 0);
+    const auto ssl = SSL_new(ctx);
+    const auto bio = BIO_new_dgram(fd, 0);
+
+    SSL_set_bio(ssl, bio, bio);
+
+    const struct sockaddr_in sin {
+        .sin_family = AF_INET,
+        .sin_port = htons(3478),
+        .sin_addr = host.host.ipv4
+    };
+
+    BIO_ctrl(bio, BIO_C_SET_ADDR, sizeof(sin), (void*) &sin);
+
+    auto r = SSL_connect(ssl);
+
+    close(fd);
+    BIO_free(bio);
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
 }
 
 }

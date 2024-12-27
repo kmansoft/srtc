@@ -94,6 +94,11 @@ X509Certificate::X509Certificate()
 #endif
 }
 
+struct evp_pkey_st* X509Certificate::getPrivateKey() const
+{
+    return mImpl->pkey;
+}
+
 struct x509_st* X509Certificate::getCertificate() const
 {
     return mImpl->x509;

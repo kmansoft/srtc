@@ -45,6 +45,7 @@ public:
     ~SdpOffer() = default;
 
     Error generate(std::string& outSdpOffer);
+    std::shared_ptr<X509Certificate> getCertificate() const;
 
 private:
     std::string generateRandomUUID();
