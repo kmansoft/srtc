@@ -10,11 +10,17 @@
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 #include <openssl/x509.h>
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/dtls1.h>
+
+#include "stunagent.h"
+#include "stunmessage.h"
 
 namespace srtc {
 
@@ -83,9 +89,9 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
         const auto socketFlags = fcntl(mSocketHandle, F_GETFL, 0);
         fcntl(mSocketHandle, F_SETFL, socketFlags | O_NONBLOCK);
 
-        // mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this);
+        mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer, mDestHost);
 
-        mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
+        // mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
     }
 }
 
@@ -113,8 +119,65 @@ std::shared_ptr<Track> PeerConnection::getAudioTrack() const
     return mAudioTrack;
 }
 
-void PeerConnection::networkThreadWorkerFunc()
+union anyaddr {
+    struct sockaddr_storage ss;
+    struct sockaddr_in sin_ipv4;
+    struct sockaddr_in6 sin_ipv6;
+};
+
+void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
+                                             const std::shared_ptr<SdpAnswer> answer,
+                                             const Host host)
 {
+    // Dest socket address
+    struct sockaddr_in destAddr = {
+            .sin_family = AF_INET,
+            .sin_port = htons(mDestHost.port),
+            .sin_addr = mDestHost.host.ipv4
+    };
+
+    // Send an ICE BINDING message to socket
+
+    uint8_t iceMessageBuffer[STUN_MAX_MESSAGE_SIZE];
+
+    StunAgent agent = {};
+    stun_agent_init(&agent, STUN_ALL_KNOWN_ATTRIBUTES,
+                    STUN_COMPATIBILITY_RFC5389,
+                    static_cast<StunAgentUsageFlags>(
+                            STUN_AGENT_USAGE_SHORT_TERM_CREDENTIALS |
+                            STUN_AGENT_USAGE_USE_FINGERPRINT
+                    ));
+
+    StunMessage msg = {};
+    stun_agent_init_request (&agent, &msg, iceMessageBuffer, sizeof(iceMessageBuffer), STUN_BINDING);
+
+    const auto iceUserName = answer->getIceUFrag();
+    const auto icePassword = answer->getIcePassword();
+
+    stun_message_append_string(&msg, STUN_ATTRIBUTE_USERNAME,
+                               iceUserName.c_str());
+    const auto iceMessageSize = stun_agent_finish_message (&agent, &msg,
+                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
+
+    if (stun_message_has_attribute(&msg, STUN_ATTRIBUTE_USERNAME)) {
+        printf("Yes USERNAME");
+    }
+    if (stun_message_has_attribute(&msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY)) {
+        printf("Yes INTEGRITY");
+    }
+    if (stun_message_has_attribute(&msg, STUN_ATTRIBUTE_FINGERPRINT)) {
+        printf("Yes FINGERPRINT");
+    }
+
+    {
+        std::lock_guard lock(mMutex);
+
+        mSendQueue.emplace_back(iceMessageBuffer, iceMessageSize);
+        eventfd_write(mEventHandle, 1);
+    }
+
+    // Our socket loop
+
     auto epollHandle = epoll_create(2);
 
     {
@@ -122,7 +185,10 @@ void PeerConnection::networkThreadWorkerFunc()
 
         struct epoll_event ev = { .events = EPOLLIN };
 
+        ev.data.fd = mEventHandle;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
+
+        ev.data.fd = mSocketHandle;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
     }
 
@@ -133,7 +199,6 @@ void PeerConnection::networkThreadWorkerFunc()
         uint8_t recv_buf[2048];
         size_t recv_n = 0;
 
-
         {
             std::lock_guard lock(mMutex);
             if (mState == State::Deactivating) {
@@ -141,18 +206,15 @@ void PeerConnection::networkThreadWorkerFunc()
             }
 
             while (!mSendQueue.empty()) {
-                const auto buf = mSendQueue.front();
-                mSendQueue.pop();
+                const auto buf = std::move(mSendQueue.front());
+                mSendQueue.erase(mSendQueue.begin());
 
-                struct sockaddr_in destAddr = {
-                        .sin_family = AF_INET,
-                        .sin_port = htons(mDestHost.port),
-                        .sin_addr = mDestHost.host.ipv4
-                };
-
-                sendto(mSocketHandle, buf->data(), buf->len(),
+                const auto w = sendto(mSocketHandle, buf.data(), buf.len(),
                        0,
                         (struct sockaddr *) &destAddr, sizeof(destAddr));
+                if (w < 0) {
+                    printf("Failed to send\n");
+                }
             }
 
             for (int i = 0; i < nfds; i += 1) {
@@ -162,10 +224,11 @@ void PeerConnection::networkThreadWorkerFunc()
                     eventfd_read(mEventHandle, &value);
                 } else if (epollEvent[i].data.fd == mSocketHandle) {
                     // Read from socket
-                    struct iovec iov = { .iov_base  = recv_buf, .iov_len = sizeof(recv_buf) };
-                    struct msghdr mh = { .msg_iov = &iov, .msg_iovlen = 1 };
+                    union anyaddr from = { };
+                    socklen_t fromLen = sizeof(from);
 
-                    const auto r = recvmsg(mSocketHandle, &mh, 0);
+                    const auto r = recvfrom(mSocketHandle, recv_buf, sizeof(recv_buf), 0,
+                                            reinterpret_cast<struct sockaddr*>(&from), &fromLen);
                     if (r > 0) {
                         std::cout << "Received " << r << " bytes" << std::endl;
 
@@ -188,12 +251,6 @@ void PeerConnection::networkThreadWorkerFunc()
 
 struct dgram_data {
     struct sockaddr_in sin;
-};
-
-union anyaddr {
-    struct sockaddr_storage ss;
-    struct sockaddr_in sin_ipv4;
-    struct sockaddr_in6 sin_ipv6;
 };
 
 static bool bio_socket_should_retry(ssize_t ret) {
@@ -330,6 +387,8 @@ void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> o
 
     SSL_set_bio(ssl, bio, bio);
 
+    auto r1 = SSL_set_tlsext_use_srtp(ssl, "SRTP_AES128_CM_SHA1_80");
+
     const struct sockaddr_in sin {
         .sin_family = AF_INET,
         .sin_port = htons(3478),
@@ -338,7 +397,7 @@ void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> o
 
     BIO_ctrl(bio, BIO_C_SET_ADDR, sizeof(sin), (void*) &sin);
 
-    auto r = SSL_connect(ssl);
+    auto r2 = SSL_connect(ssl);
 
     close(fd);
     BIO_free(bio);

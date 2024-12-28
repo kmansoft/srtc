@@ -38,19 +38,16 @@ target_compile_options(srtc PRIVATE
 target_compile_definitions(srtc PRIVATE
         "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
 
-target_include_directories(srtc PRIVATE
-        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/include")
-
 target_link_libraries(
         srtc
         PRIVATE
         ssl
         crypto
+        nice
         log
 )
 
-target_link_directories(srtc PUBLIC
-        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/lib")
+# BoringSSL
 
 ExternalProject_Add(
         boringssl
@@ -60,4 +57,23 @@ ExternalProject_Add(
         CMAKE_ARGS -DOPENSSL_SMALL=TRUE -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DANDROID_ABI=${ANDROID_ABI} -DANDROID_PLATFORM=android-29
 )
 
+target_include_directories(srtc PRIVATE
+        "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
+
+target_link_directories(srtc PUBLIC
+        "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/lib")
+
 add_dependencies(srtc boringssl)
+
+# STUN
+
+add_subdirectory(stun)
+
+add_dependencies(nice boringssl)
+add_dependencies(srtc nice)
+
+target_include_directories(srtc PRIVATE
+    "stun")
+
+target_link_directories(srtc PUBLIC
+        "${CMAKE_BINARY_DIR}/srtc/stun")

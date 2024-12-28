@@ -6,7 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <queue>
+#include <list>
 
 namespace srtc {
 
@@ -37,7 +37,9 @@ private:
     std::shared_ptr<Track> mVideoTrack SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
 
-    void networkThreadWorkerFunc();
+    void networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
+                                 const std::shared_ptr<SdpAnswer> answer,
+                                 const Host host);
     void networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer, const Host host);
 
     enum class State {
@@ -53,7 +55,7 @@ private:
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
     int mSocketHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 
-    std::queue<std::shared_ptr<ByteBuffer>> mSendQueue;
+    std::list<ByteBuffer> mSendQueue;
 };
 
 }

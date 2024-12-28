@@ -15,18 +15,19 @@ public:
     ByteBuffer(const ByteBuffer& other) = delete;
     void operator=(const ByteBuffer& other) = delete;
 
+    ByteBuffer(ByteBuffer&& other);
+    void operator=(ByteBuffer&& other);
+
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
 
-    const uint8_t* data() const;
-    size_t len() const;
+    [[nodiscard]] const uint8_t* data() const;
+    [[nodiscard]] size_t len() const;
 
 private:
     uint8_t* mBuf;
     size_t mLen;
     size_t mCap;
-
-    void writeU32(uint32_t value);
 };
 
 class ByteWriter {

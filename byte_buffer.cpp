@@ -28,6 +28,29 @@ ByteBuffer::~ByteBuffer()
     mBuf = nullptr;
 }
 
+ByteBuffer::ByteBuffer(ByteBuffer&& other)
+    : mBuf(other.mBuf)
+    , mLen(other.mLen)
+    , mCap(other.mCap)
+{
+    other.mBuf = nullptr;
+    other.mLen = 0;
+    other.mCap = 0;
+}
+
+void ByteBuffer::operator=(ByteBuffer&& other)
+{
+    delete[] mBuf;
+
+    mBuf = other.mBuf;
+    mLen = other.mLen;
+    mCap = other.mCap;
+
+    other.mBuf = nullptr;
+    other.mLen = 0;
+    other.mCap = 0;
+}
+
 void ByteBuffer::append(const uint8_t* src, size_t size)
 {
     if (mLen + size > mCap) {
