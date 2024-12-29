@@ -47,6 +47,7 @@ public:
     [[nodiscard]] std::pair<std::string, Error> generate();
 
     [[nodiscard]] std::string getIceUFrag() const;
+    [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
 private:

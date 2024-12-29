@@ -87,6 +87,11 @@ std::string SdpOffer::getIceUFrag() const
     return mIceUfrag;
 }
 
+std::string SdpOffer::getIcePassword() const
+{
+    return mIcePassword;
+}
+
 std::shared_ptr<X509Certificate> SdpOffer::getCertificate() const
 {
     return mCert;

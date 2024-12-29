@@ -102,8 +102,9 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
         mEventHandle = eventfd(0, EFD_NONBLOCK);
 
         mSocketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        const auto socketFlags = fcntl(mSocketHandle, F_GETFL, 0);
-        fcntl(mSocketHandle, F_SETFL, socketFlags | O_NONBLOCK);
+        auto socketFlags = fcntl(mSocketHandle, F_GETFL, 0);
+        socketFlags |= O_NONBLOCK;
+        fcntl(mSocketHandle, F_SETFL, socketFlags);
 
         mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer, mDestHost);
 
@@ -165,10 +166,15 @@ StunMessage make_stun_message_binding_request(StunAgent* agent,
                                               uint8_t* buf,
                                               size_t len,
                                               const std::shared_ptr<SdpOffer>& offer,
-                                              const std::shared_ptr<SdpAnswer>& answer)
+                                              const std::shared_ptr<SdpAnswer>& answer,
+                                              bool useCandidate)
 {
     StunMessage msg = {};
     stun_agent_init_request (agent, &msg, buf, len, STUN_BINDING);
+
+    if (useCandidate) {
+        stun_message_append_flag(&msg, STUN_ATTRIBUTE_USE_CANDIDATE);
+    }
 
     const uint32_t priority = make_stun_priority(200, 10, 1);
     stun_message_append32 (&msg, STUN_ATTRIBUTE_PRIORITY, priority);
@@ -205,170 +211,6 @@ bool is_stun_message(const ByteBuffer& buf)
     return false;
 }
 
-void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-                                             const std::shared_ptr<SdpAnswer> answer,
-                                             const Host host)
-{
-    // Dest socket address
-    struct sockaddr_in destAddr = {
-            .sin_family = AF_INET,
-            .sin_port = htons(mDestHost.port),
-            .sin_addr = mDestHost.host.ipv4
-    };
-
-    // We will be using STUN
-    StunAgent iceAgent = {};
-    uint8_t iceMessageBuffer[2048];
-
-    stun_agent_init(&iceAgent, STUN_ALL_KNOWN_ATTRIBUTES,
-                    STUN_COMPATIBILITY_RFC5389,
-                    static_cast<StunAgentUsageFlags>(
-                            STUN_AGENT_USAGE_SHORT_TERM_CREDENTIALS |
-                            STUN_AGENT_USAGE_USE_FINGERPRINT
-                    ));
-
-    // Send an ICE STUN BINDING message
-    const auto iceMessageBindingRequest = make_stun_message_binding_request(&iceAgent,
-                                                                            iceMessageBuffer, sizeof(iceMessageBuffer),
-                                                                            offer, answer);
-    {
-        std::lock_guard lock(mMutex);
-
-        mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&iceMessageBindingRequest));
-        eventfd_write(mEventHandle, 1);
-    }
-
-    // Our socket loop
-
-    auto epollHandle = epoll_create(2);
-
-    {
-        std::lock_guard lock(mMutex);
-
-        struct epoll_event ev = { .events = EPOLLIN };
-
-        ev.data.fd = mEventHandle;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
-
-        ev.data.fd = mSocketHandle;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
-    }
-
-    // Receive buffer
-    constexpr auto kReceiveBufferSize = 2048;
-    const auto receiveBuffer = std::make_unique<uint8_t[]>(kReceiveBufferSize);
-
-    while (true) {
-        // Receive queue
-        std::list<ReceivedData> receiveQueue;
-
-        // Epoll
-        struct epoll_event epollEvent[2];
-        const auto nfds = epoll_wait(epollHandle, epollEvent, 2, -1);
-
-        {
-           std::lock_guard lock(mMutex);
-            if (mState == State::Deactivating) {
-                break;
-            }
-
-            while (!mSendQueue.empty()) {
-                const auto buf = std::move(mSendQueue.front());
-                mSendQueue.erase(mSendQueue.begin());
-
-                const auto w = sendto(mSocketHandle, buf.data(), buf.len(),
-                       0,
-                        (struct sockaddr *) &destAddr, sizeof(destAddr));
-                LOG("Sent %zd bytes", w);
-            }
-
-            for (int i = 0; i < nfds; i += 1) {
-                if (epollEvent[i].data.fd == mEventHandle) {
-                    // Read from event
-                    eventfd_t value = { 0 };
-                    eventfd_read(mEventHandle, &value);
-                } else if (epollEvent[i].data.fd == mSocketHandle) {
-                    // Read from socket
-                    while (true) {
-                        union anyaddr from = {};
-                        socklen_t fromLen = sizeof(from);
-
-                        const auto r = recvfrom(mSocketHandle, receiveBuffer.get(), kReceiveBufferSize, 0,
-                                                reinterpret_cast<struct sockaddr *>(&from),
-                                                &fromLen);
-                        if (r > 0) {
-                            LOG("Received %zd bytes", r);
-
-                            receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        while (!receiveQueue.empty()) {
-            const ReceivedData data = std::move(receiveQueue.front());
-            receiveQueue.erase(receiveQueue.begin());
-
-            if (is_stun_message(data.buf)) {
-                LOG("Received STUN message");
-
-                StunMessage incomingMessage = {
-                        .buffer = data.buf.data(),
-                        .buffer_len = data.buf.len()
-                };
-
-                const auto stunMessageClass = stun_message_get_class(&incomingMessage);
-                const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
-
-                LOG("STUN message class  = %d", stunMessageClass);
-                LOG("STUN message method = %d", stunMessageMethod);
-
-                if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
-                    StunMessage responseMessage = {};
-                    stun_agent_init_response(&iceAgent, &responseMessage, iceMessageBuffer, sizeof(iceMessageBuffer),
-                                             &incomingMessage);
-                    stun_message_append_xor_addr (&responseMessage, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
-                                                  &data.addr.ss, sizeof(data.addr.ss));
-
-                    uint16_t requestUserNameLen = { };
-                    const auto requestUserName = stun_message_find (&incomingMessage,
-                                                                STUN_ATTRIBUTE_USERNAME, &requestUserNameLen);
-                    if (requestUserName) {
-                        std::string userName { static_cast<const char*>(requestUserName), requestUserNameLen };
-
-                        stun_message_append_bytes (&responseMessage, STUN_ATTRIBUTE_USERNAME,
-                                                   requestUserName, requestUserNameLen);
-                    }
-
-                    stun_agent_finish_message(&iceAgent, &responseMessage, nullptr, 0);
-
-                    std::lock_guard lock(mMutex);
-
-                    mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&responseMessage));
-                    eventfd_write(mEventHandle, 1);
-                } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
-                    int errorCode = { };
-                    if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
-                        LOG("STUN response error code: %d", errorCode);
-                    }
-
-                    uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-                    stun_message_id(&incomingMessage, id);
-
-                    if (stun_agent_forget_transaction(&iceAgent, id)) {
-                        LOG("Removed old transaction ID for binding request");
-                    }
-                }
-            }
-        }
-    }
-
-    close(epollHandle);
-    epollHandle = -1;
-}
 
 // Custom BIO for DGRAM
 
@@ -382,7 +224,7 @@ static bool bio_socket_should_retry(ssize_t ret) {
     }
 
     return errno == EWOULDBLOCK ||
-        errno == EINTR;
+           errno == EINTR;
 }
 
 static int dgram_read(BIO *b, char *out, int outl)
@@ -395,8 +237,8 @@ static int dgram_read(BIO *b, char *out, int outl)
     socklen_t fromLen = sizeof(from);
 
     const auto ret = recvfrom(b->num, out, outl,
-                       0,
-                       reinterpret_cast<struct sockaddr*>(&from), &fromLen);
+                              0,
+                              reinterpret_cast<struct sockaddr*>(&from), &fromLen);
 
     BIO_clear_retry_flags(b);
     if (ret <= 0) {
@@ -487,6 +329,252 @@ static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
     return 1;
 }
 
+void try_blocking_dtls(int socketHandle,
+                       const std::shared_ptr<SdpOffer>& offer,
+                       const std::shared_ptr<SdpAnswer>& answer,
+                       const Host host)
+{
+    // Set to blocking
+    auto socketFlags = fcntl(socketHandle, F_GETFL, 0);
+    fcntl(socketHandle, F_SETFL, socketFlags & ~O_NONBLOCK);
+
+    const auto cert = offer->getCertificate();
+    const auto ctx = SSL_CTX_new(DTLS_client_method());
+
+    SSL_CTX_use_certificate(ctx, cert->getCertificate());
+    SSL_CTX_use_PrivateKey(ctx, cert->getPrivateKey());
+
+    if (!SSL_CTX_check_private_key (ctx)) {
+        printf("ERROR: invalid private key");
+        return;
+    }
+
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
+
+    SSL_CTX_set_min_proto_version(ctx, DTLS1_VERSION);
+    SSL_CTX_set_read_ahead(ctx, 1);
+
+    const auto ssl = SSL_new(ctx);
+    SSL_set_connect_state(ssl);
+    SSL_set_mtu(ssl, 1200);
+
+    const auto bio = BIO_new_dgram(socketHandle, 0);
+
+    SSL_set_bio(ssl, bio, bio);
+
+    SSL_set_tlsext_use_srtp(ssl, "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
+
+    const struct sockaddr_in sin {
+            .sin_family = AF_INET,
+            .sin_port = htons(host.port),
+            .sin_addr = host.host.ipv4
+    };
+
+    BIO_ctrl(bio, BIO_C_SET_ADDR, sizeof(sin), (void*) &sin);
+
+    auto r2 = SSL_connect(ssl);
+
+    BIO_free(bio);
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+
+    // Set back to non-blocking
+    socketFlags = fcntl(socketHandle, F_GETFL, 0);
+    fcntl(socketHandle, F_SETFL, socketFlags | O_NONBLOCK);
+}
+
+void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
+                                             const std::shared_ptr<SdpAnswer> answer,
+                                             const Host host)
+{
+    // Dest socket address
+    struct sockaddr_in destAddr = {
+            .sin_family = AF_INET,
+            .sin_port = htons(mDestHost.port),
+            .sin_addr = mDestHost.host.ipv4
+    };
+
+    // We will be using STUN
+    StunAgent iceAgent = {};
+    uint8_t iceMessageBuffer[2048];
+
+    stun_agent_init(&iceAgent, STUN_ALL_KNOWN_ATTRIBUTES,
+                    STUN_COMPATIBILITY_RFC5389,
+                    static_cast<StunAgentUsageFlags>(
+                            STUN_AGENT_USAGE_SHORT_TERM_CREDENTIALS |
+                            STUN_AGENT_USAGE_USE_FINGERPRINT
+                    ));
+
+    // Send an ICE STUN BINDING message
+    auto useCandidate = false;
+    const auto iceMessageBindingRequest = make_stun_message_binding_request(&iceAgent,
+                                                                            iceMessageBuffer, sizeof(iceMessageBuffer),
+                                                                            offer, answer,
+                                                                            useCandidate);
+    {
+        std::lock_guard lock(mMutex);
+
+        mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&iceMessageBindingRequest));
+        eventfd_write(mEventHandle, 1);
+    }
+
+    // Our socket loop
+
+    int socketHandle = { -1 };
+    auto epollHandle = epoll_create(2);
+
+    {
+        std::lock_guard lock(mMutex);
+
+        struct epoll_event ev = { .events = EPOLLIN };
+
+        ev.data.fd = mEventHandle;
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
+
+        ev.data.fd = mSocketHandle;
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
+
+        socketHandle = mSocketHandle;
+    }
+
+    // Receive buffer
+    constexpr auto kReceiveBufferSize = 2048;
+    const auto receiveBuffer = std::make_unique<uint8_t[]>(kReceiveBufferSize);
+
+    while (true) {
+        // Receive queue
+        std::list<ReceivedData> receiveQueue;
+
+        // Epoll
+        struct epoll_event epollEvent[2];
+        const auto nfds = epoll_wait(epollHandle, epollEvent, 2, -1);
+
+        {
+           std::lock_guard lock(mMutex);
+            if (mState == State::Deactivating) {
+                break;
+            }
+
+            while (!mSendQueue.empty()) {
+                const auto buf = std::move(mSendQueue.front());
+                mSendQueue.erase(mSendQueue.begin());
+
+                const auto w = sendto(mSocketHandle, buf.data(), buf.len(),
+                       0,
+                        (struct sockaddr *) &destAddr, sizeof(destAddr));
+                LOG("Sent %zd bytes", w);
+            }
+
+            for (int i = 0; i < nfds; i += 1) {
+                if (epollEvent[i].data.fd == mEventHandle) {
+                    // Read from event
+                    eventfd_t value = { 0 };
+                    eventfd_read(mEventHandle, &value);
+                } else if (epollEvent[i].data.fd == mSocketHandle) {
+                    // Read from socket
+                    while (true) {
+                        union anyaddr from = {};
+                        socklen_t fromLen = sizeof(from);
+
+                        const auto r = recvfrom(mSocketHandle, receiveBuffer.get(), kReceiveBufferSize, 0,
+                                                reinterpret_cast<struct sockaddr *>(&from),
+                                                &fromLen);
+                        if (r > 0) {
+                            LOG("Received %zd bytes", r);
+
+                            receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        while (!receiveQueue.empty()) {
+            const ReceivedData data = std::move(receiveQueue.front());
+            receiveQueue.erase(receiveQueue.begin());
+
+            if (is_stun_message(data.buf)) {
+                LOG("Received STUN message");
+
+                StunMessage incomingMessage = {
+                        .buffer = data.buf.data(),
+                        .buffer_len = data.buf.len()
+                };
+
+                const auto stunMessageClass = stun_message_get_class(&incomingMessage);
+                const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
+
+                LOG("STUN message class  = %d", stunMessageClass);
+                LOG("STUN message method = %d", stunMessageMethod);
+
+                if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
+                    StunMessage responseMessage = {};
+                    stun_agent_init_response(&iceAgent, &responseMessage, iceMessageBuffer, sizeof(iceMessageBuffer),
+                                             &incomingMessage);
+                    stun_message_append_xor_addr (&responseMessage, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
+                                                  &data.addr.ss, sizeof(data.addr.ss));
+
+                    uint16_t requestUserNameLen = { };
+                    const auto requestUserName = stun_message_find (&incomingMessage,
+                                                                STUN_ATTRIBUTE_USERNAME, &requestUserNameLen);
+                    if (requestUserName) {
+                        stun_message_append_bytes (&responseMessage, STUN_ATTRIBUTE_USERNAME,
+                                                   requestUserName, requestUserNameLen);
+                    }
+
+                    uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
+                    stun_message_id(&incomingMessage, id);
+
+                    const auto icePassword = offer->getIcePassword();
+                    stun_agent_finish_message(&iceAgent, &responseMessage,
+                                              reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
+
+                    std::lock_guard lock(mMutex);
+
+                    mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&responseMessage));
+
+
+                    if (!useCandidate) {
+                        useCandidate = true;
+
+                        const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
+                                &iceAgent,
+                                iceMessageBuffer, sizeof(iceMessageBuffer),
+                                offer, answer,
+                                useCandidate);
+                        mSendQueue.emplace_back(iceMessageBuffer,
+                                                stun_message_length(&iceMessageBindingRequest2));
+                    }
+
+                    eventfd_write(mEventHandle, 1);
+                } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
+                    int errorCode = { };
+                    if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
+                        LOG("STUN response error code: %d", errorCode);
+                    }
+
+                    uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
+                    stun_message_id(&incomingMessage, id);
+
+                    if (stun_agent_forget_transaction(&iceAgent, id)) {
+                        LOG("Removed old transaction ID for binding request");
+                    }
+
+                    // try_blocking_dtls(socketHandle, offer, answer, host);
+                }
+            } else {
+                // Received non-STUN message
+                LOG("Received non-STUN message %zd, %d", data.buf.len(), data.buf.data()[0]);
+            }
+        }
+    }
+
+    close(epollHandle);
+    epollHandle = -1;
+}
+
 void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer,
                                                const Host host)
 {
@@ -514,7 +602,7 @@ void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> o
 
     const struct sockaddr_in sin {
         .sin_family = AF_INET,
-        .sin_port = htons(3478),
+        .sin_port = htons(host.port),
         .sin_addr = host.host.ipv4
     };
 
