@@ -44,8 +44,10 @@ public:
              const std::optional<AudioConfig>& audioConfig);
     ~SdpOffer() = default;
 
-    Error generate(std::string& outSdpOffer);
-    std::shared_ptr<X509Certificate> getCertificate() const;
+    [[nodiscard]] std::pair<std::string, Error> generate();
+
+    [[nodiscard]] std::string getIceUFrag() const;
+    [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
 private:
     std::string generateRandomUUID();

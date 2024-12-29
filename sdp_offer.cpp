@@ -40,7 +40,7 @@ SdpOffer::SdpOffer(const OfferConfig& config,
 {
 }
 
-Error SdpOffer::generate(std::string& outSdpOffer)
+std::pair<std::string, Error> SdpOffer::generate()
 {
     std::stringstream ss;
 
@@ -53,6 +53,7 @@ Error SdpOffer::generate(std::string& outSdpOffer)
     ss << "a=fingerprint:sha-256 " << mCert->getSha256Fingerprint() << std::endl;
     ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
     ss << "a=ice-pwd:" << mIcePassword << std::endl;
+    ss << "a=setup:actpass" << std::endl;
 
     // Video
     const auto layer = mVideoConfig.layerList[0];
@@ -78,9 +79,12 @@ Error SdpOffer::generate(std::string& outSdpOffer)
     ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
     ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
 
-    outSdpOffer = ss.str();
+    return { ss.str(), Error::OK };
+}
 
-    return Error::OK;
+std::string SdpOffer::getIceUFrag() const
+{
+    return mIceUfrag;
 }
 
 std::shared_ptr<X509Certificate> SdpOffer::getCertificate() const

@@ -138,7 +138,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Send an ICE BINDING message to socket
 
-    uint8_t iceMessageBuffer[STUN_MAX_MESSAGE_SIZE];
+    uint8_t iceMessageBuffer[2048];
 
     StunAgent agent = {};
     stun_agent_init(&agent, STUN_ALL_KNOWN_ATTRIBUTES,
@@ -151,7 +151,15 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     StunMessage msg = {};
     stun_agent_init_request (&agent, &msg, iceMessageBuffer, sizeof(iceMessageBuffer), STUN_BINDING);
 
-    const auto iceUserName = answer->getIceUFrag();
+    const uint32_t priority = 1847591679u;
+    stun_message_append32 (&msg, STUN_ATTRIBUTE_PRIORITY, priority);
+
+    const uint64_t tie = ((uint64_t)mrand48()) << 32 | mrand48();
+    stun_message_append64 (&msg, STUN_ATTRIBUTE_ICE_CONTROLLING, tie);
+
+    const auto offerUserName = offer->getIceUFrag();
+    const auto answerUserName = answer->getIceUFrag();
+    const auto iceUserName = answerUserName + ":" + offerUserName;
     const auto icePassword = answer->getIcePassword();
 
     stun_message_append_string(&msg, STUN_ATTRIBUTE_USERNAME,
@@ -240,6 +248,27 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         if (recv_n > 0) {
             ByteBuffer buf = { recv_buf, recv_n };
+
+            if (recv_n >= 20) {
+                uint32_t magic = htonl(0x2112A442);
+                uint8_t cookie[4];
+                std::memcpy(cookie, recv_buf + 4, 4);
+
+                if (std::memcmp(&magic, cookie, 4) == 0) {
+                    std::cout << "The STUN magic cookie is present" << std::endl;
+
+                    StunMessage stunMessage = {
+                            .buffer = recv_buf,
+                            .buffer_len = recv_n
+                    };
+
+                    const auto stunMessageClass = stun_message_get_class(&stunMessage);
+                    const auto stunMessageMethod = stun_message_get_method(&stunMessage);
+
+                    std::cout << "STUN message class  =" << stunMessageClass << std::endl;
+                    std::cout << "STUN message method = " << stunMessageMethod << std::endl;
+                }
+            }
         }
     }
 
