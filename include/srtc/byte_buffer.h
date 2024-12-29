@@ -21,7 +21,7 @@ public:
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
 
-    [[nodiscard]] const uint8_t* data() const;
+    [[nodiscard]] uint8_t* data() const;
     [[nodiscard]] size_t len() const;
 
 private:

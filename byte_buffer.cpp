@@ -75,7 +75,7 @@ void ByteBuffer::append(const ByteBuffer& buf)
     }
 }
 
-const uint8_t* ByteBuffer::data() const
+uint8_t* ByteBuffer::data() const
 {
     return mBuf;
 }
