@@ -532,22 +532,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
 
                     std::lock_guard lock(mMutex);
-
                     mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&responseMessage));
-
-
-                    if (!useCandidate) {
-                        useCandidate = true;
-
-                        const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                &iceAgent,
-                                iceMessageBuffer, sizeof(iceMessageBuffer),
-                                offer, answer,
-                                useCandidate);
-                        mSendQueue.emplace_back(iceMessageBuffer,
-                                                stun_message_length(&iceMessageBindingRequest2));
-                    }
-
                     eventfd_write(mEventHandle, 1);
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
@@ -560,6 +545,21 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     if (stun_agent_forget_transaction(&iceAgent, id)) {
                         LOG("Removed old transaction ID for binding request");
+
+                        if (!useCandidate) {
+                            useCandidate = true;
+
+                            const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
+                                    &iceAgent,
+                                    iceMessageBuffer, sizeof(iceMessageBuffer),
+                                    offer, answer,
+                                    useCandidate);
+
+                            std::lock_guard lock(mMutex);
+                            mSendQueue.emplace_back(iceMessageBuffer,
+                                                    stun_message_length(&iceMessageBindingRequest2));
+                            eventfd_write(mEventHandle, 1);
+                        }
                     }
 
                     // try_blocking_dtls(socketHandle, offer, answer, host);
