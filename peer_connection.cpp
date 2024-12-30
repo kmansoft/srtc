@@ -204,7 +204,6 @@ bool is_stun_message(const ByteBuffer& buf)
     return false;
 }
 
-
 // Custom BIO for DGRAM
 
 struct dgram_data {
@@ -283,19 +282,7 @@ BIO *PeerConnection::BIO_new_dgram(PeerConnection* pc) {
 }
 
 static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
-
-    const auto cert = X509_STORE_CTX_get0_cert(store_ctx);
-    if (cert) {
-        uint8_t fpBuf[32] = { };
-        unsigned int fpSize = { };
-
-        const auto digest = EVP_get_digestbyname("sha256");
-        X509_digest(cert, digest, fpBuf, &fpSize);
-
-        std::string hex = bin_to_hex(fpBuf, fpSize);
-        LOG("Remote certificate sha-256: %s", hex.c_str());
-    }
-
+    // We verify cert after the handshake has completed
     return 1;
 }
 
@@ -309,6 +296,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             .sin_port = htons(mDestHost.port),
             .sin_addr = mDestHost.host.ipv4
     };
+
+    // States
+    auto iceState = IceState::Inactive;
+    auto dtlsState = DtlsState::Inactive;
 
     // DTLS
     SSL_CTX* dtls_ctx = {};
@@ -476,48 +467,15 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             enqueueForSending({
                                 iceMessageBuffer,
                                 stun_message_length(&iceMessageBindingRequest2)});
+
+                            iceState = IceState::Completed;
+                            dtlsState = DtlsState::Activating;
                         }
                     }
-
-                    // try_blocking_dtls(socketHandle, offer, answer, host);
                 }
             } else {
                 // Received non-STUN message
                 LOG("Received non-STUN message %zd, %d", data.buf.len(), data.buf.data()[0]);
-
-                if (dtls_ssl == nullptr) {
-                    LOG("Preparing for the DTLS handshake");
-
-                    const auto cert = offer->getCertificate();
-                    dtls_ctx = SSL_CTX_new(DTLS_client_method());
-
-                    SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
-                    SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
-
-                    if (!SSL_CTX_check_private_key (dtls_ctx)) {
-                        LOG("ERROR: invalid private key");
-                    }
-
-                    SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
-
-                    SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
-                    SSL_CTX_set_read_ahead(dtls_ctx, 1);
-
-                    dtls_ssl = SSL_new(dtls_ctx);
-
-                    dtls_bio = BIO_new_dgram(this);
-
-                    SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
-
-                    SSL_set_tlsext_use_srtp(dtls_ssl, "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
-                    SSL_set_connect_state(dtls_ssl);
-
-                    if (answer->isSetupActive()) {
-                        SSL_set_accept_state(dtls_ssl);
-                    } else {
-                        SSL_set_connect_state(dtls_ssl);
-                    }
-                }
 
                 {
                     std::lock_guard lock(mMutex);
@@ -526,35 +484,79 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                 // Try the handshake
                 if (dtls_ssl) {
-                    auto r1 = SSL_do_handshake(dtls_ssl);
-                    auto err = SSL_get_error(dtls_ssl, r1);
-                    LOG("DTLS handshake: %d, %d", r1, err);
+                    if (dtlsState == DtlsState::Activating) {
+                        auto r1 = SSL_do_handshake(dtls_ssl);
+                        auto err = SSL_get_error(dtls_ssl, r1);
+                        LOG("DTLS handshake: %d, %d", r1, err);
 
-                    if (err == SSL_ERROR_WANT_READ) {
-                        LOG("Still in progress");
-                    } else if (r1 == 1 && err == 0) {
-                        LOG("Completed");
+                        if (err == SSL_ERROR_WANT_READ) {
+                            LOG("Still in progress");
+                        } else if (r1 == 1 && err == 0) {
+                            LOG("Completed");
 
-                        X509* cert = SSL_get_peer_certificate(dtls_ssl);
-                        if (cert != nullptr) {
-                            uint8_t fpBuf[32] = { };
-                            unsigned int fpSize = { };
+                            dtlsState = DtlsState::Completed;
 
-                            const auto digest = EVP_get_digestbyname("sha256");
-                            X509_digest(cert, digest, fpBuf, &fpSize);
+                            X509 *cert = SSL_get_peer_certificate(dtls_ssl);
+                            if (cert != nullptr) {
+                                uint8_t fpBuf[32] = {};
+                                unsigned int fpSize = {};
 
-                            std::string hex = bin_to_hex(fpBuf, fpSize);
-                            LOG("Remote certificate sha-256: %s", hex.c_str());
+                                const auto digest = EVP_get_digestbyname("sha256");
+                                X509_digest(cert, digest, fpBuf, &fpSize);
 
-                            const auto expectedHash = answer->getCertificateHash();
-                            const ByteBuffer actualHashBin = { fpBuf, fpSize };
+                                std::string hex = bin_to_hex(fpBuf, fpSize);
+                                LOG("Remote certificate sha-256: %s", hex.c_str());
 
-                            if (expectedHash.getBin() == actualHashBin) {
-                                LOG("Remote certificate matches");
+                                const auto expectedHash = answer->getCertificateHash();
+                                const ByteBuffer actualHashBin = {fpBuf, fpSize};
+
+                                if (expectedHash.getBin() == actualHashBin) {
+                                    LOG("Remote certificate matches");
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+
+        if (dtlsState == DtlsState::Activating) {
+            if (dtls_ssl == nullptr) {
+                LOG("Preparing for the DTLS handshake");
+
+                const auto cert = offer->getCertificate();
+                dtls_ctx = SSL_CTX_new(DTLS_client_method());
+
+                SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
+                SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
+
+                if (!SSL_CTX_check_private_key(dtls_ctx)) {
+                    LOG("ERROR: invalid private key");
+                }
+
+                SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
+
+                SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
+                SSL_CTX_set_read_ahead(dtls_ctx, 1);
+
+                dtls_ssl = SSL_new(dtls_ctx);
+
+                dtls_bio = BIO_new_dgram(this);
+
+                SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
+
+                SSL_set_tlsext_use_srtp(dtls_ssl,
+                                        "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
+                SSL_set_connect_state(dtls_ssl);
+
+                if (answer->isSetupActive()) {
+                    SSL_set_accept_state(dtls_ssl);
+                } else {
+                    SSL_set_connect_state(dtls_ssl);
+                }
+
+                // For now this will fail
+                SSL_do_handshake(dtls_ssl);
             }
         }
     }

@@ -53,6 +53,17 @@ private:
         Deactivating
     };
 
+    enum class IceState {
+        Inactive,
+        Completed
+    };
+
+    enum class DtlsState {
+        Inactive,
+        Activating,
+        Completed
+    };
+
     struct ReceivedData {
         ByteBuffer buf;
         anyaddr addr;
