@@ -110,6 +110,8 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 
     auto audioCodec = srtc::Codec::Unknown;
 
+    auto isSetupActive = false;
+
     while (!ss.eof()) {
         std::string line;
         std::getline(ss, line);
@@ -133,6 +135,8 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                     iceUFrag = value;
                 } else if (key == "ice-pwd") {
                     icePassword = value;
+                } else if (key == "setup") {
+                    isSetupActive = value == "active";
                 } else if (key == "extmap") {
                     const auto id = parse_int(value);
                     if (id >= 0) {
@@ -247,7 +251,8 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 
     outAnswer = std::make_shared<SdpAnswer>(iceUFrag, icePassword, extensionMap,
                                             hostList,
-                                            videoTrack, audioTrack);
+                                            videoTrack, audioTrack,
+                                            isSetupActive);
 
     return Error::OK;
 }
@@ -257,13 +262,15 @@ SdpAnswer::SdpAnswer(const std::string& iceUFrag,
                      const ExtensionMap& extensionMap,
                      const std::vector<Host>& hostList,
                      const std::shared_ptr<Track>& videoTrack,
-                     const std::shared_ptr<Track>& audioTrack)
+                     const std::shared_ptr<Track>& audioTrack,
+                     bool isSetupActive)
      : mIceUFrag(iceUFrag)
      , mIcePassword(icePassword)
      , mExtensionMap(extensionMap)
      , mHostList(hostList)
      , mVideoTrack(videoTrack)
      , mAudioTrack(audioTrack)
+     , mIsSetupActive(isSetupActive)
 {
 }
 
@@ -297,6 +304,11 @@ std::shared_ptr<Track> SdpAnswer::getVideoTrack() const
 std::shared_ptr<Track> SdpAnswer::getAudioTrack() const
 {
     return mAudioTrack;
+}
+
+bool SdpAnswer::isSetupActive() const
+{
+    return mIsSetupActive;
 }
 
 }

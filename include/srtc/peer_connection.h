@@ -7,6 +7,10 @@
 #include <mutex>
 #include <thread>
 #include <list>
+#include <string>
+
+struct bio_st;
+struct bio_method_st;
 
 namespace srtc {
 
@@ -40,12 +44,19 @@ private:
     void networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
                                  const std::shared_ptr<SdpAnswer> answer,
                                  const Host host);
-    void networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer, const Host host);
+
+    void enqueueForSending(ByteBuffer&& buf) SRTC_LOCKS_EXCLUDED(mMutex);
 
     enum class State {
         Inactive,
         Active,
         Deactivating
+    };
+
+    struct ReceivedData {
+        ByteBuffer buf;
+        anyaddr addr;
+        size_t addr_len;
     };
 
     State mState SRTC_GUARDED_BY(mMutex) = { State::Inactive };
@@ -56,6 +67,19 @@ private:
     int mSocketHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 
     std::list<ByteBuffer> mSendQueue;
+
+    // A queue for incoming DTLS data, routed through a custom BIO
+    std::list<ByteBuffer> mDtlsReceiveQueue SRTC_GUARDED_BY(mMutex);
+
+    // OpenSSL BIO
+    static int dgram_read(struct bio_st *b, char *out, int outl);
+    static int dgram_write(struct bio_st *b, const char *in, int inl);
+    static long dgram_ctrl(struct bio_st *b, int cmd, long num, void *ptr);
+    static int dgram_free(struct bio_st *b);
+
+    static const struct bio_method_st dgram_method;
+
+    static struct bio_st *BIO_new_dgram(PeerConnection* pc);
 };
 
 }

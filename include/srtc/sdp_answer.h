@@ -22,15 +22,17 @@ public:
               const ExtensionMap& extensionMap,
               const std::vector<Host>& hostList,
               const std::shared_ptr<Track>& videoTrack,
-              const std::shared_ptr<Track>& audioTrack);
+              const std::shared_ptr<Track>& audioTrack,
+              bool isSetupActive);
     ~SdpAnswer();
 
-    std::string getIceUFrag() const;
-    std::string getIcePassword() const;
-    ExtensionMap getExtensionMap() const;
-    std::vector<Host> getHostList() const;
-    std::shared_ptr<Track> getVideoTrack() const;
-    std::shared_ptr<Track> getAudioTrack() const;
+    [[nodiscard]] std::string getIceUFrag() const;
+    [[nodiscard]] std::string getIcePassword() const;
+    [[nodiscard]] ExtensionMap getExtensionMap() const;
+    [[nodiscard]] std::vector<Host> getHostList() const;
+    [[nodiscard]] std::shared_ptr<Track> getVideoTrack() const;
+    [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;
+    [[nodiscard]] bool isSetupActive() const;
 
 private:
     const std::string mIceUFrag;
@@ -39,6 +41,7 @@ private:
     const std::vector<Host> mHostList;
     const std::shared_ptr<Track> mVideoTrack;
     const std::shared_ptr<Track> mAudioTrack;
+    const bool mIsSetupActive;
 };
 
 }

@@ -25,7 +25,10 @@
 #ifdef ANDROID
 #include <android/log.h>
 #include <cstdarg>
-static void LOG(const char* format...)  __attribute__ ((format (printf, 1, 2)))
+
+static void LOG(const char* format...)  __attribute__ ((format (printf, 1, 2)));
+
+static void LOG(const char* format...)
 {
     va_list ap;
     va_start(ap, format);
@@ -136,17 +139,6 @@ std::shared_ptr<Track> PeerConnection::getAudioTrack() const
     return mAudioTrack;
 }
 
-union anyaddr {
-    struct sockaddr_storage ss;
-    struct sockaddr_in sin_ipv4;
-    struct sockaddr_in6 sin_ipv6;
-};
-
-struct ReceivedData {
-    ByteBuffer buf;
-    anyaddr addr;
-    size_t addr_len;
-};
 
 // https://datatracker.ietf.org/doc/html/rfc5389#section-6
 constexpr auto kStunRfc5389Cookie = 0x2112A442;
@@ -215,7 +207,8 @@ bool is_stun_message(const ByteBuffer& buf)
 // Custom BIO for DGRAM
 
 struct dgram_data {
-    struct sockaddr_in sin;
+    PeerConnection* pc;
+    struct sockaddr_in addr;
 };
 
 static bool bio_socket_should_retry(ssize_t ret) {
@@ -227,160 +220,101 @@ static bool bio_socket_should_retry(ssize_t ret) {
            errno == EINTR;
 }
 
-static int dgram_read(BIO *b, char *out, int outl)
+int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 {
     if (out == nullptr) {
         return 0;
     }
 
-    union anyaddr from = { };
-    socklen_t fromLen = sizeof(from);
-
-    const auto ret = recvfrom(b->num, out, outl,
-                              0,
-                              reinterpret_cast<struct sockaddr*>(&from), &fromLen);
-
     BIO_clear_retry_flags(b);
-    if (ret <= 0) {
-        if (bio_socket_should_retry(ret)) {
-            BIO_set_retry_read(b);
-        }
-    }
-    return static_cast<int>(ret);
-}
 
-static int dgram_write(BIO *b, const char *in, int inl) {
-    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+    auto data = reinterpret_cast<dgram_data *>(b->ptr);
 
-    const auto ret = sendto(b->num, in, inl, 0,
-                            reinterpret_cast<const struct sockaddr*>(&data->sin), sizeof(data->sin));
+    std::lock_guard lock(data->pc->mMutex);
 
-    BIO_clear_retry_flags(b);
-    if (ret <= 0) {
-        if (bio_socket_should_retry(ret)) {
-            BIO_set_retry_write(b);
-        }
-    }
-    return static_cast<int>(ret);
-}
-
-#define BIO_C_SET_ADDR 1000
-
-static long dgram_ctrl(BIO *b, int cmd, long num, void *ptr)
-{
-    auto data = reinterpret_cast<dgram_data*>(b->ptr);
-
-    switch (cmd) {
-        case BIO_C_SET_FD:
-            if (b->num && b->shutdown) {
-                close(b->num);
-            }
-            b->num = *((int *)ptr);
-            b->shutdown = (int)num;
-            b->init = 1;
-            break;
-        case BIO_C_SET_ADDR:
-            std::memcpy(&data->sin, ptr, num);
-            break;
-        default:
-            break;
+    if (data->pc->mDtlsReceiveQueue.empty()) {
+        BIO_set_retry_read(b);
+        return -1;
     }
 
-    return 1;
-}
+    const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
+    data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
 
-static int dgram_free(BIO *bio)
-{
-    if (bio->shutdown) {
-        if (bio->init) {
-            close(bio->num);
-        }
-        bio->init = 0;
-        bio->flags = 0;
-    }
-    auto data = reinterpret_cast<dgram_data*>(bio->ptr);
-    delete data;
-    return 1;
-}
-
-static const BIO_METHOD methods_dgram = {
-        BIO_TYPE_DGRAM, "dgram",
-        dgram_write,      dgram_read,
-        nullptr /* puts */, nullptr /* gets, */,
-        dgram_ctrl,       nullptr /* create */,
-        dgram_free,       nullptr /* callback_ctrl */,
-};
-
-BIO *BIO_new_dgram(int fd, int close_flag) {
-    BIO *ret;
-
-    ret = BIO_new(&methods_dgram);
-    if (ret == nullptr) {
-        return nullptr;
-    }
-    BIO_set_fd(ret, fd, close_flag);
-
-    ret->ptr = new dgram_data{};
+    const auto ret = std::min(static_cast<int>(item.len()), outl);
+    std::memcpy(out, item.data(), static_cast<size_t>(ret));
 
     return ret;
 }
 
-static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
+int PeerConnection::dgram_write(BIO *b, const char *in, int inl) {
+    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+
+    data->pc->enqueueForSending({
+        reinterpret_cast<const uint8_t *>(in),
+        static_cast<size_t>(inl) });
+
+    return inl;
+}
+
+long PeerConnection::dgram_ctrl(BIO *b, int cmd, long num, void *ptr)
+{
     return 1;
 }
 
-void try_blocking_dtls(int socketHandle,
-                       const std::shared_ptr<SdpOffer>& offer,
-                       const std::shared_ptr<SdpAnswer>& answer,
-                       const Host host)
+int PeerConnection::dgram_free(BIO *b)
 {
-    // Set to blocking
-    auto socketFlags = fcntl(socketHandle, F_GETFL, 0);
-    fcntl(socketHandle, F_SETFL, socketFlags & ~O_NONBLOCK);
+    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+    delete data;
+    return 1;
+}
 
-    const auto cert = offer->getCertificate();
-    const auto ctx = SSL_CTX_new(DTLS_client_method());
+const BIO_METHOD PeerConnection::dgram_method = {
+        BIO_TYPE_DGRAM, "dgram",
+        PeerConnection::dgram_write,      PeerConnection::dgram_read,
+        nullptr /* puts */, nullptr /* gets, */,
+        PeerConnection::dgram_ctrl,       nullptr /* create */,
+        PeerConnection::dgram_free,       nullptr /* callback_ctrl */,
+};
 
-    SSL_CTX_use_certificate(ctx, cert->getCertificate());
-    SSL_CTX_use_PrivateKey(ctx, cert->getPrivateKey());
-
-    if (!SSL_CTX_check_private_key (ctx)) {
-        printf("ERROR: invalid private key");
-        return;
+BIO *PeerConnection::BIO_new_dgram(PeerConnection* pc) {
+    BIO *b = BIO_new(&dgram_method);
+    if (b == nullptr) {
+        return nullptr;
     }
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
+    BIO_set_init(b, 1);
+    BIO_set_shutdown(b, 0);
 
-    SSL_CTX_set_min_proto_version(ctx, DTLS1_VERSION);
-    SSL_CTX_set_read_ahead(ctx, 1);
-
-    const auto ssl = SSL_new(ctx);
-    SSL_set_connect_state(ssl);
-    SSL_set_mtu(ssl, 1200);
-
-    const auto bio = BIO_new_dgram(socketHandle, 0);
-
-    SSL_set_bio(ssl, bio, bio);
-
-    SSL_set_tlsext_use_srtp(ssl, "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
-
-    const struct sockaddr_in sin {
-            .sin_family = AF_INET,
-            .sin_port = htons(host.port),
-            .sin_addr = host.host.ipv4
+    b->ptr = new dgram_data{
+        .pc = pc,
     };
+    return b;
+}
 
-    BIO_ctrl(bio, BIO_C_SET_ADDR, sizeof(sin), (void*) &sin);
+static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
 
-    auto r2 = SSL_connect(ssl);
+    const auto cert = X509_STORE_CTX_get0_cert(store_ctx);
+    if (cert) {
+        uint8_t fpBuf[32] = { };
+        unsigned int fpSize = { };
 
-    BIO_free(bio);
-    SSL_free(ssl);
-    SSL_CTX_free(ctx);
+        const auto digest = EVP_get_digestbyname("sha256");
+        X509_digest(cert, digest, fpBuf, &fpSize);
 
-    // Set back to non-blocking
-    socketFlags = fcntl(socketHandle, F_GETFL, 0);
-    fcntl(socketHandle, F_SETFL, socketFlags | O_NONBLOCK);
+        std::string fpHex;
+        for (unsigned int i = 0; i < fpSize; i += 1) {
+            static const char* const ALPHABET = "0123456789abcdef";
+            fpHex += (ALPHABET[(fpBuf[i] >> 4) & 0x0F]);
+            fpHex += (ALPHABET[(fpBuf[i]) & 0x0F]);
+            if (i != fpSize -1) {
+                fpHex += ':';
+            }
+        }
+
+        LOG("Remote certificate sha-256: %s", fpHex.c_str());
+    }
+
+    return 1;
 }
 
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
@@ -393,6 +327,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             .sin_port = htons(mDestHost.port),
             .sin_addr = mDestHost.host.ipv4
     };
+
+    // DTLS
+    SSL_CTX* dtls_ctx = {};
+    SSL* dtls_ssl = {};
+    BIO* dtls_bio = {};
 
     // We will be using STUN
     StunAgent iceAgent = {};
@@ -407,20 +346,19 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Send an ICE STUN BINDING message
     auto useCandidate = false;
-    const auto iceMessageBindingRequest = make_stun_message_binding_request(&iceAgent,
-                                                                            iceMessageBuffer, sizeof(iceMessageBuffer),
-                                                                            offer, answer,
-                                                                            useCandidate);
-    {
-        std::lock_guard lock(mMutex);
 
-        mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&iceMessageBindingRequest));
-        eventfd_write(mEventHandle, 1);
+    {
+        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(&iceAgent,
+                                                                                 iceMessageBuffer,
+                                                                                 sizeof(iceMessageBuffer),
+                                                                                 offer, answer,
+                                                                                 useCandidate);
+        enqueueForSending({
+            iceMessageBuffer, stun_message_length(&iceMessageBindingRequest1)
+        });
     }
 
     // Our socket loop
-
-    int socketHandle = { -1 };
     auto epollHandle = epoll_create(2);
 
     {
@@ -433,9 +371,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         ev.data.fd = mSocketHandle;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
-
-        socketHandle = mSocketHandle;
     }
+
+    // Are we ready for DTLS?
 
     // Receive buffer
     constexpr auto kReceiveBufferSize = 2048;
@@ -492,7 +430,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         }
 
         while (!receiveQueue.empty()) {
-            const ReceivedData data = std::move(receiveQueue.front());
+            ReceivedData data = std::move(receiveQueue.front());
             receiveQueue.erase(receiveQueue.begin());
 
             if (is_stun_message(data.buf)) {
@@ -554,11 +492,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     iceMessageBuffer, sizeof(iceMessageBuffer),
                                     offer, answer,
                                     useCandidate);
-
-                            std::lock_guard lock(mMutex);
-                            mSendQueue.emplace_back(iceMessageBuffer,
-                                                    stun_message_length(&iceMessageBindingRequest2));
-                            eventfd_write(mEventHandle, 1);
+                            enqueueForSending({
+                                iceMessageBuffer,
+                                stun_message_length(&iceMessageBindingRequest2)});
                         }
                     }
 
@@ -567,53 +503,75 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             } else {
                 // Received non-STUN message
                 LOG("Received non-STUN message %zd, %d", data.buf.len(), data.buf.data()[0]);
+
+                if (dtls_ssl == nullptr) {
+                    LOG("Preparing for the DTLS handshake");
+
+                    const auto cert = offer->getCertificate();
+                    dtls_ctx = SSL_CTX_new(DTLS_client_method());
+
+                    SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
+                    SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
+
+                    if (!SSL_CTX_check_private_key (dtls_ctx)) {
+                        LOG("ERROR: invalid private key");
+                    }
+
+                    SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
+
+                    SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
+                    SSL_CTX_set_read_ahead(dtls_ctx, 1);
+
+                    dtls_ssl = SSL_new(dtls_ctx);
+
+                    dtls_bio = BIO_new_dgram(this);
+
+                    SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
+
+                    SSL_set_tlsext_use_srtp(dtls_ssl, "SRTP_AES128_CM_SHA1_80");
+                    SSL_set_connect_state(dtls_ssl);
+
+                    if (answer->isSetupActive()) {
+                        SSL_set_accept_state(dtls_ssl);
+                    } else {
+                        SSL_set_connect_state(dtls_ssl);
+                    }
+                }
+
+                {
+                    std::lock_guard lock(mMutex);
+                    mDtlsReceiveQueue.push_back(std::move(data.buf));
+                }
+
+                // Try the handshake
+                if (dtls_ssl) {
+                    auto r1 = SSL_do_handshake(dtls_ssl);
+                    auto err = SSL_get_error(dtls_ssl, r1);
+                    LOG("DTLS handshake: %d, %d", r1, err);
+                }
             }
         }
     }
+
+    if (dtls_ssl) {
+        SSL_shutdown(dtls_ssl);
+    }
+
+    SSL_free(dtls_ssl);
+    SSL_CTX_free(dtls_ctx);
+    BIO_free(dtls_bio);
 
     close(epollHandle);
     epollHandle = -1;
 }
 
-void PeerConnection::networkThreadDtlsTestFunc(const std::shared_ptr<SdpOffer> offer,
-                                               const Host host)
+void PeerConnection::enqueueForSending(ByteBuffer&& buf)
 {
-    const auto cert = offer->getCertificate();
-    const auto ctx = SSL_CTX_new(DTLS_client_method());
+    LOG("Enqueing %zd bytes", buf.len());
 
-    SSL_CTX_use_certificate(ctx, cert->getCertificate());
-    SSL_CTX_use_PrivateKey(ctx, cert->getPrivateKey());
-
-    if (!SSL_CTX_check_private_key (ctx)) {
-        printf("ERROR: invalid private key");
-        return;
-    }
-
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
-//    SSL_CTX_set_read_ahead(ctx, 1);
-
-    const auto fd = socket(AF_INET, SOCK_DGRAM, 0);
-    const auto ssl = SSL_new(ctx);
-    const auto bio = BIO_new_dgram(fd, 0);
-
-    SSL_set_bio(ssl, bio, bio);
-
-    auto r1 = SSL_set_tlsext_use_srtp(ssl, "SRTP_AES128_CM_SHA1_80");
-
-    const struct sockaddr_in sin {
-        .sin_family = AF_INET,
-        .sin_port = htons(host.port),
-        .sin_addr = host.host.ipv4
-    };
-
-    BIO_ctrl(bio, BIO_C_SET_ADDR, sizeof(sin), (void*) &sin);
-
-    auto r2 = SSL_connect(ssl);
-
-    close(fd);
-    BIO_free(bio);
-    SSL_free(ssl);
-    SSL_CTX_free(ctx);
+    std::lock_guard lock(mMutex);
+    mSendQueue.push_back(std::move(buf));
+    eventfd_write(mEventHandle, 1);
 }
 
 }
