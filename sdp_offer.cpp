@@ -50,7 +50,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "t=0 0" << std::endl;
     ss << "a=extmap-allow-mixed" << std::endl;
     ss << "a=msid-semantic: WMS" << std::endl;
-    ss << "a=fingerprint:sha-256 " << mCert->getSha256Fingerprint() << std::endl;
+    ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
     ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
     ss << "a=ice-pwd:" << mIcePassword << std::endl;
     ss << "a=setup:actpass" << std::endl;

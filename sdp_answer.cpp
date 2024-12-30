@@ -7,6 +7,8 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
 #include "srtc/track.h"
+#include "srtc/util.h"
+#include "srtc/x509_hash.h"
 
 namespace {
 
@@ -112,6 +114,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 
     auto isSetupActive = false;
 
+    std::string certHashAlg;
+    ByteBuffer certHashBin;
+    std::string certHashHex;
+
     while (!ss.eof()) {
         std::string line;
         std::getline(ss, line);
@@ -137,6 +143,15 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                     icePassword = value;
                 } else if (key == "setup") {
                     isSetupActive = value == "active";
+                } else if (key == "fingerprint") {
+                    if (props.size() == 1) {
+                        certHashAlg = value;
+                        if (certHashAlg == "sha-256") {
+                            // TODO - for now
+                            certHashBin = hex_to_bin(props[0]);
+                            certHashHex = props[0];
+                        }
+                    }
                 } else if (key == "extmap") {
                     const auto id = parse_int(value);
                     if (id >= 0) {
@@ -249,10 +264,11 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     const auto audioTrack = audioTrackId >= 0 ?
                             std::make_shared<Track>(audioTrackId, audioPayloadType, audioCodec) : nullptr;
 
-    outAnswer = std::make_shared<SdpAnswer>(iceUFrag, icePassword, extensionMap,
+    outAnswer.reset(new SdpAnswer(iceUFrag, icePassword, extensionMap,
                                             hostList,
                                             videoTrack, audioTrack,
-                                            isSetupActive);
+                                            isSetupActive,
+                                  {certHashAlg, certHashBin, certHashHex}));
 
     return Error::OK;
 }
@@ -263,7 +279,8 @@ SdpAnswer::SdpAnswer(const std::string& iceUFrag,
                      const std::vector<Host>& hostList,
                      const std::shared_ptr<Track>& videoTrack,
                      const std::shared_ptr<Track>& audioTrack,
-                     bool isSetupActive)
+                     bool isSetupActive,
+                     const X509Hash& certHash)
      : mIceUFrag(iceUFrag)
      , mIcePassword(icePassword)
      , mExtensionMap(extensionMap)
@@ -271,6 +288,7 @@ SdpAnswer::SdpAnswer(const std::string& iceUFrag,
      , mVideoTrack(videoTrack)
      , mAudioTrack(audioTrack)
      , mIsSetupActive(isSetupActive)
+     , mCertHash(certHash)
 {
 }
 
@@ -309,6 +327,11 @@ std::shared_ptr<Track> SdpAnswer::getAudioTrack() const
 bool SdpAnswer::isSetupActive() const
 {
     return mIsSetupActive;
+}
+
+const X509Hash& SdpAnswer::getCertificateHash() const
+{
+    return mCertHash;
 }
 
 }

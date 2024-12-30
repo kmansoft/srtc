@@ -7,6 +7,8 @@ struct x509_st;
 
 namespace srtc {
 
+class ByteBuffer;
+
 struct X509CertificateImpl;
 
 class X509Certificate {
@@ -14,10 +16,11 @@ public:
     X509Certificate();
     ~X509Certificate();
 
-    struct evp_pkey_st* getPrivateKey() const;
-    struct x509_st* getCertificate() const;
+    [[nodiscard]] struct evp_pkey_st* getPrivateKey() const;
+    [[nodiscard]] struct x509_st* getCertificate() const;
 
-    std::string getSha256Fingerprint() const;
+    [[nodiscard]] std::string getSha256FingerprintHex() const;
+    [[nodiscard]] const ByteBuffer& getSha256FingerprintBin() const;
 
 private:
     X509CertificateImpl* const mImpl;

@@ -38,7 +38,7 @@ ByteBuffer::ByteBuffer(ByteBuffer&& other)
     other.mCap = 0;
 }
 
-void ByteBuffer::operator=(ByteBuffer&& other)
+ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other)
 {
     delete[] mBuf;
 
@@ -49,6 +49,8 @@ void ByteBuffer::operator=(ByteBuffer&& other)
     other.mBuf = nullptr;
     other.mLen = 0;
     other.mCap = 0;
+
+    return *this;
 }
 
 void ByteBuffer::append(const uint8_t* src, size_t size)
@@ -83,6 +85,19 @@ uint8_t* ByteBuffer::data() const
 size_t ByteBuffer::len() const
 {
     return mLen;
+}
+
+ByteBuffer ByteBuffer::copy() const
+{
+    return { mBuf, mLen };
+}
+
+bool ByteBuffer::operator==(const ByteBuffer& other) const
+{
+    if (this->mLen == other.mLen) {
+        return std::memcmp(this->mBuf, other.mBuf, this->mLen) == 0;
+    }
+    return false;
 }
 
 ByteWriter::ByteWriter(ByteBuffer& buf)

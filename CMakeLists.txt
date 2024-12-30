@@ -17,7 +17,9 @@ add_library(srtc SHARED
         include/srtc/sdp_answer.h
         include/srtc/srtc.h
         include/srtc/track.h
+        include/srtc/util.h
         include/srtc/x509_certificate.h
+        include/srtc/x509_hash.h
         byte_buffer.cpp
         error.cpp
         extension_map.cpp
@@ -27,7 +29,9 @@ add_library(srtc SHARED
         sdp_offer.cpp
         srtc.cpp
         track.cpp
+        util.cpp
         x509_certificate.cpp
+        x509_hash.cpp
 )
 
 target_include_directories(srtc PUBLIC "./include")

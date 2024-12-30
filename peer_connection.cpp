@@ -3,6 +3,7 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/track.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -208,17 +209,7 @@ bool is_stun_message(const ByteBuffer& buf)
 
 struct dgram_data {
     PeerConnection* pc;
-    struct sockaddr_in addr;
 };
-
-static bool bio_socket_should_retry(ssize_t ret) {
-    if (ret != -1) {
-        return false;
-    }
-
-    return errno == EWOULDBLOCK ||
-           errno == EINTR;
-}
 
 int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 {
@@ -301,17 +292,8 @@ static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
         const auto digest = EVP_get_digestbyname("sha256");
         X509_digest(cert, digest, fpBuf, &fpSize);
 
-        std::string fpHex;
-        for (unsigned int i = 0; i < fpSize; i += 1) {
-            static const char* const ALPHABET = "0123456789abcdef";
-            fpHex += (ALPHABET[(fpBuf[i] >> 4) & 0x0F]);
-            fpHex += (ALPHABET[(fpBuf[i]) & 0x0F]);
-            if (i != fpSize -1) {
-                fpHex += ':';
-            }
-        }
-
-        LOG("Remote certificate sha-256: %s", fpHex.c_str());
+        std::string hex = bin_to_hex(fpBuf, fpSize);
+        LOG("Remote certificate sha-256: %s", hex.c_str());
     }
 
     return 1;
@@ -334,25 +316,26 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     BIO* dtls_bio = {};
 
     // We will be using STUN
-    StunAgent iceAgent = {};
+    const auto iceAgent = std::make_unique<StunAgent>();
     uint8_t iceMessageBuffer[2048];
 
-    stun_agent_init(&iceAgent, STUN_ALL_KNOWN_ATTRIBUTES,
+    const auto iceAgentSize = sizeof(iceAgent);
+
+    stun_agent_init(iceAgent.get(), STUN_ALL_KNOWN_ATTRIBUTES,
                     STUN_COMPATIBILITY_RFC5389,
                     static_cast<StunAgentUsageFlags>(
                             STUN_AGENT_USAGE_SHORT_TERM_CREDENTIALS |
                             STUN_AGENT_USAGE_USE_FINGERPRINT
                     ));
 
-    // Send an ICE STUN BINDING message
-    auto useCandidate = false;
+    auto sentUseCandidate = false;
 
     {
-        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(&iceAgent,
+        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(iceAgent.get(),
                                                                                  iceMessageBuffer,
                                                                                  sizeof(iceMessageBuffer),
                                                                                  offer, answer,
-                                                                                 useCandidate);
+                                                                                 sentUseCandidate);
         enqueueForSending({
             iceMessageBuffer, stun_message_length(&iceMessageBindingRequest1)
         });
@@ -372,8 +355,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         ev.data.fd = mSocketHandle;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
     }
-
-    // Are we ready for DTLS?
 
     // Receive buffer
     constexpr auto kReceiveBufferSize = 2048;
@@ -449,7 +430,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                 if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
                     StunMessage responseMessage = {};
-                    stun_agent_init_response(&iceAgent, &responseMessage, iceMessageBuffer, sizeof(iceMessageBuffer),
+                    stun_agent_init_response(iceAgent.get(), &responseMessage, iceMessageBuffer, sizeof(iceMessageBuffer),
                                              &incomingMessage);
                     stun_message_append_xor_addr (&responseMessage, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
                                                   &data.addr.ss, sizeof(data.addr.ss));
@@ -466,7 +447,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     stun_message_id(&incomingMessage, id);
 
                     const auto icePassword = offer->getIcePassword();
-                    stun_agent_finish_message(&iceAgent, &responseMessage,
+                    stun_agent_finish_message(iceAgent.get(), &responseMessage,
                                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
 
                     std::lock_guard lock(mMutex);
@@ -481,17 +462,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
                     stun_message_id(&incomingMessage, id);
 
-                    if (stun_agent_forget_transaction(&iceAgent, id)) {
+                    if (stun_agent_forget_transaction(iceAgent.get(), id)) {
                         LOG("Removed old transaction ID for binding request");
 
-                        if (!useCandidate) {
-                            useCandidate = true;
+                        if (!sentUseCandidate) {
+                            sentUseCandidate = true;
 
                             const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                    &iceAgent,
+                                    iceAgent.get(),
                                     iceMessageBuffer, sizeof(iceMessageBuffer),
                                     offer, answer,
-                                    useCandidate);
+                                    sentUseCandidate);
                             enqueueForSending({
                                 iceMessageBuffer,
                                 stun_message_length(&iceMessageBindingRequest2)});
@@ -528,7 +509,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
 
-                    SSL_set_tlsext_use_srtp(dtls_ssl, "SRTP_AES128_CM_SHA1_80");
+                    SSL_set_tlsext_use_srtp(dtls_ssl, "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
                     SSL_set_connect_state(dtls_ssl);
 
                     if (answer->isSetupActive()) {
@@ -548,6 +529,31 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     auto r1 = SSL_do_handshake(dtls_ssl);
                     auto err = SSL_get_error(dtls_ssl, r1);
                     LOG("DTLS handshake: %d, %d", r1, err);
+
+                    if (err == SSL_ERROR_WANT_READ) {
+                        LOG("Still in progress");
+                    } else if (r1 == 1 && err == 0) {
+                        LOG("Completed");
+
+                        X509* cert = SSL_get_peer_certificate(dtls_ssl);
+                        if (cert != nullptr) {
+                            uint8_t fpBuf[32] = { };
+                            unsigned int fpSize = { };
+
+                            const auto digest = EVP_get_digestbyname("sha256");
+                            X509_digest(cert, digest, fpBuf, &fpSize);
+
+                            std::string hex = bin_to_hex(fpBuf, fpSize);
+                            LOG("Remote certificate sha-256: %s", hex.c_str());
+
+                            const auto expectedHash = answer->getCertificateHash();
+                            const ByteBuffer actualHashBin = { fpBuf, fpSize };
+
+                            if (expectedHash.getBin() == actualHashBin) {
+                                LOG("Remote certificate matches");
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -559,7 +565,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     SSL_free(dtls_ssl);
     SSL_CTX_free(dtls_ctx);
-    BIO_free(dtls_bio);
 
     close(epollHandle);
     epollHandle = -1;

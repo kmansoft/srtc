@@ -1,3 +1,5 @@
+#include "srtc/util.h"
+#include "srtc/byte_buffer.h"
 #include "srtc/x509_certificate.h"
 
 #include <openssl/x509.h>
@@ -14,7 +16,8 @@ namespace srtc {
 struct X509CertificateImpl {
     EVP_PKEY* pkey = { nullptr };
     X509* x509 = {nullptr };
-    std::string fp256;
+    ByteBuffer fp256bin;
+    std::string fp256hex;
 };
 
 X509Certificate::X509Certificate()
@@ -62,17 +65,8 @@ X509Certificate::X509Certificate()
     const auto digest = EVP_get_digestbyname("sha256");
     X509_digest(mImpl->x509, digest, fpBuf, &fpSize);
 
-    std::string fpHex;
-    for (unsigned int i = 0; i < fpSize; i += 1) {
-        static const char* const ALPHABET = "0123456789abcdef";
-        fpHex += (ALPHABET[(fpBuf[i] >> 4) & 0x0F]);
-        fpHex += (ALPHABET[(fpBuf[i]) & 0x0F]);
-        if (i != fpSize -1) {
-            fpHex += ':';
-        }
-    }
-
-    mImpl->fp256 = fpHex;
+    mImpl->fp256bin = { fpBuf, fpSize };
+    mImpl->fp256hex = bin_to_hex(fpBuf, fpSize);
 
 #ifdef ANDROID
     // debug
@@ -104,9 +98,14 @@ struct x509_st* X509Certificate::getCertificate() const
     return mImpl->x509;
 }
 
-std::string X509Certificate::getSha256Fingerprint() const
+const ByteBuffer& X509Certificate::getSha256FingerprintBin() const
 {
-    return mImpl->fp256;
+    return mImpl->fp256bin;
+}
+
+std::string X509Certificate::getSha256FingerprintHex() const
+{
+    return mImpl->fp256hex;
 }
 
 X509Certificate::~X509Certificate()

@@ -16,13 +16,17 @@ public:
     void operator=(const ByteBuffer& other) = delete;
 
     ByteBuffer(ByteBuffer&& other);
-    void operator=(ByteBuffer&& other);
+    ByteBuffer& operator=(ByteBuffer&& other);
 
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
 
     [[nodiscard]] uint8_t* data() const;
     [[nodiscard]] size_t len() const;
+
+    [[nodiscard]] ByteBuffer copy() const;
+
+    [[nodiscard]] bool operator==(const ByteBuffer& other) const;
 
 private:
     uint8_t* mBuf;
