@@ -492,7 +492,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         if (err == SSL_ERROR_WANT_READ) {
                             LOG("Still in progress");
                         } else if (r1 == 1 && err == 0) {
-                            LOG("Completed");
+                            const auto cipher = SSL_get_cipher(dtls_ssl);
+
+                            LOG("Completed with cipher %s", cipher);
 
                             dtlsState = DtlsState::Completed;
 
