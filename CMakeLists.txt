@@ -47,6 +47,7 @@ target_link_libraries(
         ssl
         crypto
         nice
+        srtp2
         log
 )
 
@@ -67,6 +68,25 @@ target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/lib")
 
 add_dependencies(srtc boringssl)
+
+# LibSRTP
+
+ExternalProject_Add(
+        srtp
+        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
+        GIT_TAG "v2.6.0"
+        SOURCE_DIR "external/libsrtp"
+        INSTALL_COMMAND ""
+        CMAKE_ARGS -DLIBSRTP_TEST_APPS=OFF -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DANDROID_ABI=${ANDROID_ABI} -DANDROID_PLATFORM=android-29
+)
+
+target_include_directories(srtc PRIVATE
+        "${CMAKE_BINARY_DIR}/srtc/external/libsrtp/include")
+
+target_link_directories(srtc PUBLIC
+        "${CMAKE_BINARY_DIR}/srtc/srtp-prefix/src/srtp-build/")
+
+add_dependencies(srtc srtp)
 
 # STUN
 

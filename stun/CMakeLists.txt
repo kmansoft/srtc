@@ -29,8 +29,6 @@ target_compile_definitions(nice
     HAVE_OPENSSL=1
 )
 
-message(STATUS "*** Include = ${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
-
 target_include_directories(nice PRIVATE
         "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
 

@@ -20,6 +20,8 @@
 #include <openssl/ssl.h>
 #include <openssl/dtls1.h>
 
+#include <srtp.h>
+
 #include "stunagent.h"
 #include "stunmessage.h"
 
@@ -41,6 +43,12 @@ static void LOG(const char* format...)
 #include <cstdio>
 #define LOG(format, ...) printf(format "\n", __VA_ARGS__)
 #endif
+
+namespace {
+
+std::once_flag gSrtpInitFlag;
+
+}
 
 namespace srtc {
 
@@ -290,6 +298,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                              const std::shared_ptr<SdpAnswer> answer,
                                              const Host host)
 {
+    // Init the SRTP library
+    std::call_once(gSrtpInitFlag, []{
+        srtp_init();
+    });
+
     // Dest socket address
     struct sockaddr_in destAddr = {
             .sin_family = AF_INET,
