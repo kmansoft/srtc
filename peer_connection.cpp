@@ -308,7 +308,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // We will be using STUN
     const auto iceAgent = std::make_unique<StunAgent>();
-    uint8_t iceMessageBuffer[2048];
+
+    constexpr auto kIceMessageBufferSize = 2048;
+    const auto iceMessageBuffer = std::make_unique<uint8_t[]>(kIceMessageBufferSize);
 
     const auto iceAgentSize = sizeof(iceAgent);
 
@@ -323,12 +325,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     {
         const auto iceMessageBindingRequest1 = make_stun_message_binding_request(iceAgent.get(),
-                                                                                 iceMessageBuffer,
-                                                                                 sizeof(iceMessageBuffer),
+                                                                                 iceMessageBuffer.get(),
+                                                                                 kIceMessageBufferSize,
                                                                                  offer, answer,
                                                                                  sentUseCandidate);
         enqueueForSending({
-            iceMessageBuffer, stun_message_length(&iceMessageBindingRequest1)
+            iceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
         });
     }
 
@@ -391,7 +393,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                 &fromLen);
                         if (r > 0) {
                             LOG("Received %zd bytes", r);
-
                             receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
                         } else {
                             break;
@@ -421,7 +422,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                 if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
                     StunMessage responseMessage = {};
-                    stun_agent_init_response(iceAgent.get(), &responseMessage, iceMessageBuffer, sizeof(iceMessageBuffer),
+                    stun_agent_init_response(iceAgent.get(), &responseMessage,
+                                             iceMessageBuffer.get(), kIceMessageBufferSize,
                                              &incomingMessage);
                     stun_message_append_xor_addr (&responseMessage, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
                                                   &data.addr.ss, sizeof(data.addr.ss));
@@ -441,9 +443,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     stun_agent_finish_message(iceAgent.get(), &responseMessage,
                                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
 
-                    std::lock_guard lock(mMutex);
-                    mSendQueue.emplace_back(iceMessageBuffer, stun_message_length(&responseMessage));
-                    eventfd_write(mEventHandle, 1);
+                    enqueueForSending({ iceMessageBuffer.get(), stun_message_length(&responseMessage) });
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
@@ -461,11 +461,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                             const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
                                     iceAgent.get(),
-                                    iceMessageBuffer, sizeof(iceMessageBuffer),
+                                    iceMessageBuffer.get(),
+                                    kIceMessageBufferSize,
                                     offer, answer,
                                     sentUseCandidate);
                             enqueueForSending({
-                                iceMessageBuffer,
+                                iceMessageBuffer.get(),
                                 stun_message_length(&iceMessageBindingRequest2)});
 
                             iceState = IceState::Completed;
@@ -485,18 +486,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 // Try the handshake
                 if (dtls_ssl) {
                     if (dtlsState == DtlsState::Activating) {
-                        auto r1 = SSL_do_handshake(dtls_ssl);
-                        auto err = SSL_get_error(dtls_ssl, r1);
+                        const auto r1 = SSL_do_handshake(dtls_ssl);
+                        const auto err = SSL_get_error(dtls_ssl, r1);
                         LOG("DTLS handshake: %d, %d", r1, err);
 
                         if (err == SSL_ERROR_WANT_READ) {
                             LOG("Still in progress");
                         } else if (r1 == 1 && err == 0) {
                             const auto cipher = SSL_get_cipher(dtls_ssl);
+                            const auto profile = SSL_get_selected_srtp_profile(dtls_ssl);
 
-                            LOG("Completed with cipher %s", cipher);
-
-                            dtlsState = DtlsState::Completed;
+                            LOG("Completed with cipher %s, profile %s", cipher, profile->name);
 
                             X509 *cert = SSL_get_peer_certificate(dtls_ssl);
                             if (cert != nullptr) {
@@ -513,7 +513,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                 const ByteBuffer actualHashBin = {fpBuf, fpSize};
 
                                 if (expectedHash.getBin() == actualHashBin) {
-                                    LOG("Remote certificate matches");
+                                    LOG("Remote certificate matches the SDP");
+                                    dtlsState = DtlsState::Completed;
                                 }
                             }
                         }
@@ -522,42 +523,39 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             }
         }
 
-        if (dtlsState == DtlsState::Activating) {
-            if (dtls_ssl == nullptr) {
-                LOG("Preparing for the DTLS handshake");
+        if (dtlsState == DtlsState::Activating && dtls_ssl == nullptr) {
+            LOG("Preparing for the DTLS handshake");
 
-                const auto cert = offer->getCertificate();
-                dtls_ctx = SSL_CTX_new(DTLS_client_method());
+            const auto cert = offer->getCertificate();
+            dtls_ctx = SSL_CTX_new(DTLS_client_method());
 
-                SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
-                SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
+            SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
+            SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
 
-                if (!SSL_CTX_check_private_key(dtls_ctx)) {
-                    LOG("ERROR: invalid private key");
-                }
+            if (!SSL_CTX_check_private_key(dtls_ctx)) {
+                LOG("ERROR: invalid private key");
+            }
 
-                SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
+            SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
 
-                SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
-                SSL_CTX_set_read_ahead(dtls_ctx, 1);
+            SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
+            SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_3_VERSION);
+            SSL_CTX_set_read_ahead(dtls_ctx, 1);
 
-                dtls_ssl = SSL_new(dtls_ctx);
+            dtls_ssl = SSL_new(dtls_ctx);
 
-                dtls_bio = BIO_new_dgram(this);
+            dtls_bio = BIO_new_dgram(this);
 
-                SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
+            SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
 
-                SSL_set_tlsext_use_srtp(dtls_ssl,
-                                        "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
+            SSL_set_tlsext_use_srtp(dtls_ssl,
+                                    "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
+            SSL_set_connect_state(dtls_ssl);
+
+            if (answer->isSetupActive()) {
+                SSL_set_accept_state(dtls_ssl);
+            } else {
                 SSL_set_connect_state(dtls_ssl);
-
-                if (answer->isSetupActive()) {
-                    SSL_set_accept_state(dtls_ssl);
-                } else {
-                    SSL_set_connect_state(dtls_ssl);
-                }
-
-                // For now this will fail
                 SSL_do_handshake(dtls_ssl);
             }
         }
