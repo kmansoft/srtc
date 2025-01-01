@@ -46,6 +46,8 @@ static void LOG(const char* format...)
 
 namespace {
 
+constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80";
+
 std::once_flag gSrtpInitFlag;
 
 }
@@ -64,7 +66,7 @@ PeerConnection::~PeerConnection()
         std::lock_guard lock(mMutex);
 
         if (mThread.joinable()) {
-            mState = State::Deactivating;
+            mThreadState = ThreadState::Deactivating;
             eventfd_write(mEventHandle, 1);
             waitForThread = std::move(mThread);
         }
@@ -81,10 +83,6 @@ PeerConnection::~PeerConnection()
             close(mEventHandle);
             mEventHandle = -1;
         }
-        if (mSocketHandle >= 0) {
-            close(mSocketHandle);
-            mSocketHandle = -1;
-        }
     }
 }
 
@@ -92,7 +90,7 @@ void PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(mState == State::Inactive);
+    assert(mThreadState == ThreadState::Inactive);
 
     mSdpOffer = offer;
 }
@@ -101,7 +99,7 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(mState == State::Inactive);
+    assert(mThreadState == ThreadState::Inactive);
 
     mSdpAnswer = answer;
 
@@ -109,16 +107,8 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mAudioTrack = answer->getAudioTrack();
 
     if (mSdpOffer && mSdpAnswer) {
-        mDestHost = answer->getHostList()[0];
-
         mEventHandle = eventfd(0, EFD_NONBLOCK);
-
-        mSocketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        auto socketFlags = fcntl(mSocketHandle, F_GETFL, 0);
-        socketFlags |= O_NONBLOCK;
-        fcntl(mSocketHandle, F_SETFL, socketFlags);
-
-        mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer, mDestHost);
+        mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
 
         // mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
     }
@@ -148,6 +138,11 @@ std::shared_ptr<Track> PeerConnection::getAudioTrack() const
     return mAudioTrack;
 }
 
+void PeerConnection::setConnectionStateListener(const ConnectionStateListener& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mConnectionStateListener = listener;
+}
 
 // https://datatracker.ietf.org/doc/html/rfc5389#section-6
 constexpr auto kStunRfc5389Cookie = 0x2112A442;
@@ -197,20 +192,48 @@ StunMessage make_stun_message_binding_request(StunAgent* agent,
     return msg;
 }
 
+// https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
+
 bool is_stun_message(const ByteBuffer& buf)
 {
     if (buf.len() > 20) {
-        uint32_t magic = htonl(kStunRfc5389Cookie);
-        uint8_t cookie[4];
-        std::memcpy(cookie, buf.data() + 4, 4);
+        const auto data =  buf.data();
+        if (data[0] < 2) {
+            uint32_t magic = htonl(kStunRfc5389Cookie);
+            uint8_t cookie[4];
+            std::memcpy(cookie, buf.data() + 4, 4);
 
-        if (std::memcmp(&magic, cookie, 4) == 0) {
+            if (std::memcmp(&magic, cookie, 4) == 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool is_dtls_message(const ByteBuffer& buf) {
+    if (buf.len() > 0) {
+        const auto data = buf.data();
+        if (data[0] >= 20 && data[0] <= 63) {
             return true;
         }
     }
 
     return false;
 }
+
+bool is_rtc_message(const ByteBuffer& buf) {
+    if (buf.len() > 0) {
+        const auto data = buf.data();
+        if (data[0] >= 128 && data[0] <= 191) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 
 // Custom BIO for DGRAM
 
@@ -295,20 +318,35 @@ static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
 }
 
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-                                             const std::shared_ptr<SdpAnswer> answer,
-                                             const Host host)
+                                             const std::shared_ptr<SdpAnswer> answer)
 {
+    // We are activating
+    {
+        std::lock_guard lock(mMutex);
+        mThreadState = ThreadState::Active;
+    }
+
+    setConnectionState(ConnectionState::Connecting);
+
     // Init the SRTP library
     std::call_once(gSrtpInitFlag, []{
         srtp_init();
     });
 
-    // Dest socket address
+    // Dest host and its socket address
+    const auto destHost = answer->getHostList()[0]; // TODO try them all
+
     struct sockaddr_in destAddr = {
             .sin_family = AF_INET,
-            .sin_port = htons(mDestHost.port),
-            .sin_addr = mDestHost.host.ipv4
+            .sin_port = htons(destHost.port),
+            .sin_addr = destHost.host.ipv4
     };
+
+    // Dest socket
+    auto socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    auto socketFlags = fcntl(socketFd, F_GETFL, 0);
+    socketFlags |= O_NONBLOCK;
+    fcntl(socketFd, F_SETFL, socketFlags);
 
     // States
     auto iceState = IceState::Inactive;
@@ -348,18 +386,21 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     }
 
     // Our socket loop
+    auto eventFd = -1;
     auto epollHandle = epoll_create(2);
 
     {
         std::lock_guard lock(mMutex);
 
+        eventFd = mEventHandle;
+
         struct epoll_event ev = { .events = EPOLLIN };
 
-        ev.data.fd = mEventHandle;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
+        ev.data.fd = eventFd;
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, eventFd, &ev);
 
-        ev.data.fd = mSocketHandle;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mSocketHandle, &ev);
+        ev.data.fd = socketFd;
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, socketFd, &ev);
     }
 
     // Receive buffer
@@ -376,7 +417,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         {
            std::lock_guard lock(mMutex);
-            if (mState == State::Deactivating) {
+            if (mThreadState == ThreadState::Deactivating) {
                 break;
             }
 
@@ -384,24 +425,24 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 const auto buf = std::move(mSendQueue.front());
                 mSendQueue.erase(mSendQueue.begin());
 
-                const auto w = sendto(mSocketHandle, buf.data(), buf.len(),
+                const auto w = sendto(socketFd, buf.data(), buf.len(),
                        0,
                         (struct sockaddr *) &destAddr, sizeof(destAddr));
                 LOG("Sent %zd bytes", w);
             }
 
             for (int i = 0; i < nfds; i += 1) {
-                if (epollEvent[i].data.fd == mEventHandle) {
+                if (epollEvent[i].data.fd == eventFd) {
                     // Read from event
                     eventfd_t value = { 0 };
                     eventfd_read(mEventHandle, &value);
-                } else if (epollEvent[i].data.fd == mSocketHandle) {
+                } else if (epollEvent[i].data.fd == socketFd) {
                     // Read from socket
                     while (true) {
                         union anyaddr from = {};
                         socklen_t fromLen = sizeof(from);
 
-                        const auto r = recvfrom(mSocketHandle, receiveBuffer.get(), kReceiveBufferSize, 0,
+                        const auto r = recvfrom(socketFd, receiveBuffer.get(), kReceiveBufferSize, 0,
                                                 reinterpret_cast<struct sockaddr *>(&from),
                                                 &fromLen);
                         if (r > 0) {
@@ -422,7 +463,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             if (is_stun_message(data.buf)) {
                 LOG("Received STUN message");
 
-                StunMessage incomingMessage = {
+                const StunMessage incomingMessage = {
                         .buffer = data.buf.data(),
                         .buffer_len = data.buf.len()
                 };
@@ -487,9 +528,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         }
                     }
                 }
-            } else {
-                // Received non-STUN message
-                LOG("Received non-STUN message %zd, %d", data.buf.len(), data.buf.data()[0]);
+            } else if (is_dtls_message(data.buf)) {
+                LOG("Received DTLS message %zd, %d", data.buf.len(), data.buf.data()[0]);
 
                 {
                     std::lock_guard lock(mMutex);
@@ -511,8 +551,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                             LOG("Completed with cipher %s, profile %s", cipher, profile->name);
 
-                            X509 *cert = SSL_get_peer_certificate(dtls_ssl);
-                            if (cert != nullptr) {
+                            const auto cert = SSL_get_peer_certificate(dtls_ssl);
+                            if (cert == nullptr) {
+                                // Error, no certificate
+                                dtlsState = DtlsState::Failed;
+                                setConnectionState(ConnectionState::Failed);
+                            } else {
+                                //
                                 uint8_t fpBuf[32] = {};
                                 unsigned int fpSize = {};
 
@@ -528,11 +573,25 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                 if (expectedHash.getBin() == actualHashBin) {
                                     LOG("Remote certificate matches the SDP");
                                     dtlsState = DtlsState::Completed;
+                                    setConnectionState(ConnectionState::Connected);
+                                } else {
+                                    // Error, certificate hash does not match
+                                    dtlsState = DtlsState::Failed;
+                                    setConnectionState(ConnectionState::Failed);
                                 }
                             }
+                        } else {
+                            // Error during DTLS handshake
+                            LOG("Failed");
+                            dtlsState = DtlsState::Failed;
+                            setConnectionState(ConnectionState::Failed);
                         }
                     }
                 }
+            } else if (is_rtc_message(data.buf)) {
+                LOG("Received RTP/RTCP message %zd, %d", data.buf.len(), data.buf.data()[0]);
+            } else {
+                LOG("Received unknown message %zd, %d", data.buf.len(), data.buf.data()[0]);
             }
         }
 
@@ -561,8 +620,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
             SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
 
-            SSL_set_tlsext_use_srtp(dtls_ssl,
-                                    "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80");
+            SSL_set_tlsext_use_srtp(dtls_ssl, kSrtpCipherList);
             SSL_set_connect_state(dtls_ssl);
 
             if (answer->isSetupActive()) {
@@ -583,6 +641,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     close(epollHandle);
     epollHandle = -1;
+
+    close(socketFd);
+    socketFd = -1;
+
+    setConnectionState(ConnectionState::Closed);
 }
 
 void PeerConnection::enqueueForSending(ByteBuffer&& buf)
@@ -593,5 +656,21 @@ void PeerConnection::enqueueForSending(ByteBuffer&& buf)
     mSendQueue.push_back(std::move(buf));
     eventfd_write(mEventHandle, 1);
 }
+
+void PeerConnection::setConnectionState(ConnectionState state)
+{
+    {
+        std::lock_guard lock1(mMutex);
+        mConnectionState = state;
+    }
+
+    {
+        std::lock_guard lock2(mListenerMutex);
+        if (mConnectionStateListener) {
+            mConnectionStateListener(state);
+        }
+    }
+}
+
 
 }

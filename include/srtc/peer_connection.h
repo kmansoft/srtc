@@ -8,6 +8,7 @@
 #include <thread>
 #include <list>
 #include <string>
+#include <functional>
 
 struct bio_st;
 struct bio_method_st;
@@ -32,6 +33,16 @@ public:
     std::shared_ptr<Track> getVideoTrack() const;
     std::shared_ptr<Track> getAudioTrack() const;
 
+    enum class ConnectionState {
+        Inactive = 0,
+        Connecting = 1,
+        Connected = 2,
+        Failed = 100,
+        Closed = 200
+    };
+    using ConnectionStateListener = std::function<void(ConnectionState state)>;
+    void setConnectionStateListener(const ConnectionStateListener& listener);
+
 private:
     mutable std::mutex mMutex;
 
@@ -41,13 +52,14 @@ private:
     std::shared_ptr<Track> mVideoTrack SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
 
-    void networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-                                 const std::shared_ptr<SdpAnswer> answer,
-                                 const Host host);
+    void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer,
+                                 std::shared_ptr<SdpAnswer> answer);
 
     void enqueueForSending(ByteBuffer&& buf) SRTC_LOCKS_EXCLUDED(mMutex);
 
-    enum class State {
+    void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
+
+    enum class ThreadState {
         Inactive,
         Active,
         Deactivating
@@ -61,6 +73,7 @@ private:
     enum class DtlsState {
         Inactive,
         Activating,
+        Failed,
         Completed
     };
 
@@ -70,17 +83,21 @@ private:
         size_t addr_len;
     };
 
-    State mState SRTC_GUARDED_BY(mMutex) = { State::Inactive };
+    ThreadState mThreadState SRTC_GUARDED_BY(mMutex) = { ThreadState::Inactive };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
-    Host mDestHost = { };
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
-    int mSocketHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 
     std::list<ByteBuffer> mSendQueue;
 
     // A queue for incoming DTLS data, routed through a custom BIO
     std::list<ByteBuffer> mDtlsReceiveQueue SRTC_GUARDED_BY(mMutex);
+
+    // Overall connection state and listener
+    ConnectionState mConnectionState = { ConnectionState::Inactive };
+
+    std::mutex mListenerMutex;
+    ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
 
     // OpenSSL BIO
     static int dgram_read(struct bio_st *b, char *out, int outl);
