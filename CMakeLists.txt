@@ -11,10 +11,12 @@ add_library(srtc SHARED
         include/srtc/byte_buffer.h
         include/srtc/error.h
         include/srtc/extension_map.h
+        include/srtc/logging.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
+        include/srtc/scheduler.h
         include/srtc/srtc.h
         include/srtc/track.h
         include/srtc/util.h
@@ -23,10 +25,12 @@ add_library(srtc SHARED
         byte_buffer.cpp
         error.cpp
         extension_map.cpp
+        logging.cpp
         peer_connection.cpp
         random_generator.cpp
         sdp_answer.cpp
         sdp_offer.cpp
+        scheduler.cpp
         srtc.cpp
         track.cpp
         util.cpp

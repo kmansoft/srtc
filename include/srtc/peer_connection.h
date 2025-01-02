@@ -18,6 +18,7 @@ namespace srtc {
 class SdpAnswer;
 class SdpOffer;
 class Track;
+class Scheduler;
 
 class PeerConnection {
 public:
@@ -98,6 +99,9 @@ private:
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
+
+    // A scheduler for retries
+    const std::shared_ptr<Scheduler> mScheduler;
 
     // OpenSSL BIO
     static int dgram_read(struct bio_st *b, char *out, int outl);

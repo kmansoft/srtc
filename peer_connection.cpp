@@ -4,7 +4,9 @@
 #include "srtc/track.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/util.h"
+#include "srtc/logging.h"
 #include "srtc/x509_certificate.h"
+#include "srtc/scheduler.h"
 
 #include <cassert>
 #include <iostream>
@@ -25,26 +27,11 @@
 #include "stunagent.h"
 #include "stunmessage.h"
 
-#ifdef ANDROID
-#include <android/log.h>
-#include <cstdarg>
-
-static void LOG(const char* format...)  __attribute__ ((format (printf, 1, 2)));
-
-static void LOG(const char* format...)
-{
-    va_list ap;
-    va_start(ap, format);
-    __android_log_vprint(ANDROID_LOG_INFO, "PeerConnection", format, ap);
-    va_end(ap);
-
-}
-#else
-#include <cstdio>
-#define LOG(format, ...) printf(format "\n", __VA_ARGS__)
-#endif
+#define LOG(...) srtc::log("PeerConnection", __VA_ARGS__)
 
 namespace {
+
+constexpr auto kTag = "PeerConnection";
 
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80";
 
@@ -55,7 +42,20 @@ std::once_flag gSrtpInitFlag;
 namespace srtc {
 
 PeerConnection::PeerConnection()
+    : mScheduler(std::make_shared<ThreadScheduler>("srtc-pc"))
 {
+    // Test code
+    mScheduler->submit(std::chrono::milliseconds(1000), [] {
+        LOG("Task at 1000 ms");
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    mScheduler->submit(std::chrono::milliseconds(2000), [] {
+        LOG("Task at 2000 ms");
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    mScheduler->submit(std::chrono::milliseconds(500), [] {
+        LOG("Task at 500 ms");
+    });
 }
 
 PeerConnection::~PeerConnection()
