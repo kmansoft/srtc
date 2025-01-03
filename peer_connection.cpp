@@ -33,9 +33,79 @@ namespace {
 
 constexpr auto kTag = "PeerConnection";
 
-constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80";
+// We are using LibSRTP with embedded crypto for now, which doesn't support GCM
+// constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SRTP_AES128_CM_SHA1_80";
+constexpr auto kSrtpCipherList = "SRTP_AES128_CM_SHA1_80";
 
 std::once_flag gSrtpInitFlag;
+
+// https://datatracker.ietf.org/doc/html/rfc5389#section-6
+constexpr auto kStunRfc5389Cookie = 0x2112A442;
+
+// https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
+uint32_t make_stun_priority(int type_preference,
+                            int local_preference,
+                            uint8_t component_id)
+{
+    return
+            (1 << 24) * type_preference +
+            (1 << 8) * local_preference +
+            (256 - component_id);
+}
+
+
+bool is_stun_message(const srtc::ByteBuffer& buf)
+{
+    // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
+    if (buf.len() > 20) {
+        const auto data =  buf.data();
+        if (data[0] < 2) {
+            uint32_t magic = htonl(kStunRfc5389Cookie);
+            uint8_t cookie[4];
+            std::memcpy(cookie, buf.data() + 4, 4);
+
+            if (std::memcmp(&magic, cookie, 4) == 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool is_dtls_message(const srtc::ByteBuffer& buf) {
+    // https://datatracker.ietf.org/doc/html/rfc7983#section-5
+    if (buf.len() > 0) {
+        const auto data = buf.data();
+        if (data[0] >= 20 && data[0] <= 24) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool is_rtc_message(const srtc::ByteBuffer& buf) {
+    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
+    if (buf.len() >= 8) {
+        const auto data = buf.data();
+        if (data[0] >= 128 && data[0] <= 191) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool is_rtcp_message(const srtc::ByteBuffer& buf) {
+    // https://datatracker.ietf.org/doc/html/rfc5761#section-4
+    if (buf.len() >= 8) {
+        const auto data = buf.data();
+        const auto payloadId = data[1] & 0x7F;
+        return payloadId >= 64 && payloadId <= 95;
+    }
+    return false;
+}
 
 long long elapsedMillis(const std::chrono::steady_clock::time_point& start) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
@@ -151,20 +221,6 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-// https://datatracker.ietf.org/doc/html/rfc5389#section-6
-constexpr auto kStunRfc5389Cookie = 0x2112A442;
-
-// https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
-uint32_t make_stun_priority(int type_preference,
-                            int local_preference,
-                            uint8_t component_id)
-{
-    return
-        (1 << 24) * type_preference +
-        (1 << 8) * local_preference +
-                (256 - component_id);
-}
-
 StunMessage make_stun_message_binding_request(StunAgent* agent,
                                               uint8_t* buf,
                                               size_t len,
@@ -198,49 +254,6 @@ StunMessage make_stun_message_binding_request(StunAgent* agent,
 
     return msg;
 }
-
-// https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
-
-bool is_stun_message(const ByteBuffer& buf)
-{
-    if (buf.len() > 20) {
-        const auto data =  buf.data();
-        if (data[0] < 2) {
-            uint32_t magic = htonl(kStunRfc5389Cookie);
-            uint8_t cookie[4];
-            std::memcpy(cookie, buf.data() + 4, 4);
-
-            if (std::memcmp(&magic, cookie, 4) == 0) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool is_dtls_message(const ByteBuffer& buf) {
-    if (buf.len() > 0) {
-        const auto data = buf.data();
-        if (data[0] >= 20 && data[0] <= 63) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool is_rtc_message(const ByteBuffer& buf) {
-    if (buf.len() > 0) {
-        const auto data = buf.data();
-        if (data[0] >= 128 && data[0] <= 191) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 
 // Custom BIO for DGRAM
 
@@ -363,6 +376,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     SSL_CTX* dtls_ctx = {};
     SSL* dtls_ssl = {};
     BIO* dtls_bio = {};
+
+    // SRTP
+    srtp_t srtpIn = { nullptr }, srtpOut = {nullptr };
+    srtp_create(&srtpIn, nullptr);
+    srtp_create(&srtpOut, nullptr);
+
+    std::unique_ptr<uint8_t[]> srtpClientKeyBuf, srtpServerKeyBuf;
 
     // We will be using STUN
     const auto iceAgent = std::make_unique<StunAgent>();
@@ -579,8 +599,91 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                                 if (expectedHash.getBin() == actualHashBin) {
                                     LOG("Remote certificate matches the SDP");
-                                    dtlsState = DtlsState::Completed;
-                                    setConnectionState(ConnectionState::Connected);
+
+                                    // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
+                                    const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
+
+                                    srtp_profile_t srtpProfile;
+                                    size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
+
+                                    switch (srtpProfileName->id) {
+                                        case SRTP_AEAD_AES_256_GCM:
+                                            srtpProfile = srtp_profile_aead_aes_256_gcm;
+                                            srtpKeySize = SRTP_AES_256_KEY_LEN;
+                                            srtpSaltSize = SRTP_AEAD_SALT_LEN;
+                                            break;
+                                        case SRTP_AEAD_AES_128_GCM:
+                                            srtpProfile = srtp_profile_aead_aes_128_gcm;
+                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                            srtpSaltSize = SRTP_AEAD_SALT_LEN;
+                                            break;
+                                        case SRTP_AES128_CM_SHA1_80:
+                                            srtpProfile = srtp_profile_aes128_cm_sha1_80;
+                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                            srtpSaltSize = SRTP_SALT_LEN;
+                                            break;
+                                        case SRTP_AES128_CM_SHA1_32:
+                                            srtpProfile = srtp_profile_aes128_cm_sha1_32;
+                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                            srtpSaltSize = SRTP_SALT_LEN;
+                                            break;
+                                        default:
+                                            break;
+                                    }
+
+                                    if (srtpKeySize == 0) {
+                                        dtlsState = DtlsState::Failed;
+                                        setConnectionState(ConnectionState::Failed);
+                                    } else {
+                                        const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
+                                        const auto material = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize * 2);
+
+                                        std::string label = "EXTRACTOR-dtls_srtp";
+                                        SSL_export_keying_material(dtls_ssl,
+                                                                   material.get(), srtpKeyPlusSaltSize * 2,
+                                                                   label.data(), label.size(),
+                                                                   nullptr, 0, 0);
+
+                                        const auto srtpClientKey = material.get();
+                                        const auto srtpServerKey = srtpClientKey + srtpKeySize;
+                                        const auto srtpClientSalt = srtpServerKey + srtpKeySize;
+                                        const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
+
+                                        srtpClientKeyBuf = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize);
+                                        std::memcpy(srtpClientKeyBuf.get(), srtpClientKey, srtpKeySize);
+                                        std::memcpy(srtpClientKeyBuf.get() + srtpKeySize, srtpClientSalt, srtpSaltSize);
+
+                                        srtpServerKeyBuf = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize);
+                                        std::memcpy(srtpServerKeyBuf.get(), srtpServerKey, srtpKeySize);
+                                        std::memcpy(srtpServerKeyBuf.get() + srtpKeySize, srtpServerSalt, srtpSaltSize);
+
+                                        srtp_policy_t srtpReceivePolicy = {
+                                            .ssrc {
+                                                .type = ssrc_any_inbound
+                                            },
+                                            .key = answer->isSetupActive() ? srtpClientKeyBuf.get() : srtpServerKeyBuf.get(),
+                                            .allow_repeat_tx = true
+                                        };
+                                        srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
+                                        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
+
+                                        srtp_add_stream(srtpIn, &srtpReceivePolicy);
+
+                                        srtp_policy_t srtpSendPolicy = {
+                                                .ssrc {
+                                                        .type = ssrc_any_outbound
+                                                },
+                                                .key = answer->isSetupActive() ? srtpServerKeyBuf.get() : srtpClientKeyBuf.get(),
+                                                .allow_repeat_tx = true
+                                        };
+                                        srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
+                                        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
+
+                                        srtp_add_stream(srtpOut, &srtpSendPolicy);
+
+                                        dtlsState = DtlsState::Completed;
+                                        setConnectionState(ConnectionState::Connected);
+                                    }
                                 } else {
                                     // Error, certificate hash does not match
                                     dtlsState = DtlsState::Failed;
@@ -597,6 +700,19 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 }
             } else if (is_rtc_message(data.buf)) {
                 LOG("Received RTP/RTCP message %zd, %d", data.buf.len(), data.buf.data()[0]);
+
+                if (is_rtcp_message(data.buf)) {
+                    int size = { static_cast<int>(data.buf.len()) };
+                    const auto status = srtp_unprotect_rtcp(srtpIn, data.buf.data(), &size);
+                    LOG("RTCP unprotect: %d, size = %d", status, size);
+                    if (status == srtp_err_status_ok) {
+                        const auto rtcpPayloadType = data.buf.data()[1];
+                        uint32_t rtcpSSRC = { 0 };
+                        std::memcpy(&rtcpSSRC, data.buf.data() + 4, 4);
+                        rtcpSSRC = htonl(rtcpSSRC);
+                        LOG("RTCP payload = %d, SSRC = %u", rtcpPayloadType, rtcpSSRC);
+                    }
+                }
             } else {
                 LOG("Received unknown message %zd, %d", data.buf.len(), data.buf.data()[0]);
             }
@@ -638,6 +754,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             }
         }
     }
+
+    srtp_dealloc(srtpIn);
+    srtp_dealloc(srtpOut);
 
     if (dtls_ssl) {
         SSL_shutdown(dtls_ssl);

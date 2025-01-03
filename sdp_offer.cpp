@@ -57,9 +57,9 @@ std::pair<std::string, Error> SdpOffer::generate()
 
     // Video
     const auto layer = mVideoConfig.layerList[0];
-    const int layerId = 100;
+    const int payloadId = 96;
 
-    ss << "m=video 9 UDP/TLS/RTP/SAVPF " << layerId << std::endl;
+    ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << std::endl;
     ss << "c=IN IP4 0.0.0.0" << std::endl;
     ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
     ss << "a=mid:0" << std::endl;
@@ -67,12 +67,12 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "a=sendonly" << std::endl;
     ss << "a=rtcp-mux" << std::endl;
     ss << "a=rtcp-rsize" << std::endl;
-    ss << "a=rtpmap:" << layerId << " " << to_string(layer.codec) << "/90000" << std::endl;
+    ss << "a=rtpmap:" << payloadId << " " << to_string(layer.codec) << "/90000" << std::endl;
     if (layer.codec == Codec::H264) {
         char buf[128];
         std::snprintf(buf, sizeof(buf), "%02x%04x", layer.profileId, layer.level);
 
-        ss << "a=fmtp:" << layerId
+        ss << "a=fmtp:" << payloadId
            << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="
            << buf << std::endl;
     }
