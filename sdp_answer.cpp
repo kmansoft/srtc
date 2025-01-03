@@ -98,7 +98,6 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 {
     std::stringstream ss(answer);
 
-    auto isIceLite = false;
     std::string iceUFrag, icePassword;
 
     ExtensionMap extensionMap;
@@ -135,9 +134,7 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
             parse_line(line, tag, key, value, props);
 
             if (tag == "a") {
-                if (key == "ice-lite") {
-                    isIceLite = true;
-                } else if (key == "ice-ufrag") {
+                if (key == "ice-ufrag") {
                     iceUFrag = value;
                 } else if (key == "ice-pwd") {
                     icePassword = value;
@@ -245,9 +242,6 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
         }
     }
 
-    if (!isIceLite) {
-        return { Error::Code::InvalidData, "Only ice-lite is supported" };
-    }
     if (hostList.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }

@@ -37,6 +37,10 @@ constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_256_GCM:SRTP_AEAD_AES_128_GCM:SR
 
 std::once_flag gSrtpInitFlag;
 
+long long elapsedMillis(const std::chrono::steady_clock::time_point& start) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+}
+
 }
 
 namespace srtc {
@@ -45,16 +49,19 @@ PeerConnection::PeerConnection()
     : mScheduler(std::make_shared<ThreadScheduler>("srtc-pc"))
 {
     // Test code
-    mScheduler->submit(std::chrono::milliseconds(1000), [] {
-        LOG("Task at 1000 ms");
+    const auto start1000 = std::chrono::steady_clock::now();
+    mScheduler->submit(std::chrono::milliseconds(1000), [start1000] {
+        LOG("Task at 1000 ms, at %lld ms", elapsedMillis(start1000));
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    mScheduler->submit(std::chrono::milliseconds(2000), [] {
-        LOG("Task at 2000 ms");
+    const auto start2000 = std::chrono::steady_clock::now();
+    mScheduler->submit(std::chrono::milliseconds(2000), [start2000] {
+        LOG("Task at 2000 ms, at %lld ms", elapsedMillis(start2000));
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    mScheduler->submit(std::chrono::milliseconds(500), [] {
-        LOG("Task at 500 ms");
+    const auto start500 = std::chrono::steady_clock::now();
+    mScheduler->submit(std::chrono::milliseconds(500), [start500] {
+        LOG("Task at 500 ms, at %lld ms", elapsedMillis(start500));
     });
 }
 
