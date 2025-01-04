@@ -50,6 +50,9 @@ public:
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
+    [[nodiscard]] int32_t getVideoSSRC() const;
+    [[nodiscard]] int32_t getAudioSSRC() const;
+
 private:
     std::string generateRandomUUID();
     std::string generateRandomString(size_t len);

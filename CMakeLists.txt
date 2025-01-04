@@ -12,6 +12,8 @@ add_library(srtc SHARED
         include/srtc/error.h
         include/srtc/extension_map.h
         include/srtc/logging.h
+        include/srtc/packetizer.h
+        include/srtc/packetizer_h264.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/sdp_offer.h
@@ -26,6 +28,8 @@ add_library(srtc SHARED
         error.cpp
         extension_map.cpp
         logging.cpp
+        packetizer.cpp
+        packetizer_h264.cpp
         peer_connection.cpp
         random_generator.cpp
         sdp_answer.cpp
@@ -50,7 +54,7 @@ target_link_libraries(
         PRIVATE
         ssl
         crypto
-        nice
+        stun
         srtp2
         log
 )
@@ -59,17 +63,22 @@ target_link_libraries(
 
 ExternalProject_Add(
         boringssl
-        GIT_REPOSITORY "https://github.com/google/boringssl.git"
+        GIT_REPOSITORY "https://gitlab.com/kmansoft/boringssl.git"
         GIT_TAG "origin/master"
+        GIT_SHALLOW ON
         SOURCE_DIR "external/boringssl"
-        CMAKE_ARGS -DOPENSSL_SMALL=TRUE -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DANDROID_ABI=${ANDROID_ABI} -DANDROID_PLATFORM=android-29
+        CMAKE_ARGS
+            -DOPENSSL_SMALL=ON
+            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+            -DANDROID_ABI=${ANDROID_ABI}
+            -DANDROID_PLATFORM=android-29
 )
 
 target_include_directories(srtc PRIVATE
-        "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
+        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/include")
 
 target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/lib")
+        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/lib")
 
 add_dependencies(srtc boringssl)
 
@@ -77,18 +86,23 @@ add_dependencies(srtc boringssl)
 
 ExternalProject_Add(
         srtp
-        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
+        GIT_REPOSITORY "https://gitlab.com/kmansoft/libsrtp.git"
         GIT_TAG "v2.6.0"
+        GIT_SHALLOW ON
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""
-        CMAKE_ARGS -DLIBSRTP_TEST_APPS=OFF -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DANDROID_ABI=${ANDROID_ABI} -DANDROID_PLATFORM=android-29
+        CMAKE_ARGS
+            -DLIBSRTP_TEST_APPS=OFF
+            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+            -DANDROID_ABI=${ANDROID_ABI}
+            -DANDROID_PLATFORM=android-29
 )
 
 target_include_directories(srtc PRIVATE
-        "${CMAKE_BINARY_DIR}/srtc/external/libsrtp/include")
+        "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
 
 target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/srtc/srtp-prefix/src/srtp-build/")
+        "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build/")
 
 add_dependencies(srtc srtp)
 
@@ -96,8 +110,8 @@ add_dependencies(srtc srtp)
 
 add_subdirectory(stun)
 
-add_dependencies(nice boringssl)
-add_dependencies(srtc nice)
+add_dependencies(stun boringssl)
+add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE
     "stun")

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-project("nice")
+project("stun")
 
-add_library(nice STATIC
+add_library(stun STATIC
         constants.h
         debug.c
         debug.h
@@ -24,12 +24,12 @@ add_library(nice STATIC
         win32_common.h
 )
 
-target_compile_definitions(nice
+target_compile_definitions(stun
     PRIVATE
     HAVE_OPENSSL=1
 )
 
-target_include_directories(nice PRIVATE
+target_include_directories(stun PRIVATE
         "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
 
-add_dependencies(nice boringssl)
+add_dependencies(stun boringssl)

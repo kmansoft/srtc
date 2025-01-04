@@ -200,21 +200,23 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                     if (props.size() == 7) {
                         if (props[0] == "1" && props[1] == "udp" && props[5] == "typ" && props[6] == "host") {
                             if (const auto port = parse_int(props[4]); port > 0 && port < 63536) {
-                                Host host { .family = AF_UNSPEC, .port = port };
+                                Host host {};
 
                                 const auto& addrStr = props[3];
                                 if (addrStr.find('.') != std::string::npos) {
-                                    if (inet_pton(AF_INET, addrStr.c_str(), &host.host.ipv4) > 0) {
-                                        host.family = AF_INET;
+                                    if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
+                                        host.addr.ss.ss_family = AF_INET;
+                                        host.addr.sin_ipv4.sin_port = htons(port);
                                     }
                                 } else if (addrStr.find(':') != std::string::npos) {
                                     // TODO - add support for IPv6
-//                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.host.ipv6) > 0) {
-//                                        host.family = AF_INET6;
+//                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
+//                                        host.addr.ss.ss_family = AF_INET6;
+//                                        host.addr.sin_ipv6.sin6_port = htons(port);
 //                                    }
                                 }
 
-                                if (host.family != AF_UNSPEC) {
+                                if (host.addr.ss.ss_family != AF_UNSPEC) {
                                     hostList.push_back(host);
                                 }
                             }

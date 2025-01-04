@@ -7,6 +7,7 @@
 #include "srtc/logging.h"
 #include "srtc/x509_certificate.h"
 #include "srtc/scheduler.h"
+#include "srtc/packetizer.h"
 
 #include <cassert>
 #include <iostream>
@@ -39,6 +40,10 @@ constexpr auto kSrtpCipherList = "SRTP_AES128_CM_SHA1_80";
 
 std::once_flag gSrtpInitFlag;
 
+struct dgram_data {
+    srtc::PeerConnection* pc;
+};
+
 // https://datatracker.ietf.org/doc/html/rfc5389#section-6
 constexpr auto kStunRfc5389Cookie = 0x2112A442;
 
@@ -53,6 +58,48 @@ uint32_t make_stun_priority(int type_preference,
             (256 - component_id);
 }
 
+bool operator==(
+        const struct sockaddr_in &sin1,
+        const struct sockaddr_in &sin2)
+{
+    return sin1.sin_family == sin2.sin_family &&
+        sin1.sin_addr.s_addr == sin2.sin_addr.s_addr &&
+        sin1.sin_port == sin2.sin_port;
+}
+
+StunMessage make_stun_message_binding_request(StunAgent* agent,
+                                              uint8_t* buf,
+                                              size_t len,
+                                              const std::shared_ptr<srtc::SdpOffer>& offer,
+                                              const std::shared_ptr<srtc::SdpAnswer>& answer,
+                                              bool useCandidate)
+{
+    StunMessage msg = {};
+    stun_agent_init_request (agent, &msg, buf, len, STUN_BINDING);
+
+    if (useCandidate) {
+        stun_message_append_flag(&msg, STUN_ATTRIBUTE_USE_CANDIDATE);
+    }
+
+    const uint32_t priority = make_stun_priority(200, 10, 1);
+    stun_message_append32 (&msg, STUN_ATTRIBUTE_PRIORITY, priority);
+
+    const uint64_t tie = ((uint64_t)lrand48()) << 32 | lrand48();
+    stun_message_append64 (&msg, STUN_ATTRIBUTE_ICE_CONTROLLING, tie);
+
+    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
+    const auto offerUserName = offer->getIceUFrag();
+    const auto answerUserName = answer->getIceUFrag();
+    const auto iceUserName = answerUserName + ":" + offerUserName;
+    const auto icePassword = answer->getIcePassword();
+
+    stun_message_append_string(&msg, STUN_ATTRIBUTE_USERNAME,
+                               iceUserName.c_str());
+    stun_agent_finish_message (agent, &msg,
+                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
+
+    return msg;
+}
 
 bool is_stun_message(const srtc::ByteBuffer& buf)
 {
@@ -172,7 +219,7 @@ void PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
     mSdpOffer = offer;
 }
 
-void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
+Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
     std::lock_guard lock(mMutex);
 
@@ -183,12 +230,38 @@ void PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mVideoTrack = answer->getVideoTrack();
     mAudioTrack = answer->getAudioTrack();
 
+    if (mVideoTrack) {
+        mVideoTrack->setSSRC(mSdpOffer->getVideoSSRC());
+    }
+    if (mAudioTrack) {
+        mAudioTrack->setSSRC(mSdpOffer->getAudioSSRC());
+    }
+
     if (mSdpOffer && mSdpAnswer) {
+        // Packetizers
+        if (mVideoTrack) {
+            const auto [packetizer, error] = Packetizer::makePacketizer(mVideoTrack->getCodec());
+            if (error.isError()) {
+                return error;
+            }
+            mVideoPacketizer = packetizer;
+        }
+        if (mAudioTrack) {
+            const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack->getCodec());
+            if (error.isError()) {
+                return error;
+            }
+            mAudioPacketizer = packetizer;
+        }
+
+        // Event handle for talking to the network thread and the network thread itself
         mEventHandle = eventfd(0, EFD_NONBLOCK);
         mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
 
         // mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
     }
+
+    return Error::OK;
 }
 
 std::shared_ptr<SdpOffer> PeerConnection::getSdpOffer() const
@@ -221,45 +294,32 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-StunMessage make_stun_message_binding_request(StunAgent* agent,
-                                              uint8_t* buf,
-                                              size_t len,
-                                              const std::shared_ptr<SdpOffer>& offer,
-                                              const std::shared_ptr<SdpAnswer>& answer,
-                                              bool useCandidate)
+Error PeerConnection::publishVideoFrame(ByteBuffer&& buf)
 {
-    StunMessage msg = {};
-    stun_agent_init_request (agent, &msg, buf, len, STUN_BINDING);
+    std::lock_guard lock(mMutex);
 
-    if (useCandidate) {
-        stun_message_append_flag(&msg, STUN_ATTRIBUTE_USE_CANDIDATE);
+    if (mConnectionState != ConnectionState::Connected) {
+        return Error::OK;
     }
 
-    const uint32_t priority = make_stun_priority(200, 10, 1);
-    stun_message_append32 (&msg, STUN_ATTRIBUTE_PRIORITY, priority);
+    if (mVideoTrack == nullptr) {
+        return { Error::Code::InvalidData, "There is no video track" };
+    }
+    if (mVideoPacketizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no video packetizer" };
+    }
 
-    const uint64_t tie = ((uint64_t)lrand48()) << 32 | lrand48();
-    stun_message_append64 (&msg, STUN_ATTRIBUTE_ICE_CONTROLLING, tie);
+    mFrameSendQueue.push_back({
+        .track = mVideoTrack,
+        .packetizer = mVideoPacketizer,
+        .buf = std::move(buf)
+    });
+    eventfd_write(mEventHandle, 1);
 
-    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-    const auto offerUserName = offer->getIceUFrag();
-    const auto answerUserName = answer->getIceUFrag();
-    const auto iceUserName = answerUserName + ":" + offerUserName;
-    const auto icePassword = answer->getIcePassword();
-
-    stun_message_append_string(&msg, STUN_ATTRIBUTE_USERNAME,
-                               iceUserName.c_str());
-    stun_agent_finish_message (agent, &msg,
-                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
-
-    return msg;
+    return Error::OK;
 }
 
 // Custom BIO for DGRAM
-
-struct dgram_data {
-    PeerConnection* pc;
-};
 
 int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 {
@@ -354,13 +414,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     });
 
     // Dest host and its socket address
-    const auto destHost = answer->getHostList()[0]; // TODO try them all
+    const auto destHost = answer->getHostList()[0]; // TODO try one IPv4 and one IPv6
 
-    struct sockaddr_in destAddr = {
-            .sin_family = AF_INET,
-            .sin_port = htons(destHost.port),
-            .sin_addr = destHost.host.ipv4
-    };
+    const auto destAddr = destHost.addr.sin_ipv4;
 
     // Dest socket
     auto socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -439,21 +495,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         struct epoll_event epollEvent[2];
         const auto nfds = epoll_wait(epollHandle, epollEvent, 2, -1);
 
+        std::list<ByteBuffer> rawSendQueue;
+        std::list<FrameToSend> frameSendQueue;
+
         {
            std::lock_guard lock(mMutex);
             if (mThreadState == ThreadState::Deactivating) {
                 break;
             }
 
-            while (!mSendQueue.empty()) {
-                const auto buf = std::move(mSendQueue.front());
-                mSendQueue.erase(mSendQueue.begin());
-
-                const auto w = sendto(socketFd, buf.data(), buf.len(),
-                       0,
-                        (struct sockaddr *) &destAddr, sizeof(destAddr));
-                LOG("Sent %zd bytes", w);
-            }
+            rawSendQueue = std::move(mRawSendQueue);
+            frameSendQueue = std::move(mFrameSendQueue);
 
             for (int i = 0; i < nfds; i += 1) {
                 if (epollEvent[i].data.fd == eventFd) {
@@ -470,8 +522,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                 reinterpret_cast<struct sockaddr *>(&from),
                                                 &fromLen);
                         if (r > 0) {
-                            LOG("Received %zd bytes", r);
-                            receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
+                            if (destHost.addr.ss.ss_family == AF_INET && destHost.addr.sin_ipv4 == from.sin_ipv4) {
+                                LOG("Received %zd bytes", r);
+                                receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
+                            }
                         } else {
                             break;
                         }
@@ -480,6 +534,24 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             }
         }
 
+        // Raw data
+        while (!rawSendQueue.empty()) {
+            const auto buf = std::move(rawSendQueue.front());
+            rawSendQueue.erase(rawSendQueue.begin());
+
+            const auto w = sendto(socketFd, buf.data(), buf.len(),
+                                  0,
+                                  (struct sockaddr *) &destAddr, sizeof(destAddr));
+            LOG("Sent %zd bytes", w);
+        }
+
+        // Frames
+        while (!frameSendQueue.empty()) {
+            const auto item = std::move(frameSendQueue.front());
+            frameSendQueue.erase(frameSendQueue.begin());
+        }
+
+        // Receive
         while (!receiveQueue.empty()) {
             ReceivedData data = std::move(receiveQueue.front());
             receiveQueue.erase(receiveQueue.begin());
@@ -709,10 +781,18 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     LOG("RTCP unprotect: %d, size = %d", status, size);
                     if (status == srtp_err_status_ok) {
                         const auto rtcpPayloadType = data.buf.data()[1];
-                        uint32_t rtcpSSRC = { 0 };
+                        int32_t rtcpSSRC = { 0 };
                         std::memcpy(&rtcpSSRC, data.buf.data() + 4, 4);
                         rtcpSSRC = htonl(rtcpSSRC);
-                        LOG("RTCP payload = %d, SSRC = %u", rtcpPayloadType, rtcpSSRC);
+                        LOG("RTCP payload = %d, SSRC = %d", rtcpPayloadType, rtcpSSRC);
+
+                        if (rtcpPayloadType == 201) {
+                            // Receiver Report
+                            int32_t rtcpSSRC_1;
+                            std::memcpy(&rtcpSSRC_1, data.buf.data() + 8, 4);
+                            rtcpSSRC_1 = htonl(rtcpSSRC_1);
+                            LOG("RTCP RR SSRC = %d", rtcpSSRC_1);
+                        }
                     }
                 }
             } else {
@@ -785,7 +865,7 @@ void PeerConnection::enqueueForSending(ByteBuffer&& buf)
     LOG("Enqueing %zd bytes", buf.len());
 
     std::lock_guard lock(mMutex);
-    mSendQueue.push_back(std::move(buf));
+    mRawSendQueue.push_back(std::move(buf));
     eventfd_write(mEventHandle, 1);
 }
 

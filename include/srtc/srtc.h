@@ -11,19 +11,14 @@ enum class Codec {
     Opus = 100
 };
 
-struct Host {
-    int family;
-    union {
-        struct in_addr ipv4;
-        struct in6_addr ipv6;
-    } host;
-    int port;
-};
-
 union anyaddr {
     struct sockaddr_storage ss;
     struct sockaddr_in sin_ipv4;
     struct sockaddr_in6 sin_ipv6;
+};
+
+struct Host {
+    union anyaddr addr;
 };
 
 #define SRTC_GUARDED_BY(mutex) __attribute__((guarded_by(mutex)))

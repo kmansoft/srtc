@@ -15,11 +15,14 @@ public:
           int profileId,
           int level);
 
-    int getTrackId() const;
-    int getPayloadType() const;
-    Codec getCodec() const;
-    int getProfileId() const;
-    int getLevel() const;
+    [[nodiscard]] int getTrackId() const;
+    [[nodiscard]] int getPayloadType() const;
+    [[nodiscard]] Codec getCodec() const;
+    [[nodiscard]] int getProfileId() const;
+    [[nodiscard]] int getLevel() const;
+
+    void setSSRC(int32_t ssrc);
+    [[nodiscard]] int32_t getSSRC() const;
 
 private:
     const int mTrackId;
@@ -27,6 +30,7 @@ private:
     const Codec mCodec;
     const int mProfileId;
     const int mLevel;
+    int32_t mSSRC = { 0 };
 };
 
 }

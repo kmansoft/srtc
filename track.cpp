@@ -51,4 +51,14 @@ int Track::getLevel() const
     return mLevel;
 }
 
+void Track::setSSRC(int32_t ssrc)
+{
+    mSSRC = ssrc;
+}
+
+int32_t Track::getSSRC() const
+{
+    return mSSRC;
+}
+
 }

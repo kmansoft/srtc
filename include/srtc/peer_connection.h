@@ -2,6 +2,7 @@
 
 #include "srtc/srtc.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/error.h"
 
 #include <memory>
 #include <mutex>
@@ -18,6 +19,7 @@ namespace srtc {
 class SdpAnswer;
 class SdpOffer;
 class Track;
+class Packetizer;
 class Scheduler;
 
 class PeerConnection {
@@ -26,7 +28,7 @@ public:
     ~PeerConnection();
 
     void setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
-    void setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
+    Error setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
     std::shared_ptr<SdpOffer> getSdpOffer() const;
     std::shared_ptr<SdpAnswer> getSdpAnswer() const;
@@ -43,6 +45,8 @@ public:
     };
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
+
+    Error publishVideoFrame(ByteBuffer&& buf);
 
 private:
     mutable std::mutex mMutex;
@@ -84,21 +88,32 @@ private:
         size_t addr_len;
     };
 
+    struct FrameToSend {
+        std::shared_ptr<Track> track;
+        std::shared_ptr<Packetizer> packetizer;
+        ByteBuffer buf;
+    };
+
     ThreadState mThreadState SRTC_GUARDED_BY(mMutex) = { ThreadState::Inactive };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 
-    std::list<ByteBuffer> mSendQueue;
+    std::list<ByteBuffer> mRawSendQueue;
+    std::list<FrameToSend> mFrameSendQueue;
 
     // A queue for incoming DTLS data, routed through a custom BIO
     std::list<ByteBuffer> mDtlsReceiveQueue SRTC_GUARDED_BY(mMutex);
 
     // Overall connection state and listener
-    ConnectionState mConnectionState = { ConnectionState::Inactive };
+    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
+
+    // Packetizers
+    std::shared_ptr<Packetizer> mVideoPacketizer SRTC_GUARDED_BY(mMutex);
+    std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
 
     // A scheduler for retries
     const std::shared_ptr<Scheduler> mScheduler;

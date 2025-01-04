@@ -97,6 +97,16 @@ std::shared_ptr<X509Certificate> SdpOffer::getCertificate() const
     return mCert;
 }
 
+int32_t SdpOffer::getVideoSSRC() const
+{
+    return mVideoSSRC;
+}
+
+int32_t SdpOffer::getAudioSSRC() const
+{
+    return mAudioSSRC;
+}
+
 std::string SdpOffer::generateRandomUUID()
 {
     static const char* const ALPHABET = "0123456789abcdef";
