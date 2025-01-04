@@ -45,6 +45,9 @@ class ByteWriter {
 public:
     ByteWriter(ByteBuffer& buf);
 
+    void write(const uint8_t* value,
+               size_t size);
+
     void writeU8(uint8_t value);
     void writeU16(uint16_t value);
     void writeU24(uint32_t value);

@@ -50,23 +50,23 @@ public:
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
-    [[nodiscard]] int32_t getVideoSSRC() const;
-    [[nodiscard]] int32_t getAudioSSRC() const;
+    [[nodiscard]] uint32_t getVideoSSRC() const;
+    [[nodiscard]] uint32_t getAudioSSRC() const;
 
 private:
     std::string generateRandomUUID();
     std::string generateRandomString(size_t len);
 
-    RandomGenerator<int32_t> mRandomGenerator;
+    RandomGenerator<uint32_t> mRandomGenerator;
 
     const OfferConfig mConfig;
     const VideoConfig mVideoConfig;
     const std::optional<AudioConfig> mAudioConfig;
 
-    const int64_t mOriginId;
+    const uint64_t mOriginId;
 
-    const int32_t mVideoSSRC;
-    const int32_t mAudioSSRC;
+    const uint32_t mVideoSSRC;
+    const uint32_t mAudioSSRC;
 
     const std::string mVideoMSID;
     const std::string mAudioMSID;

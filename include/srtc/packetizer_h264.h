@@ -11,10 +11,12 @@ public:
     ~PacketizerH264() override;
 
     void setCodecSpecificData(const std::vector<ByteBuffer>& csd) override;
-    void process(const ByteBuffer& frame) override;
+    std::list<RtpPacket> generate(uint8_t payloadType,
+                                  uint32_t ssrc,
+                                  const ByteBuffer& frame) override;
 
 private:
-    std::vector<ByteBuffer> mCSD;
+    std::vector<ByteBuffer> mCSD;       // Without NALU header
 };
 
 }

@@ -572,10 +572,33 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             frameSendQueue.erase(frameSendQueue.begin());
 
             if (!item.csd.empty()) {
+                // Codec Specific Data
                 item.packetizer->setCodecSpecificData(item.csd);
-            }
-            if (!item.buf.empty()) {
-                item.packetizer->process(item.buf);
+            } else if (!item.buf.empty()) {
+                // Frame data
+                const auto paloadType = item.track->getPayloadType();
+                const auto ssrc = item.track->getSSRC();
+                const auto packetList = item.packetizer->generate(paloadType, ssrc, item.buf);
+                for (const auto& packet : packetList) {
+                    // Generate
+                    auto packetData = packet.generate();
+
+                    // Encrypt
+                    void* rtp_header = packetData.data();
+                    int rtp_size = static_cast<int>(packetData.size());
+
+                    packetData.padding(SRTP_MAX_TRAILER_LEN);
+
+                    const auto rtp_header_hex_1 = bin_to_hex(packetData.data(), 24);
+
+                    if (srtp_protect(srtp_out, rtp_header, &rtp_size) == srtp_err_status_ok) {
+                        // And send
+                        const auto w = sendto(socketFd, rtp_header, rtp_size,
+                                              0,
+                                              (struct sockaddr *) &destAddr, sizeof(destAddr));
+                        LOG("Sent %zd RTP bytes", w);
+                    }
+                }
             }
         }
 

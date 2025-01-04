@@ -15,7 +15,6 @@ Value RandomGenerator<Value>::next()
     return mRandomDist(mRandomTwister);
 }
 
-template class RandomGenerator<int32_t>;
 template class RandomGenerator<uint32_t>;
 
 }

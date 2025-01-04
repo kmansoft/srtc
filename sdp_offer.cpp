@@ -25,13 +25,13 @@ namespace srtc {
 SdpOffer::SdpOffer(const OfferConfig& config,
                    const srtc::VideoConfig& videoConfig,
                    const std::optional<AudioConfig>& audioConfig)
-   : mRandomGenerator(0, 0x7fffffff)
+   : mRandomGenerator(0, 0x7ffffffe)
    , mConfig(config)
    , mVideoConfig(videoConfig)
    , mAudioConfig(audioConfig)
-   , mOriginId((static_cast<int64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
-   , mVideoSSRC(mRandomGenerator.next())
-   , mAudioSSRC(mRandomGenerator.next())
+   , mOriginId((static_cast<uint64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
+   , mVideoSSRC(1 + mRandomGenerator.next())
+   , mAudioSSRC(1 + mRandomGenerator.next())
    , mVideoMSID(generateRandomUUID())
    , mAudioMSID(generateRandomUUID())
    , mIceUfrag(generateRandomString(8))
@@ -97,12 +97,12 @@ std::shared_ptr<X509Certificate> SdpOffer::getCertificate() const
     return mCert;
 }
 
-int32_t SdpOffer::getVideoSSRC() const
+uint32_t SdpOffer::getVideoSSRC() const
 {
     return mVideoSSRC;
 }
 
-int32_t SdpOffer::getAudioSSRC() const
+uint32_t SdpOffer::getAudioSSRC() const
 {
     return mAudioSSRC;
 }

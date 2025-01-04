@@ -24,6 +24,7 @@ public:
 
     void next();
 
+    [[nodiscard]] uint8_t currRefIdc() const;
     [[nodiscard]] NaluType currType() const;
 
     [[nodiscard]] const uint8_t* currNalu() const;

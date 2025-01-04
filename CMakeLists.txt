@@ -17,6 +17,7 @@ add_library(srtc SHARED
         include/srtc/packetizer_h264.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
+        include/srtc/rtp_packet.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
         include/srtc/scheduler.h
@@ -34,6 +35,7 @@ add_library(srtc SHARED
         packetizer_h264.cpp
         peer_connection.cpp
         random_generator.cpp
+        rtp_packet.cpp
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp

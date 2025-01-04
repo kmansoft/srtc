@@ -42,6 +42,11 @@ void NaluParser::next()
     mNext = find_next_nalu(mBuf, mNext + 4, mSize);
 }
 
+uint8_t NaluParser::currRefIdc() const
+{
+    return mBuf[mPos + 4] >> 5;
+}
+
 NaluType NaluParser::currType() const
 {
     return static_cast<NaluType>(mBuf[mPos + 4] & 0x1F);
