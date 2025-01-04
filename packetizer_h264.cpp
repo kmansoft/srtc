@@ -6,4 +6,9 @@ PacketizerH264::PacketizerH264() = default;
 
 PacketizerH264::~PacketizerH264() = default;
 
+void PacketizerH264::process(const srtc::ByteBuffer& frame)
+{
+
+}
+
 }

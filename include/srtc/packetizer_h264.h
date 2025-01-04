@@ -8,6 +8,8 @@ class PacketizerH264 final : public Packetizer {
 public:
     PacketizerH264();
     ~PacketizerH264() override;
+
+    void process(const ByteBuffer& frame) override;
 };
 
 }

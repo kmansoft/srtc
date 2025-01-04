@@ -542,13 +542,15 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             const auto w = sendto(socketFd, buf.data(), buf.len(),
                                   0,
                                   (struct sockaddr *) &destAddr, sizeof(destAddr));
-            LOG("Sent %zd bytes", w);
+            LOG("Sent %zd raw bytes", w);
         }
 
         // Frames
         while (!frameSendQueue.empty()) {
             const auto item = std::move(frameSendQueue.front());
             frameSendQueue.erase(frameSendQueue.begin());
+
+            item.packetizer->process(item.buf);
         }
 
         // Receive
