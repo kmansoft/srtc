@@ -53,6 +53,13 @@ ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other)
     return *this;
 }
 
+void ByteBuffer::clear()
+{
+    delete[] mBuf;
+    mLen = 0;
+    mCap = 0;
+}
+
 void ByteBuffer::append(const uint8_t* src, size_t size)
 {
     if (mLen + size > mCap) {

@@ -18,6 +18,7 @@ public:
     ByteBuffer(ByteBuffer&& other);
     ByteBuffer& operator=(ByteBuffer&& other);
 
+    void clear();
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
 

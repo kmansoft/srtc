@@ -378,11 +378,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     BIO* dtls_bio = {};
 
     // SRTP
-    srtp_t srtpIn = { nullptr }, srtpOut = {nullptr };
-    srtp_create(&srtpIn, nullptr);
-    srtp_create(&srtpOut, nullptr);
-
-    std::unique_ptr<uint8_t[]> srtpClientKeyBuf, srtpServerKeyBuf;
+    srtp_t srtp_in = { nullptr }, srtp_out = {nullptr };
+    ByteBuffer srtp_client_key_buf, srtp_server_key_buf;
 
     // We will be using STUN
     const auto iceAgent = std::make_unique<StunAgent>();
@@ -581,10 +578,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             const auto cert = SSL_get_peer_certificate(dtls_ssl);
                             if (cert == nullptr) {
                                 // Error, no certificate
+                                LOG("There is no DTLS server certificate");;
                                 dtlsState = DtlsState::Failed;
                                 setConnectionState(ConnectionState::Failed);
                             } else {
-                                //
                                 uint8_t fpBuf[32] = {};
                                 unsigned int fpSize = {};
 
@@ -632,9 +629,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     }
 
                                     if (srtpKeySize == 0) {
+                                        LOG("Invalid SRTP profile");
                                         dtlsState = DtlsState::Failed;
                                         setConnectionState(ConnectionState::Failed);
                                     } else {
+                                        srtp_create(&srtp_in, nullptr);
+                                        srtp_create(&srtp_out, nullptr);
+
                                         const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
                                         const auto material = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize * 2);
 
@@ -649,61 +650,62 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                         const auto srtpClientSalt = srtpServerKey + srtpKeySize;
                                         const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
 
-                                        srtpClientKeyBuf = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize);
-                                        std::memcpy(srtpClientKeyBuf.get(), srtpClientKey, srtpKeySize);
-                                        std::memcpy(srtpClientKeyBuf.get() + srtpKeySize, srtpClientSalt, srtpSaltSize);
+                                        srtp_client_key_buf.clear();
+                                        srtp_client_key_buf.append(srtpClientKey, srtpKeySize);
+                                        srtp_client_key_buf.append(srtpClientSalt, srtpSaltSize);
 
-                                        srtpServerKeyBuf = std::make_unique<uint8_t[]>(srtpKeyPlusSaltSize);
-                                        std::memcpy(srtpServerKeyBuf.get(), srtpServerKey, srtpKeySize);
-                                        std::memcpy(srtpServerKeyBuf.get() + srtpKeySize, srtpServerSalt, srtpSaltSize);
+                                        srtp_server_key_buf.clear();
+                                        srtp_server_key_buf.append(srtpServerKey, srtpKeySize);
+                                        srtp_server_key_buf.append(srtpServerSalt, srtpSaltSize);
 
                                         srtp_policy_t srtpReceivePolicy = {
                                             .ssrc {
                                                 .type = ssrc_any_inbound
                                             },
-                                            .key = answer->isSetupActive() ? srtpClientKeyBuf.get() : srtpServerKeyBuf.get(),
+                                            .key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data(),
                                             .allow_repeat_tx = true
                                         };
                                         srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
                                         srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
 
-                                        srtp_add_stream(srtpIn, &srtpReceivePolicy);
+                                        srtp_add_stream(srtp_in, &srtpReceivePolicy);
 
                                         srtp_policy_t srtpSendPolicy = {
                                                 .ssrc {
                                                         .type = ssrc_any_outbound
                                                 },
-                                                .key = answer->isSetupActive() ? srtpServerKeyBuf.get() : srtpClientKeyBuf.get(),
+                                                .key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data(),
                                                 .allow_repeat_tx = true
                                         };
                                         srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
                                         srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
 
-                                        srtp_add_stream(srtpOut, &srtpSendPolicy);
+                                        srtp_add_stream(srtp_out, &srtpSendPolicy);
 
                                         dtlsState = DtlsState::Completed;
                                         setConnectionState(ConnectionState::Connected);
                                     }
                                 } else {
                                     // Error, certificate hash does not match
+                                    LOG("Server cert doesn't match the fingerprint");
                                     dtlsState = DtlsState::Failed;
                                     setConnectionState(ConnectionState::Failed);
                                 }
                             }
                         } else {
                             // Error during DTLS handshake
-                            LOG("Failed");
+                            LOG("Failed during DTLS handshake");
                             dtlsState = DtlsState::Failed;
                             setConnectionState(ConnectionState::Failed);
                         }
                     }
                 }
             } else if (is_rtc_message(data.buf)) {
-                LOG("Received RTP/RTCP message %zd, %d", data.buf.len(), data.buf.data()[0]);
+                LOG("Received RTP/RTCP message size = %zd, id = %d", data.buf.len(), data.buf.data()[0]);
 
                 if (is_rtcp_message(data.buf)) {
                     int size = { static_cast<int>(data.buf.len()) };
-                    const auto status = srtp_unprotect_rtcp(srtpIn, data.buf.data(), &size);
+                    const auto status = srtp_unprotect_rtcp(srtp_in, data.buf.data(), &size);
                     LOG("RTCP unprotect: %d, size = %d", status, size);
                     if (status == srtp_err_status_ok) {
                         const auto rtcpPayloadType = data.buf.data()[1];
@@ -755,8 +757,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         }
     }
 
-    srtp_dealloc(srtpIn);
-    srtp_dealloc(srtpOut);
+    if (srtp_in) {
+        srtp_dealloc(srtp_in);
+    }
+    if (srtp_out) {
+        srtp_dealloc(srtp_out);
+    }
 
     if (dtls_ssl) {
         SSL_shutdown(dtls_ssl);
