@@ -11,6 +11,7 @@ add_library(srtc SHARED
         include/srtc/byte_buffer.h
         include/srtc/error.h
         include/srtc/extension_map.h
+        include/srtc/h264.h
         include/srtc/logging.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
@@ -27,6 +28,7 @@ add_library(srtc SHARED
         byte_buffer.cpp
         error.cpp
         extension_map.cpp
+        h264.cpp
         logging.cpp
         packetizer.cpp
         packetizer_h264.cpp

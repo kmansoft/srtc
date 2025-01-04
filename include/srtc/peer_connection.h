@@ -46,7 +46,8 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
-    Error publishVideoFrame(ByteBuffer&& buf);
+    Error setVideoCodecSpecificData(std::vector<ByteBuffer>& list);
+    Error publishVideoFrame(ByteBuffer& buf);
 
 private:
     mutable std::mutex mMutex;
@@ -91,7 +92,8 @@ private:
     struct FrameToSend {
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;
+        ByteBuffer buf;                 // possibly empty
+        std::vector<ByteBuffer> csd;    // possibly empty
     };
 
     ThreadState mThreadState SRTC_GUARDED_BY(mMutex) = { ThreadState::Inactive };

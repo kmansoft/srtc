@@ -4,6 +4,8 @@
 
 namespace srtc {
 
+// ----- ByteBuffer
+
 ByteBuffer::ByteBuffer()
     : mBuf(nullptr)
     , mLen(0)
@@ -53,6 +55,11 @@ ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other)
     return *this;
 }
 
+bool ByteBuffer::empty() const
+{
+    return mLen == 0;
+}
+
 void ByteBuffer::clear()
 {
     delete[] mBuf;
@@ -60,18 +67,14 @@ void ByteBuffer::clear()
     mCap = 0;
 }
 
+void ByteBuffer::reserve(size_t size)
+{
+    ensureCapacity(size);
+}
+
 void ByteBuffer::append(const uint8_t* src, size_t size)
 {
-    if (mLen + size > mCap) {
-        const auto newCap = std::max(mLen + size + 128, mCap * 3 / 2);
-        const auto newBuf = new uint8_t[newCap];
-
-        std::memcpy(newBuf, mBuf, mLen);
-
-        delete[] mBuf;
-        mBuf = newBuf;
-        mCap = newCap;
-    }
+    ensureCapacity(mLen + size);
 
     std::memcpy(mBuf + mLen, src, size);
     mLen += size;
@@ -84,12 +87,20 @@ void ByteBuffer::append(const ByteBuffer& buf)
     }
 }
 
+void ByteBuffer::padding(size_t size)
+{
+    ensureCapacity(mLen + size);
+
+    std::memset(mBuf + mLen, 0, size);
+    mLen += size;
+}
+
 uint8_t* ByteBuffer::data() const
 {
     return mBuf;
 }
 
-size_t ByteBuffer::len() const
+size_t ByteBuffer::size() const
 {
     return mLen;
 }
@@ -106,6 +117,22 @@ bool ByteBuffer::operator==(const ByteBuffer& other) const
     }
     return false;
 }
+
+void ByteBuffer::ensureCapacity(size_t capacity)
+{
+    if (capacity > mCap) {
+        const auto newCap = std::max(capacity + 128, mCap * 3 / 2);
+        const auto newBuf = new uint8_t[newCap];
+
+        std::memcpy(newBuf, mBuf, mLen);
+
+        delete[] mBuf;
+        mBuf = newBuf;
+        mCap = newCap;
+    }
+}
+
+// ----- ByteWriter
 
 ByteWriter::ByteWriter(ByteBuffer& buf)
     : mBuf(buf)

@@ -18,18 +18,24 @@ public:
     ByteBuffer(ByteBuffer&& other);
     ByteBuffer& operator=(ByteBuffer&& other);
 
+    [[nodiscard]] bool empty() const;
+
     void clear();
+    void reserve(size_t size);
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
+    void padding(size_t size);
 
     [[nodiscard]] uint8_t* data() const;
-    [[nodiscard]] size_t len() const;
+    [[nodiscard]] size_t size() const;
 
     [[nodiscard]] ByteBuffer copy() const;
 
     [[nodiscard]] bool operator==(const ByteBuffer& other) const;
 
 private:
+    void ensureCapacity(size_t capacity);
+
     uint8_t* mBuf;
     size_t mLen;
     size_t mCap;

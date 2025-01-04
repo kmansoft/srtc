@@ -104,7 +104,7 @@ StunMessage make_stun_message_binding_request(StunAgent* agent,
 bool is_stun_message(const srtc::ByteBuffer& buf)
 {
     // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
-    if (buf.len() > 20) {
+    if (buf.size() > 20) {
         const auto data =  buf.data();
         if (data[0] < 2) {
             uint32_t magic = htonl(kStunRfc5389Cookie);
@@ -122,7 +122,7 @@ bool is_stun_message(const srtc::ByteBuffer& buf)
 
 bool is_dtls_message(const srtc::ByteBuffer& buf) {
     // https://datatracker.ietf.org/doc/html/rfc7983#section-5
-    if (buf.len() > 0) {
+    if (buf.size() > 0) {
         const auto data = buf.data();
         if (data[0] >= 20 && data[0] <= 24) {
             return true;
@@ -134,7 +134,7 @@ bool is_dtls_message(const srtc::ByteBuffer& buf) {
 
 bool is_rtc_message(const srtc::ByteBuffer& buf) {
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
-    if (buf.len() >= 8) {
+    if (buf.size() >= 8) {
         const auto data = buf.data();
         if (data[0] >= 128 && data[0] <= 191) {
             return true;
@@ -146,7 +146,7 @@ bool is_rtc_message(const srtc::ByteBuffer& buf) {
 
 bool is_rtcp_message(const srtc::ByteBuffer& buf) {
     // https://datatracker.ietf.org/doc/html/rfc5761#section-4
-    if (buf.len() >= 8) {
+    if (buf.size() >= 8) {
         const auto data = buf.data();
         const auto payloadId = data[1] & 0x7F;
         return payloadId >= 64 && payloadId <= 95;
@@ -294,7 +294,28 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-Error PeerConnection::publishVideoFrame(ByteBuffer&& buf)
+Error PeerConnection::setVideoCodecSpecificData(std::vector<ByteBuffer>& list)
+{
+    std::lock_guard lock(mMutex);
+
+    if (mVideoTrack == nullptr) {
+        return { Error::Code::InvalidData, "There is no video track" };
+    }
+    if (mVideoPacketizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no video packetizer" };
+    }
+
+    mFrameSendQueue.push_back({
+      .track = mVideoTrack,
+      .packetizer = mVideoPacketizer,
+      .csd = std::move(list)
+    });
+    eventfd_write(mEventHandle, 1);
+
+    return Error::OK;
+}
+
+Error PeerConnection::publishVideoFrame(ByteBuffer& buf)
 {
     std::lock_guard lock(mMutex);
 
@@ -341,7 +362,7 @@ int PeerConnection::dgram_read(BIO *b, char *out, int outl)
     const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
     data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
 
-    const auto ret = std::min(static_cast<int>(item.len()), outl);
+    const auto ret = std::min(static_cast<int>(item.size()), outl);
     std::memcpy(out, item.data(), static_cast<size_t>(ret));
 
     return ret;
@@ -539,7 +560,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             const auto buf = std::move(rawSendQueue.front());
             rawSendQueue.erase(rawSendQueue.begin());
 
-            const auto w = sendto(socketFd, buf.data(), buf.len(),
+            const auto w = sendto(socketFd, buf.data(), buf.size(),
                                   0,
                                   (struct sockaddr *) &destAddr, sizeof(destAddr));
             LOG("Sent %zd raw bytes", w);
@@ -550,7 +571,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             const auto item = std::move(frameSendQueue.front());
             frameSendQueue.erase(frameSendQueue.begin());
 
-            item.packetizer->process(item.buf);
+            if (!item.csd.empty()) {
+                item.packetizer->setCodecSpecificData(item.csd);
+            }
+            if (!item.buf.empty()) {
+                item.packetizer->process(item.buf);
+            }
         }
 
         // Receive
@@ -563,7 +589,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                 const StunMessage incomingMessage = {
                         .buffer = data.buf.data(),
-                        .buffer_len = data.buf.len()
+                        .buffer_len = data.buf.size()
                 };
 
                 const auto stunMessageClass = stun_message_get_class(&incomingMessage);
@@ -627,7 +653,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     }
                 }
             } else if (is_dtls_message(data.buf)) {
-                LOG("Received DTLS message %zd, %d", data.buf.len(), data.buf.data()[0]);
+                LOG("Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
 
                 {
                     std::lock_guard lock(mMutex);
@@ -775,10 +801,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     }
                 }
             } else if (is_rtc_message(data.buf)) {
-                LOG("Received RTP/RTCP message size = %zd, id = %d", data.buf.len(), data.buf.data()[0]);
+                LOG("Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
 
                 if (is_rtcp_message(data.buf)) {
-                    int size = { static_cast<int>(data.buf.len()) };
+                    int size = static_cast<int>(data.buf.size());
                     const auto status = srtp_unprotect_rtcp(srtp_in, data.buf.data(), &size);
                     LOG("RTCP unprotect: %d, size = %d", status, size);
                     if (status == srtp_err_status_ok) {
@@ -798,7 +824,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     }
                 }
             } else {
-                LOG("Received unknown message %zd, %d", data.buf.len(), data.buf.data()[0]);
+                LOG("Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
             }
         }
 
@@ -864,7 +890,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
 void PeerConnection::enqueueForSending(ByteBuffer&& buf)
 {
-    LOG("Enqueing %zd bytes", buf.len());
+    LOG("Enqueing %zd bytes", buf.size());
 
     std::lock_guard lock(mMutex);
     mRawSendQueue.push_back(std::move(buf));
