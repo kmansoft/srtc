@@ -585,18 +585,22 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     // Encrypt
                     void* rtp_header = packetData.data();
-                    int rtp_size = static_cast<int>(packetData.size());
+                    int rtp_size_1 = static_cast<int>(packetData.size());
+                    int rtp_size_2 = rtp_size_1;
 
                     packetData.padding(SRTP_MAX_TRAILER_LEN);
 
-                    const auto rtp_header_hex_1 = bin_to_hex(packetData.data(), 24);
+                    const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
+                    if (protectStatus == srtp_err_status_ok) {
+                        assert(rtp_size_2 > rtp_size_1);
 
-                    if (srtp_protect(srtp_out, rtp_header, &rtp_size) == srtp_err_status_ok) {
                         // And send
-                        const auto w = sendto(socketFd, rtp_header, rtp_size,
+                        const auto w = sendto(socketFd, rtp_header, rtp_size_2,
                                               0,
                                               (struct sockaddr *) &destAddr, sizeof(destAddr));
                         LOG("Sent %zd RTP bytes", w);
+                    } else {
+                        LOG("Error applying SRTP protection: %d", protectStatus);
                     }
                 }
             }
@@ -832,10 +836,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     LOG("RTCP unprotect: %d, size = %d", status, size);
                     if (status == srtp_err_status_ok) {
                         const auto rtcpPayloadType = data.buf.data()[1];
+                        const auto rtcpLength = htons(reinterpret_cast<uint16_t*>(data.buf.data() + 2)[0]);
                         int32_t rtcpSSRC = { 0 };
                         std::memcpy(&rtcpSSRC, data.buf.data() + 4, 4);
                         rtcpSSRC = htonl(rtcpSSRC);
-                        LOG("RTCP payload = %d, SSRC = %d", rtcpPayloadType, rtcpSSRC);
+                        LOG("RTCP payload = %d, len = %d, SSRC = %d", rtcpPayloadType, 4 * (rtcpLength + 1), rtcpSSRC);
 
                         if (rtcpPayloadType == 201) {
                             // Receiver Report
