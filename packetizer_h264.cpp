@@ -92,10 +92,9 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            const auto packetSize = RtpPacket::kMaxSize;
-            const auto packetCount = (naluDataSize + packetSize - 1) / packetSize;
+            auto packetSize = RtpPacket::kMaxSize;
 
-            if (packetCount == 1) {
+            if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 ByteBuffer payload = { parser.currData(), parser.currDataSize() };
                 result.emplace_back(true, payloadType,
@@ -108,6 +107,11 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                 // The "+1" is to skip the NALU type
                 auto dataPtr = naluDataPtr + 1;
                 auto dataSize = naluDataSize - 1;
+
+                // The frame now fits in one packet, but a FU-A cannot have both start and end
+                if (packetSize == dataSize) {
+                    packetSize -= 10;
+                }
 
                 auto packetNumber = 0;
                 while (dataSize > 0) {
