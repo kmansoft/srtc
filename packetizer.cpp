@@ -23,12 +23,12 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const C
     }
 }
 
-uint16_t Packetizer::getSequence()
+uint16_t Packetizer::getNextSequence()
 {
     return mSequence++;
 }
 
-uint32_t Packetizer::getTimestamp()
+uint32_t Packetizer::getNextTimestamp()
 {
     // RTP is 90,000 HZ which is 90 ticks per millisecond
     const auto now = std::chrono::steady_clock::now();

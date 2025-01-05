@@ -26,8 +26,8 @@ public:
 
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const Codec& codec);
 
-    [[nodiscard]] uint16_t getSequence();
-    [[nodiscard]] uint32_t getTimestamp();
+    [[nodiscard]] uint16_t getNextSequence();
+    [[nodiscard]] uint32_t getNextTimestamp();
 
 private:
     RandomGenerator<uint32_t> mRandom;
