@@ -42,6 +42,8 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
+    const auto frameTimestamp = getNextTimestamp();
+
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naulRefIdc = parser.currRefIdc();
         const auto naluType = parser.currType();
@@ -81,7 +83,7 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                 }
 
                 result.emplace_back(false, payloadType,
-                                    getNextSequence(), getNextTimestamp(), ssrc, payload);
+                                    getNextSequence(), frameTimestamp, ssrc, payload);
             }
         }
 
@@ -97,11 +99,10 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 ByteBuffer payload = { parser.currData(), parser.currDataSize() };
                 result.emplace_back(true, payloadType,
-                                    getNextSequence(), getNextTimestamp(),
+                                    getNextSequence(), frameTimestamp,
                                     ssrc, payload);
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
-                const auto frameTimestamp = getNextTimestamp();
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
 
                 // The "+1" is to skip the NALU type
