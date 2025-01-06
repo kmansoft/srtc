@@ -9,8 +9,9 @@ namespace srtc {
 
 class RtpPacket {
 public:
-    // TODO - MTU discovery
-    static constexpr size_t kMaxSize = 1200;
+    // https://stackoverflow.com/questions/47635545/why-webrtc-chose-rtp-max-packet-size-to-1200-bytes
+    // https://webrtc.googlesource.com/src/+/refs/heads/main/media/base/media_constants.cc#17
+    static constexpr size_t kMaxPayloadSize = 1200;
 
     RtpPacket(bool marker,
               uint8_t payloadType,

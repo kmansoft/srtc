@@ -47,7 +47,6 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naulRefIdc = parser.currRefIdc();
         const auto naluType = parser.currType();
-        LOG("NALU ref = %d, type = %d, size = %zd", naulRefIdc, naluType, parser.currNaluSize());
 
         if (naluType == NaluType::SPS || naluType == NaluType::PPS) {
             // Update codec specific data
@@ -92,7 +91,7 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            auto packetSize = RtpPacket::kMaxSize;
+            auto packetSize = RtpPacket::kMaxPayloadSize;
 
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6

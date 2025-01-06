@@ -88,16 +88,21 @@ add_dependencies(srtc boringssl)
 
 # LibSRTP
 
+set(OPENSSL_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install)
+
 ExternalProject_Add(
         srtp
         GIT_REPOSITORY "https://gitlab.com/kmansoft/libsrtp.git"
-        GIT_TAG "v2.6.0"
+        GIT_TAG "kostya-v2.6.0"
         GIT_SHALLOW ON
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""
         CMAKE_ARGS
             -DLIBSRTP_TEST_APPS=OFF
             -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+            -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
+            -DENABLE_OPENSSL=ON
+            -DOPENSSL_USE_STATIC_LIBS=ON
             -DANDROID_ABI=${ANDROID_ABI}
             -DANDROID_PLATFORM=android-29
 )
@@ -108,6 +113,7 @@ target_include_directories(srtc PRIVATE
 target_link_directories(srtc PUBLIC
         "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build/")
 
+add_dependencies(srtp boringssl)
 add_dependencies(srtc srtp)
 
 # STUN
