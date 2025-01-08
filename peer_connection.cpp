@@ -834,19 +834,23 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     const auto status = srtp_unprotect_rtcp(srtp_in, data.buf.data(), &size);
                     LOG("RTCP unprotect: %d, size = %d", status, size);
                     if (status == srtp_err_status_ok) {
-                        const auto rtcpPayloadType = data.buf.data()[1];
-                        const auto rtcpLength = htons(reinterpret_cast<uint16_t*>(data.buf.data() + 2)[0]);
-                        int32_t rtcpSSRC = { 0 };
-                        std::memcpy(&rtcpSSRC, data.buf.data() + 4, 4);
-                        rtcpSSRC = htonl(rtcpSSRC);
-                        LOG("RTCP payload = %d, len = %d, SSRC = %d", rtcpPayloadType, 4 * (rtcpLength + 1), rtcpSSRC);
+                        if (size >= 8) {
+                            const auto rtcpPayloadType = data.buf.data()[1];
+                            const auto rtcpLength = htons(
+                                    reinterpret_cast<uint16_t *>(data.buf.data())[1]);
+                            uint32_t rtcpSSRC = {0};
+                            std::memcpy(&rtcpSSRC, data.buf.data() + 4, 4);
+                            rtcpSSRC = htonl(rtcpSSRC);
+                            LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPayloadType,
+                                4 * (rtcpLength + 1), rtcpSSRC);
 
-                        if (rtcpPayloadType == 201) {
-                            // Receiver Report
-                            int32_t rtcpSSRC_1;
-                            std::memcpy(&rtcpSSRC_1, data.buf.data() + 8, 4);
-                            rtcpSSRC_1 = htonl(rtcpSSRC_1);
-                            LOG("RTCP RR SSRC = %d", rtcpSSRC_1);
+                            if (rtcpPayloadType == 201 && size >= 12) {
+                                // Receiver Report
+                                int32_t rtcpSSRC_1;
+                                std::memcpy(&rtcpSSRC_1, data.buf.data() + 8, 4);
+                                rtcpSSRC_1 = htonl(rtcpSSRC_1);
+                                LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
+                            }
                         }
                     }
                 }
