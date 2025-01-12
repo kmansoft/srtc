@@ -169,4 +169,112 @@ void ThreadScheduler::threadFunc(std::string name)
     }
 }
 
+// ----- LoopScheduler
+
+LoopScheduler::TaskImpl::TaskImpl(
+        const std::weak_ptr<LoopScheduler>& owner,
+        const When& when,
+        const Func& func)
+        : mOwner(owner)
+        , mWhen(when)
+        , mFunc(func)
+{
+}
+
+LoopScheduler::TaskImpl::~TaskImpl() = default;
+
+void LoopScheduler::TaskImpl::cancel()
+{
+    if (const auto owner = mOwner.lock()) {
+        auto self = shared_from_this();
+        owner->cancelImpl(self);
+    }
+}
+
+
+LoopScheduler::LoopScheduler()
+    : mThreadId(std::this_thread::get_id())
+{
+}
+
+LoopScheduler::~LoopScheduler()
+{
+    assertCurrentThread();
+}
+
+std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
+                                            const Func& func)
+{
+    assertCurrentThread();
+
+    const auto when = std::chrono::steady_clock::now() + delay;
+    const auto task = std::make_shared<TaskImpl>(
+            weak_from_this(),
+            when,
+            func);
+
+    {
+        mTaskQueue.insert(std::upper_bound(
+                mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
+
+        // Debug
+        LOG("Total %zd tasks", mTaskQueue.size());
+
+        const auto now = std::chrono::steady_clock::now();
+        for (const auto& iter : mTaskQueue) {
+            LOG("Task at %lld millis",
+                std::chrono::duration_cast<std::chrono::milliseconds >(iter->mWhen - now).count());
+        }
+    }
+
+    return task;
+}
+
+void LoopScheduler::cancel(std::shared_ptr<Task>& task)
+{
+    std::shared_ptr impl = std::static_pointer_cast<TaskImpl>(task);
+    cancelImpl(impl);
+}
+
+int LoopScheduler::getTimeoutMillis() const
+{
+    if (mTaskQueue.empty()) {
+        return -1;
+    }
+
+    const auto diff = duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen - std::chrono::steady_clock::now());
+    if (diff <= std::chrono::milliseconds::zero()) {
+        return 0;
+    }
+    if (diff.count() > std::numeric_limits<int>::max()) {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(diff.count());
+}
+
+void LoopScheduler::run()
+{
+    while (!mTaskQueue.empty() && mTaskQueue.front()->mWhen <= std::chrono::steady_clock::now()) {
+        const auto task = mTaskQueue.front();
+        mTaskQueue.erase(mTaskQueue.begin());
+        task->mFunc();
+    }
+}
+
+void LoopScheduler::assertCurrentThread()
+{
+    assert(mThreadId == std::this_thread::get_id());
+}
+
+void LoopScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
+{
+    assertCurrentThread();
+
+    const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), task);
+    if (iter != mTaskQueue.end()) {
+        mTaskQueue.erase(iter);
+        return;
+    }
+}
+
 }

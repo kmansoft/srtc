@@ -490,6 +490,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, socket->fd(), &ev);
     }
 
+    // Loop scheduler
+    const auto scheduler = std::make_unique<LoopScheduler>();
+
     // Receive buffer
     constexpr auto kReceiveBufferSize = 2048;
     const auto receiveBuffer = std::make_unique<uint8_t[]>(kReceiveBufferSize);
@@ -500,7 +503,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         // Epoll
         struct epoll_event epollEvent[2];
-        const auto nfds = epoll_wait(epollHandle, epollEvent, 2, -1);
+        const auto nfds = epoll_wait(epollHandle, epollEvent, 2,
+                                     scheduler->getTimeoutMillis());
 
         std::list<ByteBuffer> rawSendQueue;
         std::list<FrameToSend> frameSendQueue;
@@ -529,6 +533,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 }
             }
         }
+
+        // Scheduler
+        scheduler->run();
 
         // Raw data
         while (!rawSendQueue.empty()) {
