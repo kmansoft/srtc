@@ -43,7 +43,7 @@ private:
 
 class ByteWriter {
 public:
-    ByteWriter(ByteBuffer& buf);
+    explicit ByteWriter(ByteBuffer& buf);
 
     void write(const uint8_t* value,
                size_t size);

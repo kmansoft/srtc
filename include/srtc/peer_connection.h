@@ -71,22 +71,11 @@ private:
         Deactivating
     };
 
-    enum class IceState {
-        Inactive,
-        Completed
-    };
-
     enum class DtlsState {
         Inactive,
         Activating,
         Failed,
         Completed
-    };
-
-    struct ReceivedData {
-        ByteBuffer buf;
-        anyaddr addr;
-        size_t addr_len;
     };
 
     struct FrameToSend {

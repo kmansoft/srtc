@@ -100,8 +100,11 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 
     std::string iceUFrag, icePassword;
 
+    bool isRtcpMux = false;
+
     ExtensionMap extensionMap;
-    std::vector<Host> hostList;
+    std::vector<Host> hostList4;
+    std::vector<Host> hostList6;
 
     int videoTrackId = -1, videoPayloadType = -1;
     int audioTrackId = -1, audioPayloadType = -1;
@@ -134,7 +137,9 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
             parse_line(line, tag, key, value, props);
 
             if (tag == "a") {
-                if (key == "ice-ufrag") {
+                if (key == "rtcp-mux") {
+                    isRtcpMux = true;
+                } else if (key == "ice-ufrag") {
                     iceUFrag = value;
                 } else if (key == "ice-pwd") {
                     icePassword = value;
@@ -207,17 +212,14 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                                     if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
                                         host.addr.ss.ss_family = AF_INET;
                                         host.addr.sin_ipv4.sin_port = htons(port);
+                                        hostList4.push_back(host);
                                     }
                                 } else if (addrStr.find(':') != std::string::npos) {
-                                    // TODO - add support for IPv6
-//                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
-//                                        host.addr.ss.ss_family = AF_INET6;
-//                                        host.addr.sin_ipv6.sin6_port = htons(port);
-//                                    }
-                                }
-
-                                if (host.addr.ss.ss_family != AF_UNSPEC) {
-                                    hostList.push_back(host);
+                                    if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
+                                        host.addr.ss.ss_family = AF_INET6;
+                                        host.addr.sin_ipv6.sin6_port = htons(port);
+                                        hostList6.push_back(host);
+                                    }
                                 }
                             }
                         }
@@ -244,7 +246,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
         }
     }
 
-    if (hostList.empty()) {
+    if (!isRtcpMux) {
+        return { Error::Code::InvalidData, "The rtcp-mux extension is required" };
+    }
+    if (hostList4.empty() && hostList6.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }
     if (videoTrackId < 0) {
@@ -252,6 +257,17 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     }
     if (videoCodec == Codec::Unknown) {
         return { Error::Code::InvalidData, "No video codec" };
+    }
+
+    // Interleave IPv4 and IPv6 candidates
+    std::vector<Host> hostList;
+    for (size_t i = 0; i < 3; i += 1) {
+        if (i < hostList4.size()) {
+            //hostList.push_back(hostList4[i]);
+        }
+        if (i < hostList6.size()) {
+            hostList.push_back(hostList6[i]);
+        }
     }
 
     const auto videoTrack =

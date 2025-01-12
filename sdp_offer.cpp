@@ -1,5 +1,6 @@
 #include <sstream>
 #include <cassert>
+#include <string>
 
 #include "srtc/sdp_offer.h"
 #include "srtc/x509_certificate.h"
@@ -67,7 +68,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "a=sendonly" << std::endl;
     ss << "a=rtcp-mux" << std::endl;
     ss << "a=rtcp-rsize" << std::endl;
-    ss << "a=rtpmap:" << payloadId << " " << to_string(layer.codec) << "/90000" << std::endl;
+    ss << "a=rtpmap:" << payloadId << " " << ::to_string(layer.codec) << "/90000" << std::endl;
     if (layer.codec == Codec::H264) {
         char buf[128];
         std::snprintf(buf, sizeof(buf), "%02x%04x", layer.profileId, layer.level);

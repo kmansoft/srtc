@@ -21,8 +21,8 @@ public:
     [[nodiscard]] int getProfileId() const;
     [[nodiscard]] int getLevel() const;
 
-    void setSSRC(int32_t ssrc);
-    [[nodiscard]] int32_t getSSRC() const;
+    void setSSRC(uint32_t ssrc);
+    [[nodiscard]] uint32_t getSSRC() const;
 
 private:
     const int mTrackId;
@@ -30,7 +30,7 @@ private:
     const Codec mCodec;
     const int mProfileId;
     const int mLevel;
-    int32_t mSSRC = { 0 };
+    uint32_t mSSRC = { 0 };
 };
 
 }

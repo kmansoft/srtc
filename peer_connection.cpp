@@ -8,6 +8,7 @@
 #include "srtc/x509_certificate.h"
 #include "srtc/scheduler.h"
 #include "srtc/packetizer.h"
+#include "srtc/socket.h"
 
 #include <cassert>
 #include <iostream>
@@ -55,15 +56,6 @@ uint32_t make_stun_priority(int type_preference,
             (1 << 24) * type_preference +
             (1 << 8) * local_preference +
             (256 - component_id);
-}
-
-bool operator==(
-        const struct sockaddr_in &sin1,
-        const struct sockaddr_in &sin2)
-{
-    return sin1.sin_family == sin2.sin_family &&
-        sin1.sin_addr.s_addr == sin2.sin_addr.s_addr &&
-        sin1.sin_port == sin2.sin_port;
 }
 
 StunMessage make_stun_message_binding_request(StunAgent* agent,
@@ -435,17 +427,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Dest host and its socket address
     const auto destHost = answer->getHostList()[0]; // TODO try one IPv4 and one IPv6
-
-    const auto destAddr = destHost.addr.sin_ipv4;
+    LOG("Connecting to %s", to_string(destHost.addr).c_str());
 
     // Dest socket
-    auto socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    auto socketFlags = fcntl(socketFd, F_GETFL, 0);
-    socketFlags |= O_NONBLOCK;
-    fcntl(socketFd, F_SETFL, socketFlags);
+    auto socket = std::make_unique<Socket>(destHost.addr);
 
     // States
-    auto iceState = IceState::Inactive;
     auto dtlsState = DtlsState::Inactive;
 
     // DTLS
@@ -499,8 +486,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         ev.data.fd = eventFd;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, eventFd, &ev);
 
-        ev.data.fd = socketFd;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, socketFd, &ev);
+        ev.data.fd = socket->fd();
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, socket->fd(), &ev);
     }
 
     // Receive buffer
@@ -509,7 +496,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     while (true) {
         // Receive queue
-        std::list<ReceivedData> receiveQueue;
+        std::list<Socket::ReceivedData> receiveQueue;
 
         // Epoll
         struct epoll_event epollEvent[2];
@@ -532,23 +519,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     // Read from event
                     eventfd_t value = { 0 };
                     eventfd_read(mEventHandle, &value);
-                } else if (epollEvent[i].data.fd == socketFd) {
+                } else if (epollEvent[i].data.fd == socket->fd()) {
                     // Read from socket
-                    while (true) {
-                        union anyaddr from = {};
-                        socklen_t fromLen = sizeof(from);
-
-                        const auto r = recvfrom(socketFd, receiveBuffer.get(), kReceiveBufferSize, 0,
-                                                reinterpret_cast<struct sockaddr *>(&from),
-                                                &fromLen);
-                        if (r > 0) {
-                            if (destHost.addr.ss.ss_family == AF_INET && destHost.addr.sin_ipv4 == from.sin_ipv4) {
-                                LOG("Received %zd bytes", r);
-                                receiveQueue.emplace_back(ByteBuffer(receiveBuffer.get(), r), from, fromLen);
-                            }
-                        } else {
-                            break;
-                        }
+                    auto receiveList = socket->receive();
+                    for (auto& item : receiveList) {
+                        LOG("Received %zd bytes", item.buf.size());
+                        receiveQueue.emplace_back(std::move(item.buf));
                     }
                 }
             }
@@ -559,9 +535,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             const auto buf = std::move(rawSendQueue.front());
             rawSendQueue.erase(rawSendQueue.begin());
 
-            const auto w = sendto(socketFd, buf.data(), buf.size(),
-                                  0,
-                                  (struct sockaddr *) &destAddr, sizeof(destAddr));
+            const auto w = socket->send(buf);
             LOG("Sent %zd raw bytes", w);
         }
 
@@ -594,9 +568,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         assert(rtp_size_2 > rtp_size_1);
 
                         // And send
-                        const auto w = sendto(socketFd, rtp_header, rtp_size_2,
-                                              0,
-                                              (struct sockaddr *) &destAddr, sizeof(destAddr));
+                        const auto w = socket->send(rtp_header, rtp_size_2);
                         LOG("Sent %zd RTP bytes", w);
                     } else {
                         LOG("Error applying SRTP protection: %d", protectStatus);
@@ -607,7 +579,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         // Receive
         while (!receiveQueue.empty()) {
-            ReceivedData data = std::move(receiveQueue.front());
+            Socket::ReceivedData data = std::move(receiveQueue.front());
             receiveQueue.erase(receiveQueue.begin());
 
             if (is_stun_message(data.buf)) {
@@ -673,7 +645,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                 iceMessageBuffer.get(),
                                 stun_message_length(&iceMessageBindingRequest2)});
 
-                            iceState = IceState::Completed;
                             dtlsState = DtlsState::Activating;
                         }
                     }
@@ -912,9 +883,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     close(epollHandle);
     epollHandle = -1;
-
-    close(socketFd);
-    socketFd = -1;
 
     setConnectionState(ConnectionState::Closed);
 }

@@ -21,6 +21,8 @@ struct Host {
     union anyaddr addr;
 };
 
+std::string to_string(const anyaddr& addr);
+
 #define SRTC_GUARDED_BY(mutex) __attribute__((guarded_by(mutex)))
 #define SRTC_LOCKS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
 #define SRTC_EXCLUSIVE_LOCKS_REQUIRED(...) __attribute__((exclusive_locks_required(__VA_ARGS__)))

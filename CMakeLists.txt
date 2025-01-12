@@ -20,6 +20,7 @@ add_library(srtc SHARED
         include/srtc/rtp_packet.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
+        include/srtc/socket.h
         include/srtc/scheduler.h
         include/srtc/srtc.h
         include/srtc/track.h
@@ -39,6 +40,7 @@ add_library(srtc SHARED
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp
+        socket.cpp
         srtc.cpp
         track.cpp
         util.cpp
