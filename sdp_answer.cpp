@@ -263,10 +263,11 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     std::vector<Host> hostList;
     for (size_t i = 0; i < 3; i += 1) {
         if (i < hostList4.size()) {
-            //hostList.push_back(hostList4[i]);
+            hostList.push_back(hostList4[i]);
         }
         if (i < hostList6.size()) {
-            hostList.push_back(hostList6[i]);
+            // TODO Re-enable IPv6
+            // hostList.push_back(hostList6[i]);
         }
     }
 

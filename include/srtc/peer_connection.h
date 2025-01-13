@@ -65,12 +65,6 @@ private:
 
     void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
-    enum class ThreadState {
-        Inactive,
-        Active,
-        Deactivating
-    };
-
     enum class DtlsState {
         Inactive,
         Activating,
@@ -85,7 +79,7 @@ private:
         std::vector<ByteBuffer> csd;    // possibly empty
     };
 
-    ThreadState mThreadState SRTC_GUARDED_BY(mMutex) = { ThreadState::Inactive };
+    bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };

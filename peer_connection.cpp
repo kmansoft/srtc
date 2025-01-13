@@ -192,8 +192,9 @@ PeerConnection::~PeerConnection()
     {
         std::lock_guard lock(mMutex);
 
+        mIsQuit = true;
+
         if (mThread.joinable()) {
-            mThreadState = ThreadState::Deactivating;
             eventfd_write(mEventHandle, 1);
             waitForThread = std::move(mThread);
         }
@@ -217,7 +218,7 @@ void PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(mThreadState == ThreadState::Inactive);
+    assert(!mThread.joinable() && !mIsQuit);
 
     mSdpOffer = offer;
 }
@@ -226,7 +227,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(mThreadState == ThreadState::Inactive);
+    assert(!mThread.joinable() && !mIsQuit);
 
     mSdpAnswer = answer;
 
@@ -424,21 +425,16 @@ static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
                                              const std::shared_ptr<SdpAnswer> answer)
 {
-    // We are activating
-    {
-        std::lock_guard lock(mMutex);
-        mThreadState = ThreadState::Active;
-    }
-
-    setConnectionState(ConnectionState::Connecting);
-
     // Init the SRTP library
     std::call_once(gSrtpInitFlag, []{
         srtp_init();
     });
 
+    // We are connecting
+    setConnectionState(ConnectionState::Connecting);
+
     // Dest host and its socket address
-    const auto destHost = answer->getHostList()[0]; // TODO try one IPv4 and one IPv6
+    const auto destHost = answer->getHostList()[0]; // TODO try all candidates
     LOG("Connecting to %s", to_string(destHost.addr).c_str());
 
     // Dest socket
@@ -478,7 +474,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                                                  iceMessageBuffer.get(),
                                                                                  kIceMessageBufferSize,
                                                                                  offer, answer,
-                                                                                 sentUseCandidate);
+                                                                                 false);
         enqueueForSending({
             iceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
         });
@@ -524,7 +520,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         {
            std::lock_guard lock(mMutex);
-            if (mThreadState == ThreadState::Deactivating) {
+            if (mIsQuit) {
                 break;
             }
 
@@ -541,7 +537,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     auto receiveList = socket->receive();
                     for (auto& item : receiveList) {
                         LOG("Received %zd bytes", item.buf.size());
-                        receiveQueue.emplace_back(std::move(item.buf));
+                        receiveQueue.emplace_back(std::move(item));
                     }
                 }
             }
@@ -660,7 +656,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     iceMessageBuffer.get(),
                                     kIceMessageBufferSize,
                                     offer, answer,
-                                    sentUseCandidate);
+                                    true);
                             enqueueForSending({
                                 iceMessageBuffer.get(),
                                 stun_message_length(&iceMessageBindingRequest2)});
