@@ -136,7 +136,7 @@ private:
         };
     };
 
-    void assertCurrentThread();
+    void assertCurrentThread() const;
     void cancelImpl(std::shared_ptr<TaskImpl>& task);
 
     std::thread::id mThreadId;

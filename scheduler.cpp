@@ -3,7 +3,7 @@
 
 #include <cassert>
 
-#define LOG(...) srtc::log("ThreadScheduler", __VA_ARGS__)
+#define LOG(tag, ...) srtc::log(tag, __VA_ARGS__)
 
 namespace srtc {
 
@@ -77,11 +77,11 @@ std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
                 mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
 
         // Debug
-        LOG("Total %zd tasks", mTaskQueue.size());
+        LOG("ThreadScheduler", "Total %zd tasks", mTaskQueue.size());
 
         const auto now = std::chrono::steady_clock::now();
         for (const auto& iter : mTaskQueue) {
-            LOG("Task at %lld millis",
+            LOG("ThreadScheduler", "Task at %lld millis",
                 std::chrono::duration_cast<std::chrono::milliseconds >(iter->mWhen - now).count());
         }
     }
@@ -218,11 +218,11 @@ std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
                 mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
 
         // Debug
-        LOG("Total %zd tasks", mTaskQueue.size());
+        LOG("LoopScheduler", "Total %zd tasks", mTaskQueue.size());
 
         const auto now = std::chrono::steady_clock::now();
         for (const auto& iter : mTaskQueue) {
-            LOG("Task at %lld millis",
+            LOG("LoopScheduler", "Task at %lld millis",
                 std::chrono::duration_cast<std::chrono::milliseconds >(iter->mWhen - now).count());
         }
     }
@@ -238,6 +238,8 @@ void LoopScheduler::cancel(std::shared_ptr<Task>& task)
 
 int LoopScheduler::getTimeoutMillis() const
 {
+    assertCurrentThread();
+
     if (mTaskQueue.empty()) {
         return -1;
     }
@@ -254,6 +256,8 @@ int LoopScheduler::getTimeoutMillis() const
 
 void LoopScheduler::run()
 {
+    assertCurrentThread();
+
     while (!mTaskQueue.empty() && mTaskQueue.front()->mWhen <= std::chrono::steady_clock::now()) {
         const auto task = mTaskQueue.front();
         mTaskQueue.erase(mTaskQueue.begin());
@@ -261,7 +265,7 @@ void LoopScheduler::run()
     }
 }
 
-void LoopScheduler::assertCurrentThread()
+void LoopScheduler::assertCurrentThread() const
 {
     assert(mThreadId == std::this_thread::get_id());
 }

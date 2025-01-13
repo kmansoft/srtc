@@ -149,28 +149,40 @@ long long elapsedMillis(const std::chrono::steady_clock::time_point& start) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 }
 
+// test code
+
+template <class TScheduler>
+void testScheduler(const std::unique_ptr<TScheduler>& scheduler,
+                   const std::string& label)
+{
+    const auto start1000 = std::chrono::steady_clock::now();
+    scheduler->submit(std::chrono::milliseconds(1000), [label, start1000] {
+        const auto message = label + ": Task at 1000 ms";
+        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start1000));
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const auto start2000 = std::chrono::steady_clock::now();
+    scheduler->submit(std::chrono::milliseconds(2000), [label, start2000] {
+        const auto message = label + ": Task at 2000 ms";
+        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start2000));
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const auto start500 = std::chrono::steady_clock::now();
+    scheduler->submit(std::chrono::milliseconds(500), [label, start500] {
+        const auto message = label + ": Task at 500 ms";
+        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start500));
+    });
+}
+
 }
 
 namespace srtc {
 
 PeerConnection::PeerConnection()
-    : mScheduler(std::make_shared<ThreadScheduler>("srtc-pc"))
+    : mScheduler(std::make_unique<ThreadScheduler>("srtc-pc"))
 {
     // Test code
-    const auto start1000 = std::chrono::steady_clock::now();
-    mScheduler->submit(std::chrono::milliseconds(1000), [start1000] {
-        LOG("Task at 1000 ms, at %lld ms", elapsedMillis(start1000));
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    const auto start2000 = std::chrono::steady_clock::now();
-    mScheduler->submit(std::chrono::milliseconds(2000), [start2000] {
-        LOG("Task at 2000 ms, at %lld ms", elapsedMillis(start2000));
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    const auto start500 = std::chrono::steady_clock::now();
-    mScheduler->submit(std::chrono::milliseconds(500), [start500] {
-        LOG("Task at 500 ms, at %lld ms", elapsedMillis(start500));
-    });
+    testScheduler(mScheduler, "ThreadScheduler");
 }
 
 PeerConnection::~PeerConnection()
@@ -492,6 +504,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Loop scheduler
     const auto scheduler = std::make_unique<LoopScheduler>();
+    testScheduler(scheduler, "LoopScheduler");
 
     // Receive buffer
     constexpr auto kReceiveBufferSize = 2048;
