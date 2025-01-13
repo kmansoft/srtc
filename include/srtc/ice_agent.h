@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "stunmessage.h"
 
@@ -20,7 +21,8 @@ public:
                       uint8_t *buffer, size_t buffer_len,
                       const StunMessage *request);
     bool finishMessage(StunMessage *msg,
-                       const uint8_t *key, size_t key_len);
+                       const std::string& username,
+                       const std::string& password);
 
     bool forgetTransaction(StunTransactionId id);
 

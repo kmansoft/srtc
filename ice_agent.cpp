@@ -41,6 +41,8 @@ bool IceAgent::initRequest(StunMessage *msg,
 
     stun_message_append_software(msg, kSoftware);
 
+    stun_message_append64 (msg, STUN_ATTRIBUTE_ICE_CONTROLLING, mTie);
+
     return true;
 }
 
@@ -69,9 +71,13 @@ bool IceAgent::initResponse(StunMessage *msg,
 }
 
 bool IceAgent::finishMessage(StunMessage *msg,
-                             const uint8_t *key, size_t key_len)
+                             const std::string& username,
+                             const std::string& password)
 {
     bool remember_transaction = (stun_message_get_class (msg) == STUN_REQUEST);
+
+    stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME,
+                               username.c_str());
 
     auto ptr = stun_message_append (msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, 20);
     if (!ptr) {
@@ -80,7 +86,7 @@ bool IceAgent::finishMessage(StunMessage *msg,
 
     stun_sha1 (msg->buffer, stun_message_length (msg),
                stun_message_length (msg) - 20, reinterpret_cast<uint8_t *>(ptr),
-               key, key_len, false);
+               reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
 
     ptr = stun_message_append (msg, STUN_ATTRIBUTE_FINGERPRINT, 4);
     if (!ptr) {
