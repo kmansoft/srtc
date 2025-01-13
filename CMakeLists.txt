@@ -12,6 +12,7 @@ add_library(srtc SHARED
         include/srtc/error.h
         include/srtc/extension_map.h
         include/srtc/h264.h
+        include/srtc/ice_agent.h
         include/srtc/logging.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
@@ -31,6 +32,7 @@ add_library(srtc SHARED
         error.cpp
         extension_map.cpp
         h264.cpp
+        ice_agent.cpp
         logging.cpp
         packetizer.cpp
         packetizer_h264.cpp

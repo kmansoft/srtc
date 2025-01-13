@@ -9,6 +9,7 @@
 #include "srtc/scheduler.h"
 #include "srtc/packetizer.h"
 #include "srtc/socket.h"
+#include "srtc/ice_agent.h"
 
 #include <cassert>
 #include <iostream>
@@ -43,9 +44,6 @@ std::once_flag gSrtpInitFlag;
 struct dgram_data {
     srtc::PeerConnection* pc;
 };
-
-// https://datatracker.ietf.org/doc/html/rfc5389#section-6
-constexpr auto kStunRfc5389Cookie = 0x2112A442;
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference,
@@ -92,13 +90,43 @@ StunMessage make_stun_message_binding_request(StunAgent* agent,
     return msg;
 }
 
+StunMessage make_stun_message_binding_response(StunAgent* agent,
+                                               uint8_t* buf,
+                                               size_t len,
+                                               const std::shared_ptr<srtc::SdpOffer>& offer,
+                                               const std::shared_ptr<srtc::SdpAnswer>& answer,
+                                               const StunMessage& request,
+                                               const srtc::anyaddr& address,
+                                               socklen_t addressLen)
+{
+    StunMessage msg = {};
+    stun_agent_init_response(agent, &msg, buf, len, &request);
+
+    stun_message_append_xor_addr (&msg, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
+                                  &address.ss, addressLen);
+
+    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
+    const auto offerUserName = offer->getIceUFrag();
+    const auto answerUserName = answer->getIceUFrag();
+    const auto iceUserName = offerUserName + ":" + answerUserName;
+    const auto icePassword = offer->getIcePassword();
+
+    stun_message_append_string(&msg, STUN_ATTRIBUTE_USERNAME,
+                               iceUserName.c_str());
+
+    stun_agent_finish_message (agent, &msg,
+                               reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
+
+    return msg;
+}
+
 bool is_stun_message(const srtc::ByteBuffer& buf)
 {
     // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
     if (buf.size() > 20) {
         const auto data =  buf.data();
         if (data[0] < 2) {
-            uint32_t magic = htonl(kStunRfc5389Cookie);
+            uint32_t magic = htonl(srtc::IceAgent::kRfc5389Cookie);
             uint8_t cookie[4];
             std::memcpy(cookie, buf.data() + 4, 4);
 
@@ -113,7 +141,7 @@ bool is_stun_message(const srtc::ByteBuffer& buf)
 
 bool is_dtls_message(const srtc::ByteBuffer& buf) {
     // https://datatracker.ietf.org/doc/html/rfc7983#section-5
-    if (buf.size() > 0) {
+    if (buf.size() >= 4) {
         const auto data = buf.data();
         if (data[0] >= 20 && data[0] <= 24) {
             return true;
@@ -452,15 +480,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     srtp_t srtp_in = { nullptr }, srtp_out = {nullptr };
     ByteBuffer srtp_client_key_buf, srtp_server_key_buf;
 
-    // We will be using STUN
-    const auto iceAgent = std::make_unique<StunAgent>();
+    // ICE negotiation
+    const auto iceAgent = std::make_unique<IceAgent>();
+    const auto stunAgent = std::make_unique<StunAgent>();
 
     constexpr auto kIceMessageBufferSize = 2048;
     const auto iceMessageBuffer = std::make_unique<uint8_t[]>(kIceMessageBufferSize);
 
-    const auto iceAgentSize = sizeof(iceAgent);
-
-    stun_agent_init(iceAgent.get(), STUN_ALL_KNOWN_ATTRIBUTES,
+    stun_agent_init(stunAgent.get(), STUN_ALL_KNOWN_ATTRIBUTES,
                     STUN_COMPATIBILITY_RFC5389,
                     static_cast<StunAgentUsageFlags>(
                             STUN_AGENT_USAGE_SHORT_TERM_CREDENTIALS |
@@ -470,7 +497,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     auto sentUseCandidate = false;
 
     {
-        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(iceAgent.get(),
+        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(stunAgent.get(),
                                                                                  iceMessageBuffer.get(),
                                                                                  kIceMessageBufferSize,
                                                                                  offer, answer,
@@ -613,29 +640,15 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 LOG("STUN message method = %d", stunMessageMethod);
 
                 if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
-                    StunMessage responseMessage = {};
-                    stun_agent_init_response(iceAgent.get(), &responseMessage,
-                                             iceMessageBuffer.get(), kIceMessageBufferSize,
-                                             &incomingMessage);
-                    stun_message_append_xor_addr (&responseMessage, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
-                                                  &data.addr.ss, sizeof(data.addr.ss));
-
-                    uint16_t requestUserNameLen = { };
-                    const auto requestUserName = stun_message_find (&incomingMessage,
-                                                                STUN_ATTRIBUTE_USERNAME, &requestUserNameLen);
-                    if (requestUserName) {
-                        stun_message_append_bytes (&responseMessage, STUN_ATTRIBUTE_USERNAME,
-                                                   requestUserName, requestUserNameLen);
-                    }
-
-                    uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-                    stun_message_id(&incomingMessage, id);
-
-                    const auto icePassword = offer->getIcePassword();
-                    stun_agent_finish_message(iceAgent.get(), &responseMessage,
-                                              reinterpret_cast<const uint8_t*>(icePassword.data()), icePassword.size());
-
-                    enqueueForSending({ iceMessageBuffer.get(), stun_message_length(&responseMessage) });
+                    const auto iceMessageBindingResponse = make_stun_message_binding_response(
+                            stunAgent.get(),
+                            iceMessageBuffer.get(),
+                            kIceMessageBufferSize,
+                            offer, answer,
+                            incomingMessage,
+                            data.addr, data.addr_len
+                            );
+                    enqueueForSending({ iceMessageBuffer.get(), stun_message_length(&iceMessageBindingResponse) });
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
@@ -645,14 +658,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
                     stun_message_id(&incomingMessage, id);
 
-                    if (stun_agent_forget_transaction(iceAgent.get(), id)) {
+                    if (stun_agent_forget_transaction(stunAgent.get(), id) || true /* debug */) {
                         LOG("Removed old transaction ID for binding request");
 
                         if (!sentUseCandidate) {
                             sentUseCandidate = true;
 
                             const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                    iceAgent.get(),
+                                    stunAgent.get(),
                                     iceMessageBuffer.get(),
                                     kIceMessageBufferSize,
                                     offer, answer,

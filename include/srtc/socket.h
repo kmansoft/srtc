@@ -19,7 +19,7 @@ public:
     struct ReceivedData {
         ByteBuffer buf;
         anyaddr addr;
-        size_t addr_len;
+        socklen_t addr_len;
     };
 
     [[nodiscard]] std::list<ReceivedData> receive();
