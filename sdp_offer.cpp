@@ -7,7 +7,7 @@
 
 namespace {
 
-const char* to_string(srtc::Codec codec) {
+const char* codec_to_string(srtc::Codec codec) {
     switch (codec) {
         case srtc::Codec::H264:
             return "H264";
@@ -56,29 +56,42 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "a=ice-pwd:" << mIcePassword << std::endl;
     ss << "a=setup:actpass" << std::endl;
 
+    int payloadId = 96;
+
     // Video
-    const auto layer = mVideoConfig.layerList[0];
-    const int payloadId = 96;
+    for (const auto& layer : mVideoConfig.layerList) {
+        const auto payloadIdRtx = payloadId + 1;
 
-    ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << std::endl;
-    ss << "c=IN IP4 0.0.0.0" << std::endl;
-    ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
-    ss << "a=mid:0" << std::endl;
-    ss << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01" << std::endl;
-    ss << "a=sendonly" << std::endl;
-    ss << "a=rtcp-mux" << std::endl;
-    ss << "a=rtcp-rsize" << std::endl;
-    ss << "a=rtpmap:" << payloadId << " " << ::to_string(layer.codec) << "/90000" << std::endl;
-    if (layer.codec == Codec::H264) {
-        char buf[128];
-        std::snprintf(buf, sizeof(buf), "%02x%04x", layer.profileId, layer.level);
+        ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << " " << payloadIdRtx << std::endl;
+        ss << "c=IN IP4 0.0.0.0" << std::endl;
+        ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
+        ss << "a=mid:0" << std::endl;
+        ss << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+           << std::endl;
+        ss << "a=sendonly" << std::endl;
+        ss << "a=rtcp-mux" << std::endl;
+        ss << "a=rtcp-rsize" << std::endl;
+        ss << "a=rtpmap:" << payloadId << " " << codec_to_string(layer.codec) << "/90000"
+           << std::endl;
+        if (layer.codec == Codec::H264) {
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "%02x%04x", layer.profileId, layer.level);
 
-        ss << "a=fmtp:" << payloadId
-           << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="
-           << buf << std::endl;
+            ss << "a=fmtp:" << payloadId
+               << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="
+               << buf << std::endl;
+        }
+        ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
+        ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
+
+        ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
+        ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
+
+        ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
+        ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
+
+        payloadId += 2;
     }
-    ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
-    ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
 
     return { ss.str(), Error::OK };
 }

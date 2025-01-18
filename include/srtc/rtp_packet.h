@@ -18,7 +18,7 @@ public:
               uint16_t sequence,
               uint32_t timestamp,
               uint32_t ssrc,
-              ByteBuffer& payload);
+              ByteBuffer&& payload);
 
     ~RtpPacket();
 

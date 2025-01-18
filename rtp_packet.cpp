@@ -9,7 +9,7 @@ RtpPacket::RtpPacket(bool marker,
                      uint16_t sequence,
                      uint32_t timestamp,
                      uint32_t ssrc,
-                     srtc::ByteBuffer& payload)
+                     srtc::ByteBuffer&& payload)
     : mMarker(marker)
     , mPayloadType(payloadType)
     , mSequence(sequence)

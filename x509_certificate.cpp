@@ -21,7 +21,7 @@ struct X509CertificateImpl {
 };
 
 X509Certificate::X509Certificate()
-    : mImpl(new X509CertificateImpl{})
+    : mImpl(new X509CertificateImpl{.fp256bin = ByteBuffer{}})
 {
     // https://stackoverflow.com/questions/256405/programmatically-create-x509-certificate-using-openssl
 
@@ -65,7 +65,7 @@ X509Certificate::X509Certificate()
     const auto digest = EVP_get_digestbyname("sha256");
     X509_digest(mImpl->x509, digest, fpBuf, &fpSize);
 
-    mImpl->fp256bin = { fpBuf, fpSize };
+    mImpl->fp256bin = ByteBuffer { fpBuf, fpSize };
     mImpl->fp256hex = bin_to_hex(fpBuf, fpSize);
 
 #ifdef ANDROID

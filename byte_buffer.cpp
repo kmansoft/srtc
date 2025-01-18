@@ -13,6 +13,13 @@ ByteBuffer::ByteBuffer()
 {
 }
 
+ByteBuffer::ByteBuffer(size_t size)
+    : mBuf(size == 0 ? nullptr : new uint8_t[size])
+    , mLen(0)
+    , mCap(size)
+{
+}
+
 ByteBuffer::ByteBuffer(const uint8_t* src,
                        size_t size)
     : mBuf(size == 0 ? nullptr : new uint8_t[size])
@@ -105,9 +112,14 @@ size_t ByteBuffer::size() const
     return mLen;
 }
 
+size_t ByteBuffer::capacity() const
+{
+    return mCap;
+}
+
 ByteBuffer ByteBuffer::copy() const
 {
-    return { mBuf, mLen };
+    return ByteBuffer { mBuf, mLen };
 }
 
 bool ByteBuffer::operator==(const ByteBuffer& other) const

@@ -82,7 +82,7 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                 }
 
                 result.emplace_back(false, payloadType,
-                                    getNextSequence(), frameTimestamp, ssrc, payload);
+                                    getNextSequence(), frameTimestamp, ssrc, std::move(payload));
             }
         }
 
@@ -95,10 +95,10 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
 
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
-                ByteBuffer payload = { parser.currData(), parser.currDataSize() };
+                auto payload = ByteBuffer { parser.currData(), parser.currDataSize() };
                 result.emplace_back(true, payloadType,
                                     getNextSequence(), frameTimestamp,
-                                    ssrc, payload);
+                                    ssrc, std::move(payload));
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -133,7 +133,7 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
 
                     result.emplace_back(isEnd, payloadType,
                                         getNextSequence(), frameTimestamp,
-                                        ssrc, payload);
+                                        ssrc, std::move(payload));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;
