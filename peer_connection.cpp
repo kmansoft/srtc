@@ -872,7 +872,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             } else if (rtcpPayloadType == 207) {
                                 // https://datatracker.ietf.org/doc/html/rfc3611#section-3
                                 // XR: Extended Report
-                                while (rtcpRemaining >= 4 + 1) {
+                                while (rtcpRemaining >= 4) {
                                     const auto blockType = rtcpCurr[0];
                                     const auto blockTypeSpecific = rtcpCurr[1];
                                     const auto blockLength = 4 * (1 + get_uint16_t(rtcpCurr, 2));
@@ -882,9 +882,16 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                                     switch (blockType) {
                                         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
-                                        case 4:
+                                        case 4: {
                                             LOG("RTCP XR Receiver Reference Time Report Block");
-                                            break;
+                                            if (blockLength == 4 + 8 && rtcpRemaining >= 4 + 8) {
+                                                // https://stackoverflow.com/questions/29112071/how-to-convert-ntp-time-to-unix-epoch-time-in-c-language-linux
+                                                const auto ntpTimeSeconds = get_uint32_t(rtcpCurr, 4) - 2208988800U;
+                                                // const auto ntpTimeFraction = static_cast<uint64_t>(get_uint32_t(rtcpCurr, 4)) << 32;
+
+                                                LOG("RTCP XR Receiver Reference Time = %u", ntpTimeSeconds);
+                                            }
+                                        }   break;
                                         default:
                                             LOG("RTCP XR unknown block type %d", blockType);
                                             break;
