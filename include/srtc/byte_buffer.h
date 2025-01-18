@@ -6,9 +6,9 @@ namespace srtc {
 
 class ByteBuffer {
 public:
-    explicit ByteBuffer();
+    ByteBuffer();
     explicit ByteBuffer(size_t size);
-    explicit ByteBuffer(const uint8_t* src,
+    ByteBuffer(const uint8_t* src,
                         size_t size);
 
     ~ByteBuffer();

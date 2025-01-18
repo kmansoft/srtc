@@ -405,7 +405,7 @@ int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 int PeerConnection::dgram_write(BIO *b, const char *in, int inl) {
     auto data = reinterpret_cast<dgram_data*>(b->ptr);
 
-    data->pc->enqueueForSending(ByteBuffer{
+    data->pc->enqueueForSending({
         reinterpret_cast<const uint8_t *>(in),
         static_cast<size_t>(inl) });
 
@@ -496,7 +496,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                                                  kIceMessageBufferSize,
                                                                                  offer, answer,
                                                                                  false);
-        enqueueForSending(ByteBuffer{
+        enqueueForSending({
             iceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
         });
     }
@@ -638,7 +638,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             incomingMessage,
                             data.addr, data.addr_len
                             );
-                    enqueueForSending(ByteBuffer{ iceMessageBuffer.get(), stun_message_length(&iceMessageBindingResponse) });
+                    enqueueForSending({ iceMessageBuffer.get(), stun_message_length(&iceMessageBindingResponse) });
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
@@ -660,7 +660,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     kIceMessageBufferSize,
                                     offer, answer,
                                     true);
-                            enqueueForSending(ByteBuffer{
+                            enqueueForSending({
                                 iceMessageBuffer.get(),
                                 stun_message_length(&iceMessageBindingRequest2)});
 
@@ -823,6 +823,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     int rtcpSize = static_cast<int>(data.buf.size());
                     const auto status = srtp_unprotect_rtcp(srtp_in, data.buf.data(), &rtcpSize);
                     LOG("RTCP unprotect: %d, size = %d", status, rtcpSize);
+
                     if (status == srtp_err_status_ok) {
                         if (rtcpSize >= 8) {
                             const auto rtcpData = data.buf.data();
@@ -843,13 +844,30 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
                                     LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
                                 }
+                            } else if (rtcpPayloadType == 205) {
+                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
+                                // RTPFB: Transport layer FB message
+                                if (rtcpRemaining >= 4) {
+                                    const auto rtcpFmt = rtcpData[0] & 0x1f;
+                                    const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
+                                    LOG("RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+                                }
                             } else if (rtcpPayloadType == 206) {
-                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.1
-                                // PSFB: Payload Specific Feedback, Payload-specific FB message
+                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3
+                                // PSFB: Payload-specific FB message
                                 if (rtcpRemaining >= 4) {
                                     const auto rtcpFmt = rtcpData[0] & 0x1f;
                                     const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
                                     LOG("RTCP PSFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+
+                                    switch (rtcpFmt) {
+                                        case 1:
+                                            LOG("RTCP PSFB Picture Loss Indication");
+                                            break;
+                                        default:
+                                            LOG("RTCP PSFB Unknown fmt = %u", rtcpFmt);
+                                            break;
+                                    }
                                 }
                             } else if (rtcpPayloadType == 207) {
                                 // https://datatracker.ietf.org/doc/html/rfc3611#section-3
@@ -861,6 +879,16 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                                     LOG("RTCP XR block type = %d, type specific = %d, len = %u",
                                         blockType, blockTypeSpecific, blockLength);
+
+                                    switch (blockType) {
+                                        // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
+                                        case 4:
+                                            LOG("RTCP XR Receiver Reference Time Report Block");
+                                            break;
+                                        default:
+                                            LOG("RTCP XR unknown block type %d", blockType);
+                                            break;
+                                    }
 
                                     rtcpRemaining -= blockLength;
                                     rtcpCurr += blockLength;

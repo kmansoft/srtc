@@ -119,7 +119,7 @@ size_t ByteBuffer::capacity() const
 
 ByteBuffer ByteBuffer::copy() const
 {
-    return ByteBuffer { mBuf, mLen };
+    return { mBuf, mLen };
 }
 
 bool ByteBuffer::operator==(const ByteBuffer& other) const
