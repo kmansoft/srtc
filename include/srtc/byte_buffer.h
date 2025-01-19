@@ -4,6 +4,8 @@
 
 namespace srtc {
 
+// ByteBuffer
+
 class ByteBuffer {
 public:
     ByteBuffer();
@@ -43,6 +45,8 @@ private:
     size_t mCap;
 };
 
+// ByteWriter
+
 class ByteWriter {
 public:
     explicit ByteWriter(ByteBuffer& buf);
@@ -59,6 +63,26 @@ public:
 
 private:
     ByteBuffer& mBuf;
+};
+
+// ByteReader
+
+class ByteReader {
+public:
+    explicit ByteReader(const ByteBuffer& buf);
+    ByteReader(const ByteBuffer& buf, size_t size);
+    ByteReader(const uint8_t* buf, size_t size);
+
+    [[nodiscard]] size_t remaining() const;
+
+    [[nodiscard]] uint8_t readU8();
+    [[nodiscard]] uint16_t readU16();
+    [[nodiscard]] uint32_t readU32();
+
+private:
+    const uint8_t* mBuf;
+    size_t mLen;
+    size_t mPos;
 };
 
 }

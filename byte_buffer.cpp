@@ -1,6 +1,7 @@
 #include "srtc/byte_buffer.h"
 
 #include <algorithm>
+#include <cassert>
 
 namespace srtc {
 
@@ -167,7 +168,7 @@ void ByteWriter::writeU16(uint16_t value)
 {
     const uint8_t buf[] = {
             static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & 0xFF) };
+            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
@@ -176,7 +177,7 @@ void ByteWriter::writeU24(uint32_t value)
     const uint8_t buf[] = {
             static_cast<uint8_t>(value >> 16),
             static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & 0xFF) };
+            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
@@ -186,7 +187,7 @@ void ByteWriter::writeU32(uint32_t value)
             static_cast<uint8_t>(value >> 24),
             static_cast<uint8_t>(value >> 16),
             static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & 0xFF) };
+            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
@@ -198,7 +199,7 @@ void ByteWriter::writeU48(uint64_t value)
             static_cast<uint8_t>(value >> 24),
             static_cast<uint8_t>(value >> 16),
             static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & 0xFF) };
+            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
@@ -212,8 +213,70 @@ void ByteWriter::writeU64(uint64_t value)
             static_cast<uint8_t>(value >> 24),
             static_cast<uint8_t>(value >> 16),
             static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value & 0xFF) };
+            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
+}
+
+// ByteReader
+
+ByteReader::ByteReader(const ByteBuffer& buf)
+    : mBuf(buf.data())
+    , mLen(buf.size())
+    , mPos(0)
+{
+}
+
+ByteReader::ByteReader(const ByteBuffer& buf, size_t size)
+    : mBuf(buf.data())
+    , mLen(size)
+    , mPos(0)
+{
+    assert(mLen <= buf.size());
+}
+
+ByteReader::ByteReader(const uint8_t* buf, size_t size)
+    : mBuf(buf)
+    , mLen(size)
+    , mPos(0)
+{
+}
+
+size_t ByteReader::remaining() const
+{
+    if (mLen <= mPos) {
+        return 0;
+    }
+    return mLen - mPos;
+}
+
+uint8_t ByteReader::readU8()
+{
+    assert(mPos <= mLen - 1);
+    const uint8_t res = mBuf[mPos];
+    mPos += 1;
+    return res;
+}
+
+uint16_t ByteReader::readU16()
+{
+    assert(mPos <= mLen - 2);
+    const uint16_t res =
+            (static_cast<uint16_t>(mBuf[mPos]) << 8) |
+                static_cast<uint16_t>(mBuf[mPos + 1]);
+    mPos += 2;
+    return res;
+}
+
+uint32_t ByteReader::readU32()
+{
+    assert(mPos <= mLen - 4);
+    const uint32_t res =
+            (static_cast<uint32_t>(mBuf[mPos]) << 24) |
+            (static_cast<uint32_t>(mBuf[mPos + 1]) << 16) |
+            (static_cast<uint32_t>(mBuf[mPos + 2]) << 8) |
+                static_cast<uint32_t>(mBuf[mPos + 3]);
+    mPos += 4;
+    return res;
 }
 
 }

@@ -45,16 +45,6 @@ struct dgram_data {
     srtc::PeerConnection* pc;
 };
 
-uint16_t get_uint16_t(const uint8_t* ptr, size_t offset)
-{
-    return (ptr[offset] << 8) | ptr[offset + 1];
-}
-
-uint32_t get_uint32_t(const uint8_t* ptr, size_t offset)
-{
-    return (ptr[offset] << 24) | (ptr[offset + 1] << 16) | (ptr[offset + 2] << 8) | ptr[offset];
-}
-
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference,
                             int local_preference,
@@ -602,7 +592,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         assert(rtp_size_2 > rtp_size_1);
 
                         // And send
-                        (void) socket->send(rtp_header, rtp_size_2);
+                        const auto randomValue = lrand48() % 100;
+                        if (randomValue <= 5) {
+                            LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u", packet.getSSRC(), packet.getSequence());
+                        } else {
+                            (void) socket->send(rtp_header, rtp_size_2);
+                        }
                     } else {
                         LOG("Error applying SRTP protection: %d", protectStatus);
                     }
@@ -826,38 +821,52 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     if (status == srtp_err_status_ok) {
                         if (rtcpSize >= 8) {
-                            const auto rtcpData = data.buf.data();
-                            const auto rtcpPayloadType = rtcpData[1];
-                            const auto rtcpLength = 4 * (1 + get_uint16_t(rtcpData, 2));
-                            const auto rtcpSSRC = get_uint32_t(rtcpData, 4);
+                            ByteReader rtcpReader(data.buf.data(), rtcpSize);
 
-                            LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPayloadType,
+                            const auto rtcpRC = rtcpReader.readU8() & 0x1f;
+                            const auto rtcpPT = rtcpReader.readU8();
+                            const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
+                            const auto rtcpSSRC = rtcpReader.readU32();
+
+                            LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
                                 rtcpLength, rtcpSSRC);
 
-                            auto rtcpCurr = rtcpData + 8;
-                            auto rtcpRemaining = static_cast<int>(rtcpLength) - 8;
-
-                            if (rtcpPayloadType == 201) {
+                            if (rtcpPT == 201) {
                                 // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
                                 // RR: Receiver Report
-                                if (rtcpRemaining >= 4) {
-                                    const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
+                                if (rtcpReader.remaining() >= 4) {
+                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
                                     LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
                                 }
-                            } else if (rtcpPayloadType == 205) {
+                            } else if (rtcpPT == 205) {
                                 // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
                                 // RTPFB: Transport layer FB message
-                                if (rtcpRemaining >= 4) {
-                                    const auto rtcpFmt = rtcpData[0] & 0x1f;
-                                    const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
+                                if (rtcpReader.remaining() >= 4) {
+                                    const auto rtcpFmt = rtcpRC;
+                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
                                     LOG("RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+
+                                    switch (rtcpFmt) {
+                                        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
+                                        case 1: {
+                                            while (rtcpReader.remaining() >= 4) {
+                                                const auto pid = rtcpReader.readU16();
+                                                const auto blp = rtcpReader.readU16();
+
+                                                LOG("RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+                                            }
+                                        }   break;
+                                        default:
+                                            LOG("RTCP RTPFB Unknown fmt = %u", rtcpFmt);
+                                            break;
+                                    }
                                 }
-                            } else if (rtcpPayloadType == 206) {
+                            } else if (rtcpPT == 206) {
                                 // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3
                                 // PSFB: Payload-specific FB message
-                                if (rtcpRemaining >= 4) {
-                                    const auto rtcpFmt = rtcpData[0] & 0x1f;
-                                    const auto rtcpSSRC_1 = get_uint32_t(rtcpCurr, 0);
+                                if (rtcpReader.remaining() >= 4) {
+                                    const auto rtcpFmt = rtcpRC;
+                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
                                     LOG("RTCP PSFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
                                     switch (rtcpFmt) {
@@ -869,13 +878,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                             break;
                                     }
                                 }
-                            } else if (rtcpPayloadType == 207) {
+                            } else if (rtcpPT == 207) {
                                 // https://datatracker.ietf.org/doc/html/rfc3611#section-3
                                 // XR: Extended Report
-                                while (rtcpRemaining >= 4) {
-                                    const auto blockType = rtcpCurr[0];
-                                    const auto blockTypeSpecific = rtcpCurr[1];
-                                    const auto blockLength = 4 * (1 + get_uint16_t(rtcpCurr, 2));
+                                while (rtcpReader.remaining() >= 4) {
+                                    const auto blockType = rtcpReader.readU8();
+                                    const auto blockTypeSpecific = rtcpReader.readU8();
+                                    const auto blockLength = 4 * (1 + rtcpReader.readU16());
 
                                     LOG("RTCP XR block type = %d, type specific = %d, len = %u",
                                         blockType, blockTypeSpecific, blockLength);
@@ -884,10 +893,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
                                         case 4: {
                                             LOG("RTCP XR Receiver Reference Time Report Block");
-                                            if (blockLength == 4 + 8 && rtcpRemaining >= 4 + 8) {
+                                            if (blockLength == 4 + 8 && rtcpReader.remaining() >= 8) {
                                                 // https://stackoverflow.com/questions/29112071/how-to-convert-ntp-time-to-unix-epoch-time-in-c-language-linux
-                                                const auto ntpTimeSeconds = get_uint32_t(rtcpCurr, 4) - 2208988800U;
-                                                // const auto ntpTimeFraction = static_cast<uint64_t>(get_uint32_t(rtcpCurr, 4)) << 32;
+                                                const auto ntpTimeSeconds = rtcpReader.readU32() - 2208988800U;
+                                                // const auto ntpTimeFraction = rtcpReader.readU32();
 
                                                 LOG("RTCP XR Receiver Reference Time = %u", ntpTimeSeconds);
                                             }
@@ -896,9 +905,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                             LOG("RTCP XR unknown block type %d", blockType);
                                             break;
                                     }
-
-                                    rtcpRemaining -= blockLength;
-                                    rtcpCurr += blockLength;
                                 }
                             }
                         }

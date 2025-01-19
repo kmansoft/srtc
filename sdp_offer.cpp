@@ -62,7 +62,11 @@ std::pair<std::string, Error> SdpOffer::generate()
     for (const auto& layer : mVideoConfig.layerList) {
         const auto payloadIdRtx = payloadId + 1;
 
+#ifdef ENABLE_RTX
         ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << " " << payloadIdRtx << std::endl;
+#else
+        ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << std::endl;
+#endif
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
         ss << "a=mid:0" << std::endl;
@@ -84,13 +88,18 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
         ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
 
+#ifdef ENABLE_RTX
         ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
         ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
-
+#endif
         ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
 
+#ifdef ENABLE_RTX
         payloadId += 2;
+#else
+        payloadId += 1;
+#endif
     }
 
     return { ss.str(), Error::OK };

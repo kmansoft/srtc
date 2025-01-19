@@ -21,6 +21,21 @@ RtpPacket::RtpPacket(bool marker,
 
 RtpPacket::~RtpPacket() = default;
 
+uint8_t RtpPacket::getPayloadType() const
+{
+    return mPayloadType;
+}
+
+uint16_t RtpPacket::getSequence() const
+{
+    return mSequence;
+}
+
+uint32_t RtpPacket::getSSRC() const
+{
+    return mSSRC;
+}
+
 ByteBuffer RtpPacket::generate() const
 {
     // https://blog.webex.com/engineering/introducing-rtp-the-packet-format/

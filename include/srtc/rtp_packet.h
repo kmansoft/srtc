@@ -22,6 +22,10 @@ public:
 
     ~RtpPacket();
 
+    [[nodiscard]] uint8_t getPayloadType() const;
+    [[nodiscard]] uint16_t getSequence() const;
+    [[nodiscard]] uint32_t getSSRC() const;
+
     [[nodiscard]] ByteBuffer generate() const;
 
 private:
