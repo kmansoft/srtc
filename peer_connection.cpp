@@ -10,6 +10,7 @@
 #include "srtc/packetizer.h"
 #include "srtc/socket.h"
 #include "srtc/ice_agent.h"
+#include "srtc/send_history.h"
 
 #include <cassert>
 #include <iostream>
@@ -491,6 +492,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         });
     }
 
+    // Send history
+    const auto sendHistory = std::make_unique<SendHistory>();
+
     // Our socket loop
     auto eventFd = -1;
     auto epollHandle = epoll_create(2);
@@ -573,12 +577,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 item.packetizer->setCodecSpecificData(item.csd);
             } else if (!item.buf.empty()) {
                 // Frame data
-                const auto paloadType = item.track->getPayloadType();
-                const auto ssrc = item.track->getSSRC();
-                const auto packetList = item.packetizer->generate(paloadType, ssrc, item.buf);
+                const auto packetList = item.packetizer->generate(item.track, item.buf);
                 for (const auto& packet : packetList) {
+                    // Save
+                    sendHistory->save(packet);
+
                     // Generate
-                    auto packetData = packet.generate();
+                    auto packetData = packet->generate();
 
                     // Encrypt
                     void* rtp_header = packetData.data();
@@ -594,7 +599,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         // And send
                         const auto randomValue = lrand48() % 100;
                         if (randomValue <= 5) {
-                            LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u", packet.getSSRC(), packet.getSequence());
+                            LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u", packet->getSSRC(), packet->getSequence());
                         } else {
                             (void) socket->send(rtp_header, rtp_size_2);
                         }
@@ -854,6 +859,45 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                 const auto blp = rtcpReader.readU16();
 
                                                 LOG("RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+
+                                                std::vector<uint16_t> missingSeqList;
+                                                missingSeqList.push_back(pid);
+
+                                                if (blp != 0) {
+                                                    for (auto index = 0; index <= 15; index += 1) {
+                                                        if (blp & (1 << index)) {
+                                                            LOG("RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                                                            missingSeqList.push_back(pid + index + 1);
+                                                        }
+                                                    }
+                                                }
+
+                                                for (const auto seq : missingSeqList) {
+                                                    const auto packet = sendHistory->find(rtcpSSRC_1, seq);
+                                                    if (packet) {
+                                                        // Generate
+                                                        auto packetData = packet->generate();
+
+                                                        // Encrypt
+                                                        void* rtp_header = packetData.data();
+                                                        int rtp_size_1 = static_cast<int>(packetData.size());
+                                                        int rtp_size_2 = rtp_size_1;
+
+                                                        packetData.padding(SRTP_MAX_TRAILER_LEN);
+
+                                                        const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
+                                                        if (protectStatus == srtp_err_status_ok) {
+                                                            assert(rtp_size_2 > rtp_size_1);
+
+                                                            // And send
+                                                            const auto sentSize = socket->send(rtp_header, rtp_size_2);
+                                                            LOG("Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
+                                                                packet->getSSRC(), packet->getSequence(), sentSize);
+                                                        } else {
+                                                            LOG("Error applying SRTP protection: %d", protectStatus);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }   break;
                                         default:

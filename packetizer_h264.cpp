@@ -2,6 +2,7 @@
 #include "srtc/h264.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/track.h"
 
 #include <list>
 
@@ -34,11 +35,10 @@ void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
     }
 }
 
-std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
-                                              uint32_t ssrc,
-                                              const srtc::ByteBuffer& frame)
+std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<Track>& track,
+                                                               const srtc::ByteBuffer& frame)
 {
-    std::list<RtpPacket> result;
+    std::list<std::shared_ptr<RtpPacket>> result;
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
@@ -81,8 +81,9 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                     writer.write(csd.data(), csd.size());
                 }
 
-                result.emplace_back(false, payloadType,
-                                    getNextSequence(), frameTimestamp, ssrc, std::move(payload));
+                result.push_back(
+                        std::make_shared<RtpPacket>(
+                            track, false,getNextSequence(), frameTimestamp, std::move(payload)));
             }
         }
 
@@ -96,9 +97,9 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 auto payload = ByteBuffer { parser.currData(), parser.currDataSize() };
-                result.emplace_back(true, payloadType,
-                                    getNextSequence(), frameTimestamp,
-                                    ssrc, std::move(payload));
+                result.push_back(
+                        std::make_shared<RtpPacket>(
+                            track, true, getNextSequence(), frameTimestamp, std::move(payload)));
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -131,9 +132,9 @@ std::list<RtpPacket> PacketizerH264::generate(uint8_t payloadType,
                     const auto writeNow = std::min(dataSize, packetSize);
                     writer.write(dataPtr, writeNow);
 
-                    result.emplace_back(isEnd, payloadType,
-                                        getNextSequence(), frameTimestamp,
-                                        ssrc, std::move(payload));
+                    result.push_back(
+                            std::make_shared<RtpPacket>(
+                                    track, isEnd, getNextSequence(), frameTimestamp, std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

@@ -6,11 +6,13 @@
 #include "srtc/rtp_packet.h"
 
 #include <list>
+#include <memory>
 #include <utility>
 #include <chrono>
 
 namespace srtc {
 
+class Track;
 class ByteBuffer;
 class RtpPacket;
 
@@ -20,9 +22,8 @@ public:
     virtual ~Packetizer();
 
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd) = 0;
-    virtual std::list<RtpPacket> generate(uint8_t payloadType,
-                                          uint32_t ssrc,
-                                          const ByteBuffer& frame) = 0;
+    virtual std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
+                                                           const ByteBuffer& frame) = 0;
 
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const Codec& codec);
 

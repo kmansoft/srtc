@@ -11,9 +11,8 @@ public:
     ~PacketizerH264() override;
 
     void setCodecSpecificData(const std::vector<ByteBuffer>& csd) override;
-    std::list<RtpPacket> generate(uint8_t payloadType,
-                                  uint32_t ssrc,
-                                  const ByteBuffer& frame) override;
+    std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
+                                                   const ByteBuffer& frame) override;
 
 private:
     std::vector<ByteBuffer> mCSD;       // Without NALU header

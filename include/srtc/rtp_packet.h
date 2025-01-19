@@ -2,10 +2,13 @@
 
 #include "srtc/byte_buffer.h"
 
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 
 namespace srtc {
+
+class Track;
 
 class RtpPacket {
 public:
@@ -13,15 +16,15 @@ public:
     // https://webrtc.googlesource.com/src/+/refs/heads/main/media/base/media_constants.cc#17
     static constexpr size_t kMaxPayloadSize = 1200;
 
-    RtpPacket(bool marker,
-              uint8_t payloadType,
+    RtpPacket(const std::shared_ptr<Track>& track,
+              bool marker,
               uint16_t sequence,
               uint32_t timestamp,
-              uint32_t ssrc,
               ByteBuffer&& payload);
 
     ~RtpPacket();
 
+    [[nodiscard]] std::shared_ptr<Track> getTrack() const;
     [[nodiscard]] uint8_t getPayloadType() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
@@ -29,6 +32,7 @@ public:
     [[nodiscard]] ByteBuffer generate() const;
 
 private:
+    const std::shared_ptr<Track> mTrack;
     const bool mMarker;
     const uint8_t mPayloadType;
     const uint16_t mSequence;

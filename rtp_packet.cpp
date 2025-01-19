@@ -1,25 +1,31 @@
 #include "srtc/rtp_packet.h"
+#include "srtc/track.h"
 
 #include <utility>
 
 namespace srtc {
 
-RtpPacket::RtpPacket(bool marker,
-                     uint8_t payloadType,
+RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
+                     bool marker,
                      uint16_t sequence,
                      uint32_t timestamp,
-                     uint32_t ssrc,
                      srtc::ByteBuffer&& payload)
-    : mMarker(marker)
-    , mPayloadType(payloadType)
+    : mTrack(track)
+    , mMarker(marker)
+    , mPayloadType(track->getPayloadType())
     , mSequence(sequence)
     , mTimestamp(timestamp)
-    , mSSRC(ssrc)
+    , mSSRC(track->getSSRC())
     , mPayload(std::move(payload))
 {
 }
 
 RtpPacket::~RtpPacket() = default;
+
+std::shared_ptr<Track> RtpPacket::getTrack() const
+{
+    return mTrack;
+}
 
 uint8_t RtpPacket::getPayloadType() const
 {

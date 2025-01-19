@@ -19,10 +19,11 @@ add_library(srtc SHARED
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/rtp_packet.h
+        include/srtc/scheduler.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
+        include/srtc/send_history.h
         include/srtc/socket.h
-        include/srtc/scheduler.h
         include/srtc/srtc.h
         include/srtc/track.h
         include/srtc/util.h
@@ -42,6 +43,7 @@ add_library(srtc SHARED
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp
+        send_history.cpp
         socket.cpp
         srtc.cpp
         track.cpp
