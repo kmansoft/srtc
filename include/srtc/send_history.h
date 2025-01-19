@@ -20,6 +20,7 @@ public:
 private:
     struct TrackHistory {
         std::list<std::shared_ptr<RtpPacket>> packetList;
+        std::unordered_map<uint32_t, std::shared_ptr<RtpPacket>> packetMap;
     };
 
     std::unordered_map<uint32_t, TrackHistory> mTrackMap;

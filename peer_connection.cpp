@@ -864,7 +864,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                 missingSeqList.push_back(pid);
 
                                                 if (blp != 0) {
-                                                    for (auto index = 0; index <= 15; index += 1) {
+                                                    for (auto index = 0; index < 16; index += 1) {
                                                         if (blp & (1 << index)) {
                                                             LOG("RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
                                                             missingSeqList.push_back(pid + index + 1);
@@ -896,6 +896,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                         } else {
                                                             LOG("Error applying SRTP protection: %d", protectStatus);
                                                         }
+                                                    } else {
+                                                        LOG("Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
                                                     }
                                                 }
                                             }
