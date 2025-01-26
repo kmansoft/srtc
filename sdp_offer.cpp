@@ -60,9 +60,10 @@ std::pair<std::string, Error> SdpOffer::generate()
 
     // Video
     for (const auto& layer : mVideoConfig.layerList) {
-        const auto payloadIdRtx = payloadId + 1;
+// #define ENABLE_RTX
 
 #ifdef ENABLE_RTX
+        const auto payloadIdRtx = payloadId + 1;
         ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << " " << payloadIdRtx << std::endl;
 #else
         ss << "m=video 9 UDP/TLS/RTP/SAVPF " << payloadId << std::endl;

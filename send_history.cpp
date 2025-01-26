@@ -19,12 +19,13 @@ void SendHistory::save(const std::shared_ptr<RtpPacket>& packet)
 
     auto& item = mTrackMap[ssrc];
     while (item.packetList.size() >= kMaxHistory) {
+        auto& packetList = item.packetList;
         auto& packetMap = item.packetMap;
-        if (const auto iter = packetMap.find(item.packetList.back()->getSequence());
+        if (const auto iter = packetMap.find(packetList.back()->getSequence());
                 iter != packetMap.end()) {
-            item.packetMap.erase(iter);
+            packetMap.erase(iter);
         }
-        item.packetList.pop_back();
+        packetList.pop_back();
     }
 
     item.packetList.push_front(packet);

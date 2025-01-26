@@ -281,4 +281,70 @@ void LoopScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
     }
 }
 
+// ScopedScheduler
+
+ScopedScheduler::TaskImpl::TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
+                                    const std::weak_ptr<Task>& task)
+    : mOwner(owner)
+    , mTask(task)
+{
+}
+
+
+ScopedScheduler::TaskImpl::~TaskImpl() = default;
+
+void ScopedScheduler::TaskImpl::cancel()
+{
+    if (const auto owner = mOwner.lock()) {
+        auto self = shared_from_this();
+        owner->cancelImpl(self);
+    }
+}
+
+ScopedScheduler::ScopedScheduler(const std::shared_ptr<Scheduler>& scheduler)
+    : mScheduler(scheduler)
+{
+}
+
+ScopedScheduler::~ScopedScheduler()
+{
+    std::lock_guard lock(mMutex);
+    for (const auto& iter : mSubmitted) {
+        if (const auto task = iter->mTask.lock()) {
+            task->cancel();
+        }
+    }
+    mSubmitted.clear();
+}
+
+std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
+                                            const Func& func)
+{
+    std::lock_guard lock(mMutex);
+    const auto task = mScheduler->submit(delay, func);
+    const auto impl = std::make_shared<TaskImpl>(weak_from_this(), task);
+    mSubmitted.push_back(impl);
+    return impl;
+}
+
+void ScopedScheduler::cancel(std::shared_ptr<Task>& task)
+{
+    std::shared_ptr impl = std::static_pointer_cast<TaskImpl>(task);
+    cancelImpl(impl);
+}
+
+void ScopedScheduler::cancelImpl(std::shared_ptr<TaskImpl>& impl)
+{
+    std::lock_guard lock(mMutex);
+
+    if (const auto ptr = impl->mTask.lock()) {
+        ptr->cancel();
+    }
+
+    if (const auto iter = std::find(mSubmitted.begin(), mSubmitted.end(), impl);
+            iter != mSubmitted.end()) {
+        mSubmitted.erase(iter);
+    }
+}
+
 }
