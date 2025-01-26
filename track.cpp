@@ -8,21 +8,18 @@ Track::Track(int trackId,
   : mTrackId(trackId)
   , mPayloadType(payloadType)
   , mCodec(codec)
-  , mProfileId(0)
-  , mLevel(0)
+  , mProfileLevelId(0)
 {
 }
 
 Track::Track(int trackId,
              int payloadType,
              Codec codec,
-             int profileId,
-             int level)
+             int profileLevelId)
     : mTrackId(trackId)
     , mPayloadType(payloadType)
     , mCodec(codec)
-    , mProfileId(profileId)
-    , mLevel(level)
+    , mProfileLevelId(profileLevelId)
 {
 }
 
@@ -41,14 +38,9 @@ Codec Track::getCodec() const
     return mCodec;
 }
 
-int Track::getProfileId() const
+int Track::getProfileLevelId() const
 {
-    return mProfileId;
-}
-
-int Track::getLevel() const
-{
-    return mLevel;
+    return mProfileLevelId;
 }
 
 void Track::setSSRC(uint32_t ssrc)

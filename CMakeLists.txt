@@ -116,7 +116,7 @@ ExternalProject_Add(
 target_include_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
 
-target_link_directories(srtc PUBLIC
+target_link_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build/")
 
 add_dependencies(srtp boringssl)

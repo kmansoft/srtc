@@ -74,8 +74,6 @@ bool IceAgent::finishMessage(StunMessage *msg,
                              const std::string& username,
                              const std::string& password)
 {
-    bool remember_transaction = (stun_message_get_class (msg) == STUN_REQUEST);
-
     stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME,
                                username.c_str());
 
@@ -96,7 +94,25 @@ bool IceAgent::finishMessage(StunMessage *msg,
     auto fpr = stun_fingerprint (msg->buffer, stun_message_length (msg), false);
     std::memcpy (ptr, &fpr, sizeof (fpr));
 
+    if (stun_message_get_class (msg) == STUN_REQUEST) {
+        StunTransactionId id;
+        stun_message_id (msg, id);
+        mTransactionList.emplace_back(std::chrono::steady_clock::now(), id);
+    }
+
     return true;
+}
+
+bool IceAgent::forgetTransaction(StunTransactionId id)
+{
+    for (auto it = mTransactionList.begin(); it != mTransactionList.end(); ++it) {
+        if (std::memcmp(it->id, id, sizeof(StunTransactionId)) == 0) {
+            mTransactionList.erase(it);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 }

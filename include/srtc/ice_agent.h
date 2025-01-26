@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <chrono>
 
 #include "stunmessage.h"
 
@@ -27,7 +28,19 @@ public:
     bool forgetTransaction(StunTransactionId id);
 
 private:
+    struct SavedTransaction {
+        SavedTransaction(std::chrono::steady_clock::time_point when,
+                         const StunTransactionId& id)
+                         : when(when), id() {
+            std::memcpy(this->id, id, sizeof(StunTransactionId));
+        }
+
+        std::chrono::steady_clock::time_point when;
+        StunTransactionId id;
+    };
+
     const uint64_t mTie;
+    std::vector<SavedTransaction> mTransactionList;
 };
 
 }

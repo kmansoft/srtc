@@ -647,7 +647,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
                     stun_message_id(&incomingMessage, id);
 
-                    if (/* TODO stun_agent_forget_transaction(stunAgent.get(), id) || */ true /* debug */) {
+                    if (iceAgent->forgetTransaction(id)) {
                         LOG("Removed old transaction ID for binding request");
 
                         if (!sentUseCandidate) {

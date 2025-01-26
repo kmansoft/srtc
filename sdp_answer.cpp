@@ -110,7 +110,7 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     int audioTrackId = -1, audioPayloadType = -1;
 
     auto videoCodec = srtc::Codec::Unknown;
-    int videoProfileId = -1, videoLevel = -1;
+    int videoProfileLevelId = 0;
 
     auto audioCodec = srtc::Codec::Unknown;
 
@@ -192,11 +192,7 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                             parse_map(props[0], map);
 
                             if (const auto iter = map.find("profile-level-id"); iter != map.end()) {
-                                const auto profileLevelId = parse_int(iter->second, 16);
-                                if (profileLevelId > 0) {
-                                    videoProfileId = profileLevelId >> 16;
-                                    videoLevel = profileLevelId & 0xFFFF;
-                                }
+                                videoProfileLevelId = parse_int(iter->second, 16);
                             }
                         }
                     }
@@ -210,15 +206,23 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                                 const auto& addrStr = props[3];
                                 if (addrStr.find('.') != std::string::npos) {
                                     if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
-                                        host.addr.ss.ss_family = AF_INET;
-                                        host.addr.sin_ipv4.sin_port = htons(port);
-                                        hostList4.push_back(host);
+                                        if (std::find_if(hostList4.begin(), hostList4.end(), [host](const Host& it) {
+                                            return host.addr.sin_ipv4.sin_addr.s_addr == it.addr.sin_ipv4.sin_addr.s_addr;
+                                        }) == hostList4.end()) {
+                                            host.addr.ss.ss_family = AF_INET;
+                                            host.addr.sin_ipv4.sin_port = htons(port);
+                                            hostList4.push_back(host);
+                                        }
                                     }
                                 } else if (addrStr.find(':') != std::string::npos) {
                                     if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
-                                        host.addr.ss.ss_family = AF_INET6;
-                                        host.addr.sin_ipv6.sin6_port = htons(port);
-                                        hostList6.push_back(host);
+                                        if (std::find_if(hostList6.begin(), hostList6.end(), [host](const Host& it) {
+                                            return std::memcmp(&host.addr.sin_ipv6.sin6_addr, &it.addr.sin_ipv6.sin6_addr, sizeof(struct in6_addr)) == 0;
+                                        }) == hostList6.end()) {
+                                            host.addr.ss.ss_family = AF_INET6;
+                                            host.addr.sin_ipv6.sin6_port = htons(port);
+                                            hostList6.push_back(host);
+                                        }
                                     }
                                 }
                             }
@@ -252,11 +256,14 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     if (hostList4.empty() && hostList6.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }
-    if (videoTrackId < 0) {
-        return { Error::Code::InvalidData, "No video track" };
+    if (videoTrackId < 0 && audioTrackId < 0) {
+        return { Error::Code::InvalidData, "No video track and no audio track" };
     }
-    if (videoCodec == Codec::Unknown) {
+    if (videoTrackId >= 0 && videoCodec == Codec::Unknown) {
         return { Error::Code::InvalidData, "No video codec" };
+    }
+    if (audioTrackId >= 0 && audioCodec == Codec::Unknown) {
+        return { Error::Code::InvalidData, "No audio codec" };
     }
 
     // Interleave IPv4 and IPv6 candidates
@@ -271,11 +278,12 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
         }
     }
 
-    const auto videoTrack =
-            std::make_shared<Track>(videoTrackId, videoPayloadType, videoCodec,
-                                                    videoProfileId, videoLevel);
-    const auto audioTrack = audioTrackId >= 0 ?
-                            std::make_shared<Track>(audioTrackId, audioPayloadType, audioCodec) : nullptr;
+    const auto videoTrack = videoTrackId >= 0
+            ? std::make_shared<Track>(videoTrackId, videoPayloadType, videoCodec, videoProfileLevelId)
+            : nullptr;
+    const auto audioTrack = audioTrackId >= 0
+            ? std::make_shared<Track>(audioTrackId, audioPayloadType, audioCodec)
+            : nullptr;
 
     outAnswer.reset(new SdpAnswer(iceUFrag, icePassword, extensionMap,
                                             hostList,

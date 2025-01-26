@@ -12,14 +12,12 @@ public:
     Track(int trackId,
           int payloadType,
           Codec codec,
-          int profileId,
-          int level);
+          int profileLevelId);
 
     [[nodiscard]] int getTrackId() const;
     [[nodiscard]] int getPayloadType() const;
     [[nodiscard]] Codec getCodec() const;
-    [[nodiscard]] int getProfileId() const;
-    [[nodiscard]] int getLevel() const;
+    [[nodiscard]] int getProfileLevelId() const;
 
     void setSSRC(uint32_t ssrc);
     [[nodiscard]] uint32_t getSSRC() const;
@@ -28,8 +26,7 @@ private:
     const int mTrackId;
     const int mPayloadType;
     const Codec mCodec;
-    const int mProfileId;
-    const int mLevel;
+    const int mProfileLevelId;
     uint32_t mSSRC = { 0 };
 };
 
