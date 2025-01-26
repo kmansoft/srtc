@@ -109,10 +109,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     int videoTrackId = -1, videoPayloadType = -1;
     int audioTrackId = -1, audioPayloadType = -1;
 
-    auto videoCodec = srtc::Codec::Unknown;
+    auto videoCodec = srtc::Codec::None;
     int videoProfileLevelId = 0;
 
-    auto audioCodec = srtc::Codec::Unknown;
+    auto audioCodec = srtc::Codec::None;
 
     auto isSetupActive = false;
 
@@ -259,10 +259,10 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     if (videoTrackId < 0 && audioTrackId < 0) {
         return { Error::Code::InvalidData, "No video track and no audio track" };
     }
-    if (videoTrackId >= 0 && videoCodec == Codec::Unknown) {
+    if (videoTrackId >= 0 && videoCodec == Codec::None) {
         return { Error::Code::InvalidData, "No video codec" };
     }
-    if (audioTrackId >= 0 && audioCodec == Codec::Unknown) {
+    if (audioTrackId >= 0 && audioCodec == Codec::None) {
         return { Error::Code::InvalidData, "No audio codec" };
     }
 

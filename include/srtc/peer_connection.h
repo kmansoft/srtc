@@ -48,6 +48,7 @@ public:
 
     Error setVideoCodecSpecificData(std::vector<ByteBuffer>& list);
     Error publishVideoFrame(ByteBuffer& buf);
+    Error publishAudioFrame(ByteBuffer& buf);
 
 private:
     mutable std::mutex mMutex;

@@ -6,7 +6,7 @@
 namespace srtc {
 
 enum class Codec {
-    Unknown = 0,
+    None = 0,
     H264 = 1,
     Opus = 100
 };

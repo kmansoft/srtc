@@ -356,10 +356,35 @@ Error PeerConnection::publishVideoFrame(ByteBuffer& buf)
     }
 
     mFrameSendQueue.push_back({
-        .track = mVideoTrack,
-        .packetizer = mVideoPacketizer,
-        .buf = std::move(buf)
-    });
+                                      mVideoTrack,
+                                      mVideoPacketizer,
+                                      std::move(buf)
+                              });
+    eventfd_write(mEventHandle, 1);
+
+    return Error::OK;
+}
+
+Error PeerConnection::publishAudioFrame(ByteBuffer& buf)
+{
+    std::lock_guard lock(mMutex);
+
+    if (mConnectionState != ConnectionState::Connected) {
+        return Error::OK;
+    }
+
+    if (mAudioTrack == nullptr) {
+        return { Error::Code::InvalidData, "There is no audio track" };
+    }
+    if (mAudioPacketizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no audio packetizer" };
+    }
+
+    mFrameSendQueue.push_back({
+                                      mAudioTrack,
+                                      mAudioPacketizer,
+                                      std::move(buf)
+                              });
     eventfd_write(mEventHandle, 1);
 
     return Error::OK;
