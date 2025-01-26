@@ -20,6 +20,11 @@ public:
         ByteBuffer buf;
         anyaddr addr;
         socklen_t addr_len;
+
+        ReceivedData(ByteBuffer&& buf, const anyaddr& addr, socklen_t addr_len)
+            : buf(std::move(buf))
+            , addr(addr)
+            , addr_len(addr_len) {}
     };
 
     [[nodiscard]] std::list<ReceivedData> receive();

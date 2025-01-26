@@ -618,10 +618,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             if (is_stun_message(data.buf)) {
                 LOG("Received STUN message");
 
-                const StunMessage incomingMessage = {
-                        .buffer = data.buf.data(),
-                        .buffer_len = data.buf.size()
-                };
+                StunMessage incomingMessage = { };
+                incomingMessage.buffer = data.buf.data();
+                incomingMessage.buffer_len = data.buf.size();
 
                 const auto stunMessageClass = stun_message_get_class(&incomingMessage);
                 const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
@@ -774,25 +773,21 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                         srtp_server_key_buf.append(srtpServerKey, srtpKeySize);
                                         srtp_server_key_buf.append(srtpServerSalt, srtpSaltSize);
 
-                                        srtp_policy_t srtpReceivePolicy = {
-                                            .ssrc {
-                                                .type = ssrc_any_inbound
-                                            },
-                                            .key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data(),
-                                            .allow_repeat_tx = true
-                                        };
+                                        srtp_policy_t srtpReceivePolicy = { };
+                                        srtpReceivePolicy.ssrc.type = ssrc_any_inbound;
+                                        srtpReceivePolicy.key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data();
+                                        srtpReceivePolicy.allow_repeat_tx = true;
+
                                         srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
                                         srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
 
                                         srtp_add_stream(srtp_in, &srtpReceivePolicy);
 
-                                        srtp_policy_t srtpSendPolicy = {
-                                                .ssrc {
-                                                    .type = ssrc_any_outbound
-                                                },
-                                                .key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data(),
-                                                .allow_repeat_tx = true
-                                        };
+                                        srtp_policy_t srtpSendPolicy = { };
+                                        srtpSendPolicy.ssrc.type = ssrc_any_outbound;
+                                        srtpSendPolicy.key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data();
+                                        srtpSendPolicy.allow_repeat_tx = true;
+
                                         srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
                                         srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
 
@@ -826,7 +821,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     if (status == srtp_err_status_ok) {
                         if (rtcpSize >= 8) {
-                            ByteReader rtcpReader(data.buf.data(), rtcpSize);
+                            ByteReader rtcpReader = { data.buf.data(), static_cast<size_t>(rtcpSize) };
 
                             const auto rtcpRC = rtcpReader.readU8() & 0x1f;
                             const auto rtcpPT = rtcpReader.readU8();

@@ -72,7 +72,9 @@ int Socket::fd() const
         if (r > 0) {
             if (mAddr.ss.ss_family == AF_INET && mAddr.sin_ipv4 == from.sin_ipv4 ||
                 mAddr.ss.ss_family == AF_INET6 && mAddr.sin_ipv6 == from.sin_ipv6) {
-                list.emplace_back(ByteBuffer(mReceiveBuffer.get(), r), from, fromLen);
+
+                ByteBuffer buf = { mReceiveBuffer.get(), static_cast<size_t>(r) };
+                list.emplace_back(std::move(buf), from, fromLen);
             }
         } else {
             break;

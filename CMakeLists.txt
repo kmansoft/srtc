@@ -4,7 +4,7 @@ include(ExternalProject)
 
 project("srtc")
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 add_library(srtc SHARED

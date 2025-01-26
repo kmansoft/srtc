@@ -18,30 +18,28 @@ struct OfferConfig {
     std::string cname;
 };
 
-struct VideoLayer {
+struct PubVideoCodecConfig {
     Codec codec;
-    uint32_t profileId;
-    uint32_t level;
-    // Below are for simulcast only
-    std::string name;
-    uint32_t width;
-    uint32_t height;
-    uint32_t bitsPerSecond;
+    uint32_t profileLevelId;    // for h264
 };
 
-struct VideoConfig {
-    std::vector<VideoLayer> layerList;
+struct PubVideoConfig {
+    std::vector<PubVideoCodecConfig> list;
 };
 
-struct AudioConfig {
+struct PubAudioCodecConfig {
     Codec codec;
+};
+
+struct PubAudioConfig {
+    std::vector<PubAudioCodecConfig> list;
 };
 
 class SdpOffer {
 public:
     SdpOffer(const OfferConfig& config,
-             const VideoConfig& videoConfig,
-             const std::optional<AudioConfig>& audioConfig);
+             const std::optional<PubVideoConfig>& videoConfig,
+             const std::optional<PubAudioConfig>& audioConfig);
     ~SdpOffer() = default;
 
     [[nodiscard]] std::pair<std::string, Error> generate();
@@ -60,8 +58,8 @@ private:
     RandomGenerator<uint32_t> mRandomGenerator;
 
     const OfferConfig mConfig;
-    const VideoConfig mVideoConfig;
-    const std::optional<AudioConfig> mAudioConfig;
+    const std::optional<PubVideoConfig> mVideoConfig;
+    const std::optional<PubAudioConfig> mAudioConfig;
 
     const uint64_t mOriginId;
 
