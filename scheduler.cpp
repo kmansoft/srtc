@@ -244,7 +244,7 @@ int LoopScheduler::getTimeoutMillis() const
         return -1;
     }
 
-    const auto diff = duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen - std::chrono::steady_clock::now());
+    const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen - std::chrono::steady_clock::now());
     if (diff <= std::chrono::milliseconds::zero()) {
         return 0;
     }

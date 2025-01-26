@@ -75,6 +75,12 @@ void ByteBuffer::clear()
     mCap = 0;
 }
 
+void ByteBuffer::resize(size_t size)
+{
+    assert(size <= mCap);
+    mLen = size;
+}
+
 void ByteBuffer::reserve(size_t size)
 {
     ensureCapacity(size);

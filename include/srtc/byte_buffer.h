@@ -24,6 +24,7 @@ public:
     [[nodiscard]] bool empty() const;
 
     void clear();
+    void resize(size_t size);
     void reserve(size_t size);
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
