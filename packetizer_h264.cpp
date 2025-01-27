@@ -42,7 +42,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
-    const auto frameTimestamp = getNextTimestamp();
+    const auto frameTimestamp = getNextTimestamp(90);
 
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naulRefIdc = parser.currRefIdc();

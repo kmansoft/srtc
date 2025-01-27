@@ -623,7 +623,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                         // And send
                         const auto randomValue = lrand48() % 100;
-                        if (randomValue <= 5) {
+                        if (randomValue <= 5  && item.track->getCodec() == Codec::H264) {
                             LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u", packet->getSSRC(), packet->getSequence());
                         } else {
                             (void) socket->send(rtp_header, rtp_size_2);

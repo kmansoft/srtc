@@ -21,14 +21,14 @@ public:
     Packetizer();
     virtual ~Packetizer();
 
-    virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd) = 0;
+    virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
     virtual std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
                                                            const ByteBuffer& frame) = 0;
 
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const Codec& codec);
 
     [[nodiscard]] uint16_t getNextSequence();
-    [[nodiscard]] uint32_t getNextTimestamp();
+    [[nodiscard]] uint32_t getNextTimestamp(int clockRateKHz);
 
 private:
     RandomGenerator<uint32_t> mRandom;

@@ -16,6 +16,7 @@ add_library(srtc SHARED
         include/srtc/logging.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
+        include/srtc/packetizer_opus.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/rtp_packet.h
@@ -37,6 +38,7 @@ add_library(srtc SHARED
         logging.cpp
         packetizer.cpp
         packetizer_h264.cpp
+        packetizer_opus.cpp
         peer_connection.cpp
         random_generator.cpp
         rtp_packet.cpp
@@ -117,7 +119,7 @@ target_include_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
 
 target_link_directories(srtc PRIVATE
-        "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build/")
+        "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
 add_dependencies(srtp boringssl)
 add_dependencies(srtc srtp)

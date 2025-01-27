@@ -10,9 +10,9 @@ namespace {
 const char* codec_to_string(srtc::Codec codec) {
     switch (codec) {
         case srtc::Codec::H264:
-            return "H264";
+            return "H264/90000";
         case srtc::Codec::Opus:
-            return "opus";
+            return "opus/48000/2";
         default:
             assert(false);
             return "-";
@@ -69,11 +69,12 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "t=0 0" << std::endl;
     ss << "a=extmap-allow-mixed" << std::endl;
     ss << "a=msid-semantic: WMS" << std::endl;
-    ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
-    ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
-    ss << "a=ice-pwd:" << mIcePassword << std::endl;
-    ss << "a=setup:actpass" << std::endl;
 
+    if (mVideoConfig.has_value() && mAudioConfig.has_value()) {
+        ss << "a=group:BUNDLE 0 1" << std::endl;
+    }
+
+    uint32_t mid = 0;
     uint32_t payloadId = 96;
 
     // Video
@@ -92,17 +93,21 @@ std::pair<std::string, Error> SdpOffer::generate()
 #endif
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
-        ss << "a=mid:0" << std::endl;
+        ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
+        ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
+        ss << "a=ice-pwd:" << mIcePassword << std::endl;
+        ss << "a=setup:actpass" << std::endl;
+        ss << "a=mid:" << mid << std::endl;
+        mid += 1;
         ss
-                << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-                << std::endl;
+           << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+           << std::endl;
         ss << "a=sendonly" << std::endl;
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
         for (const auto& item: list) {
-            ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << "/90000"
-               << std::endl;
+            ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::H264) {
                 char buf[128];
                 std::snprintf(buf, sizeof(buf), "%06x", item.profileLevelId);
@@ -127,7 +132,44 @@ std::pair<std::string, Error> SdpOffer::generate()
         }
 
         ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
-        ss << "a=ssrc:" << mVideoSSRC << " msid:- " << mVideoMSID << std::endl;
+        ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+    }
+
+    // Audio
+    if (mAudioConfig.has_value()) {
+        const auto &list = mAudioConfig->list;
+        if (list.empty()) {
+            return {"", {Error::Code::InvalidData, "The audio config list is present but empty"}};
+        }
+
+        ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
+        ss << "c=IN IP4 0.0.0.0" << std::endl;
+        ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
+        ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
+        ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
+        ss << "a=ice-pwd:" << mIcePassword << std::endl;
+        ss << "a=setup:actpass" << std::endl;
+        ss << "a=mid:" << mid << std::endl;
+        mid += 1;
+        ss
+           << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+           << std::endl;
+        ss << "a=sendonly" << std::endl;
+        ss << "a=rtcp-mux" << std::endl;
+        ss << "a=rtcp-rsize" << std::endl;
+
+        for (const auto& item: list) {
+            if (item.codec == Codec::Opus) {
+                ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
+                ss << "a=fmtp:" << payloadId
+                   << " minptime=" << item.minPacketTimeMs << ";useinbandfec=1" << std::endl;
+            }
+
+            payloadId += 1;
+        }
+
+        ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
+        ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
     }
 
     return { ss.str(), Error::OK };
