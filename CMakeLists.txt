@@ -17,6 +17,7 @@ add_library(srtc SHARED
         include/srtc/h264.h
         include/srtc/ice_agent.h
         include/srtc/logging.h
+        include/srtc/optional.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_opus.h

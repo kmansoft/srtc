@@ -4,6 +4,7 @@
 #include "srtc/srtc.h"
 #include "srtc/random_generator.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/optional.h"
 
 #include <list>
 #include <memory>
@@ -36,7 +37,7 @@ private:
     const std::chrono::steady_clock::time_point mClockBaseTime;
     const uint32_t mClockBaseValue;
 
-    std::optional<long long> mLastMillis;
+    srtc::optional<long long> mLastMillis;
     uint32_t mLastTimestamp;
 };
 

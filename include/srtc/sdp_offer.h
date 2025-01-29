@@ -9,6 +9,7 @@
 #include "srtc/srtc.h"
 #include "srtc/error.h"
 #include "srtc/random_generator.h"
+#include "srtc/optional.h"
 
 namespace srtc {
 
@@ -39,8 +40,8 @@ struct PubAudioConfig {
 class SdpOffer {
 public:
     SdpOffer(const OfferConfig& config,
-             const std::optional<PubVideoConfig>& videoConfig,
-             const std::optional<PubAudioConfig>& audioConfig);
+             const srtc::optional<PubVideoConfig>& videoConfig,
+             const srtc::optional<PubAudioConfig>& audioConfig);
     ~SdpOffer() = default;
 
     [[nodiscard]] std::pair<std::string, Error> generate();
@@ -59,8 +60,8 @@ private:
     RandomGenerator<uint32_t> mRandomGenerator;
 
     const OfferConfig mConfig;
-    const std::optional<PubVideoConfig> mVideoConfig;
-    const std::optional<PubAudioConfig> mAudioConfig;
+    const srtc::optional<PubVideoConfig> mVideoConfig;
+    const srtc::optional<PubAudioConfig> mAudioConfig;
 
     const uint64_t mOriginId;
 

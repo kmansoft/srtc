@@ -38,8 +38,8 @@ std::string list_to_string(uint32_t start, uint32_t end)
 namespace srtc {
 
 SdpOffer::SdpOffer(const OfferConfig& config,
-                   const std::optional<PubVideoConfig>& videoConfig,
-                   const std::optional<PubAudioConfig>& audioConfig)
+                   const srtc::optional<PubVideoConfig>& videoConfig,
+                   const srtc::optional<PubAudioConfig>& audioConfig)
    : mRandomGenerator(0, 0x7ffffffe)
    , mConfig(config)
    , mVideoConfig(videoConfig)
