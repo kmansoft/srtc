@@ -42,6 +42,7 @@
 
 #include "stunmessage.h"
 #include "utils.h"
+#include "debug.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -88,7 +89,7 @@ stun_message_find (const StunMessage *msg, StunAttribute type,
   size_t length = stun_message_length (msg);
   size_t offset = 0;
 
-  /* In MS-TURN, IDs of REALM and NONCE STUN attributes are swapped. */
+  /* In MS-TURN, IDs of REALM and NONCE STUN attributes are swapped.
   if (msg->agent && msg->agent->compatibility == STUN_COMPATIBILITY_OC2007)
   {
     if (type == STUN_ATTRIBUTE_REALM)
@@ -96,6 +97,7 @@ stun_message_find (const StunMessage *msg, StunAttribute type,
     else if (type == STUN_ATTRIBUTE_NONCE)
       type = STUN_ATTRIBUTE_REALM;
   }
+ */
 
   offset = STUN_MESSAGE_ATTRIBUTES_POS;
 
@@ -131,9 +133,11 @@ stun_message_find (const StunMessage *msg, StunAttribute type,
         break;
     }
 
+    /*
     if (!(msg->agent &&
             (msg->agent->usage_flags & STUN_AGENT_USAGE_NO_ALIGNED_ATTRIBUTES)))
-      alen = stun_align (alen);
+    */
+    alen = stun_align (alen);
 
     offset += alen;
   }
@@ -332,7 +336,7 @@ stun_message_append (StunMessage *msg, StunAttribute type, size_t length)
   uint8_t *a;
   uint16_t mlen = stun_message_length (msg);
 
-  /* In MS-TURN, IDs of REALM and NONCE STUN attributes are swapped. */
+  /* In MS-TURN, IDs of REALM and NONCE STUN attributes are swapped.
   if (msg->agent && msg->agent->compatibility == STUN_COMPATIBILITY_OC2007)
   {
     if (type == STUN_ATTRIBUTE_NONCE)
@@ -340,6 +344,7 @@ stun_message_append (StunMessage *msg, StunAttribute type, size_t length)
     else if (type == STUN_ATTRIBUTE_REALM)
       type = STUN_ATTRIBUTE_NONCE;
   }
+ */
 
   if ((size_t)mlen + STUN_ATTRIBUTE_HEADER_LENGTH + length > msg->buffer_len)
     return NULL;
@@ -347,8 +352,8 @@ stun_message_append (StunMessage *msg, StunAttribute type, size_t length)
 
   a = msg->buffer + mlen;
   a = stun_setw (a, type);
-  if (msg->agent &&
-      (msg->agent->usage_flags & STUN_AGENT_USAGE_NO_ALIGNED_ATTRIBUTES))
+  if (false /* msg->agent &&
+      (msg->agent->usage_flags & STUN_AGENT_USAGE_NO_ALIGNED_ATTRIBUTES)*/)
   {
     a = stun_setw (a, length);
   } else {

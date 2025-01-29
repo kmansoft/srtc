@@ -508,8 +508,6 @@ typedef enum
   STUN_MESSAGE_RETURN_UNSUPPORTED_ADDRESS
 } StunMessageReturn;
 
-#include "stunagent.h"
-
 /**
  * STUN_MAX_MESSAGE_SIZE:
  *
@@ -519,7 +517,6 @@ typedef enum
 
 /**
  * StunMessage:
- * @agent: The agent that created or validated this message
  * @buffer: The buffer containing the STUN message
  * @buffer_len: The length of the buffer (not the size of the message)
  * @key: The short term credentials key to use for authentication validation
@@ -533,7 +530,6 @@ typedef enum
  * This structure represents a STUN message
  */
 struct _StunMessage {
-  StunAgent *agent;
   uint8_t *buffer;
   size_t buffer_len;
   uint8_t *key;

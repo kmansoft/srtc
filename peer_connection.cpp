@@ -28,7 +28,6 @@
 
 #include <srtp.h>
 
-#include "stunagent.h"
 #include "stunmessage.h"
 
 #define LOG(...) srtc::log("PeerConnection", __VA_ARGS__)

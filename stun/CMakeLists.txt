@@ -11,8 +11,6 @@ add_library(stun STATIC
         readme.txt
         stun5389.c
         stun5389.h
-        stunagent.c
-        stunagent.h
         stuncrc32.c
         stuncrc32.h
         stunhmac.c

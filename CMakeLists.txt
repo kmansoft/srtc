@@ -7,6 +7,9 @@ project("srtc")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED YES)
+
 add_library(srtc SHARED
         include/srtc/byte_buffer.h
         include/srtc/error.h
