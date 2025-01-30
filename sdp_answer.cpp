@@ -4,6 +4,8 @@
 
 #include <arpa/inet.h>
 
+#include <cassert>
+
 #include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
 #include "srtc/track.h"
@@ -90,11 +92,90 @@ int parse_int(const std::string& s, int radix = 10) {
     return -1;
 }
 
+srtc::Codec parse_codec(const std::string& s) {
+    if (s == "H264") {
+        return srtc::Codec::H264;
+    } else if (s == "opus") {
+        return srtc::Codec::Opus;
+    } else {
+        return srtc::Codec::None;
+    }
+}
+
+struct ParsePayloadState {
+    int payloadId = { -1 };
+    srtc::Codec codec = { srtc::Codec::None };
+    int profileLevelId = { 0 };
+    bool hasNack = { false };
+    bool hasPli = { false };
+};
+
+struct ParseMediaState {
+    int id = { -1 };
+    srtc::MediaType mediaType = { srtc::MediaType::None };
+    srtc::ExtensionMap extensionMap;
+    bool isSetupActive = { false };
+
+    size_t payloadStateSize = { 0u };
+    std::unique_ptr<ParsePayloadState[]> payloadStateList;
+
+    void setPayloadList(const std::vector<int>& list);
+    [[nodiscard]] ParsePayloadState* getPayloadState(int payloadId) const;
+    [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const;
+};
+
+void ParseMediaState::setPayloadList(const std::vector<int> &list)
+{
+    payloadStateSize = list.size();
+    payloadStateList = std::make_unique<ParsePayloadState[]>(payloadStateSize);
+    for (size_t i = 0u; i < payloadStateSize; i += 1) {
+        payloadStateList[i].payloadId = list[i];
+    }
+}
+
+ParsePayloadState* ParseMediaState::getPayloadState(int payloadId) const {
+   for (size_t i = 0u; i < payloadStateSize; i += 1) {
+       if (payloadStateList[i].payloadId == payloadId) {
+           return &payloadStateList[i];
+       }
+   }
+   return nullptr;
+}
+
+std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const
+{
+    if (id <= 0) {
+        return nullptr;
+    }
+
+    std::vector<std::shared_ptr<srtc::Track>> list;
+    for (size_t i = 0u; i < payloadStateSize; i += 1) {
+        const auto& payloadState = payloadStateList[i];
+        if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None) {
+            const auto track = std::make_shared<srtc::Track>(id, payloadState.payloadId, payloadState.codec,
+                                                             payloadState.hasNack, payloadState.hasPli,
+                                                             payloadState.profileLevelId);
+            list.push_back(track);
+        }
+    }
+
+    if (list.empty()) {
+        return nullptr;
+    }
+
+    const auto selected =
+        selector == nullptr ? list[0] : selector->selectTrack(mediaType, list);
+    assert(selected != nullptr);
+    return selected;
+}
+
 }
 
 namespace srtc {
 
-Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &outAnswer)
+Error SdpAnswer::parse(const std::string& answer,
+                       const std::shared_ptr<TrackSelector>& selector,
+                       std::shared_ptr<SdpAnswer> &outAnswer)
 {
     std::stringstream ss(answer);
 
@@ -102,19 +183,14 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
 
     bool isRtcpMux = false;
 
-    ExtensionMap extensionMap;
+    ParseMediaState mediaStateVideo, mediaStateAudio;
+    mediaStateVideo.mediaType = MediaType::Video;
+    mediaStateAudio.mediaType = MediaType::Audio;
+
+    ParseMediaState* mediaStateCurr = nullptr;
+
     std::vector<Host> hostList4;
     std::vector<Host> hostList6;
-
-    int videoTrackId = -1, videoPayloadType = -1;
-    int audioTrackId = -1, audioPayloadType = -1;
-
-    auto videoCodec = srtc::Codec::None;
-    int videoProfileLevelId = 0;
-
-    auto audioCodec = srtc::Codec::None;
-
-    auto isSetupActive = false;
 
     std::string certHashAlg;
     ByteBuffer certHashBin;
@@ -144,7 +220,9 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                 } else if (key == "ice-pwd") {
                     icePassword = value;
                 } else if (key == "setup") {
-                    isSetupActive = value == "active";
+                    if (mediaStateCurr) {
+                        mediaStateCurr->isSetupActive = value == "active";
+                    }
                 } else if (key == "fingerprint") {
                     if (props.size() == 1) {
                         certHashAlg = value;
@@ -157,42 +235,56 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                 } else if (key == "extmap") {
                     const auto id = parse_int(value);
                     if (id >= 0) {
-                        if (props.size() == 1) {
-                            extensionMap.set(id, props[0]);
+                        if (props.size() == 1 && mediaStateCurr) {
+                            mediaStateCurr->extensionMap.add(id, props[0]);
                         }
                     }
                 } else if (key == "rtpmap") {
-                    if (parse_int(value) == videoPayloadType) {
-                        // a=rtpmap:100 H264/90000
-                        if (props.size() == 1) {
+                    // a=rtpmap:100 H264/90000
+                    // a=rtpmap:99 opus/48000/2
+                    if (const auto payloadId = parse_int(value); payloadId > 0) {
+                        if (props.size() == 1 && mediaStateCurr) {
                             const auto posSlash = props[0].find('/');
                             if (posSlash != std::string::npos) {
-                                const auto codec = props[0].substr(0, posSlash);
-                                if (codec == "H264") {
-                                    videoCodec = srtc::Codec::H264;
-                                }
-                            }
-                        }
-                    } else if (parse_int(value) == audioPayloadType) {
-                        if (props.size() == 1) {
-                            const auto posSlash = props[0].find('/');
-                            if (posSlash != std::string::npos) {
-                                const auto codec = props[0].substr(0, posSlash);
-                                if (codec == "opus") {
-                                    audioCodec = srtc::Codec::Opus;
+                                const auto codecString = props[0].substr(0, posSlash);
+                                if (const auto codec = parse_codec(codecString); codec != Codec::None) {
+                                    const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+                                    if (payloadState) {
+                                        payloadState->codec = codec;
+                                        payloadState->payloadId = payloadId;
+                                    }
                                 }
                             }
                         }
                     }
                 } else if (key == "fmtp") {
-                    if (parse_int(value) == videoPayloadType) {
-                        // a=fmtp:100 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+                    // a=fmtp:100 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+                    if (const auto payloadId = parse_int(value); payloadId > 0 && mediaStateCurr) {
                         if (props.size() == 1) {
                             std::unordered_map<std::string, std::string> map;
                             parse_map(props[0], map);
 
                             if (const auto iter = map.find("profile-level-id"); iter != map.end()) {
-                                videoProfileLevelId = parse_int(iter->second, 16);
+                                const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+                                if (payloadState) {
+                                    payloadState->profileLevelId = parse_int(iter->second, 16);
+                                }
+                            }
+                        }
+                    }
+                } else if (key == "rtcp-fb") {
+                    // a=rtcp-fb:98 nack pli
+                    if (const auto payloadId = parse_int(value); payloadId > 0 && mediaStateCurr) {
+                        const auto payloadState = mediaStateCurr->getPayloadState(
+                                payloadId);
+                        if (payloadState) {
+                            for (size_t i = 0u; i < props.size(); i += 1) {
+                                const auto& token = props[i];
+                                if (token == "nack") {
+                                    payloadState->hasNack = true;
+                                } else if (token == "pli") {
+                                    payloadState->hasPli = true;
+                                }
                             }
                         }
                     }
@@ -230,21 +322,32 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
                     }
                 }
             } else if (tag == "m") {
-                // "m=video 0 UDP/TLS/RTP/SAVPF 100"
+                // "m=video 9 UDP/TLS/RTP/SAVPF 96 97 98"
                 if (props.size() < 2 || props[1] != "UDP/TLS/RTP/SAVPF") {
                     return Error { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" };
                 }
 
                 if (key == "video") {
-                    if (props.size() >= 3) {
-                        videoTrackId = parse_int(props[0]);
-                        videoPayloadType = parse_int(props[2]);
-                    }
+                    mediaStateCurr = &mediaStateVideo;
                 } else if (key == "audio") {
-                    if (props.size() >= 3) {
-                        audioTrackId = parse_int(props[0]);
-                        audioPayloadType = parse_int(props[2]);
+                    mediaStateCurr = &mediaStateAudio;
+                } else {
+                    mediaStateCurr = nullptr;
+                }
+
+                if (mediaStateCurr) {
+                    if (const auto id = parse_int(props[0]); id > 0) {
+                        mediaStateCurr->id = id;
                     }
+
+                    std::vector<int> payloadIdList;
+                    for (size_t i = 2u; i < props.size(); i += 1) {
+                        if (const auto id = parse_int(props[i]); id > 0) {
+                            payloadIdList.push_back(id);
+                        }
+                    }
+
+                    mediaStateCurr->setPayloadList(payloadIdList);
                 }
             }
         }
@@ -255,15 +358,6 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
     }
     if (hostList4.empty() && hostList6.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
-    }
-    if (videoTrackId < 0 && audioTrackId < 0) {
-        return { Error::Code::InvalidData, "No video track and no audio track" };
-    }
-    if (videoTrackId >= 0 && videoCodec == Codec::None) {
-        return { Error::Code::InvalidData, "No video codec" };
-    }
-    if (audioTrackId >= 0 && audioCodec == Codec::None) {
-        return { Error::Code::InvalidData, "No audio codec" };
     }
 
     // Interleave IPv4 and IPv6 candidates
@@ -278,38 +372,45 @@ Error SdpAnswer::parse(const std::string& answer, std::shared_ptr<SdpAnswer> &ou
         }
     }
 
-    const auto videoTrack = videoTrackId >= 0
-            ? std::make_shared<Track>(videoTrackId, videoPayloadType, videoCodec, videoProfileLevelId)
-            : nullptr;
-    const auto audioTrack = audioTrackId >= 0
-            ? std::make_shared<Track>(audioTrackId, audioPayloadType, audioCodec)
-            : nullptr;
+    if (mediaStateVideo.id <= 0 && mediaStateAudio.id <= 0) {
+        return { Error::Code::InvalidData, "No media tracks" };
+    }
 
-    outAnswer.reset(new SdpAnswer(iceUFrag, icePassword, extensionMap,
-                                            hostList,
-                                            videoTrack, audioTrack,
-                                            isSetupActive,
-                                  {certHashAlg, certHashBin, certHashHex}));
+    const auto videoTrack = mediaStateVideo.selectTrack(selector);
+    const auto audioTrack = mediaStateAudio.selectTrack(selector);
+
+    if (!videoTrack && !audioTrack) {
+        return { Error::Code::InvalidData, "No media tracks" };
+    }
+
+    outAnswer.reset(new SdpAnswer(
+            iceUFrag, icePassword, hostList,
+            videoTrack, audioTrack,
+            mediaStateVideo.extensionMap, mediaStateAudio.extensionMap,
+            mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive,
+            { certHashAlg, certHashBin, certHashHex }));
 
     return Error::OK;
 }
 
 SdpAnswer::SdpAnswer(const std::string& iceUFrag,
                      const std::string& icePassword,
-                     const ExtensionMap& extensionMap,
                      const std::vector<Host>& hostList,
                      const std::shared_ptr<Track>& videoTrack,
                      const std::shared_ptr<Track>& audioTrack,
+                     const ExtensionMap& videoExtensionMap,
+                     const ExtensionMap& audioExtensionMap,
                      bool isSetupActive,
                      const X509Hash& certHash)
-     : mIceUFrag(iceUFrag)
-     , mIcePassword(icePassword)
-     , mExtensionMap(extensionMap)
-     , mHostList(hostList)
-     , mVideoTrack(videoTrack)
-     , mAudioTrack(audioTrack)
-     , mIsSetupActive(isSetupActive)
-     , mCertHash(certHash)
+    : mIceUFrag(iceUFrag)
+    , mIcePassword(icePassword)
+    , mHostList(hostList)
+    , mVideoTrack(videoTrack)
+    , mAudioTrack(audioTrack)
+    , mVideoExtensionMap(videoExtensionMap)
+    , mAudioExtensionMap(audioExtensionMap)
+    , mIsSetupActive(isSetupActive)
+    , mCertHash(certHash)
 {
 }
 
@@ -325,9 +426,14 @@ std::string SdpAnswer::getIcePassword() const
     return mIcePassword;
 }
 
-ExtensionMap SdpAnswer::getExtensionMap() const
+const ExtensionMap& SdpAnswer::getVideoExtensionMap() const
 {
-    return mExtensionMap;
+    return mVideoExtensionMap;
+}
+
+const ExtensionMap& SdpAnswer::getAudioExtensionMap() const
+{
+    return mAudioExtensionMap;
 }
 
 std::vector<Host> SdpAnswer::getHostList() const

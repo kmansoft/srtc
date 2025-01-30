@@ -17,35 +17,48 @@ class Track;
 class SdpAnswer {
 public:
 
-    static Error parse(const std::string& answer, std::shared_ptr<SdpAnswer>& outAnswer);
+    class TrackSelector {
+    public:
+        virtual ~TrackSelector() = default;
+
+        virtual std::shared_ptr<Track> selectTrack(MediaType type,
+                                                   const std::vector<std::shared_ptr<Track>>& list) const = 0;
+    };
+
+    static Error parse(const std::string& answer,
+                       const std::shared_ptr<TrackSelector>& selector,
+                       std::shared_ptr<SdpAnswer>& outAnswer);
 
     ~SdpAnswer();
 
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
-    [[nodiscard]] ExtensionMap getExtensionMap() const;
     [[nodiscard]] std::vector<Host> getHostList() const;
     [[nodiscard]] std::shared_ptr<Track> getVideoTrack() const;
     [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;
+    [[nodiscard]] const ExtensionMap& getVideoExtensionMap() const;
+    [[nodiscard]] const ExtensionMap& getAudioExtensionMap() const;
     [[nodiscard]] bool isSetupActive() const;
     [[nodiscard]] const X509Hash& getCertificateHash() const;
 
 private:
     const std::string mIceUFrag;
     const std::string mIcePassword;
-    const ExtensionMap mExtensionMap;
     const std::vector<Host> mHostList;
     const std::shared_ptr<Track> mVideoTrack;
     const std::shared_ptr<Track> mAudioTrack;
+    const ExtensionMap mVideoExtensionMap;
+    const ExtensionMap mAudioExtensionMap;
     const bool mIsSetupActive;
     const X509Hash mCertHash;
 
     SdpAnswer(const std::string& iceUFrag,
               const std::string& icePassword,
-              const ExtensionMap& extensionMap,
               const std::vector<Host>& hostList,
               const std::shared_ptr<Track>& videoTrack,
               const std::shared_ptr<Track>& audioTrack,
+              const ExtensionMap& videoExtensionMap,
+              const ExtensionMap& audioExtensionMap,
               bool isSetupActive,
               const X509Hash& certHash);
 };

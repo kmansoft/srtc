@@ -4,21 +4,15 @@ namespace srtc {
 
 Track::Track(int trackId,
              int payloadType,
-             Codec codec)
-  : mTrackId(trackId)
-  , mPayloadType(payloadType)
-  , mCodec(codec)
-  , mProfileLevelId(0)
-{
-}
-
-Track::Track(int trackId,
-             int payloadType,
              Codec codec,
+             bool hasNack,
+             bool hasPli,
              int profileLevelId)
     : mTrackId(trackId)
     , mPayloadType(payloadType)
     , mCodec(codec)
+    , mHasNack(hasNack)
+    , mHasPli(hasPli)
     , mProfileLevelId(profileLevelId)
 {
 }
@@ -36,6 +30,16 @@ int Track::getPayloadType() const
 Codec Track::getCodec() const
 {
     return mCodec;
+}
+
+bool Track::hasNack() const
+{
+    return mHasNack;
+}
+
+bool Track::hasPli() const
+{
+    return mHasPli;
 }
 
 int Track::getProfileLevelId() const

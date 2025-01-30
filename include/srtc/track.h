@@ -8,15 +8,16 @@ class Track {
 public:
     Track(int trackId,
           int payloadType,
-          Codec codec);
-    Track(int trackId,
-          int payloadType,
           Codec codec,
-          int profileLevelId);
+          bool hasNack,
+          bool hasPli,
+          int profileLevelId = 0);
 
     [[nodiscard]] int getTrackId() const;
     [[nodiscard]] int getPayloadType() const;
     [[nodiscard]] Codec getCodec() const;
+    [[nodiscard]] bool hasNack() const;
+    [[nodiscard]] bool hasPli() const;
     [[nodiscard]] int getProfileLevelId() const;
 
     void setSSRC(uint32_t ssrc);
@@ -26,6 +27,8 @@ private:
     const int mTrackId;
     const int mPayloadType;
     const Codec mCodec;
+    const bool mHasNack;
+    const bool mHasPli;
     const int mProfileLevelId;
     uint32_t mSSRC = { 0 };
 };

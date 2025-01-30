@@ -10,7 +10,7 @@ public:
     ExtensionMap() = default;
     ~ExtensionMap() = default;
 
-    void set(int id, const std::string& name);
+    void add(int id, const std::string& name);
 
 private:
     std::unordered_map<int, std::string> mMapIdToName;

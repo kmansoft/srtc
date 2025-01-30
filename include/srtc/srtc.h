@@ -11,6 +11,12 @@ enum class Codec {
     Opus = 100
 };
 
+enum class MediaType {
+    None = 0,
+    Video = 1,
+    Audio = 2
+};
+
 union anyaddr {
     struct sockaddr_storage ss;
     struct sockaddr_in sin_ipv4;
