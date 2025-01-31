@@ -8,7 +8,8 @@ namespace srtc {
 enum class Codec {
     None = 0,
     H264 = 1,
-    Opus = 100
+    Opus = 100,
+    Rtx = 200
 };
 
 enum class MediaType {

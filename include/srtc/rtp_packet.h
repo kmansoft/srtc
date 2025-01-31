@@ -25,16 +25,17 @@ public:
     ~RtpPacket();
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
-    [[nodiscard]] uint8_t getPayloadType() const;
+    [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
 
     [[nodiscard]] ByteBuffer generate() const;
+    [[nodiscard]] std::pair<ByteBuffer, bool> generateRetransmit() const;
 
 private:
     const std::shared_ptr<Track> mTrack;
     const bool mMarker;
-    const uint8_t mPayloadType;
+    const uint8_t mPayloadId;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
     const uint32_t mSSRC;

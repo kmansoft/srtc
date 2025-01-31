@@ -254,10 +254,10 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mAudioTrack = answer->getAudioTrack();
 
     if (mVideoTrack) {
-        mVideoTrack->setSSRC(mSdpOffer->getVideoSSRC());
+        mVideoTrack->setSSRC(mSdpOffer->getVideoSSRC(), mSdpOffer->getRtxVideoSSRC());
     }
     if (mAudioTrack) {
-        mAudioTrack->setSSRC(mSdpOffer->getAudioSSRC());
+        mAudioTrack->setSSRC(mSdpOffer->getAudioSSRC(), mSdpOffer->getRtxAudioSSRC());
     }
 
     if (mSdpOffer && mSdpAnswer) {
@@ -494,7 +494,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     BIO* dtls_bio = {};
 
     // SRTP
-    srtp_t srtp_in = { nullptr }, srtp_out = {nullptr };
+    srtp_t srtp_in = { nullptr };
+    srtp_t srtp_out_video = { nullptr }, srtp_out_video_rtx = { nullptr };
+    srtp_t srtp_out_audio = { nullptr }, srtp_out_audio_rtx = { nullptr };
     ByteBuffer srtp_client_key_buf, srtp_server_key_buf;
 
     // ICE negotiation
@@ -616,19 +618,37 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
                     packetData.padding(SRTP_MAX_TRAILER_LEN);
 
-                    const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
-                    if (protectStatus == srtp_err_status_ok) {
-                        assert(rtp_size_2 > rtp_size_1);
+                    srtp_t srtp_out;
+                    switch (item.track->getMediaType()) {
+                        case MediaType::Video:
+                            srtp_out = srtp_out_video;
+                            break;
+                        case MediaType::Audio:
+                            srtp_out = srtp_out_audio;
+                            break;
+                        default:
+                            srtp_out = nullptr;
+                            break;
+                    }
 
-                        // And send
-                        const auto randomValue = lrand48() % 100;
-                        if (randomValue <= 5  && item.track->hasNack()) {
-                            LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u", packet->getSSRC(), packet->getSequence());
+                    if (srtp_out) {
+                        const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
+                        if (protectStatus == srtp_err_status_ok) {
+                            assert(rtp_size_2 > rtp_size_1);
+
+                            // And send
+                            const auto randomValue = lrand48() % 100;
+                            if (randomValue <= 5 && item.track->getCodec() == Codec::H264) {
+                                LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u",
+                                    packet->getSSRC(), packet->getSequence());
+                            } else {
+                                (void) socket->send(rtp_header, rtp_size_2);
+                            }
                         } else {
-                            (void) socket->send(rtp_header, rtp_size_2);
+                            LOG("Error applying SRTP protection: %d", protectStatus);
                         }
                     } else {
-                        LOG("Error applying SRTP protection: %d", protectStatus);
+                        LOG("Error finding SRTP context");
                     }
                 }
             }
@@ -773,7 +793,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                         setConnectionState(ConnectionState::Failed);
                                     } else {
                                         srtp_create(&srtp_in, nullptr);
-                                        srtp_create(&srtp_out, nullptr);
+                                        srtp_create(&srtp_out_video, nullptr);
+                                        srtp_create(&srtp_out_video_rtx, nullptr);
+                                        srtp_create(&srtp_out_audio, nullptr);
+                                        srtp_create(&srtp_out_audio_rtx, nullptr);
 
                                         const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
                                         const auto material = ByteBuffer{srtpKeyPlusSaltSize * 2};
@@ -815,7 +838,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                         srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
                                         srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
 
-                                        srtp_add_stream(srtp_out, &srtpSendPolicy);
+                                        srtp_add_stream(srtp_out_video, &srtpSendPolicy);
+                                        srtp_add_stream(srtp_out_video_rtx, &srtpSendPolicy);
+                                        srtp_add_stream(srtp_out_audio, &srtpSendPolicy);
+                                        srtp_add_stream(srtp_out_audio_rtx, &srtpSendPolicy);
 
                                         dtlsState = DtlsState::Completed;
                                         setConnectionState(ConnectionState::Connected);
@@ -895,7 +921,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                     const auto packet = sendHistory->find(rtcpSSRC_1, seq);
                                                     if (packet) {
                                                         // Generate
-                                                        auto packetData = packet->generate();
+                                                        auto [packetData, isRtx] = packet->generateRetransmit();
 
                                                         // Encrypt
                                                         void* rtp_header = packetData.data();
@@ -903,6 +929,27 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                         int rtp_size_2 = rtp_size_1;
 
                                                         packetData.padding(SRTP_MAX_TRAILER_LEN);
+
+                                                        srtp_t srtp_out;
+                                                        switch (packet->getTrack()->getMediaType()) {
+                                                            case MediaType::Video:
+                                                                if (isRtx) {
+                                                                    srtp_out = srtp_out_video_rtx;
+                                                                } else {
+                                                                    srtp_out = srtp_out_video;
+                                                                }
+                                                                break;
+                                                            case MediaType::Audio:
+                                                                if (isRtx) {
+                                                                    srtp_out = srtp_out_audio_rtx;
+                                                                } else {
+                                                                    srtp_out = srtp_out_audio;
+                                                                }
+                                                                break;
+                                                            default:
+                                                                srtp_out = nullptr;
+                                                                break;
+                                                        }
 
                                                         const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
                                                         if (protectStatus == srtp_err_status_ok) {
@@ -1020,8 +1067,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     if (srtp_in) {
         srtp_dealloc(srtp_in);
     }
-    if (srtp_out) {
-        srtp_dealloc(srtp_out);
+    if (srtp_out_video) {
+        srtp_dealloc(srtp_out_video);
+    }
+    if (srtp_out_video_rtx) {
+        srtp_dealloc(srtp_out_video_rtx);
+    }
+    if (srtp_out_audio) {
+        srtp_dealloc(srtp_out_audio);
+    }
+    if (srtp_out_audio_rtx) {
+        srtp_dealloc(srtp_out_audio_rtx);
     }
 
     if (dtls_ssl) {

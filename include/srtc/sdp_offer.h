@@ -51,7 +51,9 @@ public:
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
     [[nodiscard]] uint32_t getVideoSSRC() const;
+    [[nodiscard]] uint32_t getRtxVideoSSRC() const;
     [[nodiscard]] uint32_t getAudioSSRC() const;
+    [[nodiscard]] uint32_t getRtxAudioSSRC() const;
 
 private:
     std::string generateRandomUUID();
@@ -66,7 +68,9 @@ private:
     const uint64_t mOriginId;
 
     const uint32_t mVideoSSRC;
+    const uint32_t mRtxVideoSSRC;
     const uint32_t mAudioSSRC;
+    const uint32_t mRtxAudioSSRC;
 
     const std::string mVideoMSID;
     const std::string mAudioMSID;

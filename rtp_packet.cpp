@@ -12,7 +12,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      srtc::ByteBuffer&& payload)
     : mTrack(track)
     , mMarker(marker)
-    , mPayloadType(track->getPayloadType())
+    , mPayloadId(track->getPayloadId())
     , mSequence(sequence)
     , mTimestamp(timestamp)
     , mSSRC(track->getSSRC())
@@ -27,9 +27,9 @@ std::shared_ptr<Track> RtpPacket::getTrack() const
     return mTrack;
 }
 
-uint8_t RtpPacket::getPayloadType() const
+uint8_t RtpPacket::getPayloadId() const
 {
-    return mPayloadType;
+    return mPayloadId;
 }
 
 uint16_t RtpPacket::getSequence() const
@@ -50,7 +50,7 @@ ByteBuffer RtpPacket::generate() const
     ByteWriter writer(buf);
 
     // V=1 | P | X | CC | M | PT
-    const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (mPayloadType & 0x7F);
+    const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
     writer.writeU16(header);
 
     writer.writeU16(mSequence);
@@ -61,6 +61,34 @@ ByteBuffer RtpPacket::generate() const
     buf.append(mPayload);
 
     return buf;
+}
+
+std::pair<ByteBuffer, bool> RtpPacket::generateRetransmit() const
+{
+    const auto rtxPayloadId = mTrack->getRtxPayloadId();
+    if (rtxPayloadId <= 0) {
+        return { generate(), false };
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc4588#section-4
+
+    ByteBuffer buf;
+    ByteWriter writer(buf);
+
+    // V=1 | P | X | CC | M | PT
+    const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7F);
+    writer.writeU16(header);
+
+    const auto rtxSequence = mTrack->getRtxNextSequence();
+    writer.writeU16(rtxSequence);
+    writer.writeU32(mTimestamp);
+    writer.writeU32(mTrack->getRtxSSRC());
+
+    // Payload
+    writer.writeU16(mSequence);
+    buf.append(mPayload);
+
+    return { std::move(buf), true };
 }
 
 }

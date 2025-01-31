@@ -40,18 +40,20 @@ namespace srtc {
 SdpOffer::SdpOffer(const OfferConfig& config,
                    const srtc::optional<PubVideoConfig>& videoConfig,
                    const srtc::optional<PubAudioConfig>& audioConfig)
-   : mRandomGenerator(0, 0x7ffffffe)
-   , mConfig(config)
-   , mVideoConfig(videoConfig)
-   , mAudioConfig(audioConfig)
-   , mOriginId((static_cast<uint64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
-   , mVideoSSRC(1 + mRandomGenerator.next())
-   , mAudioSSRC(1 + mRandomGenerator.next())
-   , mVideoMSID(generateRandomUUID())
-   , mAudioMSID(generateRandomUUID())
-   , mIceUfrag(generateRandomString(8))
-   , mIcePassword(generateRandomString(24))
-   , mCert(std::make_shared<X509Certificate>())
+    : mRandomGenerator(0, 0x7ffffffe)
+    , mConfig(config)
+    , mVideoConfig(videoConfig)
+    , mAudioConfig(audioConfig)
+    , mOriginId((static_cast<uint64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
+    , mVideoSSRC(1 + mRandomGenerator.next())
+    , mRtxVideoSSRC(1 + mRandomGenerator.next())
+    , mAudioSSRC(1 + mRandomGenerator.next())
+    , mRtxAudioSSRC(1 + mRandomGenerator.next())
+    , mVideoMSID(generateRandomUUID())
+    , mAudioMSID(generateRandomUUID())
+    , mIceUfrag(generateRandomString(8))
+    , mIcePassword(generateRandomString(24))
+    , mCert(std::make_shared<X509Certificate>())
 {
 }
 
@@ -77,14 +79,14 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
+#define ENABLE_RTX
+
     // Video
     if (mVideoConfig.has_value()) {
         const auto& list = mVideoConfig->list;
         if (list.empty()) {
             return { "", { Error::Code::InvalidData, "The video config list is present but empty"} };
         }
-
-// #define ENABLE_RTX
 
 #ifdef ENABLE_RTX
         ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
@@ -123,16 +125,25 @@ std::pair<std::string, Error> SdpOffer::generate()
             const auto payloadIdRtx = payloadId + 1;
             ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
             ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
-#endif
-#ifdef ENABLE_RTX
+
             payloadId += 2;
 #else
             payloadId += 1;
 #endif
         }
 
+#ifdef ENABLE_RTX
+        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+        ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
+#endif
+
         ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+
+#ifdef ENABLE_RTX
+        ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
+        ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+#endif
     }
 
     // Audio
@@ -142,7 +153,12 @@ std::pair<std::string, Error> SdpOffer::generate()
             return {"", {Error::Code::InvalidData, "The audio config list is present but empty"}};
         }
 
+#ifdef ENABLE_RTX
+        ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
+#else
         ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
+#endif
+
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
         ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
@@ -159,17 +175,35 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-rsize" << std::endl;
 
         for (const auto& item: list) {
+            ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::Opus) {
-                ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
                 ss << "a=fmtp:" << payloadId
                    << " minptime=" << item.minPacketTimeMs << ";useinbandfec=1" << std::endl;
             }
 
+#ifdef ENABLE_RTX
+            const auto payloadIdRtx = payloadId + 1;
+            ss << "a=rtpmap:" << payloadIdRtx << " rtx/48000" << std::endl;
+            ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
+
+            payloadId += 2;
+#else
             payloadId += 1;
+#endif
         }
+
+#ifdef ENABLE_RTX
+        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+        ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
+#endif
 
         ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
+
+#ifdef ENABLE_RTX
+        ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
+        ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
+#endif
     }
 
     return { ss.str(), Error::OK };
@@ -195,9 +229,19 @@ uint32_t SdpOffer::getVideoSSRC() const
     return mVideoSSRC;
 }
 
+uint32_t SdpOffer::getRtxVideoSSRC() const
+{
+    return mRtxVideoSSRC;
+}
+
 uint32_t SdpOffer::getAudioSSRC() const
 {
     return mAudioSSRC;
+}
+
+uint32_t SdpOffer::getRtxAudioSSRC() const
+{
+    return mRtxAudioSSRC;
 }
 
 std::string SdpOffer::generateRandomUUID()

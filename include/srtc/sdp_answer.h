@@ -21,8 +21,8 @@ public:
     public:
         virtual ~TrackSelector() = default;
 
-        virtual std::shared_ptr<Track> selectTrack(MediaType type,
-                                                   const std::vector<std::shared_ptr<Track>>& list) const = 0;
+        [[nodiscard]] virtual std::shared_ptr<Track> selectTrack(MediaType type,
+                                                                 const std::vector<std::shared_ptr<Track>>& list) const = 0;
     };
 
     static Error parse(const std::string& answer,

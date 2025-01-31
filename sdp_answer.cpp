@@ -97,6 +97,8 @@ srtc::Codec parse_codec(const std::string& s) {
         return srtc::Codec::H264;
     } else if (s == "opus") {
         return srtc::Codec::Opus;
+    } else if (s == "rtx") {
+        return srtc::Codec::Rtx;
     } else {
         return srtc::Codec::None;
     }
@@ -106,6 +108,7 @@ struct ParsePayloadState {
     int payloadId = { -1 };
     srtc::Codec codec = { srtc::Codec::None };
     int profileLevelId = { 0 };
+    int rtxPayloadId = { -1 };
     bool hasNack = { false };
     bool hasPli = { false };
 };
@@ -151,8 +154,12 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(const std::shared_ptr<
     std::vector<std::shared_ptr<srtc::Track>> list;
     for (size_t i = 0u; i < payloadStateSize; i += 1) {
         const auto& payloadState = payloadStateList[i];
-        if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None) {
-            const auto track = std::make_shared<srtc::Track>(id, payloadState.payloadId, payloadState.codec,
+        if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None && payloadState.codec != srtc::Codec::Rtx) {
+            const auto track = std::make_shared<srtc::Track>(id,
+                                                             mediaType,
+                                                             payloadState.payloadId,
+                                                             payloadState.rtxPayloadId,
+                                                             payloadState.codec,
                                                              payloadState.hasNack, payloadState.hasPli,
                                                              payloadState.profileLevelId);
             list.push_back(track);
@@ -264,10 +271,21 @@ Error SdpAnswer::parse(const std::string& answer,
                             std::unordered_map<std::string, std::string> map;
                             parse_map(props[0], map);
 
-                            if (const auto iter = map.find("profile-level-id"); iter != map.end()) {
+                            if (const auto iter1 = map.find("profile-level-id"); iter1 != map.end()) {
                                 const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
                                 if (payloadState) {
-                                    payloadState->profileLevelId = parse_int(iter->second, 16);
+                                    payloadState->profileLevelId = parse_int(iter1->second, 16);
+                                }
+                            } else if (const auto iter2 = map.find("apt"); iter2 != map.end()) {
+                                const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+                                if (payloadState && payloadState->codec == Codec::Rtx) {
+                                    const auto referencedPayloadId = parse_int(iter2->second);
+                                    if (referencedPayloadId > 0) {
+                                        const auto referencedPayloadState = mediaStateCurr->getPayloadState(referencedPayloadId);
+                                        if (referencedPayloadState) {
+                                            referencedPayloadState->rtxPayloadId = payloadId;
+                                        }
+                                    }
                                 }
                             }
                         }
