@@ -11,6 +11,7 @@ public:
     ~PacketizerH264() override;
 
     void setCodecSpecificData(const std::vector<ByteBuffer>& csd) override;
+    bool isKeyFrame(const ByteBuffer& frame) const;
     std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
                                                    const ByteBuffer& frame) override;
 

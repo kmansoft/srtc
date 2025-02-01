@@ -35,6 +35,19 @@ void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
     }
 }
 
+bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
+{
+    for (NaluParser parser(frame); parser; parser.next()) {
+        const auto naluType = parser.currType();
+
+        if (naluType == NaluType::KeyFrame) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<Track>& track,
                                                                const srtc::ByteBuffer& frame)
 {
@@ -45,7 +58,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
     const auto frameTimestamp = getNextTimestamp(90);
 
     for (NaluParser parser(frame); parser; parser.next()) {
-        const auto naulRefIdc = parser.currRefIdc();
         const auto naluType = parser.currType();
 
         if (naluType == NaluType::SPS || naluType == NaluType::PPS) {
@@ -56,11 +68,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
             if (parser.currDataSize() > 0) {
                 mCSD.emplace_back(parser.currData(), parser.currDataSize());
-            }
-
-            if (naluType == NaluType::SPS && parser.currDataSize() >= 2) {
-                const uint8_t profileId = parser.currData()[1];
-                LOG("Profile ID = %u", profileId);
             }
         } else if (naluType == NaluType::KeyFrame) {
             // Send codec specific data first as a STAP-A

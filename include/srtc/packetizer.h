@@ -23,6 +23,7 @@ public:
     virtual ~Packetizer();
 
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
+    virtual bool isKeyFrame(const ByteBuffer& frame) const;
     virtual std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
                                                            const ByteBuffer& frame) = 0;
 

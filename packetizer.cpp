@@ -18,6 +18,11 @@ void Packetizer::setCodecSpecificData([[maybe_unused]] const std::vector<ByteBuf
 {
 }
 
+bool Packetizer::isKeyFrame(const ByteBuffer& frame) const;
+{
+    return false;
+}
+
 std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const Codec& codec)
 {
     switch (codec) {
