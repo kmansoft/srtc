@@ -88,7 +88,7 @@ private:
         };
     };
 
-    void cancelImpl(std::shared_ptr<TaskImpl> &task);
+    void cancelImpl(const std::shared_ptr<TaskImpl>& task);
 
     void threadFunc(std::string name);
 
@@ -183,7 +183,8 @@ private:
         const std::weak_ptr<Task> mTask;
     };
 
-    void cancelImpl(std::shared_ptr<TaskImpl> &task);
+    void cancelImpl(const std::shared_ptr<TaskImpl>& task);
+    void removeExpiredLocked() SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
     std::vector<std::shared_ptr<TaskImpl>> mSubmitted SRTC_GUARDED_BY(mMutex);
     std::mutex mMutex;

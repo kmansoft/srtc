@@ -96,7 +96,7 @@ void ThreadScheduler::cancel(std::shared_ptr<Task>& task)
     cancelImpl(impl);
 }
 
-void ThreadScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
+void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
 {
     std::unique_lock lock(mMutex);
 
@@ -111,7 +111,7 @@ void ThreadScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
     });
 }
 
-void ThreadScheduler::threadFunc(std::string name)
+void ThreadScheduler::threadFunc(const std::string name)
 {
 #ifdef _POSIX_VERSION
     pthread_setname_np(pthread_self(), name.c_str());
@@ -321,9 +321,13 @@ std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
                                             const Func& func)
 {
     std::lock_guard lock(mMutex);
+
+    removeExpiredLocked();
+
     const auto task = mScheduler->submit(delay, func);
     const auto impl = std::make_shared<TaskImpl>(weak_from_this(), task);
     mSubmitted.push_back(impl);
+
     return impl;
 }
 
@@ -333,17 +337,28 @@ void ScopedScheduler::cancel(std::shared_ptr<Task>& task)
     cancelImpl(impl);
 }
 
-void ScopedScheduler::cancelImpl(std::shared_ptr<TaskImpl>& impl)
+void ScopedScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& impl)
 {
-    std::lock_guard lock(mMutex);
-
     if (const auto ptr = impl->mTask.lock()) {
         ptr->cancel();
     }
 
+    std::lock_guard lock(mMutex);
+
     if (const auto iter = std::find(mSubmitted.begin(), mSubmitted.end(), impl);
             iter != mSubmitted.end()) {
         mSubmitted.erase(iter);
+    }
+}
+
+void ScopedScheduler::removeExpiredLocked()
+{
+    for (auto iter = mSubmitted.begin(); iter != mSubmitted.end();) {
+        if ((*iter)->mTask.expired()) {
+            iter = mSubmitted.erase(iter);
+        } else {
+            ++ iter;
+        }
     }
 }
 
