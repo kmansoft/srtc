@@ -27,7 +27,7 @@ public:
     PeerConnection();
     ~PeerConnection();
 
-    void setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
+    Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
     Error setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
     std::shared_ptr<SdpOffer> getSdpOffer() const;
@@ -80,6 +80,7 @@ private:
         std::vector<ByteBuffer> csd;    // possibly empty
     };
 
+    bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 

@@ -211,9 +211,9 @@ PeerConnection::~PeerConnection()
     {
         std::lock_guard lock(mMutex);
 
-        mIsQuit = true;
+        if (mIsStarted) {
+            mIsQuit = true;
 
-        if (mThread.joinable()) {
             eventfd_write(mEventHandle, 1);
             waitForThread = std::move(mThread);
         }
@@ -233,20 +233,30 @@ PeerConnection::~PeerConnection()
     }
 }
 
-void PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
+Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(!mThread.joinable() && !mIsQuit);
+    assert(!mIsQuit);
+
+    if (mIsStarted) {
+        return { Error::Code::InvalidData, "Connection is already started" };
+    }
 
     mSdpOffer = offer;
+
+    return Error::OK;
 }
 
 Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
     std::lock_guard lock(mMutex);
 
-    assert(!mThread.joinable() && !mIsQuit);
+    assert(!mIsQuit);
+
+    if (mIsStarted) {
+        return { Error::Code::InvalidData, "Connection is already started" };
+    }
 
     mSdpAnswer = answer;
 
@@ -276,6 +286,9 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
             }
             mAudioPacketizer = packetizer;
         }
+
+        // We are started
+        mIsStarted = true;
 
         // Event handle for talking to the network thread and the network thread itself
         mEventHandle = eventfd(0, EFD_NONBLOCK);
