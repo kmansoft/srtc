@@ -711,7 +711,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         }
                     }
                 }
-            } else if (is_dtls_message(data.buf)) {
+            } else if (dtls_ssl && is_dtls_message(data.buf)) {
                 LOG("Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
 
                 {
@@ -720,145 +720,143 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 }
 
                 // Try the handshake
-                if (dtls_ssl) {
-                    if (dtlsState == DtlsState::Activating) {
-                        const auto r1 = SSL_do_handshake(dtls_ssl);
-                        const auto err = SSL_get_error(dtls_ssl, r1);
-                        LOG("DTLS handshake: %d, %d", r1, err);
+                if (dtlsState == DtlsState::Activating) {
+                    const auto r1 = SSL_do_handshake(dtls_ssl);
+                    const auto err = SSL_get_error(dtls_ssl, r1);
+                    LOG("DTLS handshake: %d, %d", r1, err);
 
-                        if (err == SSL_ERROR_WANT_READ) {
-                            LOG("Still in progress");
-                        } else if (r1 == 1 && err == 0) {
-                            const auto cipher = SSL_get_cipher(dtls_ssl);
-                            const auto profile = SSL_get_selected_srtp_profile(dtls_ssl);
+                    if (err == SSL_ERROR_WANT_READ) {
+                        LOG("Still in progress");
+                    } else if (r1 == 1 && err == 0) {
+                        const auto cipher = SSL_get_cipher(dtls_ssl);
+                        const auto profile = SSL_get_selected_srtp_profile(dtls_ssl);
 
-                            LOG("Completed with cipher %s, profile %s", cipher, profile->name);
+                        LOG("Completed with cipher %s, profile %s", cipher, profile->name);
 
-                            const auto cert = SSL_get_peer_certificate(dtls_ssl);
-                            if (cert == nullptr) {
-                                // Error, no certificate
-                                LOG("There is no DTLS server certificate");
-                                dtlsState = DtlsState::Failed;
-                                setConnectionState(ConnectionState::Failed);
-                            } else {
-                                uint8_t fpBuf[32] = {};
-                                unsigned int fpSize = {};
-
-                                const auto digest = EVP_get_digestbyname("sha256");
-                                X509_digest(cert, digest, fpBuf, &fpSize);
-
-                                std::string hex = bin_to_hex(fpBuf, fpSize);
-                                LOG("Remote certificate sha-256: %s", hex.c_str());
-
-                                const auto expectedHash = answer->getCertificateHash();
-                                const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
-
-                                if (expectedHash.getBin() == actualHashBin) {
-                                    LOG("Remote certificate matches the SDP");
-
-                                    // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
-                                    const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
-
-                                    srtp_profile_t srtpProfile;
-                                    size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
-
-                                    switch (srtpProfileName->id) {
-                                        case SRTP_AEAD_AES_256_GCM:
-                                            srtpProfile = srtp_profile_aead_aes_256_gcm;
-                                            srtpKeySize = SRTP_AES_256_KEY_LEN;
-                                            srtpSaltSize = SRTP_AEAD_SALT_LEN;
-                                            break;
-                                        case SRTP_AEAD_AES_128_GCM:
-                                            srtpProfile = srtp_profile_aead_aes_128_gcm;
-                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                            srtpSaltSize = SRTP_AEAD_SALT_LEN;
-                                            break;
-                                        case SRTP_AES128_CM_SHA1_80:
-                                            srtpProfile = srtp_profile_aes128_cm_sha1_80;
-                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                            srtpSaltSize = SRTP_SALT_LEN;
-                                            break;
-                                        case SRTP_AES128_CM_SHA1_32:
-                                            srtpProfile = srtp_profile_aes128_cm_sha1_32;
-                                            srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                            srtpSaltSize = SRTP_SALT_LEN;
-                                            break;
-                                        default:
-                                            break;
-                                    }
-
-                                    if (srtpKeySize == 0) {
-                                        LOG("Invalid SRTP profile");
-                                        dtlsState = DtlsState::Failed;
-                                        setConnectionState(ConnectionState::Failed);
-                                    } else {
-                                        srtp_create(&srtp_in, nullptr);
-                                        srtp_create(&srtp_out_video, nullptr);
-                                        srtp_create(&srtp_out_video_rtx, nullptr);
-                                        srtp_create(&srtp_out_audio, nullptr);
-                                        srtp_create(&srtp_out_audio_rtx, nullptr);
-
-                                        const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
-                                        const auto material = ByteBuffer{srtpKeyPlusSaltSize * 2};
-
-                                        std::string label = "EXTRACTOR-dtls_srtp";
-                                        SSL_export_keying_material(dtls_ssl,
-                                                                   material.data(), srtpKeyPlusSaltSize * 2,
-                                                                   label.data(), label.size(),
-                                                                   nullptr, 0, 0);
-
-                                        const auto srtpClientKey = material.data();
-                                        const auto srtpServerKey = srtpClientKey + srtpKeySize;
-                                        const auto srtpClientSalt = srtpServerKey + srtpKeySize;
-                                        const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
-
-                                        srtp_client_key_buf.clear();
-                                        srtp_client_key_buf.append(srtpClientKey, srtpKeySize);
-                                        srtp_client_key_buf.append(srtpClientSalt, srtpSaltSize);
-
-                                        srtp_server_key_buf.clear();
-                                        srtp_server_key_buf.append(srtpServerKey, srtpKeySize);
-                                        srtp_server_key_buf.append(srtpServerSalt, srtpSaltSize);
-
-                                        srtp_policy_t srtpReceivePolicy = { };
-                                        srtpReceivePolicy.ssrc.type = ssrc_any_inbound;
-                                        srtpReceivePolicy.key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data();
-                                        srtpReceivePolicy.allow_repeat_tx = true;
-
-                                        srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
-                                        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
-
-                                        srtp_add_stream(srtp_in, &srtpReceivePolicy);
-
-                                        srtp_policy_t srtpSendPolicy = { };
-                                        srtpSendPolicy.ssrc.type = ssrc_any_outbound;
-                                        srtpSendPolicy.key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data();
-                                        srtpSendPolicy.allow_repeat_tx = true;
-
-                                        srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
-                                        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
-
-                                        srtp_add_stream(srtp_out_video, &srtpSendPolicy);
-                                        srtp_add_stream(srtp_out_video_rtx, &srtpSendPolicy);
-                                        srtp_add_stream(srtp_out_audio, &srtpSendPolicy);
-                                        srtp_add_stream(srtp_out_audio_rtx, &srtpSendPolicy);
-
-                                        dtlsState = DtlsState::Completed;
-                                        setConnectionState(ConnectionState::Connected);
-                                    }
-                                } else {
-                                    // Error, certificate hash does not match
-                                    LOG("Server cert doesn't match the fingerprint");
-                                    dtlsState = DtlsState::Failed;
-                                    setConnectionState(ConnectionState::Failed);
-                                }
-                            }
-                        } else {
-                            // Error during DTLS handshake
-                            LOG("Failed during DTLS handshake");
+                        const auto cert = SSL_get_peer_certificate(dtls_ssl);
+                        if (cert == nullptr) {
+                            // Error, no certificate
+                            LOG("There is no DTLS server certificate");
                             dtlsState = DtlsState::Failed;
                             setConnectionState(ConnectionState::Failed);
+                        } else {
+                            uint8_t fpBuf[32] = {};
+                            unsigned int fpSize = {};
+
+                            const auto digest = EVP_get_digestbyname("sha256");
+                            X509_digest(cert, digest, fpBuf, &fpSize);
+
+                            std::string hex = bin_to_hex(fpBuf, fpSize);
+                            LOG("Remote certificate sha-256: %s", hex.c_str());
+
+                            const auto expectedHash = answer->getCertificateHash();
+                            const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
+
+                            if (expectedHash.getBin() == actualHashBin) {
+                                LOG("Remote certificate matches the SDP");
+
+                                // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
+                                const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
+
+                                srtp_profile_t srtpProfile;
+                                size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
+
+                                switch (srtpProfileName->id) {
+                                    case SRTP_AEAD_AES_256_GCM:
+                                        srtpProfile = srtp_profile_aead_aes_256_gcm;
+                                        srtpKeySize = SRTP_AES_256_KEY_LEN;
+                                        srtpSaltSize = SRTP_AEAD_SALT_LEN;
+                                        break;
+                                    case SRTP_AEAD_AES_128_GCM:
+                                        srtpProfile = srtp_profile_aead_aes_128_gcm;
+                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                        srtpSaltSize = SRTP_AEAD_SALT_LEN;
+                                        break;
+                                    case SRTP_AES128_CM_SHA1_80:
+                                        srtpProfile = srtp_profile_aes128_cm_sha1_80;
+                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                        srtpSaltSize = SRTP_SALT_LEN;
+                                        break;
+                                    case SRTP_AES128_CM_SHA1_32:
+                                        srtpProfile = srtp_profile_aes128_cm_sha1_32;
+                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
+                                        srtpSaltSize = SRTP_SALT_LEN;
+                                        break;
+                                    default:
+                                        break;
+                                }
+
+                                if (srtpKeySize == 0) {
+                                    LOG("Invalid SRTP profile");
+                                    dtlsState = DtlsState::Failed;
+                                    setConnectionState(ConnectionState::Failed);
+                                } else {
+                                    srtp_create(&srtp_in, nullptr);
+                                    srtp_create(&srtp_out_video, nullptr);
+                                    srtp_create(&srtp_out_video_rtx, nullptr);
+                                    srtp_create(&srtp_out_audio, nullptr);
+                                    srtp_create(&srtp_out_audio_rtx, nullptr);
+
+                                    const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
+                                    const auto material = ByteBuffer{srtpKeyPlusSaltSize * 2};
+
+                                    std::string label = "EXTRACTOR-dtls_srtp";
+                                    SSL_export_keying_material(dtls_ssl,
+                                                               material.data(), srtpKeyPlusSaltSize * 2,
+                                                               label.data(), label.size(),
+                                                               nullptr, 0, 0);
+
+                                    const auto srtpClientKey = material.data();
+                                    const auto srtpServerKey = srtpClientKey + srtpKeySize;
+                                    const auto srtpClientSalt = srtpServerKey + srtpKeySize;
+                                    const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
+
+                                    srtp_client_key_buf.clear();
+                                    srtp_client_key_buf.append(srtpClientKey, srtpKeySize);
+                                    srtp_client_key_buf.append(srtpClientSalt, srtpSaltSize);
+
+                                    srtp_server_key_buf.clear();
+                                    srtp_server_key_buf.append(srtpServerKey, srtpKeySize);
+                                    srtp_server_key_buf.append(srtpServerSalt, srtpSaltSize);
+
+                                    srtp_policy_t srtpReceivePolicy = { };
+                                    srtpReceivePolicy.ssrc.type = ssrc_any_inbound;
+                                    srtpReceivePolicy.key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data();
+                                    srtpReceivePolicy.allow_repeat_tx = true;
+
+                                    srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
+                                    srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
+
+                                    srtp_add_stream(srtp_in, &srtpReceivePolicy);
+
+                                    srtp_policy_t srtpSendPolicy = { };
+                                    srtpSendPolicy.ssrc.type = ssrc_any_outbound;
+                                    srtpSendPolicy.key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data();
+                                    srtpSendPolicy.allow_repeat_tx = true;
+
+                                    srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
+                                    srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
+
+                                    srtp_add_stream(srtp_out_video, &srtpSendPolicy);
+                                    srtp_add_stream(srtp_out_video_rtx, &srtpSendPolicy);
+                                    srtp_add_stream(srtp_out_audio, &srtpSendPolicy);
+                                    srtp_add_stream(srtp_out_audio_rtx, &srtpSendPolicy);
+
+                                    dtlsState = DtlsState::Completed;
+                                    setConnectionState(ConnectionState::Connected);
+                                }
+                            } else {
+                                // Error, certificate hash does not match
+                                LOG("Server cert doesn't match the fingerprint");
+                                dtlsState = DtlsState::Failed;
+                                setConnectionState(ConnectionState::Failed);
+                            }
                         }
+                    } else {
+                        // Error during DTLS handshake
+                        LOG("Failed during DTLS handshake");
+                        dtlsState = DtlsState::Failed;
+                        setConnectionState(ConnectionState::Failed);
                     }
                 }
             } else if (is_rtc_message(data.buf)) {
@@ -1090,9 +1088,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     if (dtls_ssl) {
         SSL_shutdown(dtls_ssl);
+        SSL_free(dtls_ssl);
     }
 
-    SSL_free(dtls_ssl);
     SSL_CTX_free(dtls_ctx);
 
     close(epollHandle);
