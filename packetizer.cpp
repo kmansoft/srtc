@@ -6,9 +6,9 @@ namespace srtc {
 
 Packetizer::Packetizer()
     : mRandom(0, 10000)
-    , mSequence(mRandom.next())
     , mClockBaseTime(std::chrono::steady_clock::now())
     , mClockBaseValue(mRandom.next() % 10000)
+    , mLastTimestamp(0L)
 {
 }
 
@@ -33,11 +33,6 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const C
         default:
             return { nullptr, { Error::Code::InvalidData, "Unsupported codec type" }};
     }
-}
-
-uint16_t Packetizer::getNextSequence()
-{
-    return mSequence++;
 }
 
 uint32_t Packetizer::getNextTimestamp(int clockRateKHz)

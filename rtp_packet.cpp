@@ -1,6 +1,8 @@
 #include "srtc/rtp_packet.h"
+#include "srtc/rtp_packet_source.h"
 #include "srtc/track.h"
 
+#include <cassert>
 #include <utility>
 
 namespace srtc {
@@ -63,12 +65,10 @@ ByteBuffer RtpPacket::generate() const
     return buf;
 }
 
-std::pair<ByteBuffer, bool> RtpPacket::generateRetransmit() const
+ByteBuffer RtpPacket::generateRtx() const
 {
     const auto rtxPayloadId = mTrack->getRtxPayloadId();
-    if (rtxPayloadId <= 0) {
-        return { generate(), false };
-    }
+    assert(rtxPayloadId > 0);
 
     // https://datatracker.ietf.org/doc/html/rfc4588#section-4
 
@@ -79,7 +79,8 @@ std::pair<ByteBuffer, bool> RtpPacket::generateRetransmit() const
     const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7F);
     writer.writeU16(header);
 
-    const auto rtxSequence = mTrack->getRtxNextSequence();
+    const auto packetSource = mTrack->getRtxPacketSource();
+    const auto rtxSequence = packetSource->getNextSequence();
     writer.writeU16(rtxSequence);
     writer.writeU32(mTimestamp);
     writer.writeU32(mTrack->getRtxSSRC());
@@ -88,7 +89,7 @@ std::pair<ByteBuffer, bool> RtpPacket::generateRetransmit() const
     writer.writeU16(mSequence);
     buf.append(mPayload);
 
-    return { std::move(buf), true };
+    return buf;
 }
 
 }

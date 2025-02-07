@@ -1,4 +1,6 @@
 #include "srtc/packetizer_opus.h"
+#include "srtc/track.h"
+#include "srtc/rtp_packet_source.h"
 
 namespace srtc {
 
@@ -13,6 +15,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/rfc7587
 
+    const auto packetSource = track->getPacketSource();
     const auto frameTimestamp = getNextTimestamp(48);
 
     auto payload = frame.copy();
@@ -22,7 +25,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared
 
     result.push_back(
             std::make_shared<RtpPacket>(
-                    track, false, getNextSequence(), frameTimestamp, std::move(payload)));
+                    track, false, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
 
     return result;
 }

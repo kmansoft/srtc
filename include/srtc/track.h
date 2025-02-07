@@ -2,7 +2,11 @@
 
 #include "srtc/srtc.h"
 
+#include <memory>
+
 namespace srtc {
+
+class RtpPacketSource;
 
 class Track {
 public:
@@ -26,9 +30,10 @@ public:
 
     void setSSRC(uint32_t ssrc, uint32_t rtx);
     [[nodiscard]] uint32_t getSSRC() const;
-
     [[nodiscard]] uint32_t getRtxSSRC() const;
-    [[nodiscard]] uint16_t getRtxNextSequence();
+
+    [[nodiscard]] std::shared_ptr<RtpPacketSource> getPacketSource() const;
+    [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtxPacketSource() const;
 
 private:
     const int mTrackId;
@@ -39,9 +44,10 @@ private:
     const bool mHasNack;
     const bool mHasPli;
     const int mProfileLevelId;
+    const std::shared_ptr<RtpPacketSource> mPacketSource;
+    const std::shared_ptr<RtpPacketSource> mRtxPacketSource;
     uint32_t mSSRC = { 0 };
     uint32_t mRtxSSRC = { 0 };
-    uint16_t mRtxNextSequence;
 };
 
 }

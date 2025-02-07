@@ -16,6 +16,7 @@ namespace srtc {
 class Track;
 class ByteBuffer;
 class RtpPacket;
+class RtpPacketSource;
 
 class Packetizer {
 public:
@@ -29,12 +30,10 @@ public:
 
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const Codec& codec);
 
-    [[nodiscard]] uint16_t getNextSequence();
     [[nodiscard]] uint32_t getNextTimestamp(int clockRateKHz);
 
 private:
     RandomGenerator<uint32_t> mRandom;
-    uint16_t mSequence;
     const std::chrono::steady_clock::time_point mClockBaseTime;
     const uint32_t mClockBaseValue;
 

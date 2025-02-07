@@ -24,6 +24,7 @@ add_library(srtc SHARED
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/rtp_packet.h
+        include/srtc/rtp_packet_source.h
         include/srtc/scheduler.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
@@ -46,6 +47,7 @@ add_library(srtc SHARED
         peer_connection.cpp
         random_generator.cpp
         rtp_packet.cpp
+        rtp_packet_source.cpp
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp

@@ -30,7 +30,7 @@ public:
     [[nodiscard]] uint32_t getSSRC() const;
 
     [[nodiscard]] ByteBuffer generate() const;
-    [[nodiscard]] std::pair<ByteBuffer, bool> generateRetransmit() const;
+    [[nodiscard]] ByteBuffer generateRtx() const;
 
 private:
     const std::shared_ptr<Track> mTrack;

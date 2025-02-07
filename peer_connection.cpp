@@ -921,7 +921,15 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                     const auto packet = sendHistory->find(rtcpSSRC_1, seq);
                                                     if (packet) {
                                                         // Generate
-                                                        auto [packetData, isRtx] = packet->generateRetransmit();
+                                                        bool isRtx = false;
+                                                        ByteBuffer packetData;
+
+                                                        if (packet->getTrack()->getRtxPayloadId() > 0) {
+                                                            isRtx = true;
+                                                            packetData = packet->generateRtx();
+                                                        } else {
+                                                            packetData = packet->generate();
+                                                        }
 
                                                         // Encrypt
                                                         void* rtp_header = packetData.data();

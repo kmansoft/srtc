@@ -2,6 +2,7 @@
 #include "srtc/h264.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/rtp_packet_source.h"
 #include "srtc/track.h"
 
 #include <list>
@@ -55,6 +56,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
+    const auto packetSource = track->getPacketSource();
     const auto frameTimestamp = getNextTimestamp(90);
 
     for (NaluParser parser(frame); parser; parser.next()) {
@@ -90,7 +92,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
                 result.push_back(
                         std::make_shared<RtpPacket>(
-                            track, false,getNextSequence(), frameTimestamp, std::move(payload)));
+                            track, false, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
             }
         }
 
@@ -106,7 +108,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 auto payload = ByteBuffer { parser.currData(), parser.currDataSize() };
                 result.push_back(
                         std::make_shared<RtpPacket>(
-                            track, true, getNextSequence(), frameTimestamp, std::move(payload)));
+                            track, true, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -141,7 +143,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
                     result.push_back(
                             std::make_shared<RtpPacket>(
-                                    track, isEnd, getNextSequence(), frameTimestamp, std::move(payload)));
+                                    track, isEnd, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

@@ -1,4 +1,5 @@
 #include "srtc/track.h"
+#include "srtc/rtp_packet_source.h"
 
 namespace srtc {
 
@@ -18,7 +19,8 @@ Track::Track(int trackId,
     , mHasNack(hasNack)
     , mHasPli(hasPli)
     , mProfileLevelId(profileLevelId)
-    , mRtxNextSequence(static_cast<uint16_t>(lrand48()))
+    , mPacketSource(std::make_shared<RtpPacketSource>())
+    , mRtxPacketSource(std::make_shared<RtpPacketSource>())
 {
 }
 
@@ -78,9 +80,14 @@ uint32_t Track::getRtxSSRC() const
     return mRtxSSRC;
 }
 
-uint16_t Track::getRtxNextSequence()
+std::shared_ptr<RtpPacketSource> Track::getPacketSource() const
 {
-    return ++mRtxNextSequence;
+    return mPacketSource;
+}
+
+std::shared_ptr<RtpPacketSource> Track::getRtxPacketSource() const
+{
+    return mRtxPacketSource;
 }
 
 }
