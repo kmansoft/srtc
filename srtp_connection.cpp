@@ -4,13 +4,11 @@
 #include "srtp.h"
 
 #include <mutex>
+#include <cassert>
 
 #define LOG(...) srtc::log("SrtpConnection", __VA_ARGS__)
 
 namespace {
-
-// GCM support requires libsrtp to be build with OpenSSL which is what we do
-constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80";
 
 std::once_flag gSrtpInitFlag;
 
@@ -25,6 +23,7 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
         srtp_init();
     });
 
+    // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
 
     const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
     if (srtpProfileName == nullptr) {
@@ -56,11 +55,7 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
             srtpSaltSize = SRTP_SALT_LEN;
             break;
         default:
-            break;
-    }
-
-    if (srtpKeySize == 0) {
-        LOG("Invalid SRTP profile");
+            return {nullptr, { Error::Code::InvalidData, "Unsupported SRTP profile" }};
     }
 
     const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
@@ -128,6 +123,7 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
         return 0;
     }
 
+    assert(rtp_size_2 > rtp_size_1);
     return static_cast<size_t>(rtp_size_2);
 }
 
