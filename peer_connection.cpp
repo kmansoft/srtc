@@ -539,6 +539,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             if (mIsQuit) {
                 break;
             }
+            if (mConnectionState == ConnectionState::Failed) {
+                break;
+            }
 
             rawSendQueue = std::move(mRawSendQueue);
             frameSendQueue = std::move(mFrameSendQueue);
@@ -866,7 +869,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         SSL_free(dtls_ssl);
     }
 
-    SSL_CTX_free(dtls_ctx);
+    if (dtls_ctx) {
+        SSL_CTX_free(dtls_ctx);
+    }
 
     close(epollHandle);
     epollHandle = -1;
@@ -887,6 +892,10 @@ void PeerConnection::setConnectionState(ConnectionState state)
 {
     {
         std::lock_guard lock1(mMutex);
+        if (mConnectionState == ConnectionState::Failed) {
+            // There is no escape
+            return;
+        }
         mConnectionState = state;
     }
 
