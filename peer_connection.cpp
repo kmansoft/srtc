@@ -892,7 +892,7 @@ void PeerConnection::setConnectionState(ConnectionState state)
 {
     {
         std::lock_guard lock1(mMutex);
-        if (mConnectionState == ConnectionState::Failed) {
+        if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
             // There is no escape
             return;
         }

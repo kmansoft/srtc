@@ -81,18 +81,28 @@ target_link_libraries(
 
 # BoringSSL
 
+LIST(APPEND BORINGSSL_CMAKE_ARGS
+    "-DOPENSSL_SMALL=ON"
+)
+
+if(ANDROID)
+    LIST(APPEND BORINGSSL_CMAKE_ARGS
+        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+        -DANDROID_ABI=${ANDROID_ABI}
+        -DANDROID_PLATFORM=android-29
+    )
+endif()
+
 ExternalProject_Add(
         boringssl
         GIT_REPOSITORY "https://boringssl.googlesource.com/boringssl"
         GIT_TAG "origin/master"
         GIT_SHALLOW ON
         SOURCE_DIR "external/boringssl"
-        CMAKE_ARGS
-            -DOPENSSL_SMALL=ON
-            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-            -DANDROID_ABI=${ANDROID_ABI}
-            -DANDROID_PLATFORM=android-29
+        CMAKE_ARGS ${BORINGSSL_CMAKE_ARGS}
 )
+
+set(OPENSSL_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install)
 
 target_include_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/include")
@@ -104,7 +114,20 @@ add_dependencies(srtc boringssl)
 
 # LibSRTP
 
-set(OPENSSL_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install)
+LIST(APPEND LIBSRTP_CMAKE_ARGS
+        "-DLIBSRTP_TEST_APPS=OFF"
+        "-DENABLE_OPENSSL=ON"
+        "-DOPENSSL_USE_STATIC_LIBS=ON"
+        "-DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}"
+)
+
+if(ANDROID)
+    LIST(APPEND LIBSRTP_CMAKE_ARGS
+        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+        -DANDROID_ABI=${ANDROID_ABI}
+        -DANDROID_PLATFORM=android-29
+    )
+endif()
 
 ExternalProject_Add(
         srtp
@@ -113,14 +136,7 @@ ExternalProject_Add(
         GIT_SHALLOW ON
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""
-        CMAKE_ARGS
-            -DLIBSRTP_TEST_APPS=OFF
-            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-            -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
-            -DENABLE_OPENSSL=ON
-            -DOPENSSL_USE_STATIC_LIBS=ON
-            -DANDROID_ABI=${ANDROID_ABI}
-            -DANDROID_PLATFORM=android-29
+        CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
 )
 
 target_include_directories(srtc PRIVATE
