@@ -106,9 +106,7 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
     if (iter != mSrtpOutMap.end()) {
         srtpOut = iter->second;
     } else {
-        srtp_create(&srtpOut, nullptr);
-        srtp_add_stream(srtpOut, &mSrtpSendPolicy);
-
+        srtp_create(&srtpOut, &mSrtpSendPolicy);
         mSrtpOutMap.insert({ source->getUniqueId(), srtpOut });
     }
 
@@ -164,8 +162,7 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
     srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, profile);
 
     // Receive stream
-    srtp_create(&mSrtpIn, nullptr);
-    srtp_add_stream(mSrtpIn, &mSrtpReceivePolicy);
+    srtp_create(&mSrtpIn, &mSrtpReceivePolicy);
 }
 
 }
