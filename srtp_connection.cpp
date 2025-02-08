@@ -134,6 +134,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 
     if (status != srtp_err_status_ok) {
         LOG("srtp_unprotect_rtcp() failed: %d", status);
+        return 0;
     }
 
     return static_cast<size_t>(rtcpSize);
