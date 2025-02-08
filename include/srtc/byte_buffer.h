@@ -15,11 +15,11 @@ public:
 
     ~ByteBuffer();
 
-    ByteBuffer(const ByteBuffer& other) = delete;
-    void operator=(const ByteBuffer& other) = delete;
-
     ByteBuffer(ByteBuffer&& other);
     ByteBuffer& operator=(ByteBuffer&& other);
+
+    ByteBuffer(const ByteBuffer& other) = delete;
+    void operator=(const ByteBuffer& other) = delete;
 
     [[nodiscard]] bool empty() const;
 

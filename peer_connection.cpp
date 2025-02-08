@@ -11,6 +11,7 @@
 #include "srtc/socket.h"
 #include "srtc/ice_agent.h"
 #include "srtc/send_history.h"
+#include "srtc/srtp_connection.h"
 
 #include <cassert>
 #include <iostream>
@@ -34,12 +35,8 @@
 
 namespace {
 
-constexpr auto kTag = "PeerConnection";
-
 // GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80";
-
-std::once_flag gSrtpInitFlag;
 
 struct dgram_data {
     srtc::PeerConnection* pc;
@@ -483,11 +480,6 @@ static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
                                              const std::shared_ptr<SdpAnswer> answer)
 {
-    // Init the SRTP library
-    std::call_once(gSrtpInitFlag, []{
-        srtp_init();
-    });
-
     // We are connecting
     setConnectionState(ConnectionState::Connecting);
 
@@ -507,10 +499,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     BIO* dtls_bio = {};
 
     // SRTP
-    srtp_t srtp_in = { nullptr };
-    srtp_t srtp_out_video = { nullptr }, srtp_out_video_rtx = { nullptr };
-    srtp_t srtp_out_audio = { nullptr }, srtp_out_audio_rtx = { nullptr };
-    ByteBuffer srtp_client_key_buf, srtp_server_key_buf;
+    std::shared_ptr<SrtpConnection> srtp;
 
     // ICE negotiation
     const auto iceAgent = std::make_unique<IceAgent>();
@@ -622,46 +611,23 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     sendHistory->save(packet);
 
                     // Generate
+                    const auto packetSource = item.track->getPacketSource();
                     auto packetData = packet->generate();
 
-                    // Encrypt
-                    void* rtp_header = packetData.data();
-                    int rtp_size_1 = static_cast<int>(packetData.size());
-                    int rtp_size_2 = rtp_size_1;
-
-                    packetData.padding(SRTP_MAX_TRAILER_LEN);
-
-                    srtp_t srtp_out;
-                    switch (item.track->getMediaType()) {
-                        case MediaType::Video:
-                            srtp_out = srtp_out_video;
-                            break;
-                        case MediaType::Audio:
-                            srtp_out = srtp_out_audio;
-                            break;
-                        default:
-                            srtp_out = nullptr;
-                            break;
-                    }
-
-                    if (srtp_out) {
-                        const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
-                        if (protectStatus == srtp_err_status_ok) {
-                            assert(rtp_size_2 > rtp_size_1);
-
+                    if (srtp) {
+                        const auto protectedSize = srtp->protectOutgoing(packetSource, packetData);
+                        if (protectedSize > 0) {
                             // And send
                             const auto randomValue = lrand48() % 100;
                             if (randomValue <= 5 && item.track->getCodec() == Codec::H264) {
                                 LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u",
                                     packet->getSSRC(), packet->getSequence());
                             } else {
-                                (void) socket->send(rtp_header, rtp_size_2);
+                                (void) socket->send(packetData.data(), protectedSize);
                             }
-                        } else {
-                            LOG("Error applying SRTP protection: %d", protectStatus);
                         }
                     } else {
-                        LOG("Error finding SRTP context");
+                        LOG("SRTP is not initialized");
                     }
                 }
             }
@@ -768,95 +734,18 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             if (expectedHash.getBin() == actualHashBin) {
                                 LOG("Remote certificate matches the SDP");
 
-                                // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
-                                const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
+                                const auto [ srtpConn, srtpError ] = SrtpConnection::create(dtls_ssl, answer->isSetupActive());
 
-                                srtp_profile_t srtpProfile;
-                                size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
-
-                                switch (srtpProfileName->id) {
-                                    case SRTP_AEAD_AES_256_GCM:
-                                        srtpProfile = srtp_profile_aead_aes_256_gcm;
-                                        srtpKeySize = SRTP_AES_256_KEY_LEN;
-                                        srtpSaltSize = SRTP_AEAD_SALT_LEN;
-                                        break;
-                                    case SRTP_AEAD_AES_128_GCM:
-                                        srtpProfile = srtp_profile_aead_aes_128_gcm;
-                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                        srtpSaltSize = SRTP_AEAD_SALT_LEN;
-                                        break;
-                                    case SRTP_AES128_CM_SHA1_80:
-                                        srtpProfile = srtp_profile_aes128_cm_sha1_80;
-                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                        srtpSaltSize = SRTP_SALT_LEN;
-                                        break;
-                                    case SRTP_AES128_CM_SHA1_32:
-                                        srtpProfile = srtp_profile_aes128_cm_sha1_32;
-                                        srtpKeySize = SRTP_AES_128_KEY_LEN;
-                                        srtpSaltSize = SRTP_SALT_LEN;
-                                        break;
-                                    default:
-                                        break;
-                                }
-
-                                if (srtpKeySize == 0) {
-                                    LOG("Invalid SRTP profile");
-                                    dtlsState = DtlsState::Failed;
-                                    setConnectionState(ConnectionState::Failed);
-                                } else {
-                                    srtp_create(&srtp_in, nullptr);
-                                    srtp_create(&srtp_out_video, nullptr);
-                                    srtp_create(&srtp_out_video_rtx, nullptr);
-                                    srtp_create(&srtp_out_audio, nullptr);
-                                    srtp_create(&srtp_out_audio_rtx, nullptr);
-
-                                    const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
-                                    const auto material = ByteBuffer{srtpKeyPlusSaltSize * 2};
-
-                                    std::string label = "EXTRACTOR-dtls_srtp";
-                                    SSL_export_keying_material(dtls_ssl,
-                                                               material.data(), srtpKeyPlusSaltSize * 2,
-                                                               label.data(), label.size(),
-                                                               nullptr, 0, 0);
-
-                                    const auto srtpClientKey = material.data();
-                                    const auto srtpServerKey = srtpClientKey + srtpKeySize;
-                                    const auto srtpClientSalt = srtpServerKey + srtpKeySize;
-                                    const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
-
-                                    srtp_client_key_buf.clear();
-                                    srtp_client_key_buf.append(srtpClientKey, srtpKeySize);
-                                    srtp_client_key_buf.append(srtpClientSalt, srtpSaltSize);
-
-                                    srtp_server_key_buf.clear();
-                                    srtp_server_key_buf.append(srtpServerKey, srtpKeySize);
-                                    srtp_server_key_buf.append(srtpServerSalt, srtpSaltSize);
-
-                                    srtp_policy_t srtpReceivePolicy = { };
-                                    srtpReceivePolicy.ssrc.type = ssrc_any_inbound;
-                                    srtpReceivePolicy.key = answer->isSetupActive() ? srtp_client_key_buf.data() : srtp_server_key_buf.data();
-                                    srtpReceivePolicy.allow_repeat_tx = true;
-
-                                    srtp_crypto_policy_set_from_profile_for_rtp(&srtpReceivePolicy.rtp, srtpProfile);
-                                    srtp_crypto_policy_set_from_profile_for_rtcp(&srtpReceivePolicy.rtcp, srtpProfile);
-
-                                    srtp_add_stream(srtp_in, &srtpReceivePolicy);
-
-                                    srtp_policy_t srtpSendPolicy = { };
-                                    srtpSendPolicy.ssrc.type = ssrc_any_outbound;
-                                    srtpSendPolicy.key = answer->isSetupActive() ? srtp_server_key_buf.data() : srtp_client_key_buf.data();
-                                    srtpSendPolicy.allow_repeat_tx = true;
-
-                                    srtp_crypto_policy_set_from_profile_for_rtp(&srtpSendPolicy.rtp, srtpProfile);
-                                    srtp_crypto_policy_set_from_profile_for_rtcp(&srtpSendPolicy.rtcp, srtpProfile);
-
-                                    srtp_add_stream(srtp_out_video, &srtpSendPolicy);
-                                    srtp_add_stream(srtp_out_video_rtx, &srtpSendPolicy);
-                                    srtp_add_stream(srtp_out_audio, &srtpSendPolicy);
-                                    srtp_add_stream(srtp_out_audio_rtx, &srtpSendPolicy);
+                                if (srtpError.isOk()) {
+                                    srtp = srtpConn;
 
                                     dtlsState = DtlsState::Completed;
                                     setConnectionState(ConnectionState::Connected);
+                                } else {
+                                    // Error, failed to initialize SRTP
+                                    LOG("Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
+                                    dtlsState = DtlsState::Failed;
+                                    setConnectionState(ConnectionState::Failed);
                                 }
                             } else {
                                 // Error, certificate hash does not match
@@ -875,167 +764,134 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             } else if (is_rtc_message(data.buf)) {
                 LOG("Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
 
-                if (is_rtcp_message(data.buf)) {
-                    int rtcpSize = static_cast<int>(data.buf.size());
-                    const auto status = srtp_unprotect_rtcp(srtp_in, data.buf.data(), &rtcpSize);
-                    LOG("RTCP unprotect: %d, size = %d", status, rtcpSize);
+                if (is_rtcp_message(data.buf) && srtp) {
+                    const auto unprotectedSize = srtp->unprotectIncomingControl(data.buf);
+                    if (unprotectedSize >= 8) {
+                        LOG("RTCP unprotect: size = %zd", unprotectedSize);
 
-                    if (status == srtp_err_status_ok) {
-                        if (rtcpSize >= 8) {
-                            ByteReader rtcpReader = { data.buf.data(), static_cast<size_t>(rtcpSize) };
+                        ByteReader rtcpReader = { data.buf.data(), unprotectedSize };
 
-                            const auto rtcpRC = rtcpReader.readU8() & 0x1f;
-                            const auto rtcpPT = rtcpReader.readU8();
-                            const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
-                            const auto rtcpSSRC = rtcpReader.readU32();
+                        const auto rtcpRC = rtcpReader.readU8() & 0x1f;
+                        const auto rtcpPT = rtcpReader.readU8();
+                        const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
+                        const auto rtcpSSRC = rtcpReader.readU32();
 
-                            LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
-                                rtcpLength, rtcpSSRC);
+                        LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
+                            rtcpLength, rtcpSSRC);
 
-                            if (rtcpPT == 201) {
-                                // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
-                                // RR: Receiver Report
-                                if (rtcpReader.remaining() >= 4) {
-                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                    LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
-                                }
-                            } else if (rtcpPT == 205) {
-                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
-                                // RTPFB: Transport layer FB message
-                                if (rtcpReader.remaining() >= 4) {
-                                    const auto rtcpFmt = rtcpRC;
-                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                    LOG("RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+                        if (rtcpPT == 201) {
+                            // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
+                            // RR: Receiver Report
+                            if (rtcpReader.remaining() >= 4) {
+                                const auto rtcpSSRC_1 = rtcpReader.readU32();
+                                LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
+                            }
+                        } else if (rtcpPT == 205) {
+                            // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
+                            // RTPFB: Transport layer FB message
+                            if (rtcpReader.remaining() >= 4) {
+                                const auto rtcpFmt = rtcpRC;
+                                const auto rtcpSSRC_1 = rtcpReader.readU32();
+                                LOG("RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
-                                    switch (rtcpFmt) {
-                                        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
-                                        case 1: {
-                                            while (rtcpReader.remaining() >= 4) {
-                                                const auto pid = rtcpReader.readU16();
-                                                const auto blp = rtcpReader.readU16();
+                                switch (rtcpFmt) {
+                                    // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
+                                    case 1: {
+                                        while (rtcpReader.remaining() >= 4) {
+                                            const auto pid = rtcpReader.readU16();
+                                            const auto blp = rtcpReader.readU16();
 
-                                                LOG("RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+                                            LOG("RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
 
-                                                std::vector<uint16_t> missingSeqList;
-                                                missingSeqList.push_back(pid);
+                                            std::vector<uint16_t> missingSeqList;
+                                            missingSeqList.push_back(pid);
 
-                                                if (blp != 0) {
-                                                    for (auto index = 0; index < 16; index += 1) {
-                                                        if (blp & (1 << index)) {
-                                                            LOG("RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-                                                            missingSeqList.push_back(pid + index + 1);
-                                                        }
+                                            if (blp != 0) {
+                                                for (auto index = 0; index < 16; index += 1) {
+                                                    if (blp & (1 << index)) {
+                                                        LOG("RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                                                        missingSeqList.push_back(pid + index + 1);
                                                     }
                                                 }
+                                            }
 
-                                                for (const auto seq : missingSeqList) {
-                                                    const auto packet = sendHistory->find(rtcpSSRC_1, seq);
-                                                    if (packet) {
-                                                        // Generate
-                                                        bool isRtx = false;
-                                                        ByteBuffer packetData;
+                                            for (const auto seq : missingSeqList) {
+                                                const auto packet = sendHistory->find(rtcpSSRC_1, seq);
+                                                if (packet && srtp) {
+                                                    // Generate
+                                                    const auto track = packet->getTrack();
+                                                    std::shared_ptr<RtpPacketSource> packetSource;
+                                                    ByteBuffer packetData;
 
-                                                        if (packet->getTrack()->getRtxPayloadId() > 0) {
-                                                            isRtx = true;
-                                                            packetData = packet->generateRtx();
-                                                        } else {
-                                                            packetData = packet->generate();
-                                                        }
-
-                                                        // Encrypt
-                                                        void* rtp_header = packetData.data();
-                                                        int rtp_size_1 = static_cast<int>(packetData.size());
-                                                        int rtp_size_2 = rtp_size_1;
-
-                                                        packetData.padding(SRTP_MAX_TRAILER_LEN);
-
-                                                        srtp_t srtp_out;
-                                                        switch (packet->getTrack()->getMediaType()) {
-                                                            case MediaType::Video:
-                                                                if (isRtx) {
-                                                                    srtp_out = srtp_out_video_rtx;
-                                                                } else {
-                                                                    srtp_out = srtp_out_video;
-                                                                }
-                                                                break;
-                                                            case MediaType::Audio:
-                                                                if (isRtx) {
-                                                                    srtp_out = srtp_out_audio_rtx;
-                                                                } else {
-                                                                    srtp_out = srtp_out_audio;
-                                                                }
-                                                                break;
-                                                            default:
-                                                                srtp_out = nullptr;
-                                                                break;
-                                                        }
-
-                                                        const auto protectStatus = srtp_protect(srtp_out, rtp_header, &rtp_size_2);
-                                                        if (protectStatus == srtp_err_status_ok) {
-                                                            assert(rtp_size_2 > rtp_size_1);
-
-                                                            // And send
-                                                            const auto sentSize = socket->send(rtp_header, rtp_size_2);
-                                                            LOG("Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
-                                                                packet->getSSRC(), packet->getSequence(), sentSize);
-                                                        } else {
-                                                            LOG("Error applying SRTP protection: %d", protectStatus);
-                                                        }
+                                                    if (track->getRtxPayloadId() > 0) {
+                                                        packetSource = track->getRtxPacketSource();
+                                                        packetData = packet->generateRtx();
                                                     } else {
-                                                        LOG("Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
+                                                        packetSource = track->getPacketSource();
+                                                        packetData = packet->generate();
                                                     }
+
+                                                    const auto protectedSize = srtp->protectOutgoing(packetSource, packetData);
+                                                    if (protectedSize > 0) {
+                                                        // And send
+                                                        const auto sentSize = socket->send(packetData.data(), protectedSize);
+                                                        LOG("Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
+                                                            packet->getSSRC(), packet->getSequence(), sentSize);
+                                                    }
+                                                } else {
+                                                    LOG("Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
                                                 }
                                             }
-                                        }   break;
-                                        default:
-                                            LOG("RTCP RTPFB Unknown fmt = %u", rtcpFmt);
-                                            break;
-                                    }
+                                        }
+                                    }   break;
+                                    default:
+                                        LOG("RTCP RTPFB Unknown fmt = %u", rtcpFmt);
+                                        break;
                                 }
-                            } else if (rtcpPT == 206) {
-                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3
-                                // PSFB: Payload-specific FB message
-                                if (rtcpReader.remaining() >= 4) {
-                                    const auto rtcpFmt = rtcpRC;
-                                    const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                    LOG("RTCP PSFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+                            }
+                        } else if (rtcpPT == 206) {
+                            // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3
+                            // PSFB: Payload-specific FB message
+                            if (rtcpReader.remaining() >= 4) {
+                                const auto rtcpFmt = rtcpRC;
+                                const auto rtcpSSRC_1 = rtcpReader.readU32();
+                                LOG("RTCP PSFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
-                                    switch (rtcpFmt) {
-                                        case 1:
-                                            LOG("RTCP PSFB Picture Loss Indication");
-                                            break;
-                                        default:
-                                            LOG("RTCP PSFB Unknown fmt = %u", rtcpFmt);
-                                            break;
-                                    }
+                                switch (rtcpFmt) {
+                                    case 1:
+                                        LOG("RTCP PSFB Picture Loss Indication");
+                                        break;
+                                    default:
+                                        LOG("RTCP PSFB Unknown fmt = %u", rtcpFmt);
+                                        break;
                                 }
-                            } else if (rtcpPT == 207) {
-                                // https://datatracker.ietf.org/doc/html/rfc3611#section-3
-                                // XR: Extended Report
-                                while (rtcpReader.remaining() >= 4) {
-                                    const auto blockType = rtcpReader.readU8();
-                                    const auto blockTypeSpecific = rtcpReader.readU8();
-                                    const auto blockLength = 4 * (1 + rtcpReader.readU16());
+                            }
+                        } else if (rtcpPT == 207) {
+                            // https://datatracker.ietf.org/doc/html/rfc3611#section-3
+                            // XR: Extended Report
+                            while (rtcpReader.remaining() >= 4) {
+                                const auto blockType = rtcpReader.readU8();
+                                const auto blockTypeSpecific = rtcpReader.readU8();
+                                const auto blockLength = 4 * (1 + rtcpReader.readU16());
 
-                                    LOG("RTCP XR block type = %d, type specific = %d, len = %u",
-                                        blockType, blockTypeSpecific, blockLength);
+                                LOG("RTCP XR block type = %d, type specific = %d, len = %u",
+                                    blockType, blockTypeSpecific, blockLength);
 
-                                    switch (blockType) {
-                                        // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
-                                        case 4: {
-                                            LOG("RTCP XR Receiver Reference Time Report Block");
-                                            if (blockLength == 4 + 8 && rtcpReader.remaining() >= 8) {
-                                                // https://stackoverflow.com/questions/29112071/how-to-convert-ntp-time-to-unix-epoch-time-in-c-language-linux
-                                                const auto ntpTimeSeconds = rtcpReader.readU32() - 2208988800U;
-                                                // const auto ntpTimeFraction = rtcpReader.readU32();
+                                switch (blockType) {
+                                    // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
+                                    case 4: {
+                                        LOG("RTCP XR Receiver Reference Time Report Block");
+                                        if (blockLength == 4 + 8 && rtcpReader.remaining() >= 8) {
+                                            // https://stackoverflow.com/questions/29112071/how-to-convert-ntp-time-to-unix-epoch-time-in-c-language-linux
+                                            const auto ntpTimeSeconds = rtcpReader.readU32() - 2208988800U;
+                                            // const auto ntpTimeFraction = rtcpReader.readU32();
 
-                                                LOG("RTCP XR Receiver Reference Time = %u", ntpTimeSeconds);
-                                            }
-                                        }   break;
-                                        default:
-                                            LOG("RTCP XR unknown block type %d", blockType);
-                                            break;
-                                    }
+                                            LOG("RTCP XR Receiver Reference Time = %u", ntpTimeSeconds);
+                                        }
+                                    }   break;
+                                    default:
+                                        LOG("RTCP XR unknown block type %d", blockType);
+                                        break;
                                 }
                             }
                         }
@@ -1081,22 +937,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 SSL_do_handshake(dtls_ssl);
             }
         }
-    }
-
-    if (srtp_in) {
-        srtp_dealloc(srtp_in);
-    }
-    if (srtp_out_video) {
-        srtp_dealloc(srtp_out_video);
-    }
-    if (srtp_out_video_rtx) {
-        srtp_dealloc(srtp_out_video_rtx);
-    }
-    if (srtp_out_audio) {
-        srtp_dealloc(srtp_out_audio);
-    }
-    if (srtp_out_audio_rtx) {
-        srtp_dealloc(srtp_out_audio_rtx);
     }
 
     if (dtls_ssl) {

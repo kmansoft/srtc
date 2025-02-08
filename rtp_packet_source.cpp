@@ -17,6 +17,11 @@ RtpPacketSource::RtpPacketSource()
 {
 }
 
+uint32_t RtpPacketSource::getUniqueId() const
+{
+    return mUniqueId;
+}
+
 uint16_t RtpPacketSource::getNextSequence()
 {
     return mNextSequence++;

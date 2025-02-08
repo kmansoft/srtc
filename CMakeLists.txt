@@ -31,6 +31,7 @@ add_library(srtc SHARED
         include/srtc/send_history.h
         include/srtc/socket.h
         include/srtc/srtc.h
+        include/srtc/srtp_connection.h
         include/srtc/track.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
@@ -54,6 +55,7 @@ add_library(srtc SHARED
         send_history.cpp
         socket.cpp
         srtc.cpp
+        srtp_connection.cpp
         track.cpp
         util.cpp
         x509_certificate.cpp

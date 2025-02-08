@@ -1,0 +1,45 @@
+#pragma once
+
+#include "srtc/error.h"
+#include "srtc/byte_buffer.h"
+#include "srtc/rtp_packet_source.h"
+
+#include <srtp.h>
+#include <openssl/ssl.h>
+
+#include <memory>
+#include <map>
+
+namespace srtc {
+
+class SrtpConnection {
+public:
+    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(SSL* dtls_ssl, bool isSetupActive);
+    ~SrtpConnection();
+
+    // Returns 0 on error
+    size_t protectOutgoing(const std::shared_ptr<RtpPacketSource>& source,
+                           ByteBuffer& packetData);
+
+    // Returns 0 on error
+    size_t unprotectIncomingControl(ByteBuffer& packetData);
+
+    // Implementation
+    SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
+                   ByteBuffer&& srtpServerKeyBuf,
+                   bool isSetupActive,
+                   srtp_profile_t profile);
+
+private:
+    const ByteBuffer mSrtpClientKeyBuf;
+    const ByteBuffer mSrtpServerKeyBuf;
+
+    srtp_policy_t mSrtpReceivePolicy = { };
+    srtp_policy_t mSrtpSendPolicy = { };
+
+    srtp_t mSrtpIn = {nullptr };
+    std::map<uint32_t, srtp_t> mSrtpOutMap;
+
+};
+
+}
