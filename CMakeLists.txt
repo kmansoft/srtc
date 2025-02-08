@@ -83,7 +83,7 @@ target_link_libraries(
 
 ExternalProject_Add(
         boringssl
-        GIT_REPOSITORY "https://gitlab.com/kmansoft/boringssl.git"
+        GIT_REPOSITORY "https://boringssl.googlesource.com/boringssl"
         GIT_TAG "origin/master"
         GIT_SHALLOW ON
         SOURCE_DIR "external/boringssl"
