@@ -326,7 +326,7 @@ Error PeerConnection::setVideoCodecSpecificData(std::vector<ByteBuffer>& list)
     return Error::OK;
 }
 
-Error PeerConnection::publishVideoFrame(ByteBuffer& buf)
+Error PeerConnection::publishVideoFrame(ByteBuffer&& buf)
 {
     std::lock_guard lock(mMutex);
 
@@ -351,7 +351,7 @@ Error PeerConnection::publishVideoFrame(ByteBuffer& buf)
     return Error::OK;
 }
 
-Error PeerConnection::publishAudioFrame(ByteBuffer& buf)
+Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 {
     std::lock_guard lock(mMutex);
 
