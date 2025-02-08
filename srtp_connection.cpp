@@ -6,7 +6,7 @@
 #include <mutex>
 #include <cassert>
 
-#define LOG(...) srtc::log("SrtpConnection", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
 
 namespace {
 
@@ -117,7 +117,7 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
 
     const auto result = srtp_protect(srtpOut, packetData.data(), &rtp_size_2);
     if (result != srtp_err_status_ok) {
-        LOG("srtp_protect() failed: %d", result);
+        LOG(SRTC_LOG_E, "srtp_protect() failed: %d", result);
         return 0;
     }
 
@@ -131,7 +131,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
     const auto status = srtp_unprotect_rtcp(mSrtpIn, packetData.data(), &rtcpSize);
 
     if (status != srtp_err_status_ok) {
-        LOG("srtp_unprotect_rtcp() failed: %d", status);
+        LOG(SRTC_LOG_E, "srtp_unprotect_rtcp() failed: %d", status);
         return 0;
     }
 

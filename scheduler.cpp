@@ -3,7 +3,7 @@
 
 #include <cassert>
 
-#define LOG(tag, ...) srtc::log(tag, __VA_ARGS__)
+#define LOG(level, tag, ...) srtc::log(level, tag, __VA_ARGS__)
 
 namespace srtc {
 
@@ -75,15 +75,6 @@ std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
         std::lock_guard lock(mMutex);
         mTaskQueue.insert(std::upper_bound(
                 mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
-
-        // Debug
-        LOG("ThreadScheduler", "Total %zd tasks", mTaskQueue.size());
-
-        const auto now = std::chrono::steady_clock::now();
-        for (const auto& iter : mTaskQueue) {
-            LOG("ThreadScheduler", "Task at %lld millis",
-                std::chrono::duration_cast<std::chrono::milliseconds >(iter->mWhen - now).count());
-        }
     }
 
     mCondVar.notify_one();
@@ -216,15 +207,6 @@ std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
     {
         mTaskQueue.insert(std::upper_bound(
                 mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
-
-        // Debug
-        LOG("LoopScheduler", "Total %zd tasks", mTaskQueue.size());
-
-        const auto now = std::chrono::steady_clock::now();
-        for (const auto& iter : mTaskQueue) {
-            LOG("LoopScheduler", "Task at %lld millis",
-                std::chrono::duration_cast<std::chrono::milliseconds >(iter->mWhen - now).count());
-        }
     }
 
     return task;

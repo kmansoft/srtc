@@ -102,9 +102,6 @@ private:
     std::shared_ptr<Packetizer> mVideoPacketizer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
 
-    // A scheduler for retries
-    const std::unique_ptr<Scheduler> mScheduler;
-
     // OpenSSL BIO
     static int dgram_read(struct bio_st *b, char *out, int outl);
     static int dgram_write(struct bio_st *b, const char *in, int inl);

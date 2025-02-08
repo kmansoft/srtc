@@ -31,7 +31,7 @@
 
 #include "stunmessage.h"
 
-#define LOG(...) srtc::log("PeerConnection", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
 namespace {
 
@@ -39,7 +39,7 @@ namespace {
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80";
 
 struct dgram_data {
-    srtc::PeerConnection* pc;
+    srtc::PeerConnection *pc;
 };
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
@@ -53,11 +53,11 @@ uint32_t make_stun_priority(int type_preference,
             (256 - component_id);
 }
 
-StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAgent>& agent,
-                                              uint8_t* buf,
+StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAgent> &agent,
+                                              uint8_t *buf,
                                               size_t len,
-                                              const std::shared_ptr<srtc::SdpOffer>& offer,
-                                              const std::shared_ptr<srtc::SdpAnswer>& answer,
+                                              const std::shared_ptr<srtc::SdpOffer> &offer,
+                                              const std::shared_ptr<srtc::SdpAnswer> &answer,
                                               bool useCandidate)
 {
     StunMessage msg = {};
@@ -69,7 +69,7 @@ StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAge
     }
 
     const uint32_t priority = make_stun_priority(200, 10, 1);
-    stun_message_append32 (&msg, STUN_ATTRIBUTE_PRIORITY, priority);
+    stun_message_append32(&msg, STUN_ATTRIBUTE_PRIORITY, priority);
 
     // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
     const auto offerUserName = offer->getIceUFrag();
@@ -82,20 +82,20 @@ StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAge
     return msg;
 }
 
-StunMessage make_stun_message_binding_response(const std::unique_ptr<srtc::IceAgent>& agent,
-                                               uint8_t* buf,
+StunMessage make_stun_message_binding_response(const std::unique_ptr<srtc::IceAgent> &agent,
+                                               uint8_t *buf,
                                                size_t len,
-                                               const std::shared_ptr<srtc::SdpOffer>& offer,
-                                               const std::shared_ptr<srtc::SdpAnswer>& answer,
-                                               const StunMessage& request,
-                                               const srtc::anyaddr& address,
+                                               const std::shared_ptr<srtc::SdpOffer> &offer,
+                                               const std::shared_ptr<srtc::SdpAnswer> &answer,
+                                               const StunMessage &request,
+                                               const srtc::anyaddr &address,
                                                socklen_t addressLen)
 {
     StunMessage msg = {};
     agent->initResponse(&msg, buf, len, &request);
 
-    stun_message_append_xor_addr (&msg, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
-                                  &address.ss, addressLen);
+    stun_message_append_xor_addr(&msg, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
+                                 &address.ss, addressLen);
 
     // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
     const auto offerUserName = offer->getIceUFrag();
@@ -108,11 +108,11 @@ StunMessage make_stun_message_binding_response(const std::unique_ptr<srtc::IceAg
     return msg;
 }
 
-bool is_stun_message(const srtc::ByteBuffer& buf)
+bool is_stun_message(const srtc::ByteBuffer &buf)
 {
     // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
     if (buf.size() > 20) {
-        const auto data =  buf.data();
+        const auto data = buf.data();
         if (data[0] < 2) {
             uint32_t magic = htonl(srtc::IceAgent::kRfc5389Cookie);
             uint8_t cookie[4];
@@ -127,7 +127,8 @@ bool is_stun_message(const srtc::ByteBuffer& buf)
     return false;
 }
 
-bool is_dtls_message(const srtc::ByteBuffer& buf) {
+bool is_dtls_message(const srtc::ByteBuffer &buf)
+{
     // https://datatracker.ietf.org/doc/html/rfc7983#section-5
     if (buf.size() >= 4) {
         const auto data = buf.data();
@@ -139,7 +140,8 @@ bool is_dtls_message(const srtc::ByteBuffer& buf) {
     return false;
 }
 
-bool is_rtc_message(const srtc::ByteBuffer& buf) {
+bool is_rtc_message(const srtc::ByteBuffer &buf)
+{
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
     if (buf.size() >= 8) {
         const auto data = buf.data();
@@ -151,7 +153,8 @@ bool is_rtc_message(const srtc::ByteBuffer& buf) {
     return false;
 }
 
-bool is_rtcp_message(const srtc::ByteBuffer& buf) {
+bool is_rtcp_message(const srtc::ByteBuffer &buf)
+{
     // https://datatracker.ietf.org/doc/html/rfc5761#section-4
     if (buf.size() >= 8) {
         const auto data = buf.data();
@@ -161,33 +164,10 @@ bool is_rtcp_message(const srtc::ByteBuffer& buf) {
     return false;
 }
 
-long long elapsedMillis(const std::chrono::steady_clock::time_point& start) {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-}
-
-// test code
-
-template <class TScheduler>
-void testScheduler(const std::unique_ptr<TScheduler>& scheduler,
-                   const std::string& label)
+long long elapsedMillis(const std::chrono::steady_clock::time_point &start)
 {
-    const auto start1000 = std::chrono::steady_clock::now();
-    scheduler->submit(std::chrono::milliseconds(1000), [label, start1000] {
-        const auto message = label + ": Task at 1000 ms";
-        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start1000));
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    const auto start2000 = std::chrono::steady_clock::now();
-    scheduler->submit(std::chrono::milliseconds(2000), [label, start2000] {
-        const auto message = label + ": Task at 2000 ms";
-        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start2000));
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    const auto start500 = std::chrono::steady_clock::now();
-    scheduler->submit(std::chrono::milliseconds(500), [label, start500] {
-        const auto message = label + ": Task at 500 ms";
-        LOG("%s, at %lld ms", message.c_str(), elapsedMillis(start500));
-    });
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
 }
 
 }
@@ -195,10 +175,7 @@ void testScheduler(const std::unique_ptr<TScheduler>& scheduler,
 namespace srtc {
 
 PeerConnection::PeerConnection()
-    : mScheduler(std::make_unique<ThreadScheduler>("srtc-pc"))
 {
-    // Test code
-    testScheduler(mScheduler, "ThreadScheduler");
 }
 
 PeerConnection::~PeerConnection()
@@ -485,7 +462,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Dest host and its socket address
     const auto destHost = answer->getHostList()[0]; // TODO try all candidates
-    LOG("Connecting to %s", to_string(destHost.addr).c_str());
+    LOG(SRTC_LOG_I, "Connecting to %s", to_string(destHost.addr).c_str());
 
     // Dest socket
     auto socket = std::make_unique<Socket>(destHost.addr);
@@ -543,7 +520,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
     // Loop scheduler
     const auto scheduler = std::make_unique<LoopScheduler>();
-    testScheduler(scheduler, "LoopScheduler");
 
     // Receive buffer
     while (true) {
@@ -576,7 +552,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     // Read from socket
                     auto receiveList = socket->receive();
                     for (auto& item : receiveList) {
-                        LOG("Received %zd bytes", item.buf.size());
+                        LOG(SRTC_LOG_V, "Received %zd bytes", item.buf.size());
                         receiveQueue.emplace_back(std::move(item));
                     }
                 }
@@ -592,7 +568,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             rawSendQueue.erase(rawSendQueue.begin());
 
             const auto w = socket->send(buf);
-            LOG("Sent %zd raw bytes", w);
+            LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
         }
 
         // Frames
@@ -620,14 +596,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             // And send
                             const auto randomValue = lrand48() % 100;
                             if (randomValue <= 5 && item.track->getCodec() == Codec::H264) {
-                                LOG("NOT sending an RTP packet with SSRC = %u, SEQ = %u",
+                                LOG(SRTC_LOG_V, "NOT sending an RTP packet with SSRC = %u, SEQ = %u",
                                     packet->getSSRC(), packet->getSequence());
                             } else {
                                 (void) socket->send(packetData.data(), protectedSize);
                             }
                         }
                     } else {
-                        LOG("SRTP is not initialized");
+                        LOG(SRTC_LOG_V, "SRTP is not initialized yet");
                     }
                 }
             }
@@ -639,8 +615,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             receiveQueue.erase(receiveQueue.begin());
 
             if (is_stun_message(data.buf)) {
-                LOG("Received STUN message");
-
                 StunMessage incomingMessage = { };
                 incomingMessage.buffer = data.buf.data();
                 incomingMessage.buffer_len = data.buf.size();
@@ -648,8 +622,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 const auto stunMessageClass = stun_message_get_class(&incomingMessage);
                 const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
 
-                LOG("STUN message class  = %d", stunMessageClass);
-                LOG("STUN message method = %d", stunMessageMethod);
+                LOG(SRTC_LOG_V, "STUN message class  = %d", stunMessageClass);
+                LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
 
                 if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
                     const auto iceMessageBindingResponse = make_stun_message_binding_response(
@@ -664,14 +638,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
-                        LOG("STUN response error code: %d", errorCode);
+                        LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
                     }
 
                     uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
                     stun_message_id(&incomingMessage, id);
 
                     if (iceAgent->forgetTransaction(id)) {
-                        LOG("Removed old transaction ID for binding request");
+                        LOG(SRTC_LOG_V, "Removed old transaction ID for binding request");
 
                         if (!sentUseCandidate) {
                             sentUseCandidate = true;
@@ -691,7 +665,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     }
                 }
             } else if (dtls_ssl && is_dtls_message(data.buf)) {
-                LOG("Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
+                LOG(SRTC_LOG_V, "Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
 
                 {
                     std::lock_guard lock(mMutex);
@@ -702,20 +676,20 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 if (dtlsState == DtlsState::Activating) {
                     const auto r1 = SSL_do_handshake(dtls_ssl);
                     const auto err = SSL_get_error(dtls_ssl, r1);
-                    LOG("DTLS handshake: %d, %d", r1, err);
+                    LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
 
                     if (err == SSL_ERROR_WANT_READ) {
-                        LOG("Still in progress");
+                        LOG(SRTC_LOG_V, "Still in progress");
                     } else if (r1 == 1 && err == 0) {
                         const auto cipher = SSL_get_cipher(dtls_ssl);
                         const auto profile = SSL_get_selected_srtp_profile(dtls_ssl);
 
-                        LOG("Completed with cipher %s, profile %s", cipher, profile->name);
+                        LOG(SRTC_LOG_V, "Completed with cipher %s, profile %s", cipher, profile->name);
 
                         const auto cert = SSL_get_peer_certificate(dtls_ssl);
                         if (cert == nullptr) {
                             // Error, no certificate
-                            LOG("There is no DTLS server certificate");
+                            LOG(SRTC_LOG_E, "There is no DTLS server certificate");
                             dtlsState = DtlsState::Failed;
                             setConnectionState(ConnectionState::Failed);
                         } else {
@@ -726,14 +700,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             X509_digest(cert, digest, fpBuf, &fpSize);
 
                             std::string hex = bin_to_hex(fpBuf, fpSize);
-                            LOG("Remote certificate sha-256: %s", hex.c_str());
+                            LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
 
                             const auto expectedHash = answer->getCertificateHash();
                             const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
 
                             if (expectedHash.getBin() == actualHashBin) {
-                                LOG("Remote certificate matches the SDP");
-
                                 const auto [ srtpConn, srtpError ] = SrtpConnection::create(dtls_ssl, answer->isSetupActive());
 
                                 if (srtpError.isOk()) {
@@ -743,31 +715,31 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                     setConnectionState(ConnectionState::Connected);
                                 } else {
                                     // Error, failed to initialize SRTP
-                                    LOG("Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
+                                    LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
                                     dtlsState = DtlsState::Failed;
                                     setConnectionState(ConnectionState::Failed);
                                 }
                             } else {
                                 // Error, certificate hash does not match
-                                LOG("Server cert doesn't match the fingerprint");
+                                LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
                                 dtlsState = DtlsState::Failed;
                                 setConnectionState(ConnectionState::Failed);
                             }
                         }
                     } else {
                         // Error during DTLS handshake
-                        LOG("Failed during DTLS handshake");
+                        LOG(SRTC_LOG_E, "Failed during DTLS handshake");
                         dtlsState = DtlsState::Failed;
                         setConnectionState(ConnectionState::Failed);
                     }
                 }
             } else if (is_rtc_message(data.buf)) {
-                LOG("Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
+                LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
 
                 if (is_rtcp_message(data.buf) && srtp) {
                     const auto unprotectedSize = srtp->unprotectIncomingControl(data.buf);
                     if (unprotectedSize >= 8) {
-                        LOG("RTCP unprotect: size = %zd", unprotectedSize);
+                        LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
 
                         ByteReader rtcpReader = { data.buf.data(), unprotectedSize };
 
@@ -776,23 +748,16 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
                         const auto rtcpSSRC = rtcpReader.readU32();
 
-                        LOG("RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
+                        LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
                             rtcpLength, rtcpSSRC);
 
-                        if (rtcpPT == 201) {
-                            // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
-                            // RR: Receiver Report
-                            if (rtcpReader.remaining() >= 4) {
-                                const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                LOG("RTCP RR SSRC = %u", rtcpSSRC_1);
-                            }
-                        } else if (rtcpPT == 205) {
+                        if (rtcpPT == 205) {
                             // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
                             // RTPFB: Transport layer FB message
                             if (rtcpReader.remaining() >= 4) {
                                 const auto rtcpFmt = rtcpRC;
                                 const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                LOG("RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+                                LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
                                 switch (rtcpFmt) {
                                     // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
@@ -801,7 +766,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                             const auto pid = rtcpReader.readU16();
                                             const auto blp = rtcpReader.readU16();
 
-                                            LOG("RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+                                            LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
 
                                             std::vector<uint16_t> missingSeqList;
                                             missingSeqList.push_back(pid);
@@ -809,7 +774,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                             if (blp != 0) {
                                                 for (auto index = 0; index < 16; index += 1) {
                                                     if (blp & (1 << index)) {
-                                                        LOG("RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                                                        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
                                                         missingSeqList.push_back(pid + index + 1);
                                                     }
                                                 }
@@ -835,62 +800,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                     if (protectedSize > 0) {
                                                         // And send
                                                         const auto sentSize = socket->send(packetData.data(), protectedSize);
-                                                        LOG("Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
+                                                        LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
                                                             packet->getSSRC(), packet->getSequence(), sentSize);
                                                     }
                                                 } else {
-                                                    LOG("Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
+                                                    LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
                                                 }
                                             }
                                         }
                                     }   break;
                                     default:
-                                        LOG("RTCP RTPFB Unknown fmt = %u", rtcpFmt);
-                                        break;
-                                }
-                            }
-                        } else if (rtcpPT == 206) {
-                            // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3
-                            // PSFB: Payload-specific FB message
-                            if (rtcpReader.remaining() >= 4) {
-                                const auto rtcpFmt = rtcpRC;
-                                const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                LOG("RTCP PSFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
-
-                                switch (rtcpFmt) {
-                                    case 1:
-                                        LOG("RTCP PSFB Picture Loss Indication");
-                                        break;
-                                    default:
-                                        LOG("RTCP PSFB Unknown fmt = %u", rtcpFmt);
-                                        break;
-                                }
-                            }
-                        } else if (rtcpPT == 207) {
-                            // https://datatracker.ietf.org/doc/html/rfc3611#section-3
-                            // XR: Extended Report
-                            while (rtcpReader.remaining() >= 4) {
-                                const auto blockType = rtcpReader.readU8();
-                                const auto blockTypeSpecific = rtcpReader.readU8();
-                                const auto blockLength = 4 * (1 + rtcpReader.readU16());
-
-                                LOG("RTCP XR block type = %d, type specific = %d, len = %u",
-                                    blockType, blockTypeSpecific, blockLength);
-
-                                switch (blockType) {
-                                    // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
-                                    case 4: {
-                                        LOG("RTCP XR Receiver Reference Time Report Block");
-                                        if (blockLength == 4 + 8 && rtcpReader.remaining() >= 8) {
-                                            // https://stackoverflow.com/questions/29112071/how-to-convert-ntp-time-to-unix-epoch-time-in-c-language-linux
-                                            const auto ntpTimeSeconds = rtcpReader.readU32() - 2208988800U;
-                                            // const auto ntpTimeFraction = rtcpReader.readU32();
-
-                                            LOG("RTCP XR Receiver Reference Time = %u", ntpTimeSeconds);
-                                        }
-                                    }   break;
-                                    default:
-                                        LOG("RTCP XR unknown block type %d", blockType);
+                                        LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
                                         break;
                                 }
                             }
@@ -898,12 +818,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     }
                 }
             } else {
-                LOG("Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
+                LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
             }
         }
 
         if (dtlsState == DtlsState::Activating && dtls_ssl == nullptr) {
-            LOG("Preparing for the DTLS handshake");
+            LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
 
             const auto cert = offer->getCertificate();
             dtls_ctx = SSL_CTX_new(DTLS_client_method());
@@ -912,29 +832,31 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
             SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
 
             if (!SSL_CTX_check_private_key(dtls_ctx)) {
-                LOG("ERROR: invalid private key");
-            }
-
-            SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
-
-            SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
-            SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_3_VERSION);
-            SSL_CTX_set_read_ahead(dtls_ctx, 1);
-
-            dtls_ssl = SSL_new(dtls_ctx);
-
-            dtls_bio = BIO_new_dgram(this);
-
-            SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
-
-            SSL_set_tlsext_use_srtp(dtls_ssl, kSrtpCipherList);
-            SSL_set_connect_state(dtls_ssl);
-
-            if (answer->isSetupActive()) {
-                SSL_set_accept_state(dtls_ssl);
+                LOG(SRTC_LOG_V, "ERROR: invalid private key");
+                dtlsState = DtlsState::Failed;
+                setConnectionState(ConnectionState::Failed);
             } else {
+                SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
+
+                SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
+                SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_3_VERSION);
+                SSL_CTX_set_read_ahead(dtls_ctx, 1);
+
+                dtls_ssl = SSL_new(dtls_ctx);
+
+                dtls_bio = BIO_new_dgram(this);
+
+                SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
+
+                SSL_set_tlsext_use_srtp(dtls_ssl, kSrtpCipherList);
                 SSL_set_connect_state(dtls_ssl);
-                SSL_do_handshake(dtls_ssl);
+
+                if (answer->isSetupActive()) {
+                    SSL_set_accept_state(dtls_ssl);
+                } else {
+                    SSL_set_connect_state(dtls_ssl);
+                    SSL_do_handshake(dtls_ssl);
+                }
             }
         }
     }
@@ -954,7 +876,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
 void PeerConnection::enqueueForSending(ByteBuffer&& buf)
 {
-    LOG("Enqueing %zd bytes", buf.size());
+    LOG(SRTC_LOG_V, "Enqueing %zd bytes", buf.size());
 
     std::lock_guard lock(mMutex);
     mRawSendQueue.push_back(std::move(buf));
