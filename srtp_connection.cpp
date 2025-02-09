@@ -102,12 +102,12 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
 {
     srtp_t srtpOut = nullptr;
 
-    const auto iter = mSrtpOutMap.find(source->getUniqueId());
+    const auto iter = mSrtpOutMap.find(source);
     if (iter != mSrtpOutMap.end()) {
         srtpOut = iter->second;
     } else {
         srtp_create(&srtpOut, &mSrtpSendPolicy);
-        mSrtpOutMap.insert({ source->getUniqueId(), srtpOut });
+        mSrtpOutMap.insert({ source, srtpOut });
     }
 
     int rtp_size_1 = static_cast<int>(packetData.size());

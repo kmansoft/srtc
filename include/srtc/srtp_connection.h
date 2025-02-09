@@ -8,7 +8,7 @@
 #include <openssl/ssl.h>
 
 #include <memory>
-#include <map>
+#include <unordered_map>
 
 namespace srtc {
 
@@ -38,7 +38,7 @@ private:
     srtp_policy_t mSrtpSendPolicy = { };
 
     srtp_t mSrtpIn = {nullptr };
-    std::map<uint32_t, srtp_t> mSrtpOutMap;
+    std::unordered_map<std::shared_ptr<RtpPacketSource>, srtp_t> mSrtpOutMap;
 
 };
 
