@@ -12,7 +12,9 @@ class Track {
 public:
     Track(int trackId,
           MediaType mediaType,
+          uint32_t ssrc,
           int payloadId,
+          uint32_t rtxSsrc,
           int rtxPayloadId,
           Codec codec,
           bool hasNack,
@@ -28,8 +30,8 @@ public:
     [[nodiscard]] bool hasPli() const;
     [[nodiscard]] int getProfileLevelId() const;
 
-    void setSSRC(uint32_t ssrc, uint32_t rtx);
     [[nodiscard]] uint32_t getSSRC() const;
+    [[nodiscard]]
     [[nodiscard]] uint32_t getRtxSSRC() const;
 
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getPacketSource() const;
@@ -38,7 +40,9 @@ public:
 private:
     const int mTrackId;
     const MediaType mMediaType;
+    const uint32_t mSSRC;
     const int mPayloadId;
+    const uint32_t mRtxSSRC;
     const int mRtxPayloadId;
     const Codec mCodec;
     const bool mHasNack;
@@ -46,8 +50,6 @@ private:
     const int mProfileLevelId;
     const std::shared_ptr<RtpPacketSource> mPacketSource;
     const std::shared_ptr<RtpPacketSource> mRtxPacketSource;
-    uint32_t mSSRC = { 0 };
-    uint32_t mRtxSSRC = { 0 };
 };
 
 }

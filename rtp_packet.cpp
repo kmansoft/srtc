@@ -13,11 +13,11 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      uint32_t timestamp,
                      srtc::ByteBuffer&& payload)
     : mTrack(track)
-    , mMarker(marker)
+    , mSSRC(track->getSSRC())
     , mPayloadId(track->getPayloadId())
+    , mMarker(marker)
     , mSequence(sequence)
     , mTimestamp(timestamp)
-    , mSSRC(track->getSSRC())
     , mPayload(std::move(payload))
 {
 }

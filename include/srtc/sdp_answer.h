@@ -12,6 +12,7 @@
 
 namespace srtc {
 
+class SdpOffer;
 class Track;
 
 class SdpAnswer {
@@ -25,7 +26,8 @@ public:
                                                                  const std::vector<std::shared_ptr<Track>>& list) const = 0;
     };
 
-    static Error parse(const std::string& answer,
+    static Error parse(const std::shared_ptr<SdpOffer>& offer,
+                       const std::string& answer,
                        const std::shared_ptr<TrackSelector>& selector,
                        std::shared_ptr<SdpAnswer>& outAnswer);
 

@@ -34,11 +34,11 @@ public:
 
 private:
     const std::shared_ptr<Track> mTrack;
-    const bool mMarker;
+    const uint32_t mSSRC;
     const uint8_t mPayloadId;
+    const bool mMarker;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
-    const uint32_t mSSRC;
     const ByteBuffer mPayload;
 };
 

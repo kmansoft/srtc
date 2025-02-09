@@ -237,13 +237,6 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mVideoTrack = answer->getVideoTrack();
     mAudioTrack = answer->getAudioTrack();
 
-    if (mVideoTrack) {
-        mVideoTrack->setSSRC(mSdpOffer->getVideoSSRC(), mSdpOffer->getRtxVideoSSRC());
-    }
-    if (mAudioTrack) {
-        mAudioTrack->setSSRC(mSdpOffer->getAudioSSRC(), mSdpOffer->getRtxAudioSSRC());
-    }
-
     if (mSdpOffer && mSdpAnswer) {
         // Packetizers
         if (mVideoTrack) {

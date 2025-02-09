@@ -5,7 +5,9 @@ namespace srtc {
 
 Track::Track(int trackId,
              MediaType mediaType,
+             uint32_t ssrtc,
              int payloadId,
+             uint32_t rtxSsrc,
              int rtxPayloadId,
              Codec codec,
              bool hasNack,
@@ -13,14 +15,16 @@ Track::Track(int trackId,
              int profileLevelId)
     : mTrackId(trackId)
     , mMediaType(mediaType)
+    , mSSRC(ssrtc)
     , mPayloadId(payloadId)
+    , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
     , mCodec(codec)
     , mHasNack(hasNack)
     , mHasPli(hasPli)
     , mProfileLevelId(profileLevelId)
-    , mPacketSource(std::make_shared<RtpPacketSource>())
-    , mRtxPacketSource(std::make_shared<RtpPacketSource>())
+    , mPacketSource(std::make_shared<RtpPacketSource>(mSSRC, mPayloadId))
+    , mRtxPacketSource(std::make_shared<RtpPacketSource>(mRtxSSRC, mRtxPayloadId))
 {
 }
 
@@ -62,12 +66,6 @@ bool Track::hasPli() const
 int Track::getProfileLevelId() const
 {
     return mProfileLevelId;
-}
-
-void Track::setSSRC(uint32_t ssrc, uint32_t rtx)
-{
-    mSSRC = ssrc;
-    mRtxSSRC = rtx;
 }
 
 uint32_t Track::getSSRC() const

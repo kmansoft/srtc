@@ -6,6 +6,7 @@
 
 #include <cassert>
 
+#include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
 #include "srtc/track.h"
@@ -13,6 +14,11 @@
 #include "srtc/x509_hash.h"
 
 namespace {
+
+bool is_valid_payload_id(int payloadId)
+{
+    return payloadId > 0 && payloadId <= 127;
+}
 
 bool parse_line(const std::string& input,
                 std::string& outTag,
@@ -107,8 +113,8 @@ srtc::Codec parse_codec(const std::string& s) {
 struct ParsePayloadState {
     int payloadId = { -1 };
     srtc::Codec codec = { srtc::Codec::None };
-    int profileLevelId = { 0 };
-    int rtxPayloadId = { -1 };
+    uint32_t profileLevelId = { 0 };
+    uint8_t rtxPayloadId = { 0 };
     bool hasNack = { false };
     bool hasPli = { false };
 };
@@ -122,12 +128,14 @@ struct ParseMediaState {
     size_t payloadStateSize = { 0u };
     std::unique_ptr<ParsePayloadState[]> payloadStateList;
 
-    void setPayloadList(const std::vector<int>& list);
-    [[nodiscard]] ParsePayloadState* getPayloadState(int payloadId) const;
-    [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const;
+    void setPayloadList(const std::vector<uint8_t>& list);
+    [[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
+    [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(uint32_t ssrc,
+                                                           uint32_t rtxSsrc,
+                                                           const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const;
 };
 
-void ParseMediaState::setPayloadList(const std::vector<int> &list)
+void ParseMediaState::setPayloadList(const std::vector<uint8_t> &list)
 {
     payloadStateSize = list.size();
     payloadStateList = std::make_unique<ParsePayloadState[]>(payloadStateSize);
@@ -136,7 +144,7 @@ void ParseMediaState::setPayloadList(const std::vector<int> &list)
     }
 }
 
-ParsePayloadState* ParseMediaState::getPayloadState(int payloadId) const {
+ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const {
    for (size_t i = 0u; i < payloadStateSize; i += 1) {
        if (payloadStateList[i].payloadId == payloadId) {
            return &payloadStateList[i];
@@ -145,7 +153,9 @@ ParsePayloadState* ParseMediaState::getPayloadState(int payloadId) const {
    return nullptr;
 }
 
-std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const
+std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
+                                                          uint32_t rtxSsrc,
+                                                          const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const
 {
     if (id <= 0) {
         return nullptr;
@@ -157,7 +167,9 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(const std::shared_ptr<
         if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None && payloadState.codec != srtc::Codec::Rtx) {
             const auto track = std::make_shared<srtc::Track>(id,
                                                              mediaType,
+                                                             ssrc,
                                                              payloadState.payloadId,
+                                                             rtxSsrc,
                                                              payloadState.rtxPayloadId,
                                                              payloadState.codec,
                                                              payloadState.hasNack, payloadState.hasPli,
@@ -180,7 +192,8 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(const std::shared_ptr<
 
 namespace srtc {
 
-Error SdpAnswer::parse(const std::string& answer,
+Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
+                       const std::string& answer,
                        const std::shared_ptr<TrackSelector>& selector,
                        std::shared_ptr<SdpAnswer> &outAnswer)
 {
@@ -249,7 +262,7 @@ Error SdpAnswer::parse(const std::string& answer,
                 } else if (key == "rtpmap") {
                     // a=rtpmap:100 H264/90000
                     // a=rtpmap:99 opus/48000/2
-                    if (const auto payloadId = parse_int(value); payloadId > 0) {
+                    if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId)) {
                         if (props.size() == 1 && mediaStateCurr) {
                             const auto posSlash = props[0].find('/');
                             if (posSlash != std::string::npos) {
@@ -266,7 +279,7 @@ Error SdpAnswer::parse(const std::string& answer,
                     }
                 } else if (key == "fmtp") {
                     // a=fmtp:100 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
-                    if (const auto payloadId = parse_int(value); payloadId > 0 && mediaStateCurr) {
+                    if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId) && mediaStateCurr) {
                         if (props.size() == 1) {
                             std::unordered_map<std::string, std::string> map;
                             parse_map(props[0], map);
@@ -280,7 +293,7 @@ Error SdpAnswer::parse(const std::string& answer,
                                 const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
                                 if (payloadState && payloadState->codec == Codec::Rtx) {
                                     const auto referencedPayloadId = parse_int(iter2->second);
-                                    if (referencedPayloadId > 0) {
+                                    if (is_valid_payload_id(referencedPayloadId)) {
                                         const auto referencedPayloadState = mediaStateCurr->getPayloadState(referencedPayloadId);
                                         if (referencedPayloadState) {
                                             referencedPayloadState->rtxPayloadId = payloadId;
@@ -292,7 +305,7 @@ Error SdpAnswer::parse(const std::string& answer,
                     }
                 } else if (key == "rtcp-fb") {
                     // a=rtcp-fb:98 nack pli
-                    if (const auto payloadId = parse_int(value); payloadId > 0 && mediaStateCurr) {
+                    if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId) && mediaStateCurr) {
                         const auto payloadState = mediaStateCurr->getPayloadState(
                                 payloadId);
                         if (payloadState) {
@@ -358,10 +371,10 @@ Error SdpAnswer::parse(const std::string& answer,
                         mediaStateCurr->id = id;
                     }
 
-                    std::vector<int> payloadIdList;
+                    std::vector<uint8_t> payloadIdList;
                     for (size_t i = 2u; i < props.size(); i += 1) {
-                        if (const auto id = parse_int(props[i]); id > 0) {
-                            payloadIdList.push_back(id);
+                        if (const auto payloadId = parse_int(props[i]); is_valid_payload_id(payloadId)) {
+                            payloadIdList.push_back(payloadId);
                         }
                     }
 
@@ -394,8 +407,12 @@ Error SdpAnswer::parse(const std::string& answer,
         return { Error::Code::InvalidData, "No media tracks" };
     }
 
-    const auto videoTrack = mediaStateVideo.selectTrack(selector);
-    const auto audioTrack = mediaStateAudio.selectTrack(selector);
+    const auto videoTrack = mediaStateVideo.selectTrack(offer->getVideoSSRC(),
+                                                        offer->getRtxVideoSSRC(),
+                                                        selector);
+    const auto audioTrack = mediaStateAudio.selectTrack(offer->getAudioSSRC(),
+                                                        offer->getRtxAudioSSRC(),
+                                                        selector);
 
     if (!videoTrack && !audioTrack) {
         return { Error::Code::InvalidData, "No media tracks" };
