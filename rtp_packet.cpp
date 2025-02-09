@@ -60,7 +60,7 @@ ByteBuffer RtpPacket::generate() const
     writer.writeU32(mSSRC);
 
     // Payload
-    buf.append(mPayload);
+    writer.write(mPayload);
 
     return buf;
 }
@@ -87,7 +87,7 @@ ByteBuffer RtpPacket::generateRtx() const
 
     // Payload
     writer.writeU16(mSequence);
-    buf.append(mPayload);
+    writer.write(mPayload);
 
     return buf;
 }

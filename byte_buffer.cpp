@@ -158,6 +158,11 @@ ByteWriter::ByteWriter(ByteBuffer& buf)
 {
 }
 
+void ByteWriter::write(const ByteBuffer& value)
+{
+    mBuf.append(value.data(), value.size());
+}
+
 void ByteWriter::write(const uint8_t* value,
                        size_t size)
 {
