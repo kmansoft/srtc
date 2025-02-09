@@ -37,8 +37,30 @@ private:
     srtp_policy_t mSrtpReceivePolicy = { };
     srtp_policy_t mSrtpSendPolicy = { };
 
-    srtp_t mSrtpIn = {nullptr };
-    std::unordered_map<std::shared_ptr<RtpPacketSource>, srtp_t> mSrtpOutMap;
+    struct hash_packet_source {
+        std::size_t operator()(const std::shared_ptr<srtc::RtpPacketSource>& source) const
+        {
+            return std::hash<uint32_t>()(source->getSSRC() ^ source->getPayloadId());
+        }
+    };
+
+    struct equal_to_packet_source {
+        bool operator()(const std::shared_ptr<srtc::RtpPacketSource>& lhs,
+                        const std::shared_ptr<srtc::RtpPacketSource>& rhs) const
+        {
+            if (lhs.get() == rhs.get()) {
+                return true;
+            }
+
+            return lhs->getSSRC() == rhs->getSSRC() && lhs->getPayloadId() == rhs->getPayloadId();
+        }
+    };
+
+
+    srtp_t mSrtpControlIn = { nullptr };
+
+    std::unordered_map<std::shared_ptr<RtpPacketSource>, srtp_t,
+        hash_packet_source, equal_to_packet_source> mSrtpOutMap;
 
 };
 

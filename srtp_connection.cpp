@@ -88,8 +88,8 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection()
 {
-    if (mSrtpIn) {
-        srtp_dealloc(mSrtpIn);
+    if (mSrtpControlIn) {
+        srtp_dealloc(mSrtpControlIn);
     }
 
     for (auto& iter : mSrtpOutMap) {
@@ -128,7 +128,7 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
 size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 {
     int rtcpSize = static_cast<int>(packetData.size());
-    const auto status = srtp_unprotect_rtcp(mSrtpIn, packetData.data(), &rtcpSize);
+    const auto status = srtp_unprotect_rtcp(mSrtpControlIn, packetData.data(), &rtcpSize);
 
     if (status != srtp_err_status_ok) {
         LOG(SRTC_LOG_E, "srtp_unprotect_rtcp() failed: %d", status);
@@ -161,8 +161,8 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
     srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpSendPolicy.rtp, profile);
     srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, profile);
 
-    // Receive stream
-    srtp_create(&mSrtpIn, &mSrtpReceivePolicy);
+    // Receive stream for RTCP
+    srtp_create(&mSrtpControlIn, &mSrtpReceivePolicy);
 }
 
 }
