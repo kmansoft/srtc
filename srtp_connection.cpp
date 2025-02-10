@@ -163,14 +163,16 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
     , mProfile(profile)
 {
     // Receive policy
+    std::memset(&mSrtpReceivePolicy, 0, sizeof(mSrtpReceivePolicy));
     mSrtpReceivePolicy.ssrc.type = ssrc_any_inbound;
     mSrtpReceivePolicy.key = mIsSetupActive ? mSrtpClientKeyBuf.data() : mSrtpServerKeyBuf.data();
-    mSrtpReceivePolicy.allow_repeat_tx = true;
+    mSrtpReceivePolicy.allow_repeat_tx = false;
 
     srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpReceivePolicy.rtp, mProfile);
     srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpReceivePolicy.rtcp, mProfile);
 
     // Send policy
+    std::memset(&mSrtpSendPolicy, 0, sizeof(mSrtpSendPolicy));
     mSrtpSendPolicy.ssrc.type = ssrc_any_inbound;
     mSrtpSendPolicy.key = mIsSetupActive ? mSrtpServerKeyBuf.data() : mSrtpClientKeyBuf.data();
     mSrtpSendPolicy.allow_repeat_tx = true;

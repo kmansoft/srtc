@@ -37,8 +37,8 @@ private:
     const bool mIsSetupActive;
     const srtp_profile_t mProfile;
 
-    srtp_policy_t mSrtpReceivePolicy = { };
-    srtp_policy_t mSrtpSendPolicy = { };
+    srtp_policy_t mSrtpReceivePolicy;
+    srtp_policy_t mSrtpSendPolicy;
 
     struct ChannelKey {
         uint32_t ssrc;
