@@ -27,12 +27,16 @@ public:
     // Implementation
     SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                    ByteBuffer&& srtpServerKeyBuf,
+                   size_t keySize,
                    bool isSetupActive,
                    srtp_profile_t profile);
 
 private:
     const ByteBuffer mSrtpClientKeyBuf;
     const ByteBuffer mSrtpServerKeyBuf;
+    const size_t mKeySize;
+    const bool mIsSetupActive;
+    const srtp_profile_t mProfile;
 
     srtp_policy_t mSrtpReceivePolicy = { };
     srtp_policy_t mSrtpSendPolicy = { };

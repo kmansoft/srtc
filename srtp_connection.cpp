@@ -82,7 +82,7 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
     const auto conn = std::make_shared<SrtpConnection>(
             std::move(srtpClientKeyBuf), std::move(srtpServerKeyBuf),
-            isSetupActive, srtpProfile);
+            srtpKeySize, isSetupActive, srtpProfile);
     return { conn, Error::OK };
 }
 
@@ -140,26 +140,30 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 
 SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                                ByteBuffer&& srtpServerKeyBuf,
+                               size_t keySize,
                                bool isSetupActive,
                                srtp_profile_t profile)
     : mSrtpClientKeyBuf(std::move(srtpClientKeyBuf))
     , mSrtpServerKeyBuf(std::move(srtpServerKeyBuf))
+    , mKeySize(keySize)
+    , mIsSetupActive(isSetupActive)
+    , mProfile(profile)
 {
     // Receive policy
     mSrtpReceivePolicy.ssrc.type = ssrc_any_inbound;
-    mSrtpReceivePolicy.key = isSetupActive ? mSrtpClientKeyBuf.data() : mSrtpServerKeyBuf.data();
+    mSrtpReceivePolicy.key = mIsSetupActive ? mSrtpClientKeyBuf.data() : mSrtpServerKeyBuf.data();
     mSrtpReceivePolicy.allow_repeat_tx = true;
 
-    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpReceivePolicy.rtp, profile);
-    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpReceivePolicy.rtcp, profile);
+    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpReceivePolicy.rtp, mProfile);
+    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpReceivePolicy.rtcp, mProfile);
 
     // Send policy
     mSrtpSendPolicy.ssrc.type = ssrc_any_inbound;
-    mSrtpSendPolicy.key = isSetupActive ? mSrtpServerKeyBuf.data() : mSrtpClientKeyBuf.data();
+    mSrtpSendPolicy.key = mIsSetupActive ? mSrtpServerKeyBuf.data() : mSrtpClientKeyBuf.data();
     mSrtpSendPolicy.allow_repeat_tx = true;
 
-    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpSendPolicy.rtp, profile);
-    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, profile);
+    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpSendPolicy.rtp, mProfile);
+    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, mProfile);
 
     // Receive stream for RTCP
     srtp_create(&mSrtpControlIn, &mSrtpReceivePolicy);
