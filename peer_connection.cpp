@@ -580,14 +580,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 const auto packetList = item.packetizer->generate(item.track, item.buf);
                 for (const auto& packet : packetList) {
                     // Save
-                    sendHistory->save(packet);
+                    if (item.track->hasNack() || item.track->getRtxPayloadId() > 0) {
+                        sendHistory->save(packet);
+                    }
 
                     // Generate
-                    const auto packetSource = item.track->getPacketSource();
                     auto packetData = packet->generate();
-
                     if (srtp) {
-                        const auto protectedSize = srtp->protectOutgoing(packetSource, packetData);
+                        const auto protectedSize = srtp->protectOutgoing(packetData);
                         if (protectedSize > 0) {
                             // And send
                             const auto randomValue = lrand48() % 100;
@@ -780,19 +780,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                                 const auto packet = sendHistory->find(rtcpSSRC_1, seq);
                                                 if (packet && srtp) {
                                                     // Generate
-                                                    const auto track = packet->getTrack();
-                                                    std::shared_ptr<RtpPacketSource> packetSource;
                                                     ByteBuffer packetData;
-
-                                                    if (track->getRtxPayloadId() > 0) {
-                                                        packetSource = track->getRtxPacketSource();
+                                                    if (packet->getTrack()->getRtxPayloadId() > 0) {
                                                         packetData = packet->generateRtx();
                                                     } else {
-                                                        packetSource = track->getPacketSource();
                                                         packetData = packet->generate();
                                                     }
 
-                                                    const auto protectedSize = srtp->protectOutgoing(packetSource, packetData);
+                                                    const auto protectedSize = srtp->protectOutgoing(packetData);
                                                     if (protectedSize > 0) {
                                                         // And send
                                                         const auto sentSize = socket->send(packetData.data(), protectedSize);

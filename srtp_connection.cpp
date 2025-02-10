@@ -4,6 +4,7 @@
 #include "srtp.h"
 
 #include <mutex>
+#include <arpa/inet.h>
 #include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
@@ -88,8 +89,8 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection()
 {
-    if (mSrtpControlIn) {
-        srtp_dealloc(mSrtpControlIn);
+    for (auto& iter : mSrtpInMap) {
+        srtp_dealloc(iter.second);
     }
 
     for (auto& iter : mSrtpOutMap) {
@@ -97,25 +98,26 @@ SrtpConnection::~SrtpConnection()
     }
 }
 
-size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& source,
-                                       ByteBuffer& packetData)
+size_t SrtpConnection::protectOutgoing(ByteBuffer& packetData)
 {
-    srtp_t srtpOut = nullptr;
-
-    const auto iter = mSrtpOutMap.find(source);
-    if (iter != mSrtpOutMap.end()) {
-        srtpOut = iter->second;
-    } else {
-        srtp_create(&srtpOut, &mSrtpSendPolicy);
-        mSrtpOutMap.insert({ source, srtpOut });
+    if (packetData.size() < 4 + 4 + 4) {
+        LOG(SRTC_LOG_E, "Outgoing RTP packet is too small");
+        return 0;
     }
+
+
+    ChannelKey key;
+    key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8));
+    key.payloadId = packetData.data()[1] & 0x7F;
+
+    const auto srtp = ensureSrtpChannel(mSrtpOutMap, key, &mSrtpSendPolicy);
 
     int rtp_size_1 = static_cast<int>(packetData.size());
     int rtp_size_2 = rtp_size_1;
 
     packetData.padding(SRTP_MAX_TRAILER_LEN);
 
-    const auto result = srtp_protect(srtpOut, packetData.data(), &rtp_size_2);
+    const auto result = srtp_protect(srtp, packetData.data(), &rtp_size_2);
     if (result != srtp_err_status_ok) {
         LOG(SRTC_LOG_E, "srtp_protect() failed: %d", result);
         return 0;
@@ -127,8 +129,19 @@ size_t SrtpConnection::protectOutgoing(const std::shared_ptr<RtpPacketSource>& s
 
 size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 {
+    if (packetData.size() < 4 + 4) {
+        LOG(SRTC_LOG_E, "Incoming RTCP packet is too small");
+        return 0;
+    }
+
+    ChannelKey key;
+    key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4));
+    key.payloadId = 0;
+
+    const auto srtp = ensureSrtpChannel(mSrtpInMap, key, &mSrtpReceivePolicy);
+
     int rtcpSize = static_cast<int>(packetData.size());
-    const auto status = srtp_unprotect_rtcp(mSrtpControlIn, packetData.data(), &rtcpSize);
+    const auto status = srtp_unprotect_rtcp(srtp, packetData.data(), &rtcpSize);
 
     if (status != srtp_err_status_ok) {
         LOG(SRTC_LOG_E, "srtp_unprotect_rtcp() failed: %d", status);
@@ -164,9 +177,21 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
 
     srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpSendPolicy.rtp, mProfile);
     srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, mProfile);
+}
 
-    // Receive stream for RTCP
-    srtp_create(&mSrtpControlIn, &mSrtpReceivePolicy);
+srtp_t SrtpConnection::ensureSrtpChannel(ChannelMap& map,
+                                         const ChannelKey& key,
+                                         const srtp_policy_t* policy)
+{
+    const auto iter = map.find(key);
+    if (iter != map.end()) {
+        return iter->second;
+    }
+
+    srtp_t srtp = nullptr;
+    srtp_create(&srtp, policy);
+    map.insert({ key, srtp });
+    return srtp;
 }
 
 }

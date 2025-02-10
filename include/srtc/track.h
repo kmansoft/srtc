@@ -31,7 +31,6 @@ public:
     [[nodiscard]] int getProfileLevelId() const;
 
     [[nodiscard]] uint32_t getSSRC() const;
-    [[nodiscard]]
     [[nodiscard]] uint32_t getRtxSSRC() const;
 
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getPacketSource() const;

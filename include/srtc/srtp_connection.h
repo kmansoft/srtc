@@ -18,8 +18,7 @@ public:
     ~SrtpConnection();
 
     // Returns 0 on error
-    size_t protectOutgoing(const std::shared_ptr<RtpPacketSource>& source,
-                           ByteBuffer& packetData);
+    size_t protectOutgoing(ByteBuffer& packetData);
 
     // Returns 0 on error
     size_t unprotectIncomingControl(ByteBuffer& packetData);
@@ -41,31 +40,34 @@ private:
     srtp_policy_t mSrtpReceivePolicy = { };
     srtp_policy_t mSrtpSendPolicy = { };
 
-    struct hash_packet_source {
-        std::size_t operator()(const std::shared_ptr<srtc::RtpPacketSource>& source) const
+    struct ChannelKey {
+        uint32_t ssrc;
+        uint8_t payloadId;
+    };
+
+    struct hash_channel_key {
+        std::size_t operator()(const ChannelKey& key) const
         {
-            return std::hash<uint32_t>()(source->getSSRC() ^ source->getPayloadId());
+            return key.ssrc ^ key.payloadId;
         }
     };
 
-    struct equal_to_packet_source {
-        bool operator()(const std::shared_ptr<srtc::RtpPacketSource>& lhs,
-                        const std::shared_ptr<srtc::RtpPacketSource>& rhs) const
+    struct equal_to_channel_key {
+        bool operator()(const ChannelKey& lhs,
+                        const ChannelKey& rhs) const
         {
-            if (lhs.get() == rhs.get()) {
-                return true;
-            }
-
-            return lhs->getSSRC() == rhs->getSSRC() && lhs->getPayloadId() == rhs->getPayloadId();
+            return lhs.ssrc == rhs.ssrc && lhs.payloadId == rhs.payloadId;
         }
     };
 
+    using ChannelMap = std::unordered_map<ChannelKey, srtp_t, hash_channel_key, equal_to_channel_key>;
 
-    srtp_t mSrtpControlIn = { nullptr };
+    ChannelMap mSrtpInMap;
+    ChannelMap mSrtpOutMap;
 
-    std::unordered_map<std::shared_ptr<RtpPacketSource>, srtp_t,
-        hash_packet_source, equal_to_packet_source> mSrtpOutMap;
-
+    srtp_t ensureSrtpChannel(ChannelMap& map,
+                             const ChannelKey& key,
+                             const srtp_policy_t* policy);
 };
 
 }
