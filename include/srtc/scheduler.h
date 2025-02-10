@@ -6,6 +6,9 @@
 #include <thread>
 #include <memory>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <string>
 
 #include "srtc/srtc.h"
 

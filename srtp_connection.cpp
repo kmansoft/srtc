@@ -4,8 +4,11 @@
 #include "srtp.h"
 
 #include <mutex>
+
 #include <arpa/inet.h>
+
 #include <cassert>
+#include <cstring>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
 

@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <random>
+#include <memory>
 
 #include "srtc/srtc.h"
 #include "srtc/error.h"

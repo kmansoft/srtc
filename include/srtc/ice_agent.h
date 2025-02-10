@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <chrono>
+#include <vector>
+#include <cstring>
 
 #include "stunmessage.h"
 

@@ -2,6 +2,8 @@
 
 #include <arpa/inet.h>
 
+#include <string>
+
 namespace srtc {
 
 std::string to_string(const anyaddr& addr)

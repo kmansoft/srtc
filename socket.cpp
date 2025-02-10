@@ -1,5 +1,10 @@
 #include "srtc/socket.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstring>
+
 namespace {
 
 int createSocket(const srtc::anyaddr &addr)

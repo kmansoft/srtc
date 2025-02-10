@@ -1,6 +1,8 @@
 #include "srtc/scheduler.h"
 #include "srtc/logging.h"
 
+#include <algorithm>
+
 #include <cassert>
 
 #define LOG(level, tag, ...) srtc::log(level, tag, __VA_ARGS__)

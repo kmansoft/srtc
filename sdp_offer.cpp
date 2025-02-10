@@ -1,5 +1,6 @@
 #include <sstream>
 #include <cassert>
+#include <cstring>
 #include <string>
 
 #include "srtc/sdp_offer.h"

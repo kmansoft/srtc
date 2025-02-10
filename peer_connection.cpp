@@ -13,23 +13,21 @@
 #include "srtc/send_history.h"
 #include "srtc/srtp_connection.h"
 
+#include "stunmessage.h"
+
 #include <cassert>
-#include <iostream>
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <unistd.h>
 
 #include <openssl/x509.h>
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
-#include <openssl/dtls1.h>
 
 #include <srtp.h>
-
-#include "stunmessage.h"
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
@@ -61,7 +59,6 @@ StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAge
                                               bool useCandidate)
 {
     StunMessage msg = {};
-    // stun_agent_init_request (agent, &msg, buf, len, STUN_BINDING);
     agent->initRequest(&msg, buf, len, STUN_BINDING);
 
     if (useCandidate) {

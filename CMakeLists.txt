@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED YES)
 
-add_library(srtc SHARED
+add_library(srtc
         include/srtc/byte_buffer.h
         include/srtc/error.h
         include/srtc/extension_map.h
@@ -64,11 +64,6 @@ add_library(srtc SHARED
 
 target_include_directories(srtc PUBLIC "./include")
 
-target_compile_options(srtc PRIVATE
-        "-Wthread-safety")
-target_compile_definitions(srtc PRIVATE
-        "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
-
 target_link_libraries(
         srtc
         PRIVATE
@@ -76,13 +71,26 @@ target_link_libraries(
         crypto
         stun
         srtp2
-        log
 )
+
+if(ANDROID)
+    target_compile_options(srtc PRIVATE
+            "-Wthread-safety")
+    target_compile_definitions(srtc PRIVATE
+            "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
+
+    target_link_libraries(
+            srtc
+            PRIVATE
+            log
+    )
+endif()
 
 # BoringSSL
 
 LIST(APPEND BORINGSSL_CMAKE_ARGS
     "-DOPENSSL_SMALL=ON"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
 )
 
 if(ANDROID)
@@ -119,6 +127,7 @@ LIST(APPEND LIBSRTP_CMAKE_ARGS
         "-DENABLE_OPENSSL=ON"
         "-DOPENSSL_USE_STATIC_LIBS=ON"
         "-DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}"
+        "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
 )
 
 if(ANDROID)
@@ -156,7 +165,7 @@ add_dependencies(stun boringssl)
 add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE
-    "stun")
+        "stun")
 
 target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/srtc/stun")
