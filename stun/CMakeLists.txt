@@ -27,3 +27,9 @@ target_compile_definitions(stun
     HAVE_OPENSSL=1
 )
 
+find_package(OpenSSL REQUIRED)
+
+target_include_directories(stun
+    PRIVATE
+    ${OPENSSL_INCLUDE_DIR}
+)
