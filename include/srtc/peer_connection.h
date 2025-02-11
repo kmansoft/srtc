@@ -108,7 +108,8 @@ private:
     static long dgram_ctrl(struct bio_st *b, int cmd, long num, void *ptr);
     static int dgram_free(struct bio_st *b);
 
-    static const struct bio_method_st dgram_method;
+    static std::once_flag dgram_once;
+    static struct bio_method_st* dgram_method;
 
     static struct bio_st *BIO_new_dgram(PeerConnection* pc);
 };

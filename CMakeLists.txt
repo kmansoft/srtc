@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-include(ExternalProject)
-
 project("srtc")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -9,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED YES)
+
+include(ExternalProject)
+
+# srtc
 
 add_library(srtc
         include/srtc/byte_buffer.h
@@ -67,10 +69,22 @@ target_include_directories(srtc PUBLIC "./include")
 target_link_libraries(
         srtc
         PRIVATE
-        ssl
-        crypto
         stun
         srtp2
+)
+
+# OpenSSL
+
+find_package(OpenSSL REQUIRED)
+
+target_include_directories(srtc
+        PRIVATE
+        ${OPENSSL_INCLUDE_DIR}
+)
+target_link_libraries(srtc
+        PRIVATE
+        OpenSSL::Crypto
+        OpenSSL::SSL
 )
 
 if(ANDROID)
@@ -86,49 +100,20 @@ if(ANDROID)
     )
 endif()
 
-# BoringSSL
-
-LIST(APPEND BORINGSSL_CMAKE_ARGS
-    "-DOPENSSL_SMALL=ON"
-    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-)
-
-if(ANDROID)
-    LIST(APPEND BORINGSSL_CMAKE_ARGS
-        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-        -DANDROID_ABI=${ANDROID_ABI}
-        -DANDROID_PLATFORM=android-29
-    )
-endif()
-
-ExternalProject_Add(
-        boringssl
-        GIT_REPOSITORY "https://boringssl.googlesource.com/boringssl"
-        GIT_TAG "origin/master"
-        GIT_SHALLOW ON
-        SOURCE_DIR "external/boringssl"
-        CMAKE_ARGS ${BORINGSSL_CMAKE_ARGS}
-)
-
-set(OPENSSL_ROOT_DIR ${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install)
-
-target_include_directories(srtc PRIVATE
-        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/include")
-
-target_link_directories(srtc PUBLIC
-        "${CMAKE_CURRENT_BINARY_DIR}/external/boringssl/install/lib")
-
-add_dependencies(srtc boringssl)
-
 # LibSRTP
 
 LIST(APPEND LIBSRTP_CMAKE_ARGS
         "-DLIBSRTP_TEST_APPS=OFF"
         "-DENABLE_OPENSSL=ON"
-        "-DOPENSSL_USE_STATIC_LIBS=ON"
-        "-DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}"
         "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
 )
+
+if(SRTC_OPENSSL_FIND_ROOT_PATH)
+    LIST(APPEND LIBSRTP_CMAKE_ARGS
+        "-DCMAKE_FIND_ROOT_PATH=${SRTC_OPENSSL_FIND_ROOT_PATH}"
+    )
+    message(FATAL "SRTC_OPENSSL_FIND_ROOT_PATH = ${SRTC_OPENSSL_FIND_ROOT_PATH}")
+endif()
 
 if(ANDROID)
     LIST(APPEND LIBSRTP_CMAKE_ARGS
@@ -140,11 +125,12 @@ endif()
 
 ExternalProject_Add(
         srtp
-        GIT_REPOSITORY "https://gitlab.com/kmansoft/libsrtp.git"
-        GIT_TAG "kostya-v2.6.0"
+        GIT_REPOSITORY "https://github.com/kmansoft/libsrtp.git"
+        GIT_TAG "v2.6.0-kostya"
         GIT_SHALLOW ON
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""
+        UPDATE_DISCONNECTED ON
         CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
 )
 
@@ -154,14 +140,12 @@ target_include_directories(srtc PRIVATE
 target_link_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
-add_dependencies(srtp boringssl)
 add_dependencies(srtc srtp)
 
 # STUN
 
 add_subdirectory(stun)
 
-add_dependencies(stun boringssl)
 add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE

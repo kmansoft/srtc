@@ -27,7 +27,3 @@ target_compile_definitions(stun
     HAVE_OPENSSL=1
 )
 
-target_include_directories(stun PRIVATE
-        "${CMAKE_BINARY_DIR}/srtc/external/boringssl/install/include")
-
-add_dependencies(stun boringssl)

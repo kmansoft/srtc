@@ -376,7 +376,8 @@ int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 
     BIO_clear_retry_flags(b);
 
-    auto data = reinterpret_cast<dgram_data *>(b->ptr);
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data *>(ptr);
 
     std::lock_guard lock(data->pc->mMutex);
 
@@ -395,7 +396,8 @@ int PeerConnection::dgram_read(BIO *b, char *out, int outl)
 }
 
 int PeerConnection::dgram_write(BIO *b, const char *in, int inl) {
-    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data*>(ptr);
 
     data->pc->enqueueForSending({
         reinterpret_cast<const uint8_t *>(in),
@@ -411,21 +413,25 @@ long PeerConnection::dgram_ctrl(BIO *b, int cmd, long num, void *ptr)
 
 int PeerConnection::dgram_free(BIO *b)
 {
-    auto data = reinterpret_cast<dgram_data*>(b->ptr);
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data*>(ptr);
     delete data;
     return 1;
 }
 
-const BIO_METHOD PeerConnection::dgram_method = {
-        BIO_TYPE_DGRAM, "dgram",
-        PeerConnection::dgram_write,      PeerConnection::dgram_read,
-        nullptr /* puts */, nullptr /* gets, */,
-        PeerConnection::dgram_ctrl,       nullptr /* create */,
-        PeerConnection::dgram_free,       nullptr /* callback_ctrl */,
-};
+std::once_flag PeerConnection::dgram_once;
+BIO_METHOD* PeerConnection::dgram_method = nullptr;
 
 BIO *PeerConnection::BIO_new_dgram(PeerConnection* pc) {
-    BIO *b = BIO_new(&dgram_method);
+    std::call_once(dgram_once, []{
+        dgram_method = BIO_meth_new(BIO_TYPE_DGRAM, "dgram");
+        BIO_meth_set_read(dgram_method, PeerConnection::dgram_read);
+        BIO_meth_set_write(dgram_method, PeerConnection::dgram_write);
+        BIO_meth_set_ctrl(dgram_method, PeerConnection::dgram_ctrl);
+        BIO_meth_set_destroy(dgram_method, PeerConnection::dgram_free);
+    });
+
+    BIO *b = BIO_new(dgram_method);
     if (b == nullptr) {
         return nullptr;
     }
@@ -433,9 +439,8 @@ BIO *PeerConnection::BIO_new_dgram(PeerConnection* pc) {
     BIO_set_init(b, 1);
     BIO_set_shutdown(b, 0);
 
-    b->ptr = new dgram_data{
-        .pc = pc,
-    };
+    const auto ptr = new dgram_data{ pc };
+    BIO_set_data(b, ptr);
     return b;
 }
 
@@ -827,7 +832,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
 
                 SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
-                SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_3_VERSION);
+                SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_2_VERSION);
                 SSL_CTX_set_read_ahead(dtls_ctx, 1);
 
                 dtls_ssl = SSL_new(dtls_ctx);

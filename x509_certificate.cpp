@@ -27,15 +27,14 @@ X509Certificate::X509Certificate()
 
     mImpl->pkey = EVP_PKEY_new();
 
-    BIGNUM e;
-    BN_init(&e);
-    BN_set_word(&e, RSA_F4);
+    BIGNUM* e = BN_new();
+    BN_set_word(e, RSA_F4);
 
     auto rsa = RSA_new();
-    RSA_generate_key_ex(rsa, 2048, &e, nullptr);
+    RSA_generate_key_ex(rsa, 2048, e, nullptr);
     EVP_PKEY_assign_RSA(mImpl->pkey, rsa);
 
-    BN_free(&e);
+    BN_free(e);
 
     mImpl->x509 = X509_new();
 
