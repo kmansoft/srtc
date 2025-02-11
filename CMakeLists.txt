@@ -93,8 +93,7 @@ if(ANDROID)
     target_compile_definitions(srtc PRIVATE
             "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
 
-    target_link_libraries(
-            srtc
+    target_link_libraries(srtc
             PRIVATE
             log
     )
@@ -107,13 +106,6 @@ LIST(APPEND LIBSRTP_CMAKE_ARGS
         "-DENABLE_OPENSSL=ON"
         "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
 )
-
-if(SRTC_OPENSSL_FIND_ROOT_PATH)
-    LIST(APPEND LIBSRTP_CMAKE_ARGS
-        "-DCMAKE_FIND_ROOT_PATH=${SRTC_OPENSSL_FIND_ROOT_PATH}"
-    )
-    message(FATAL "SRTC_OPENSSL_FIND_ROOT_PATH = ${SRTC_OPENSSL_FIND_ROOT_PATH}")
-endif()
 
 if(ANDROID)
     LIST(APPEND LIBSRTP_CMAKE_ARGS
