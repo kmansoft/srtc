@@ -89,6 +89,11 @@ void ThreadScheduler::cancel(std::shared_ptr<Task>& task)
     cancelImpl(impl);
 }
 
+std::shared_ptr<RealScheduler> ThreadScheduler::getRealScheduler()
+{
+    return shared_from_this();
+}
+
 void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
 {
     std::unique_lock lock(mMutex);
@@ -220,6 +225,11 @@ void LoopScheduler::cancel(std::shared_ptr<Task>& task)
     cancelImpl(impl);
 }
 
+std::shared_ptr<RealScheduler> LoopScheduler::getRealScheduler()
+{
+    return shared_from_this();
+}
+
 int LoopScheduler::getTimeoutMillis() const
 {
     assertCurrentThread();
@@ -274,7 +284,6 @@ ScopedScheduler::TaskImpl::TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
 {
 }
 
-
 ScopedScheduler::TaskImpl::~TaskImpl() = default;
 
 void ScopedScheduler::TaskImpl::cancel()
@@ -285,7 +294,7 @@ void ScopedScheduler::TaskImpl::cancel()
     }
 }
 
-ScopedScheduler::ScopedScheduler(const std::shared_ptr<Scheduler>& scheduler)
+ScopedScheduler::ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler)
     : mScheduler(scheduler)
 {
 }

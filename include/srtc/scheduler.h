@@ -14,6 +14,8 @@
 
 namespace srtc {
 
+class RealScheduler;
+
 // ----- Task
 
 class Task {
@@ -44,14 +46,25 @@ public:
 
     virtual void cancel(std::shared_ptr<Task>& task) = 0;
 
+    [[nodiscard]] virtual std::shared_ptr<RealScheduler> getRealScheduler() = 0;
+
 protected:
     using When = std::chrono::steady_clock::time_point;
 };
 
+// ---- RealScheduler
+
+class RealScheduler : public Scheduler {
+public:
+    RealScheduler() = default;
+    ~RealScheduler() override = default;
+};
+
+
 // ----- ThreadScheduler
 
 class ThreadScheduler final :
-        public Scheduler,
+        public RealScheduler,
         private std::enable_shared_from_this<ThreadScheduler> {
 public:
     explicit ThreadScheduler(const std::string &name);
@@ -62,6 +75,8 @@ public:
                                const Func& func) override;
 
     void cancel(std::shared_ptr<Task>& task) override;
+
+    std::shared_ptr<RealScheduler> getRealScheduler() override;
 
 private:
 
@@ -107,7 +122,7 @@ private:
 // ----- LoopScheduler
 
 class LoopScheduler final :
-        public Scheduler,
+        public RealScheduler,
         private std::enable_shared_from_this<LoopScheduler> {
 public:
     LoopScheduler();
@@ -118,6 +133,8 @@ public:
                                const Func& func) override;
 
     void cancel(std::shared_ptr<Task>& task) override;
+
+    std::shared_ptr<RealScheduler> getRealScheduler() override;
 
     [[nodiscard]] int getTimeoutMillis() const;
 
@@ -163,7 +180,7 @@ class ScopedScheduler final :
         public Scheduler,
         private std::enable_shared_from_this<ScopedScheduler> {
 public:
-    explicit ScopedScheduler(const std::shared_ptr<Scheduler>& scheduler);
+    explicit ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler);
 
     ~ScopedScheduler() override;
 
@@ -192,7 +209,7 @@ private:
     std::vector<std::shared_ptr<TaskImpl>> mSubmitted SRTC_GUARDED_BY(mMutex);
     std::mutex mMutex;
 
-    const std::shared_ptr<Scheduler> mScheduler;
+    const std::shared_ptr<RealScheduler> mScheduler;
 };
 
 }

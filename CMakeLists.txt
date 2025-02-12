@@ -73,6 +73,21 @@ target_link_libraries(
         srtp2
 )
 
+# Android specific
+
+if(ANDROID)
+    target_compile_options(srtc PRIVATE
+            "-Wthread-safety")
+    target_compile_definitions(srtc PRIVATE
+            "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
+
+    target_link_libraries(srtc
+            PRIVATE
+            log
+            )
+endif()
+
+
 # OpenSSL
 
 find_package(OpenSSL REQUIRED)
@@ -86,18 +101,6 @@ target_link_libraries(srtc
         OpenSSL::Crypto
         OpenSSL::SSL
 )
-
-if(ANDROID)
-    target_compile_options(srtc PRIVATE
-            "-Wthread-safety")
-    target_compile_definitions(srtc PRIVATE
-            "_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS")
-
-    target_link_libraries(srtc
-            PRIVATE
-            log
-    )
-endif()
 
 # LibSRTP
 
