@@ -730,6 +730,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         dtlsState = DtlsState::Failed;
                         setConnectionState(ConnectionState::Failed);
                     }
+
+                    if (dtlsState == DtlsState::Failed) {
+                        SSL_shutdown(dtls_ssl);
+                        SSL_free(dtls_ssl);
+                        dtls_ssl = nullptr;
+
+                        if (dtls_ctx) {
+                            SSL_CTX_free(dtls_ctx);
+                            dtls_ctx = nullptr;
+                        }
+                    }
                 }
             } else if (is_rtc_message(data.buf)) {
                 LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
@@ -882,11 +893,17 @@ void PeerConnection::setConnectionState(ConnectionState state)
 {
     {
         std::lock_guard lock1(mMutex);
+
         if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
             // There is no escape
             return;
         }
+
         mConnectionState = state;
+
+        if (mConnectionState == ConnectionState::Failed) {
+            mIsQuit = true;
+        }
     }
 
     {
@@ -896,6 +913,5 @@ void PeerConnection::setConnectionState(ConnectionState state)
         }
     }
 }
-
 
 }
