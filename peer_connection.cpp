@@ -524,7 +524,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         // Epoll
         struct epoll_event epollEvent[2];
         const auto nfds = epoll_wait(epollHandle, epollEvent, 2,
-                                     scheduler->getTimeoutMillis());
+                                     scheduler->getTimeoutMillis(1000));
 
         std::list<ByteBuffer> rawSendQueue;
         std::list<FrameToSend> frameSendQueue;
@@ -643,7 +643,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     stun_message_id(&incomingMessage, id);
 
                     if (iceAgent->forgetTransaction(id)) {
-                        LOG(SRTC_LOG_V, "Removed old transaction ID for binding request");
+                        LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
 
                         if (!sentUseCandidate) {
                             sentUseCandidate = true;
@@ -740,6 +740,22 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                             SSL_CTX_free(dtls_ctx);
                             dtls_ctx = nullptr;
                         }
+                    } else if (dtlsState == DtlsState::Completed) {
+                        const auto checkIce = [this, &iceAgent, &iceMessageBuffer, &offer, &answer]() {
+                            LOG(SRTC_LOG_V, "Sending STUN keep-alive");
+
+                            const auto iceMessageKeepAliveRequest = make_stun_message_binding_request(iceAgent,
+                                                                                                        iceMessageBuffer.get(),
+                                                                                                        kIceMessageBufferSize,
+                                                                                                        offer, answer,
+                                                                                                        false);
+                            enqueueForSending({
+                                                      iceMessageBuffer.get(), stun_message_length(&iceMessageKeepAliveRequest)
+                                              });
+
+                        };
+
+                        scheduler->submit(std::chrono::milliseconds(1500), checkIce);
                     }
                 }
             } else if (is_rtc_message(data.buf)) {

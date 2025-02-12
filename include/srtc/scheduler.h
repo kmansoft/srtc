@@ -136,7 +136,7 @@ public:
 
     std::shared_ptr<RealScheduler> getRealScheduler() override;
 
-    [[nodiscard]] int getTimeoutMillis() const;
+    [[nodiscard]] int getTimeoutMillis(int defaultValue) const;
 
     void run();
 

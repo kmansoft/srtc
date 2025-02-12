@@ -230,12 +230,12 @@ std::shared_ptr<RealScheduler> LoopScheduler::getRealScheduler()
     return shared_from_this();
 }
 
-int LoopScheduler::getTimeoutMillis() const
+int LoopScheduler::getTimeoutMillis(int defaultValue) const
 {
     assertCurrentThread();
 
     if (mTaskQueue.empty()) {
-        return -1;
+        return defaultValue;
     }
 
     const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen - std::chrono::steady_clock::now());
