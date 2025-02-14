@@ -95,12 +95,9 @@ StunMessage make_stun_message_binding_response(const std::unique_ptr<srtc::IceAg
                                  &address.ss, addressLen);
 
     // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-    const auto offerUserName = offer->getIceUFrag();
-    const auto answerUserName = answer->getIceUFrag();
-    const auto iceUserName = offerUserName + ":" + answerUserName;
     const auto icePassword = offer->getIcePassword();
 
-    agent->finishMessage(&msg, iceUserName, icePassword);
+    agent->finishMessage(&msg, srtc::nullopt, icePassword);
 
     return msg;
 }
@@ -629,7 +626,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     const auto iceUserName = offerUserName + ":" + answerUserName;
                     const auto icePassword = offer->getIcePassword();
 
-                    if (iceAgent->verifyMessage(&incomingMessage, iceUserName, icePassword)) {
+                    if (iceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
                         const auto iceMessageBindingResponse = make_stun_message_binding_response(
                                 iceAgent,
                                 iceMessageBuffer.get(),
@@ -644,7 +641,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                         LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
                     }
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
-                    int errorCode = { };
+                    int errorCode = { 0 };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
                         LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
                     }
@@ -655,20 +652,27 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                     if (iceAgent->forgetTransaction(id)) {
                         LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
 
-                        if (!sentUseCandidate) {
-                            sentUseCandidate = true;
+                        const auto icePassword = answer->getIcePassword();
 
-                            const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                    iceAgent,
-                                    iceMessageBuffer.get(),
-                                    kIceMessageBufferSize,
-                                    offer, answer,
-                                    true);
-                            enqueueForSending({
-                                iceMessageBuffer.get(),
-                                stun_message_length(&iceMessageBindingRequest2)});
+                        if (errorCode == 0 && iceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
+                            if (!sentUseCandidate) {
+                                sentUseCandidate = true;
 
-                            dtlsState = DtlsState::Activating;
+                                const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
+                                        iceAgent,
+                                        iceMessageBuffer.get(),
+                                        kIceMessageBufferSize,
+                                        offer, answer,
+                                        true);
+                                enqueueForSending({
+                                                          iceMessageBuffer.get(),
+                                                          stun_message_length(
+                                                                  &iceMessageBindingRequest2)});
+
+                                dtlsState = DtlsState::Activating;
+                            }
+                        } else {
+                            LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
                         }
                     }
                 }

@@ -74,11 +74,13 @@ bool IceAgent::initResponse(StunMessage *msg,
 }
 
 bool IceAgent::finishMessage(StunMessage *msg,
-                             const std::string& username,
+                             const srtc::optional<std::string>& username,
                              const std::string& password)
 {
-    stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME,
-                               username.c_str());
+    if (username.has_value()) {
+        stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME,
+                                   username.value().c_str());
+    }
 
     auto ptr = stun_message_append (msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, 20);
     if (!ptr) {
@@ -118,16 +120,16 @@ bool IceAgent::forgetTransaction(StunTransactionId id)
     return false;
 }
 
-bool IceAgent::verifyMessage(StunMessage* msg,
-                             const std::string& username,
-                             const std::string& password)
+bool IceAgent::verifyRequestMessage(StunMessage* msg,
+                                    const std::string& username,
+                                    const std::string& password)
 {
     // Fingerprint
     uint16_t attrFingerprintLen = { 0 };
     auto attrFingerprintPtr = stun_message_find(msg, STUN_ATTRIBUTE_FINGERPRINT, &attrFingerprintLen);
 
     if (!attrFingerprintPtr || attrFingerprintLen != 4) {
-        LOG(SRTC_LOG_E, "Message verification failed: no fingerprint or invalid size");
+        LOG(SRTC_LOG_E, "Request verification failed: no fingerprint or invalid size");
         return false;
     }
 
@@ -139,7 +141,7 @@ bool IceAgent::verifyMessage(StunMessage* msg,
                                                         false);
 
     if (fingerprintMessage != fingerprintCalculated) {
-        LOG(SRTC_LOG_E, "Message verification failed: fingerprint does not match");
+        LOG(SRTC_LOG_E, "Request verification failed: fingerprint does not match");
         return false;
     }
 
@@ -148,13 +150,13 @@ bool IceAgent::verifyMessage(StunMessage* msg,
     const auto attrUserNamePtr = stun_message_find(msg, STUN_ATTRIBUTE_USERNAME, &attrUserNameLen);
 
     if (!attrUserNamePtr || attrUserNameLen == 0) {
-        LOG(SRTC_LOG_E, "Message verification failed: no username or invalid size");
+        LOG(SRTC_LOG_E, "Request verification failed: no username or invalid size");
         return false;
     }
 
     const std::string attrUserName { reinterpret_cast<const char*>(attrUserNamePtr), attrUserNameLen };
     if (attrUserName != username) {
-        LOG(SRTC_LOG_E, "Message verification failed: username does not match");
+        LOG(SRTC_LOG_E, "Request verification failed: username does not match");
         return false;
     }
 
@@ -163,7 +165,7 @@ bool IceAgent::verifyMessage(StunMessage* msg,
     const auto attrIntegrityPtr = stun_message_find(msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, &attrIntegrityLen);
 
     if (!attrIntegrityPtr || attrIntegrityLen != 20) {
-        LOG(SRTC_LOG_E, "Message verification failed: no signature or invalid size");
+        LOG(SRTC_LOG_E, "Request verification failed: no signature or invalid size");
         return false;
     }
 
@@ -175,7 +177,56 @@ bool IceAgent::verifyMessage(StunMessage* msg,
                reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
 
     if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
-        LOG(SRTC_LOG_E, "Message verification failed: signature does not match");
+        LOG(SRTC_LOG_E, "Request verification failed: signature does not match");
+        return false;
+    }
+
+    // Success
+    return true;
+}
+
+bool IceAgent::verifyResponseMessage(StunMessage* msg,
+                                     const std::string& password)
+{
+    // Fingerprint
+    uint16_t attrFingerprintLen = { 0 };
+    auto attrFingerprintPtr = stun_message_find(msg, STUN_ATTRIBUTE_FINGERPRINT, &attrFingerprintLen);
+
+    if (!attrFingerprintPtr || attrFingerprintLen != 4) {
+        LOG(SRTC_LOG_E, "Response verification failed: no fingerprint or invalid size");
+        return false;
+    }
+
+    uint32_t fingerprintMessage;
+    std::memcpy(&fingerprintMessage, attrFingerprintPtr, 4);
+
+    const auto fingerprintCalculated = stun_fingerprint(msg->buffer,
+                                                        stun_message_length(msg),
+                                                        false);
+
+    if (fingerprintMessage != fingerprintCalculated) {
+        LOG(SRTC_LOG_E, "Response verification failed: fingerprint does not match");
+        return false;
+    }
+
+    // Signature based on password
+    uint16_t attrIntegrityLen = { 0 };
+    const auto attrIntegrityPtr = stun_message_find(msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, &attrIntegrityLen);
+
+    if (!attrIntegrityPtr || attrIntegrityLen != 20) {
+        LOG(SRTC_LOG_E, "Response verification failed: no signature or invalid size");
+        return false;
+    }
+
+    const auto sha1Message = reinterpret_cast<const uint8_t*>(attrIntegrityPtr);
+    uint8_t sha1Calculated[20];
+
+    stun_sha1 (msg->buffer, sha1Message + 20 - msg->buffer,
+               sha1Message - msg->buffer, sha1Calculated,
+               reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
+
+    if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
+        LOG(SRTC_LOG_E, "Response verification failed: signature does not match");
         return false;
     }
 

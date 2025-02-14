@@ -3,10 +3,12 @@
 #include <cstdint>
 #include <string>
 #include <chrono>
-#include <vector>
+#include <list>
 #include <cstring>
 
 #include "stunmessage.h"
+
+#include "srtc/optional.h"
 
 namespace srtc {
 
@@ -25,14 +27,16 @@ public:
                       uint8_t* buffer, size_t buffer_len,
                       const StunMessage* request);
     bool finishMessage(StunMessage *msg,
-                       const std::string& username,
+                       const srtc::optional<std::string>& username,
                        const std::string& password);
 
     bool forgetTransaction(StunTransactionId id);
 
-    bool verifyMessage(StunMessage* msg,
-                       const std::string& username,
-                       const std::string& password);
+    bool verifyRequestMessage(StunMessage* msg,
+                              const std::string& username,
+                              const std::string& password);
+    bool verifyResponseMessage(StunMessage* msg,
+                               const std::string& password);
 
 private:
     struct SavedTransaction {
@@ -47,7 +51,7 @@ private:
     };
 
     const uint64_t mTie;
-    std::vector<SavedTransaction> mTransactionList;
+    std::list<SavedTransaction> mTransactionList;
 };
 
 }
