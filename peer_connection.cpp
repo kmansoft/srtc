@@ -624,15 +624,25 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
 
                 if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
-                    const auto iceMessageBindingResponse = make_stun_message_binding_response(
-                            iceAgent,
-                            iceMessageBuffer.get(),
-                            kIceMessageBufferSize,
-                            offer, answer,
-                            incomingMessage,
-                            data.addr, data.addr_len
-                            );
-                    enqueueForSending({ iceMessageBuffer.get(), stun_message_length(&iceMessageBindingResponse) });
+                    const auto offerUserName = offer->getIceUFrag();
+                    const auto answerUserName = answer->getIceUFrag();
+                    const auto iceUserName = offerUserName + ":" + answerUserName;
+                    const auto icePassword = offer->getIcePassword();
+
+                    if (iceAgent->verifyMessage(&incomingMessage, iceUserName, icePassword)) {
+                        const auto iceMessageBindingResponse = make_stun_message_binding_response(
+                                iceAgent,
+                                iceMessageBuffer.get(),
+                                kIceMessageBufferSize,
+                                offer, answer,
+                                incomingMessage,
+                                data.addr, data.addr_len
+                        );
+                        enqueueForSending({iceMessageBuffer.get(),
+                                           stun_message_length(&iceMessageBindingResponse)});
+                    } else {
+                        LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
+                    }
                 } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
                     int errorCode = { };
                     if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
