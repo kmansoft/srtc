@@ -34,7 +34,7 @@ public:
 
 private:
     const anyaddr mAddr;
-    int mFd;
+    const int mFd;
     const std::unique_ptr<uint8_t[]> mReceiveBuffer;
 };
 

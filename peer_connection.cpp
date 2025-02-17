@@ -1,3 +1,6 @@
+#include <openssl/ssl.h>
+#include <openssl/bio.h>
+
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
@@ -23,154 +26,13 @@
 #include <netdb.h>
 #include <unistd.h>
 
-#include <openssl/x509.h>
-#include <openssl/bio.h>
-#include <openssl/ssl.h>
-
 #include <srtp.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
-namespace {
-
-// GCM support requires libsrtp to be build with OpenSSL which is what we do
-constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
-
-struct dgram_data {
-    srtc::PeerConnection *pc;
-};
-
-// https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
-uint32_t make_stun_priority(int type_preference,
-                            int local_preference,
-                            uint8_t component_id)
-{
-    return
-            (1 << 24) * type_preference +
-            (1 << 8) * local_preference +
-            (256 - component_id);
-}
-
-StunMessage make_stun_message_binding_request(const std::unique_ptr<srtc::IceAgent> &agent,
-                                              uint8_t *buf,
-                                              size_t len,
-                                              const std::shared_ptr<srtc::SdpOffer> &offer,
-                                              const std::shared_ptr<srtc::SdpAnswer> &answer,
-                                              bool useCandidate)
-{
-    StunMessage msg = {};
-    agent->initRequest(&msg, buf, len, STUN_BINDING);
-
-    if (useCandidate) {
-        stun_message_append_flag(&msg, STUN_ATTRIBUTE_USE_CANDIDATE);
-    }
-
-    const uint32_t priority = make_stun_priority(200, 10, 1);
-    stun_message_append32(&msg, STUN_ATTRIBUTE_PRIORITY, priority);
-
-    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-    const auto offerUserName = offer->getIceUFrag();
-    const auto answerUserName = answer->getIceUFrag();
-    const auto iceUserName = answerUserName + ":" + offerUserName;
-    const auto icePassword = answer->getIcePassword();
-
-    agent->finishMessage(&msg, iceUserName, icePassword);
-
-    return msg;
-}
-
-StunMessage make_stun_message_binding_response(const std::unique_ptr<srtc::IceAgent> &agent,
-                                               uint8_t *buf,
-                                               size_t len,
-                                               const std::shared_ptr<srtc::SdpOffer> &offer,
-                                               const std::shared_ptr<srtc::SdpAnswer> &answer,
-                                               const StunMessage &request,
-                                               const srtc::anyaddr &address,
-                                               socklen_t addressLen)
-{
-    StunMessage msg = {};
-    agent->initResponse(&msg, buf, len, &request);
-
-    stun_message_append_xor_addr(&msg, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS,
-                                 &address.ss, addressLen);
-
-    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-    const auto icePassword = offer->getIcePassword();
-
-    agent->finishMessage(&msg, srtc::nullopt, icePassword);
-
-    return msg;
-}
-
-bool is_stun_message(const srtc::ByteBuffer &buf)
-{
-    // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
-    if (buf.size() > 20) {
-        const auto data = buf.data();
-        if (data[0] < 2) {
-            uint32_t magic = htonl(srtc::IceAgent::kRfc5389Cookie);
-            uint8_t cookie[4];
-            std::memcpy(cookie, buf.data() + 4, 4);
-
-            if (std::memcmp(&magic, cookie, 4) == 0) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool is_dtls_message(const srtc::ByteBuffer &buf)
-{
-    // https://datatracker.ietf.org/doc/html/rfc7983#section-5
-    if (buf.size() >= 4) {
-        const auto data = buf.data();
-        if (data[0] >= 20 && data[0] <= 24) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool is_rtc_message(const srtc::ByteBuffer &buf)
-{
-    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
-    if (buf.size() >= 8) {
-        const auto data = buf.data();
-        if (data[0] >= 128 && data[0] <= 191) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool is_rtcp_message(const srtc::ByteBuffer &buf)
-{
-    // https://datatracker.ietf.org/doc/html/rfc5761#section-4
-    if (buf.size() >= 8) {
-        const auto data = buf.data();
-        const auto payloadId = data[1] & 0x7F;
-        return payloadId >= 64 && payloadId <= 95;
-    }
-    return false;
-}
-
-long long elapsedMillis(const std::chrono::steady_clock::time_point &start)
-{
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-}
-
-}
-
 namespace srtc {
 
-PeerConnection::PeerConnection()
-{
-}
+PeerConnection::PeerConnection() = default;
 
 PeerConnection::~PeerConnection()
 {
@@ -254,8 +116,6 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
         // Event handle for talking to the network thread and the network thread itself
         mEventHandle = eventfd(0, EFD_NONBLOCK);
         mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
-
-        // mThread = std::thread(&PeerConnection::networkThreadDtlsTestFunc, this, mSdpOffer, mDestHost);
     }
 
     return Error::OK;
@@ -302,11 +162,11 @@ Error PeerConnection::setVideoCodecSpecificData(std::vector<ByteBuffer>& list)
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back(FrameToSend{
-      .track = mVideoTrack,
-      .packetizer = mVideoPacketizer,
-      .buf = ByteBuffer(),
-      .csd = std::move(list)
+    mFrameSendQueue.push_back({
+      mVideoTrack,
+      mVideoPacketizer,
+      { },
+      std::move(list)
     });
     eventfd_write(mEventHandle, 1);
 
@@ -329,10 +189,10 @@ Error PeerConnection::publishVideoFrame(ByteBuffer&& buf)
     }
 
     mFrameSendQueue.push_back({
-                                      mVideoTrack,
-                                      mVideoPacketizer,
-                                      std::move(buf)
-                              });
+        mVideoTrack,
+        mVideoPacketizer,
+        std::move(buf)
+    });
     eventfd_write(mEventHandle, 1);
 
     return Error::OK;
@@ -363,171 +223,49 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
     return Error::OK;
 }
 
-// Custom BIO for DGRAM
-
-int PeerConnection::dgram_read(BIO *b, char *out, int outl)
-{
-    if (out == nullptr) {
-        return 0;
-    }
-
-    BIO_clear_retry_flags(b);
-
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data *>(ptr);
-
-    std::lock_guard lock(data->pc->mMutex);
-
-    if (data->pc->mDtlsReceiveQueue.empty()) {
-        BIO_set_retry_read(b);
-        return -1;
-    }
-
-    const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
-    data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
-
-    const auto ret = std::min(static_cast<int>(item.size()), outl);
-    std::memcpy(out, item.data(), static_cast<size_t>(ret));
-
-    return ret;
-}
-
-int PeerConnection::dgram_write(BIO *b, const char *in, int inl) {
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data*>(ptr);
-
-    data->pc->enqueueForSending({
-        reinterpret_cast<const uint8_t *>(in),
-        static_cast<size_t>(inl) });
-
-    return inl;
-}
-
-long PeerConnection::dgram_ctrl(BIO *b, int cmd, long num, void *ptr)
-{
-    return 1;
-}
-
-int PeerConnection::dgram_free(BIO *b)
-{
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data*>(ptr);
-    delete data;
-    return 1;
-}
-
-std::once_flag PeerConnection::dgram_once;
-BIO_METHOD* PeerConnection::dgram_method = nullptr;
-
-BIO *PeerConnection::BIO_new_dgram(PeerConnection* pc) {
-    std::call_once(dgram_once, []{
-        dgram_method = BIO_meth_new(BIO_TYPE_DGRAM, "dgram");
-        BIO_meth_set_read(dgram_method, PeerConnection::dgram_read);
-        BIO_meth_set_write(dgram_method, PeerConnection::dgram_write);
-        BIO_meth_set_ctrl(dgram_method, PeerConnection::dgram_ctrl);
-        BIO_meth_set_destroy(dgram_method, PeerConnection::dgram_free);
-    });
-
-    BIO *b = BIO_new(dgram_method);
-    if (b == nullptr) {
-        return nullptr;
-    }
-
-    BIO_set_init(b, 1);
-    BIO_set_shutdown(b, 0);
-
-    const auto ptr = new dgram_data{ pc };
-    BIO_set_data(b, ptr);
-    return b;
-}
-
-static int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
-    // We verify cert after the handshake has completed
-    return 1;
-}
-
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
                                              const std::shared_ptr<SdpAnswer> answer)
 {
     // We are connecting
     setConnectionState(ConnectionState::Connecting);
 
-    // Dest host and its socket address
-    const auto destHost = answer->getHostList()[0]; // TODO try all candidates
-    LOG(SRTC_LOG_I, "Connecting to %s", to_string(destHost.addr).c_str());
-
-    // Dest socket
-    auto socket = std::make_unique<Socket>(destHost.addr);
-
-    // States
-    auto dtlsState = DtlsState::Inactive;
-
-    // DTLS
-    SSL_CTX* dtls_ctx = {};
-    SSL* dtls_ssl = {};
-    BIO* dtls_bio = {};
-
-    // SRTP
-    std::shared_ptr<SrtpConnection> srtp;
-
-    // ICE negotiation
-    const auto iceAgent = std::make_unique<IceAgent>();
-
-    constexpr auto kIceMessageBufferSize = 2048;
-    const auto iceMessageBuffer = std::make_unique<uint8_t[]>(kIceMessageBufferSize);
-
-    auto sentUseCandidate = false;
-
-    {
-        const auto iceMessageBindingRequest1 = make_stun_message_binding_request(iceAgent,
-                                                                                 iceMessageBuffer.get(),
-                                                                                 kIceMessageBufferSize,
-                                                                                 offer, answer,
-                                                                                 false);
-        enqueueForSending({
-            iceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
-        });
-    }
-
-    // Send history
-    const auto sendHistory = std::make_unique<SendHistory>();
+    // Candidate
+    const auto host = answer->getHostList()[0]; // TODO try all candidates
+    const auto candidate = std::make_unique<PeerCandidate>(
+            this,
+            offer, answer,
+            host);
 
     // Our socket loop
-    auto eventFd = -1;
-    auto epollHandle = epoll_create(2);
+    const auto epollHandle = epoll_create(2);
 
     {
         std::lock_guard lock(mMutex);
 
-        eventFd = mEventHandle;
-
         struct epoll_event ev = { .events = EPOLLIN };
 
-        ev.data.fd = eventFd;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, eventFd, &ev);
+        ev.data.fd = 0;
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
 
-        ev.data.fd = socket->fd();
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, socket->fd(), &ev);
+        ev.data.ptr = candidate.get();
+        epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
     }
 
     // Loop scheduler
     const auto scheduler = std::make_unique<LoopScheduler>();
 
-    // Receive buffer
+    // Our processing loop
     while (true) {
-        // Receive queue
-        std::list<Socket::ReceivedData> receiveQueue;
-
-        // Epoll
-        struct epoll_event epollEvent[2];
-        const auto nfds = epoll_wait(epollHandle, epollEvent, 2,
+        // Epoll for incoming data
+        struct epoll_event epollEvent[10];
+        const auto nfds = epoll_wait(epollHandle, epollEvent,
+                                     sizeof(epollEvent) / sizeof(epollEvent[0]),
                                      scheduler->getTimeoutMillis(1000));
 
-        std::list<ByteBuffer> rawSendQueue;
-        std::list<FrameToSend> frameSendQueue;
+        std::list<PeerCandidate::FrameToSend> frameSendQueue;
 
         {
-           std::lock_guard lock(mMutex);
+            std::lock_guard lock(mMutex);
             if (mIsQuit) {
                 break;
             }
@@ -535,21 +273,17 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                 break;
             }
 
-            rawSendQueue = std::move(mRawSendQueue);
             frameSendQueue = std::move(mFrameSendQueue);
 
             for (int i = 0; i < nfds; i += 1) {
-                if (epollEvent[i].data.fd == eventFd) {
+                if (epollEvent[i].data.fd == 0) {
                     // Read from event
-                    eventfd_t value = { 0 };
+                    eventfd_t value = {0};
                     eventfd_read(mEventHandle, &value);
-                } else if (epollEvent[i].data.fd == socket->fd()) {
+                } else if (epollEvent[i].data.ptr != nullptr) {
                     // Read from socket
-                    auto receiveList = socket->receive();
-                    for (auto& item : receiveList) {
-                        LOG(SRTC_LOG_V, "Received %zd bytes", item.buf.size());
-                        receiveQueue.emplace_back(std::move(item));
-                    }
+                    const auto ptr = reinterpret_cast<PeerCandidate *>(epollEvent[i].data.ptr);
+                    ptr->receiveFromSocket();
                 }
             }
         }
@@ -557,366 +291,18 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         // Scheduler
         scheduler->run();
 
-        // Raw data
-        while (!rawSendQueue.empty()) {
-            const auto buf = std::move(rawSendQueue.front());
-            rawSendQueue.erase(rawSendQueue.begin());
-
-            const auto w = socket->send(buf);
-            LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
+        // Frames to send
+        for (auto& item : frameSendQueue) {
+            candidate->addSendFrame(std::move(item));
         }
 
-        // Frames
-        while (!frameSendQueue.empty()) {
-            const auto item = std::move(frameSendQueue.front());
-            frameSendQueue.erase(frameSendQueue.begin());
-
-            if (!item.csd.empty()) {
-                // Codec Specific Data
-                item.packetizer->setCodecSpecificData(item.csd);
-            } else if (!item.buf.empty()) {
-                // Frame data
-                const auto packetList = item.packetizer->generate(item.track, item.buf);
-                for (const auto& packet : packetList) {
-                    // Save
-                    if (item.track->hasNack() || item.track->getRtxPayloadId() > 0) {
-                        sendHistory->save(packet);
-                    }
-
-                    // Generate
-                    auto packetData = packet->generate();
-                    if (srtp) {
-                        const auto protectedSize = srtp->protectOutgoing(packetData);
-                        if (protectedSize > 0) {
-                            // And send
-                            const auto randomValue = lrand48() % 100;
-                            if (randomValue <= 5 && item.track->getCodec() == Codec::H264) {
-                                LOG(SRTC_LOG_V, "NOT sending an RTP packet with SSRC = %u, SEQ = %u",
-                                    packet->getSSRC(), packet->getSequence());
-                            } else {
-                                (void) socket->send(packetData.data(), protectedSize);
-                            }
-                        }
-                    } else {
-                        LOG(SRTC_LOG_V, "SRTP is not initialized yet");
-                    }
-                }
-            }
-        }
-
-        // Receive
-        while (!receiveQueue.empty()) {
-            Socket::ReceivedData data = std::move(receiveQueue.front());
-            receiveQueue.erase(receiveQueue.begin());
-
-            if (is_stun_message(data.buf)) {
-                StunMessage incomingMessage = { };
-                incomingMessage.buffer = data.buf.data();
-                incomingMessage.buffer_len = data.buf.size();
-
-                const auto stunMessageClass = stun_message_get_class(&incomingMessage);
-                const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
-
-                LOG(SRTC_LOG_V, "STUN message class  = %d", stunMessageClass);
-                LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
-
-                if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
-                    const auto offerUserName = offer->getIceUFrag();
-                    const auto answerUserName = answer->getIceUFrag();
-                    const auto iceUserName = offerUserName + ":" + answerUserName;
-                    const auto icePassword = offer->getIcePassword();
-
-                    if (iceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
-                        const auto iceMessageBindingResponse = make_stun_message_binding_response(
-                                iceAgent,
-                                iceMessageBuffer.get(),
-                                kIceMessageBufferSize,
-                                offer, answer,
-                                incomingMessage,
-                                data.addr, data.addr_len
-                        );
-                        enqueueForSending({iceMessageBuffer.get(),
-                                           stun_message_length(&iceMessageBindingResponse)});
-                    } else {
-                        LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
-                    }
-                } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
-                    int errorCode = { 0 };
-                    if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
-                        LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
-                    }
-
-                    uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-                    stun_message_id(&incomingMessage, id);
-
-                    if (iceAgent->forgetTransaction(id)) {
-                        LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
-
-                        const auto icePassword = answer->getIcePassword();
-
-                        if (errorCode == 0 && iceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
-                            if (!sentUseCandidate) {
-                                sentUseCandidate = true;
-
-                                const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                        iceAgent,
-                                        iceMessageBuffer.get(),
-                                        kIceMessageBufferSize,
-                                        offer, answer,
-                                        true);
-                                enqueueForSending({
-                                                          iceMessageBuffer.get(),
-                                                          stun_message_length(
-                                                                  &iceMessageBindingRequest2)});
-
-                                dtlsState = DtlsState::Activating;
-                            }
-                        } else {
-                            LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
-                        }
-                    }
-                }
-            } else if (dtls_ssl && is_dtls_message(data.buf)) {
-                LOG(SRTC_LOG_V, "Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
-
-                {
-                    std::lock_guard lock(mMutex);
-                    mDtlsReceiveQueue.push_back(std::move(data.buf));
-                }
-
-                // Try the handshake
-                if (dtlsState == DtlsState::Activating) {
-                    const auto r1 = SSL_do_handshake(dtls_ssl);
-                    const auto err = SSL_get_error(dtls_ssl, r1);
-                    LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
-
-                    if (err == SSL_ERROR_WANT_READ) {
-                        LOG(SRTC_LOG_V, "Still in progress");
-                    } else if (r1 == 1 && err == 0) {
-                        const auto cipher = SSL_get_cipher(dtls_ssl);
-                        const auto profile = SSL_get_selected_srtp_profile(dtls_ssl);
-
-                        LOG(SRTC_LOG_V, "Completed with cipher %s, profile %s", cipher, profile->name);
-
-                        const auto cert = SSL_get_peer_certificate(dtls_ssl);
-                        if (cert == nullptr) {
-                            // Error, no certificate
-                            LOG(SRTC_LOG_E, "There is no DTLS server certificate");
-                            dtlsState = DtlsState::Failed;
-                            setConnectionState(ConnectionState::Failed);
-                        } else {
-                            uint8_t fpBuf[32] = {};
-                            unsigned int fpSize = {};
-
-                            const auto digest = EVP_get_digestbyname("sha256");
-                            X509_digest(cert, digest, fpBuf, &fpSize);
-
-                            std::string hex = bin_to_hex(fpBuf, fpSize);
-                            LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
-
-                            const auto expectedHash = answer->getCertificateHash();
-                            const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
-
-                            if (expectedHash.getBin() == actualHashBin) {
-                                const auto [ srtpConn, srtpError ] = SrtpConnection::create(dtls_ssl, answer->isSetupActive());
-
-                                if (srtpError.isOk()) {
-                                    srtp = srtpConn;
-
-                                    dtlsState = DtlsState::Completed;
-                                    setConnectionState(ConnectionState::Connected);
-                                } else {
-                                    // Error, failed to initialize SRTP
-                                    LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
-                                    dtlsState = DtlsState::Failed;
-                                    setConnectionState(ConnectionState::Failed);
-                                }
-                            } else {
-                                // Error, certificate hash does not match
-                                LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
-                                dtlsState = DtlsState::Failed;
-                                setConnectionState(ConnectionState::Failed);
-                            }
-                        }
-                    } else {
-                        // Error during DTLS handshake
-                        LOG(SRTC_LOG_E, "Failed during DTLS handshake");
-                        dtlsState = DtlsState::Failed;
-                        setConnectionState(ConnectionState::Failed);
-                    }
-
-                    if (dtlsState == DtlsState::Failed) {
-                        SSL_shutdown(dtls_ssl);
-                        SSL_free(dtls_ssl);
-                        dtls_ssl = nullptr;
-
-                        if (dtls_ctx) {
-                            SSL_CTX_free(dtls_ctx);
-                            dtls_ctx = nullptr;
-                        }
-                    } else if (dtlsState == DtlsState::Completed) {
-                        const auto checkIce = [this, &iceAgent, &iceMessageBuffer, &offer, &answer]() {
-                            LOG(SRTC_LOG_V, "Sending STUN keep-alive");
-
-                            const auto iceMessageKeepAliveRequest = make_stun_message_binding_request(iceAgent,
-                                                                                                        iceMessageBuffer.get(),
-                                                                                                        kIceMessageBufferSize,
-                                                                                                        offer, answer,
-                                                                                                        false);
-                            enqueueForSending({
-                                                      iceMessageBuffer.get(), stun_message_length(&iceMessageKeepAliveRequest)
-                                              });
-
-                        };
-
-                        scheduler->submit(std::chrono::milliseconds(1500), checkIce);
-                    }
-                }
-            } else if (is_rtc_message(data.buf)) {
-                LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
-
-                if (is_rtcp_message(data.buf) && srtp) {
-                    const auto unprotectedSize = srtp->unprotectIncomingControl(data.buf);
-                    if (unprotectedSize >= 8) {
-                        LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
-
-                        ByteReader rtcpReader = { data.buf.data(), unprotectedSize };
-
-                        const auto rtcpRC = rtcpReader.readU8() & 0x1f;
-                        const auto rtcpPT = rtcpReader.readU8();
-                        const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
-                        const auto rtcpSSRC = rtcpReader.readU32();
-
-                        LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
-                            rtcpLength, rtcpSSRC);
-
-                        if (rtcpPT == 205) {
-                            // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
-                            // RTPFB: Transport layer FB message
-                            if (rtcpReader.remaining() >= 4) {
-                                const auto rtcpFmt = rtcpRC;
-                                const auto rtcpSSRC_1 = rtcpReader.readU32();
-                                LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
-
-                                switch (rtcpFmt) {
-                                    // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
-                                    case 1: {
-                                        while (rtcpReader.remaining() >= 4) {
-                                            const auto pid = rtcpReader.readU16();
-                                            const auto blp = rtcpReader.readU16();
-
-                                            LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
-
-                                            std::vector<uint16_t> missingSeqList;
-                                            missingSeqList.push_back(pid);
-
-                                            if (blp != 0) {
-                                                for (auto index = 0; index < 16; index += 1) {
-                                                    if (blp & (1 << index)) {
-                                                        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-                                                        missingSeqList.push_back(pid + index + 1);
-                                                    }
-                                                }
-                                            }
-
-                                            for (const auto seq : missingSeqList) {
-                                                const auto packet = sendHistory->find(rtcpSSRC_1, seq);
-                                                if (packet && srtp) {
-                                                    // Generate
-                                                    ByteBuffer packetData;
-                                                    if (packet->getTrack()->getRtxPayloadId() > 0) {
-                                                        packetData = packet->generateRtx();
-                                                    } else {
-                                                        packetData = packet->generate();
-                                                    }
-
-                                                    const auto protectedSize = srtp->protectOutgoing(packetData);
-                                                    if (protectedSize > 0) {
-                                                        // And send
-                                                        const auto sentSize = socket->send(packetData.data(), protectedSize);
-                                                        LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
-                                                            packet->getSSRC(), packet->getSequence(), sentSize);
-                                                    }
-                                                } else {
-                                                    LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
-                                                }
-                                            }
-                                        }
-                                    }   break;
-                                    default:
-                                        LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
-                                        break;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
-            }
-        }
-
-        if (dtlsState == DtlsState::Activating && dtls_ssl == nullptr) {
-            LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
-
-            const auto cert = offer->getCertificate();
-            dtls_ctx = SSL_CTX_new(DTLS_client_method());
-
-            SSL_CTX_use_certificate(dtls_ctx, cert->getCertificate());
-            SSL_CTX_use_PrivateKey(dtls_ctx, cert->getPrivateKey());
-
-            if (!SSL_CTX_check_private_key(dtls_ctx)) {
-                LOG(SRTC_LOG_V, "ERROR: invalid private key");
-                dtlsState = DtlsState::Failed;
-                setConnectionState(ConnectionState::Failed);
-            } else {
-                SSL_CTX_set_verify(dtls_ctx, SSL_VERIFY_PEER, verify_callback);
-
-                SSL_CTX_set_min_proto_version(dtls_ctx, DTLS1_VERSION);
-                SSL_CTX_set_max_proto_version(dtls_ctx, DTLS1_2_VERSION);
-                SSL_CTX_set_read_ahead(dtls_ctx, 1);
-
-                dtls_ssl = SSL_new(dtls_ctx);
-
-                dtls_bio = BIO_new_dgram(this);
-
-                SSL_set_bio(dtls_ssl, dtls_bio, dtls_bio);
-
-                SSL_set_tlsext_use_srtp(dtls_ssl, kSrtpCipherList);
-                SSL_set_connect_state(dtls_ssl);
-
-                if (answer->isSetupActive()) {
-                    SSL_set_accept_state(dtls_ssl);
-                } else {
-                    SSL_set_connect_state(dtls_ssl);
-                    SSL_do_handshake(dtls_ssl);
-                }
-            }
-        }
-    }
-
-    if (dtls_ssl) {
-        SSL_shutdown(dtls_ssl);
-        SSL_free(dtls_ssl);
-    }
-
-    if (dtls_ctx) {
-        SSL_CTX_free(dtls_ctx);
+        // Candidate processing
+        candidate->process();
     }
 
     close(epollHandle);
-    epollHandle = -1;
 
     setConnectionState(ConnectionState::Closed);
-}
-
-void PeerConnection::enqueueForSending(ByteBuffer&& buf)
-{
-    LOG(SRTC_LOG_V, "Enqueing %zd bytes", buf.size());
-
-    std::lock_guard lock(mMutex);
-    mRawSendQueue.push_back(std::move(buf));
-    eventfd_write(mEventHandle, 1);
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)
@@ -933,6 +319,7 @@ void PeerConnection::setConnectionState(ConnectionState state)
 
         if (mConnectionState == ConnectionState::Failed) {
             mIsQuit = true;
+            eventfd_write(mEventHandle, 1);
         }
     }
 
@@ -942,6 +329,28 @@ void PeerConnection::setConnectionState(ConnectionState state)
             mConnectionStateListener(state);
         }
     }
+}
+
+void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
+{
+    std::lock_guard lock(mMutex);
+    eventfd_write(mEventHandle, 1);
+}
+
+void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
+{
+    setConnectionState(ConnectionState::Connecting);
+}
+
+void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
+{
+    setConnectionState(ConnectionState::Connected);
+}
+
+void PeerConnection::onCandidateFailed(PeerCandidate* candidate, const Error& error)
+{
+    LOG(SRTC_LOG_E, "Candidate failed: %d %s", error.mCode, error.mMessage.c_str());
+    setConnectionState(ConnectionState::Failed);
 }
 
 }

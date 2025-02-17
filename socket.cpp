@@ -54,7 +54,6 @@ Socket::~Socket()
 {
     if (mFd >= 0) {
         close(mFd);
-        mFd = -1;
     }
 }
 

@@ -3,6 +3,8 @@
 #include "srtc/srtc.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
+#include "srtc/peer_candidate_listener.h"
+#include "srtc/peer_candidate.h"
 
 #include <memory>
 #include <mutex>
@@ -11,9 +13,6 @@
 #include <string>
 #include <functional>
 
-struct bio_st;
-struct bio_method_st;
-
 namespace srtc {
 
 class SdpAnswer;
@@ -21,8 +20,10 @@ class SdpOffer;
 class Track;
 class Packetizer;
 class Scheduler;
+class PeerCandidate;
 
-class PeerConnection {
+class PeerConnection final :
+        public PeerCandidateListener {
 public:
     PeerConnection();
     ~PeerConnection();
@@ -62,23 +63,7 @@ private:
     void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer,
                                  std::shared_ptr<SdpAnswer> answer);
 
-    void enqueueForSending(ByteBuffer&& buf) SRTC_LOCKS_EXCLUDED(mMutex);
-
     void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
-
-    enum class DtlsState {
-        Inactive,
-        Activating,
-        Failed,
-        Completed
-    };
-
-    struct FrameToSend {
-        std::shared_ptr<Track> track;
-        std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;                 // possibly empty
-        std::vector<ByteBuffer> csd;    // possibly empty
-    };
 
     bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
@@ -86,11 +71,14 @@ private:
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
 
-    std::list<ByteBuffer> mRawSendQueue;
-    std::list<FrameToSend> mFrameSendQueue;
+    std::list<PeerCandidate::FrameToSend> mFrameSendQueue;
 
-    // A queue for incoming DTLS data, routed through a custom BIO
-    std::list<ByteBuffer> mDtlsReceiveQueue SRTC_GUARDED_BY(mMutex);
+    // PeerCandiateListener
+    void onCandidateHasDataToSend(PeerCandidate* candidate) override;
+
+    void onCandidateConnecting(PeerCandidate* candidate) override;
+    void onCandidateConnected(PeerCandidate* candidate) override;
+    void onCandidateFailed(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
@@ -101,17 +89,6 @@ private:
     // Packetizers
     std::shared_ptr<Packetizer> mVideoPacketizer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
-
-    // OpenSSL BIO
-    static int dgram_read(struct bio_st *b, char *out, int outl);
-    static int dgram_write(struct bio_st *b, const char *in, int inl);
-    static long dgram_ctrl(struct bio_st *b, int cmd, long num, void *ptr);
-    static int dgram_free(struct bio_st *b);
-
-    static std::once_flag dgram_once;
-    static struct bio_method_st* dgram_method;
-
-    static struct bio_st *BIO_new_dgram(PeerConnection* pc);
 };
 
 }

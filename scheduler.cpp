@@ -330,6 +330,11 @@ void ScopedScheduler::cancel(std::shared_ptr<Task>& task)
     cancelImpl(impl);
 }
 
+std::shared_ptr<RealScheduler> ScopedScheduler::getRealScheduler()
+{
+    return mScheduler;
+}
+
 void ScopedScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& impl)
 {
     if (const auto ptr = impl->mTask.lock()) {

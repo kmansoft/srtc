@@ -23,6 +23,8 @@ add_library(srtc
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_opus.h
+        include/srtc/peer_candidate.h
+        include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/rtp_packet.h
@@ -47,6 +49,7 @@ add_library(srtc
         packetizer.cpp
         packetizer_h264.cpp
         packetizer_opus.cpp
+        peer_candidate.cpp
         peer_connection.cpp
         random_generator.cpp
         rtp_packet.cpp
@@ -61,8 +64,7 @@ add_library(srtc
         track.cpp
         util.cpp
         x509_certificate.cpp
-        x509_hash.cpp
-)
+        x509_hash.cpp)
 
 target_include_directories(srtc PUBLIC "./include")
 

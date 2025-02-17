@@ -189,6 +189,8 @@ public:
 
     void cancel(std::shared_ptr<Task>& task) override;
 
+    [[nodiscard]] std::shared_ptr<RealScheduler> getRealScheduler() override;
+
 private:
     class TaskImpl final : public Task, private std::enable_shared_from_this<TaskImpl> {
     public:
