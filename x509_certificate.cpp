@@ -7,10 +7,6 @@
 #include <openssl/pem.h>
 #include <openssl/bio.h>
 
-#ifdef ANDROID
-#include <android/log.h>
-#endif
-
 namespace srtc {
 
 struct X509CertificateImpl {
@@ -66,25 +62,6 @@ X509Certificate::X509Certificate()
 
     mImpl->fp256bin = { fpBuf, fpSize };
     mImpl->fp256hex = bin_to_hex(fpBuf, fpSize);
-
-#ifdef ANDROID
-    // debug
-    const auto bio = BIO_new(BIO_s_mem());
-    PEM_write_bio_X509(bio, mImpl->x509);
-
-    const uint8_t* outContents = nullptr;
-    size_t outLen = -1;
-    BIO_mem_contents(bio, &outContents, &outLen);
-
-    std::string str { outContents, outContents + outLen };
-
-    __android_log_print(ANDROID_LOG_INFO, "srtc",
-                        "Certificate:\n%s", str.substr(0, 512).c_str());
-    __android_log_print(ANDROID_LOG_INFO, "srtc",
-                        "Certificate:\n%s", str.substr(512).c_str());
-
-    BIO_free(bio);
-#endif
 }
 
 struct evp_pkey_st* X509Certificate::getPrivateKey() const
