@@ -104,7 +104,8 @@ private:
 
     // State
     void emitOnConnecting();
-    void emitOnConnected();
+    void emitOnIceConnected();
+    void emitOnDtlsConnected();
     void emitOnFailed(const Error& error);
 };
 

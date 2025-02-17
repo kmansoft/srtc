@@ -347,7 +347,12 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
     setConnectionState(ConnectionState::Connecting);
 }
 
-void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
+void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
+{
+    // TODO: Forget all candidates except the one that succeeded
+}
+
+void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connected);
 }

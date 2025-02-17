@@ -372,6 +372,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                 if (!mSentUseCandidate) {
                     mSentUseCandidate = true;
 
+                    emitOnIceConnected();
+
                     const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
                             mIceAgent,
                             mIceMessageBuffer.get(),
@@ -435,7 +437,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                     if (srtpError.isOk()) {
                         mSrtp = srtpConn;
                         mDtlsState = DtlsState::Completed;
-                        emitOnConnected();
+                        emitOnDtlsConnected();
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
@@ -640,9 +642,14 @@ void PeerCandidate::emitOnConnecting() {
     mListener->onCandidateConnecting(this);
 }
 
-void PeerCandidate::emitOnConnected()
+void PeerCandidate::emitOnIceConnected()
 {
-    mListener->onCandidateConnected(this);
+    mListener->onCandidateIceConnected(this);
+}
+
+void PeerCandidate::emitOnDtlsConnected()
+{
+    mListener->onCandidateDtlsConnected(this);
 }
 
 void PeerCandidate::emitOnFailed(const Error& error)
