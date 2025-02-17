@@ -17,14 +17,10 @@
 #include "stunmessage.h"
 
 #include <cassert>
+#include <chrono>
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-
-#include <srtp.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
@@ -224,6 +220,9 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
                                              const std::shared_ptr<SdpAnswer> answer)
 {
+    // Loop scheduler
+    const auto scheduler = std::make_shared<LoopScheduler>();
+
     // We are connecting
     setConnectionState(ConnectionState::Connecting);
 
@@ -232,7 +231,9 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     const auto candidate = std::make_unique<PeerCandidate>(
             this,
             offer, answer,
-            host);
+            scheduler,
+            host,
+            std::chrono::milliseconds::zero());
 
     // Our socket loop
     const auto epollHandle = epoll_create(2);
@@ -248,9 +249,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         ev.data.ptr = candidate.get();
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
     }
-
-    // Loop scheduler
-    const auto scheduler = std::make_unique<LoopScheduler>();
 
     // Our processing loop
     while (true) {
@@ -314,6 +312,11 @@ void PeerConnection::setConnectionState(ConnectionState state)
 {
     {
         std::lock_guard lock1(mMutex);
+
+        if (mConnectionState == state) {
+            // Already set
+            return;
+        }
 
         if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
             // There is no escape

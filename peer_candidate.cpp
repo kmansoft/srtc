@@ -153,7 +153,9 @@ namespace srtc {
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::shared_ptr<SdpOffer>& offer,
                              const std::shared_ptr<SdpAnswer>& answer,
-                             const Host& host)
+                             const std::shared_ptr<RealScheduler>& scheduler,
+                             const Host& host,
+                             const Scheduler::Delay& startDelay)
     : mListener(listener)
     , mOffer(offer)
     , mAnswer(answer)
@@ -162,21 +164,13 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
+    , mScheduler(scheduler)
 {
     assert(mListener);
 
-    emitOnConnecting();
-
-    // Open the conversation by sending an STUN binding request
-    const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
-                                                                             mIceMessageBuffer.get(),
-                                                                             kIceMessageBufferSize,
-                                                                             offer, answer,
-                                                                             false);
-    addSendRaw({
-                              mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
-                      });
-
+    mScheduler.submit(startDelay, [this] {
+        startConnecting();
+    });
 }
 
 PeerCandidate::~PeerCandidate()
@@ -314,6 +308,23 @@ void PeerCandidate::process()
             }
         }
     }
+}
+
+void PeerCandidate::startConnecting()
+{
+    // Notify the listener
+    emitOnConnecting();
+
+    // Open the conversation by sending an STUN binding request
+    const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
+                                                                             mIceMessageBuffer.get(),
+                                                                             kIceMessageBufferSize,
+                                                                             mOffer, mAnswer,
+                                                                             false);
+    addSendRaw({
+                       mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
+               });
+
 }
 
 void PeerCandidate::addSendRaw(ByteBuffer&& buf)

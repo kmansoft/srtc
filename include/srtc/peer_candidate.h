@@ -4,6 +4,7 @@
 #include "srtc/socket.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/peer_candidate_listener.h"
+#include "srtc/scheduler.h"
 
 #include <list>
 #include <memory>
@@ -32,7 +33,9 @@ public:
     PeerCandidate(PeerCandidateListener* listener,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
-                  const Host& host);
+                  const std::shared_ptr<RealScheduler>& scheduler,
+                  const Host& host,
+                  const Scheduler::Delay& startDelay);
     ~PeerCandidate();
 
     [[nodiscard]] int getSocketFd() const;
@@ -50,6 +53,8 @@ public:
     void process();
 
 private:
+    void startConnecting();
+
     void addSendRaw(ByteBuffer&& buf);
 
     void onReceivedStunMessage(const Socket::ReceivedData& data);
@@ -107,6 +112,9 @@ private:
     void emitOnIceConnected();
     void emitOnDtlsConnected();
     void emitOnFailed(const Error& error);
+
+    // Scheduler
+    ScopedScheduler mScheduler;
 };
 
 }
