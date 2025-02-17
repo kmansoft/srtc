@@ -70,7 +70,7 @@ target_link_libraries(
         srtc
         PRIVATE
         stun
-        srtp2
+        srtp3
 )
 
 # Android specific
@@ -121,8 +121,8 @@ endif()
 
 ExternalProject_Add(
         srtp
-        GIT_REPOSITORY "https://github.com/kmansoft/libsrtp.git"
-        GIT_TAG "v2.6.0-kostya"
+        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
+        GIT_TAG "cb9e8920e42fd31c5fab9a385e69e3dfcbc7f3be"
         GIT_SHALLOW ON
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""

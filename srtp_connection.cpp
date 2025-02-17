@@ -109,25 +109,30 @@ size_t SrtpConnection::protectOutgoing(ByteBuffer& packetData)
     }
 
 
-    ChannelKey key;
+    ChannelKey key = { };
     key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8));
     key.payloadId = packetData.data()[1] & 0x7F;
 
     const auto srtp = ensureSrtpChannel(mSrtpOutMap, key, &mSrtpSendPolicy);
 
-    int rtp_size_1 = static_cast<int>(packetData.size());
-    int rtp_size_2 = rtp_size_1;
+    auto size_1 = packetData.size();
 
     packetData.padding(SRTP_MAX_TRAILER_LEN);
 
-    const auto result = srtp_protect(srtp, packetData.data(), &rtp_size_2);
+    auto data = packetData.data();
+    auto size_2 = packetData.size();
+
+    const auto result = srtp_protect(srtp,
+                                     data, size_1,
+                                     data, &size_2,
+                                     0);
     if (result != srtp_err_status_ok) {
         LOG(SRTC_LOG_E, "srtp_protect() failed: %d", result);
         return 0;
     }
 
-    assert(rtp_size_2 > rtp_size_1);
-    return static_cast<size_t>(rtp_size_2);
+    assert(size_2 > size_1);
+    return size_2;
 }
 
 size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
@@ -137,21 +142,24 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
         return 0;
     }
 
-    ChannelKey key;
+    ChannelKey key = { };
     key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4));
     key.payloadId = 0;
 
     const auto srtp = ensureSrtpChannel(mSrtpInMap, key, &mSrtpReceivePolicy);
 
-    int rtcpSize = static_cast<int>(packetData.size());
-    const auto status = srtp_unprotect_rtcp(srtp, packetData.data(), &rtcpSize);
+    auto data = packetData.data();
+    auto size = packetData.size();
+    const auto status = srtp_unprotect_rtcp(srtp,
+                                            data, size,
+                                            data, &size);
 
     if (status != srtp_err_status_ok) {
         LOG(SRTC_LOG_E, "srtp_unprotect_rtcp() failed: %d", status);
         return 0;
     }
 
-    return static_cast<size_t>(rtcpSize);
+    return size;
 }
 
 SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
