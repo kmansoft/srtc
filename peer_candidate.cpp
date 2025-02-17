@@ -265,227 +265,14 @@ void PeerCandidate::process()
         mRawReceiveQueue.erase(mRawReceiveQueue.begin());
 
         if (is_stun_message(data.buf)) {
-            StunMessage incomingMessage = { };
-            incomingMessage.buffer = data.buf.data();
-            incomingMessage.buffer_len = data.buf.size();
-
-            const auto stunMessageClass = stun_message_get_class(&incomingMessage);
-            const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
-
-            LOG(SRTC_LOG_V, "STUN message class  = %d", stunMessageClass);
-            LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
-
-            if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
-                const auto offerUserName = mOffer->getIceUFrag();
-                const auto answerUserName = mAnswer->getIceUFrag();
-                const auto iceUserName = offerUserName + ":" + answerUserName;
-                const auto icePassword = mOffer->getIcePassword();
-
-                if (mIceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
-                    const auto iceMessageBindingResponse = make_stun_message_binding_response(
-                            mIceAgent,
-                            mIceMessageBuffer.get(),
-                            kIceMessageBufferSize,
-                            mOffer, mAnswer,
-                            incomingMessage,
-                            data.addr, data.addr_len
-                    );
-                    addSendRaw({mIceMessageBuffer.get(),
-                                       stun_message_length(&iceMessageBindingResponse)});
-                } else {
-                    LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
-                }
-            } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
-                int errorCode = { 0 };
-                if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
-                    LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
-                }
-
-                uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-                stun_message_id(&incomingMessage, id);
-
-                if (mIceAgent->forgetTransaction(id)) {
-                    LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
-
-                    const auto icePassword = mAnswer->getIcePassword();
-
-                    if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
-                        if (!mSentUseCandidate) {
-                            mSentUseCandidate = true;
-
-                            const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                                    mIceAgent,
-                                    mIceMessageBuffer.get(),
-                                    kIceMessageBufferSize,
-                                    mOffer, mAnswer,
-                                    true);
-                            addSendRaw({
-                                                      mIceMessageBuffer.get(),
-                                                      stun_message_length(
-                                                              &iceMessageBindingRequest2)});
-
-                            mDtlsState = DtlsState::Activating;
-                        }
-                    } else {
-                        LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
-                    }
-                }
-            }
+            LOG(SRTC_LOG_V, "Received STUN message %zd, %d", data.buf.size(), data.buf.data()[0]);
+            onReceivedStunMessage(data);
         } else if (mDtlsSsl && is_dtls_message(data.buf)) {
             LOG(SRTC_LOG_V, "Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
-
-            mDtlsReceiveQueue.push_back(std::move(data.buf));
-
-            // Try the handshake
-            if (mDtlsState == DtlsState::Activating) {
-                const auto r1 = SSL_do_handshake(mDtlsSsl);
-                const auto err = SSL_get_error(mDtlsSsl, r1);
-                LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
-
-                if (err == SSL_ERROR_WANT_READ) {
-                    LOG(SRTC_LOG_V, "Still in progress");
-                } else if (r1 == 1 && err == 0) {
-                    const auto cipher = SSL_get_cipher(mDtlsSsl);
-                    const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
-
-                    LOG(SRTC_LOG_V, "Completed with cipher %s, profile %s", cipher, profile->name);
-
-                    const auto cert = SSL_get_peer_certificate(mDtlsSsl);
-                    if (cert == nullptr) {
-                        // Error, no certificate
-                        LOG(SRTC_LOG_E, "There is no DTLS server certificate");
-                        mDtlsState = DtlsState::Failed;
-                        emitOnFailed({ Error::Code::InvalidData, "There is no DTLS server certificate"});
-                    } else {
-                        uint8_t fpBuf[32] = {};
-                        unsigned int fpSize = {};
-
-                        const auto digest = EVP_get_digestbyname("sha256");
-                        X509_digest(cert, digest, fpBuf, &fpSize);
-
-                        std::string hex = bin_to_hex(fpBuf, fpSize);
-                        LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
-
-                        const auto expectedHash = mAnswer->getCertificateHash();
-                        const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
-
-                        if (expectedHash.getBin() == actualHashBin) {
-                            const auto [ srtpConn, srtpError ] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
-
-                            if (srtpError.isOk()) {
-                                mSrtp = srtpConn;
-                                mDtlsState = DtlsState::Completed;
-                                emitOnConnected();
-                            } else {
-                                // Error, failed to initialize SRTP
-                                LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
-                                mDtlsState = DtlsState::Failed;
-                                emitOnFailed(srtpError);
-                            }
-                        } else {
-                            // Error, certificate hash does not match
-                            LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
-                            mDtlsState = DtlsState::Failed;
-                            emitOnFailed({ Error::Code::InvalidData, "Certificate hash doesn't match"});
-                        }
-                    }
-                } else {
-                    // Error during DTLS handshake
-                    LOG(SRTC_LOG_E, "Failed during DTLS handshake");
-                    mDtlsState = DtlsState::Failed;
-                    emitOnFailed({ Error::Code::InvalidData, "Failure during DTLS handshake"});
-                }
-
-                if (mDtlsState == DtlsState::Failed) {
-                    SSL_shutdown(mDtlsSsl);
-                    SSL_free(mDtlsSsl);
-                    mDtlsSsl = nullptr;
-
-                    if (mDtlsCtx) {
-                        SSL_CTX_free(mDtlsCtx);
-                        mDtlsCtx = nullptr;
-                    }
-                }
-            }
+            onReceivedDtlsMessage(std::move(data.buf));
         } else if (is_rtc_message(data.buf)) {
             LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
-
-            if (is_rtcp_message(data.buf) && mSrtp) {
-                const auto unprotectedSize = mSrtp->unprotectIncomingControl(data.buf);
-                if (unprotectedSize >= 8) {
-                    LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
-
-                    ByteReader rtcpReader = { data.buf.data(), unprotectedSize };
-
-                    const auto rtcpRC = rtcpReader.readU8() & 0x1f;
-                    const auto rtcpPT = rtcpReader.readU8();
-                    const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
-                    const auto rtcpSSRC = rtcpReader.readU32();
-
-                    LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
-                        rtcpLength, rtcpSSRC);
-
-                    if (rtcpPT == 205) {
-                        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
-                        // RTPFB: Transport layer FB message
-                        if (rtcpReader.remaining() >= 4) {
-                            const auto rtcpFmt = rtcpRC;
-                            const auto rtcpSSRC_1 = rtcpReader.readU32();
-                            LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
-
-                            switch (rtcpFmt) {
-                                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
-                                case 1: {
-                                    while (rtcpReader.remaining() >= 4) {
-                                        const auto pid = rtcpReader.readU16();
-                                        const auto blp = rtcpReader.readU16();
-
-                                        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
-
-                                        std::vector<uint16_t> missingSeqList;
-                                        missingSeqList.push_back(pid);
-
-                                        if (blp != 0) {
-                                            for (auto index = 0; index < 16; index += 1) {
-                                                if (blp & (1 << index)) {
-                                                    LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-                                                    missingSeqList.push_back(pid + index + 1);
-                                                }
-                                            }
-                                        }
-
-                                        for (const auto seq : missingSeqList) {
-                                            const auto packet = mSendHistory->find(rtcpSSRC_1, seq);
-                                            if (packet && mSrtp) {
-                                                // Generate
-                                                ByteBuffer packetData;
-                                                if (packet->getTrack()->getRtxPayloadId() > 0) {
-                                                    packetData = packet->generateRtx();
-                                                } else {
-                                                    packetData = packet->generate();
-                                                }
-
-                                                const auto protectedSize = mSrtp->protectOutgoing(packetData);
-                                                if (protectedSize > 0) {
-                                                    // And send
-                                                    const auto sentSize = mSocket->send(packetData.data(), protectedSize);
-                                                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
-                                                        packet->getSSRC(), packet->getSequence(), sentSize);
-                                                }
-                                            } else {
-                                                LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
-                                            }
-                                        }
-                                    }
-                                }   break;
-                                default:
-                                    LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
-                                    break;
-                            }
-                        }
-                    }
-                }
-            }
+            onReceivedRtcMessage(std::move(data.buf));
         } else {
             LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
         }
@@ -533,6 +320,238 @@ void PeerCandidate::addSendRaw(ByteBuffer&& buf)
 {
     mRawSendQueue.push_back(std::move(buf));
     mListener->onCandidateHasDataToSend(this);
+}
+
+void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
+{
+    StunMessage incomingMessage = { };
+    incomingMessage.buffer = data.buf.data();
+    incomingMessage.buffer_len = data.buf.size();
+
+    const auto stunMessageClass = stun_message_get_class(&incomingMessage);
+    const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
+
+    LOG(SRTC_LOG_V, "STUN message class  = %d", stunMessageClass);
+    LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
+
+    if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
+        const auto offerUserName = mOffer->getIceUFrag();
+        const auto answerUserName = mAnswer->getIceUFrag();
+        const auto iceUserName = offerUserName + ":" + answerUserName;
+        const auto icePassword = mOffer->getIcePassword();
+
+        if (mIceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
+            const auto iceMessageBindingResponse = make_stun_message_binding_response(
+                    mIceAgent,
+                    mIceMessageBuffer.get(),
+                    kIceMessageBufferSize,
+                    mOffer, mAnswer,
+                    incomingMessage,
+                    data.addr, data.addr_len
+            );
+            addSendRaw({mIceMessageBuffer.get(),
+                        stun_message_length(&iceMessageBindingResponse)});
+        } else {
+            LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
+        }
+    } else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
+        int errorCode = { 0 };
+        if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
+            LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
+        }
+
+        uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
+        stun_message_id(&incomingMessage, id);
+
+        if (mIceAgent->forgetTransaction(id)) {
+            LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
+
+            const auto icePassword = mAnswer->getIcePassword();
+
+            if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
+                if (!mSentUseCandidate) {
+                    mSentUseCandidate = true;
+
+                    const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
+                            mIceAgent,
+                            mIceMessageBuffer.get(),
+                            kIceMessageBufferSize,
+                            mOffer, mAnswer,
+                            true);
+                    addSendRaw({
+                                       mIceMessageBuffer.get(),
+                                       stun_message_length(
+                                               &iceMessageBindingRequest2)});
+
+                    mDtlsState = DtlsState::Activating;
+                }
+            } else {
+                LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
+            }
+        }
+    }
+}
+
+void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
+{
+    mDtlsReceiveQueue.push_back(std::move(buf));
+
+    // Try the handshake
+    if (mDtlsState == DtlsState::Activating) {
+        const auto r1 = SSL_do_handshake(mDtlsSsl);
+        const auto err = SSL_get_error(mDtlsSsl, r1);
+        LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
+
+        if (err == SSL_ERROR_WANT_READ) {
+            LOG(SRTC_LOG_V, "Still in progress");
+        } else if (r1 == 1 && err == 0) {
+            const auto cipher = SSL_get_cipher(mDtlsSsl);
+            const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
+
+            LOG(SRTC_LOG_V, "Completed with cipher %s, profile %s", cipher, profile->name);
+
+            const auto cert = SSL_get_peer_certificate(mDtlsSsl);
+            if (cert == nullptr) {
+                // Error, no certificate
+                LOG(SRTC_LOG_E, "There is no DTLS server certificate");
+                mDtlsState = DtlsState::Failed;
+                emitOnFailed({ Error::Code::InvalidData, "There is no DTLS server certificate"});
+            } else {
+                uint8_t fpBuf[32] = {};
+                unsigned int fpSize = {};
+
+                const auto digest = EVP_get_digestbyname("sha256");
+                X509_digest(cert, digest, fpBuf, &fpSize);
+
+                std::string hex = bin_to_hex(fpBuf, fpSize);
+                LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
+
+                const auto expectedHash = mAnswer->getCertificateHash();
+                const auto actualHashBin = ByteBuffer {fpBuf, fpSize};
+
+                if (expectedHash.getBin() == actualHashBin) {
+                    const auto [ srtpConn, srtpError ] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
+
+                    if (srtpError.isOk()) {
+                        mSrtp = srtpConn;
+                        mDtlsState = DtlsState::Completed;
+                        emitOnConnected();
+                    } else {
+                        // Error, failed to initialize SRTP
+                        LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
+                        mDtlsState = DtlsState::Failed;
+                        emitOnFailed(srtpError);
+                    }
+                } else {
+                    // Error, certificate hash does not match
+                    LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
+                    mDtlsState = DtlsState::Failed;
+                    emitOnFailed({ Error::Code::InvalidData, "Certificate hash doesn't match"});
+                }
+            }
+        } else {
+            // Error during DTLS handshake
+            LOG(SRTC_LOG_E, "Failed during DTLS handshake");
+            mDtlsState = DtlsState::Failed;
+            emitOnFailed({ Error::Code::InvalidData, "Failure during DTLS handshake"});
+        }
+
+        if (mDtlsState == DtlsState::Failed) {
+            SSL_shutdown(mDtlsSsl);
+            SSL_free(mDtlsSsl);
+            mDtlsSsl = nullptr;
+
+            if (mDtlsCtx) {
+                SSL_CTX_free(mDtlsCtx);
+                mDtlsCtx = nullptr;
+            }
+        }
+    }
+}
+
+void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
+{
+    if (is_rtcp_message(buf) && mSrtp) {
+        const auto unprotectedSize = mSrtp->unprotectIncomingControl(buf);
+        if (unprotectedSize >= 8) {
+            LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
+            onReceivedRtcMessageUnprotected(buf, unprotectedSize);
+        }
+    }
+}
+
+void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
+                                                    size_t unprotectedSize)
+{
+    ByteReader rtcpReader = { buf.data(), unprotectedSize };
+
+    const auto rtcpRC = rtcpReader.readU8() & 0x1f;
+    const auto rtcpPT = rtcpReader.readU8();
+    const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
+    const auto rtcpSSRC = rtcpReader.readU32();
+
+    LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT,
+        rtcpLength, rtcpSSRC);
+
+    if (rtcpPT == 205) {
+        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
+        // RTPFB: Transport layer FB message
+        if (rtcpReader.remaining() >= 4) {
+            const auto rtcpFmt = rtcpRC;
+            const auto rtcpSSRC_1 = rtcpReader.readU32();
+            LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+
+            switch (rtcpFmt) {
+                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
+                case 1: {
+                    while (rtcpReader.remaining() >= 4) {
+                        const auto pid = rtcpReader.readU16();
+                        const auto blp = rtcpReader.readU16();
+
+                        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+
+                        std::vector<uint16_t> missingSeqList;
+                        missingSeqList.push_back(pid);
+
+                        if (blp != 0) {
+                            for (auto index = 0; index < 16; index += 1) {
+                                if (blp & (1 << index)) {
+                                    LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                                    missingSeqList.push_back(pid + index + 1);
+                                }
+                            }
+                        }
+
+                        for (const auto seq : missingSeqList) {
+                            const auto packet = mSendHistory->find(rtcpSSRC_1, seq);
+                            if (packet && mSrtp) {
+                                // Generate
+                                ByteBuffer packetData;
+                                if (packet->getTrack()->getRtxPayloadId() > 0) {
+                                    packetData = packet->generateRtx();
+                                } else {
+                                    packetData = packet->generate();
+                                }
+
+                                const auto protectedSize = mSrtp->protectOutgoing(packetData);
+                                if (protectedSize > 0) {
+                                    // And send
+                                    const auto sentSize = mSocket->send(packetData.data(), protectedSize);
+                                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
+                                        packet->getSSRC(), packet->getSequence(), sentSize);
+                                }
+                            } else {
+                                LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
+                            }
+                        }
+                    }
+                }   break;
+                default:
+                    LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
+                    break;
+            }
+        }
+    }
 }
 
 // Custom BIO for DGRAM

@@ -52,6 +52,12 @@ public:
 private:
     void addSendRaw(ByteBuffer&& buf);
 
+    void onReceivedStunMessage(const Socket::ReceivedData& data);
+    void onReceivedDtlsMessage(ByteBuffer&& buf);
+    void onReceivedRtcMessage(ByteBuffer&& buf);
+    void onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
+                                         size_t unprotectedSize);
+
     PeerCandidateListener* const mListener;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
