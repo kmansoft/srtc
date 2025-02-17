@@ -1,7 +1,5 @@
-#include <openssl/ssl.h>
-#include <openssl/bio.h>
-
 #include "srtc/peer_connection.h"
+#include "srtc/peer_candidate.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/track.h"
@@ -293,7 +291,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         // Frames to send
         for (auto& item : frameSendQueue) {
-            candidate->addSendFrame(std::move(item));
+            candidate->addSendFrame(
+                    PeerCandidate::FrameToSend{
+                        item.track,
+                        item.packetizer,
+                        std::move(item.buf),
+                        std::move(item.csd)
+                    }
+            );
         }
 
         // Candidate processing

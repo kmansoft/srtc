@@ -20,7 +20,6 @@ class SdpOffer;
 class Track;
 class Packetizer;
 class Scheduler;
-class PeerCandidate;
 
 class PeerConnection final :
         public PeerCandidateListener {
@@ -70,6 +69,13 @@ private:
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
+
+    struct FrameToSend {
+        std::shared_ptr<Track> track;
+        std::shared_ptr<Packetizer> packetizer;
+        ByteBuffer buf;                 // possibly empty
+        std::vector<ByteBuffer> csd;    // possibly empty
+    };
 
     std::list<PeerCandidate::FrameToSend> mFrameSendQueue;
 
