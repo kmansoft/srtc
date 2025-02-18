@@ -1,4 +1,5 @@
 #include "srtc/socket.h"
+#include "srtc/util.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -14,24 +15,6 @@ int createSocket(const srtc::anyaddr &addr)
     }
 
     return socket(AF_INET, SOCK_DGRAM, 0);
-}
-
-bool operator==(
-        const struct sockaddr_in &sin1,
-        const struct sockaddr_in &sin2)
-{
-    return sin1.sin_family == sin2.sin_family &&
-           sin1.sin_port == sin2.sin_port &&
-           sin1.sin_addr.s_addr == sin2.sin_addr.s_addr;
-}
-
-bool operator==(
-        const struct sockaddr_in6 &sin1,
-        const struct sockaddr_in6 &sin2)
-{
-    return sin1.sin6_family == sin2.sin6_family &&
-           sin1.sin6_port == sin2.sin6_port &&
-           std::memcmp(&sin1.sin6_addr, &sin2.sin6_addr, sizeof(sin1.sin6_addr)) == 0;
 }
 
 constexpr auto kReceiveBufferSize = 2048;
@@ -74,9 +57,7 @@ int Socket::fd() const
                                 reinterpret_cast<struct sockaddr *>(&from),
                                 &fromLen);
         if (r > 0) {
-            if (mAddr.ss.ss_family == AF_INET && mAddr.sin_ipv4 == from.sin_ipv4 ||
-                mAddr.ss.ss_family == AF_INET6 && mAddr.sin_ipv6 == from.sin_ipv6) {
-
+            if (mAddr == from) {
                 ByteBuffer buf = { mReceiveBuffer.get(), static_cast<size_t>(r) };
                 list.emplace_back(std::move(buf), from, fromLen);
             }

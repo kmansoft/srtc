@@ -58,6 +58,8 @@ class RealScheduler : public Scheduler {
 public:
     RealScheduler() = default;
     ~RealScheduler() override = default;
+
+    virtual void dump() = 0;
 };
 
 
@@ -65,7 +67,7 @@ public:
 
 class ThreadScheduler final :
         public RealScheduler,
-        private std::enable_shared_from_this<ThreadScheduler> {
+        public std::enable_shared_from_this<ThreadScheduler> {
 public:
     explicit ThreadScheduler(const std::string &name);
 
@@ -78,9 +80,11 @@ public:
 
     std::shared_ptr<RealScheduler> getRealScheduler() override;
 
+    void dump() override;
+
 private:
 
-    class TaskImpl final : public Task, private std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
     public:
         TaskImpl(const std::weak_ptr<ThreadScheduler>& owner,
                  const When& when,
@@ -123,7 +127,7 @@ private:
 
 class LoopScheduler final :
         public RealScheduler,
-        private std::enable_shared_from_this<LoopScheduler> {
+        public std::enable_shared_from_this<LoopScheduler> {
 public:
     LoopScheduler();
 
@@ -136,13 +140,15 @@ public:
 
     std::shared_ptr<RealScheduler> getRealScheduler() override;
 
+    void dump() override;
+
     [[nodiscard]] int getTimeoutMillis(int defaultValue) const;
 
     void run();
 
 private:
 
-    class TaskImpl final : public Task, private std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
     public:
         TaskImpl(const std::weak_ptr<LoopScheduler>& owner,
                  const When& when,
@@ -178,7 +184,7 @@ private:
 
 class ScopedScheduler final :
         public Scheduler,
-        private std::enable_shared_from_this<ScopedScheduler> {
+        public std::enable_shared_from_this<ScopedScheduler> {
 public:
     explicit ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler);
 
@@ -192,7 +198,7 @@ public:
     [[nodiscard]] std::shared_ptr<RealScheduler> getRealScheduler() override;
 
 private:
-    class TaskImpl final : public Task, private std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
     public:
         TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
                  const std::weak_ptr<Task>& task);

@@ -211,8 +211,7 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
 
     ParseMediaState* mediaStateCurr = nullptr;
 
-    std::vector<Host> hostList4;
-    std::vector<Host> hostList6;
+    std::vector<Host> hostList;
 
     std::string certHashAlg;
     ByteBuffer certHashBin;
@@ -331,22 +330,22 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
                                 const auto& addrStr = props[3];
                                 if (addrStr.find('.') != std::string::npos) {
                                     if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
-                                        if (std::find_if(hostList4.begin(), hostList4.end(), [host](const Host& it) {
-                                            return host.addr.sin_ipv4.sin_addr.s_addr == it.addr.sin_ipv4.sin_addr.s_addr;
-                                        }) == hostList4.end()) {
+                                        if (std::find_if(hostList.begin(), hostList.end(), [host](const Host& it) {
+                                            return host.addr == it.addr;
+                                        }) == hostList.end()) {
                                             host.addr.ss.ss_family = AF_INET;
                                             host.addr.sin_ipv4.sin_port = htons(port);
-                                            hostList4.push_back(host);
+                                            hostList.push_back(host);
                                         }
                                     }
                                 } else if (addrStr.find(':') != std::string::npos) {
                                     if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
-                                        if (std::find_if(hostList6.begin(), hostList6.end(), [host](const Host& it) {
-                                            return std::memcmp(&host.addr.sin_ipv6.sin6_addr, &it.addr.sin_ipv6.sin6_addr, sizeof(struct in6_addr)) == 0;
-                                        }) == hostList6.end()) {
+                                        if (std::find_if(hostList.begin(), hostList.end(), [host](const Host& it) {
+                                            return host.addr == it.addr;
+                                        }) == hostList.end()) {
                                             host.addr.ss.ss_family = AF_INET6;
                                             host.addr.sin_ipv6.sin6_port = htons(port);
-                                            hostList6.push_back(host);
+                                            hostList.push_back(host);
                                         }
                                     }
                                 }
@@ -389,21 +388,10 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
     if (!isRtcpMux) {
         return { Error::Code::InvalidData, "The rtcp-mux extension is required" };
     }
-    if (hostList4.empty() && hostList6.empty()) {
+    if (hostList.empty()) {
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }
 
-    // Interleave IPv4 and IPv6 candidates
-    std::vector<Host> hostList;
-    for (size_t i = 0; i < 3; i += 1) {
-        if (i < hostList4.size()) {
-            hostList.push_back(hostList4[i]);
-        }
-        if (i < hostList6.size()) {
-            // TODO Re-enable IPv6
-            // hostList.push_back(hostList6[i]);
-        }
-    }
 
     if (mediaStateVideo.id <= 0 && mediaStateAudio.id <= 0) {
         return { Error::Code::InvalidData, "No media tracks" };

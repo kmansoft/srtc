@@ -94,6 +94,14 @@ std::shared_ptr<RealScheduler> ThreadScheduler::getRealScheduler()
     return shared_from_this();
 }
 
+void ThreadScheduler::dump()
+{
+    std::unique_lock lock(mMutex);
+
+    srtc::log(SRTC_LOG_V, "ThreadScheduler",
+              "Queue contains %zd items", mTaskQueue.size());
+}
+
 void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
 {
     std::unique_lock lock(mMutex);
@@ -211,10 +219,8 @@ std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
             when,
             func);
 
-    {
-        mTaskQueue.insert(std::upper_bound(
-                mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
-    }
+    mTaskQueue.insert(std::upper_bound(
+            mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
 
     return task;
 }
@@ -228,6 +234,12 @@ void LoopScheduler::cancel(std::shared_ptr<Task>& task)
 std::shared_ptr<RealScheduler> LoopScheduler::getRealScheduler()
 {
     return shared_from_this();
+}
+
+void LoopScheduler::dump()
+{
+    srtc::log(SRTC_LOG_V, "LoopScheduler",
+        "Queue contains %zu items", mTaskQueue.size());
 }
 
 int LoopScheduler::getTimeoutMillis(int defaultValue) const
@@ -266,12 +278,13 @@ void LoopScheduler::assertCurrentThread() const
 
 void LoopScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
 {
+    srtc::log(SRTC_LOG_V, "LoopScheduler", "cancelImpl");
+
     assertCurrentThread();
 
     const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), task);
     if (iter != mTaskQueue.end()) {
         mTaskQueue.erase(iter);
-        return;
     }
 }
 
@@ -302,6 +315,10 @@ ScopedScheduler::ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler
 ScopedScheduler::~ScopedScheduler()
 {
     std::lock_guard lock(mMutex);
+
+    srtc::log(SRTC_LOG_V, "ScopedScheduler",
+              "Submitted contains %zd items", mSubmitted.size());
+
     for (const auto& iter : mSubmitted) {
         if (const auto task = iter->mTask.lock()) {
             task->cancel();

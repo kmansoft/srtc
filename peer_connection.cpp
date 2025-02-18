@@ -221,22 +221,62 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                              const std::shared_ptr<SdpAnswer> answer)
 {
     // Loop scheduler
-    const auto scheduler = std::make_shared<LoopScheduler>();
+    mLoopScheduler = std::make_shared<LoopScheduler>();
 
     // We are connecting
     setConnectionState(ConnectionState::Connecting);
 
-    // Candidate
-    const auto host = answer->getHostList()[0]; // TODO try all candidates
-    const auto candidate = std::make_unique<PeerCandidate>(
-            this,
-            offer, answer,
-            scheduler,
-            host,
-            std::chrono::milliseconds::zero());
+
+    // Interleave IPv4 and IPv6 candidates
+    std::vector<Host> hostList4;
+    std::vector<Host> hostList6;
+    for (const auto& host : answer->getHostList()) {
+        if (host.addr.ss.ss_family == AF_INET) {
+            hostList4.push_back(host);
+        }
+        if (host.addr.ss.ss_family == AF_INET6) {
+            hostList6.push_back(host);
+        }
+    }
+
+    // We will be polling, the size arg is obsolete
+    const auto epollHandle = epoll_create(1);
+
+    auto connectDelay = 0;
+    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i +=1) {
+        struct epoll_event ev = { .events = EPOLLIN };
+
+        if (i < hostList4.size()) {
+            const auto host = hostList4[i];
+            const auto candidate = std::make_shared<PeerCandidate>(
+                    this,
+                    offer, answer,
+                    mLoopScheduler,
+                    host,
+                    std::chrono::milliseconds(connectDelay));
+            mConnectingCandidateList.push_back(candidate);
+
+            ev.data.ptr = candidate.get();
+            epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
+        }
+        if (i < hostList6.size()) {
+            const auto host = hostList6[i];
+            const auto candidate = std::make_shared<PeerCandidate>(
+                    this,
+                    offer, answer,
+                    mLoopScheduler,
+                    host,
+                    std::chrono::milliseconds(connectDelay));
+            mConnectingCandidateList.push_back(candidate);
+
+            ev.data.ptr = candidate.get();
+            epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
+        }
+
+        connectDelay += 100;
+    }
 
     // Our socket loop
-    const auto epollHandle = epoll_create(2);
 
     {
         std::lock_guard lock(mMutex);
@@ -245,9 +285,6 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         ev.data.fd = 0;
         epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
-
-        ev.data.ptr = candidate.get();
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
     }
 
     // Our processing loop
@@ -256,7 +293,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         struct epoll_event epollEvent[10];
         const auto nfds = epoll_wait(epollHandle, epollEvent,
                                      sizeof(epollEvent) / sizeof(epollEvent[0]),
-                                     scheduler->getTimeoutMillis(1000));
+                                     mLoopScheduler->getTimeoutMillis(1000));
 
         std::list<PeerCandidate::FrameToSend> frameSendQueue;
 
@@ -285,23 +322,37 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         }
 
         // Scheduler
-        scheduler->run();
+        mLoopScheduler->run();
 
         // Frames to send
-        for (auto& item : frameSendQueue) {
-            candidate->addSendFrame(
-                    PeerCandidate::FrameToSend{
-                        item.track,
-                        item.packetizer,
-                        std::move(item.buf),
-                        std::move(item.csd)
-                    }
-            );
+        if (mSelectedCandidate) {
+            for (auto& item: frameSendQueue) {
+                mSelectedCandidate->addSendFrame(
+                        PeerCandidate::FrameToSend{
+                                item.track,
+                                item.packetizer,
+                                std::move(item.buf),
+                                std::move(item.csd)
+                        }
+                );
+            }
         }
 
         // Candidate processing
-        candidate->process();
+        for (const auto& candidate: mConnectingCandidateList) {
+            candidate->process();
+            if (mConnectingCandidateList.empty()) {
+                // A candidate reached ICE connected, and we removed all connecting ones
+                break;
+            }
+        }
+
+        if (mSelectedCandidate) {
+            mSelectedCandidate->process();
+        }
     }
+
+    mLoopScheduler.reset();
 
     close(epollHandle);
 
@@ -352,7 +403,16 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 {
-    // TODO: Forget all candidates except the one that succeeded
+    for (const auto& item : mConnectingCandidateList) {
+        if (item.get() == candidate) {
+            mSelectedCandidate = item;
+            break;
+        }
+    }
+
+    mConnectingCandidateList.clear();
+
+    mLoopScheduler->dump();
 }
 
 void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)

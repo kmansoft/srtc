@@ -96,6 +96,11 @@ private:
     // Packetizers
     std::shared_ptr<Packetizer> mVideoPacketizer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
+
+    // These are only used on the worker thread so don't need mutexes
+    std::shared_ptr<LoopScheduler> mLoopScheduler;
+    std::shared_ptr<PeerCandidate> mSelectedCandidate;
+    std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
 };
 
 }

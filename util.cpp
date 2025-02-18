@@ -52,4 +52,34 @@ ByteBuffer hex_to_bin(const std::string& hex) {
     return std::move(buf);
 }
 
+bool operator==(
+        const struct sockaddr_in& sin1,
+        const struct sockaddr_in& sin2)
+{
+    return sin1.sin_family == sin2.sin_family &&
+           sin1.sin_port == sin2.sin_port &&
+           sin1.sin_addr.s_addr == sin2.sin_addr.s_addr;
+}
+
+bool operator==(
+        const struct sockaddr_in6& sin1,
+        const struct sockaddr_in6& sin2)
+{
+    return sin1.sin6_family == sin2.sin6_family &&
+           sin1.sin6_port == sin2.sin6_port &&
+           std::memcmp(&sin1.sin6_addr, &sin2.sin6_addr, sizeof(sin1.sin6_addr)) == 0;
+}
+
+bool operator==(
+        const anyaddr& addr1,
+        const anyaddr& addr2)
+{
+    return
+            addr1.ss.ss_family == addr2.ss.ss_family &&
+            (
+                    addr1.ss.ss_family == AF_INET && addr1.sin_ipv4 == addr2.sin_ipv4 ||
+                    addr1.ss.ss_family == AF_INET6 && addr1.sin_ipv6 == addr2.sin_ipv6
+            );
+}
+
 }
