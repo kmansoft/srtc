@@ -35,6 +35,7 @@ public:
                   const std::shared_ptr<SdpAnswer>& answer,
                   const std::shared_ptr<RealScheduler>& scheduler,
                   const Host& host,
+                  int epollHandle,
                   const Scheduler::Delay& startDelay);
     ~PeerCandidate();
 
@@ -67,6 +68,7 @@ private:
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
     const Host mHost;
+    const int mEpollHandle;
     const std::shared_ptr<Socket> mSocket;
     const std::shared_ptr<IceAgent> mIceAgent;
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
@@ -107,14 +109,23 @@ private:
 
     static struct bio_st *BIO_new_dgram(PeerCandidate* pc);
 
+    void freeDTLS();
+
     // State
     void emitOnConnecting();
     void emitOnIceConnected();
     void emitOnDtlsConnected();
-    void emitOnFailed(const Error& error);
+    void emitOnFailedToConnect(const Error& error);
 
-    // Scheduler
-    ScopedScheduler mScheduler;
+    // Receive timeout
+    void updateReceiveTimeout();
+    void onReceiveTimeout();
+
+    // Scheduler and tasks
+    std::weak_ptr<Task> mTaskConnectTimeout;
+    std::weak_ptr<Task> mTaskReceiveTimeout;
+
+    std::shared_ptr<ScopedScheduler> mScheduler;
 };
 
 }

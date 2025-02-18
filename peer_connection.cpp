@@ -223,75 +223,29 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     // Loop scheduler
     mLoopScheduler = std::make_shared<LoopScheduler>();
 
-    // We are connecting
-    setConnectionState(ConnectionState::Connecting);
-
-
-    // Interleave IPv4 and IPv6 candidates
-    std::vector<Host> hostList4;
-    std::vector<Host> hostList6;
-    for (const auto& host : answer->getHostList()) {
-        if (host.addr.ss.ss_family == AF_INET) {
-            hostList4.push_back(host);
-        }
-        if (host.addr.ss.ss_family == AF_INET6) {
-            hostList6.push_back(host);
-        }
-    }
-
     // We will be polling, the size arg is obsolete
-    const auto epollHandle = epoll_create(1);
-
-    auto connectDelay = 0;
-    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i +=1) {
-        struct epoll_event ev = { .events = EPOLLIN };
-
-        if (i < hostList4.size()) {
-            const auto host = hostList4[i];
-            const auto candidate = std::make_shared<PeerCandidate>(
-                    this,
-                    offer, answer,
-                    mLoopScheduler,
-                    host,
-                    std::chrono::milliseconds(connectDelay));
-            mConnectingCandidateList.push_back(candidate);
-
-            ev.data.ptr = candidate.get();
-            epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
-        }
-        if (i < hostList6.size()) {
-            const auto host = hostList6[i];
-            const auto candidate = std::make_shared<PeerCandidate>(
-                    this,
-                    offer, answer,
-                    mLoopScheduler,
-                    host,
-                    std::chrono::milliseconds(connectDelay));
-            mConnectingCandidateList.push_back(candidate);
-
-            ev.data.ptr = candidate.get();
-            epoll_ctl(epollHandle, EPOLL_CTL_ADD, candidate->getSocketFd(), &ev);
-        }
-
-        connectDelay += 100;
-    }
-
-    // Our socket loop
 
     {
         std::lock_guard lock(mMutex);
 
-        struct epoll_event ev = { .events = EPOLLIN };
+        mEpollHandle = epoll_create(1);
 
+        struct epoll_event ev = {  };
+
+        ev.events = EPOLLIN;
         ev.data.fd = 0;
-        epoll_ctl(epollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
+
+        epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, mEventHandle, &ev);
     }
+
+    // We are connecting
+    startConnecting();
 
     // Our processing loop
     while (true) {
         // Epoll for incoming data
         struct epoll_event epollEvent[10];
-        const auto nfds = epoll_wait(epollHandle, epollEvent,
+        const auto nfds = epoll_wait(mEpollHandle, epollEvent,
                                      sizeof(epollEvent) / sizeof(epollEvent[0]),
                                      mLoopScheduler->getTimeoutMillis(1000));
 
@@ -352,9 +306,12 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         }
     }
 
-    mLoopScheduler.reset();
+    {
+        std::lock_guard lock(mMutex);
+        close(mEpollHandle);
+    }
 
-    close(epollHandle);
+    mLoopScheduler.reset();
 
     setConnectionState(ConnectionState::Closed);
 }
@@ -390,6 +347,53 @@ void PeerConnection::setConnectionState(ConnectionState state)
     }
 }
 
+void PeerConnection::startConnecting()
+{
+    setConnectionState(ConnectionState::Connecting);
+
+    std::lock_guard lock(mMutex);
+
+    // Interleave IPv4 and IPv6 candidates
+    std::vector<Host> hostList4;
+    std::vector<Host> hostList6;
+    for (const auto& host : mSdpAnswer->getHostList()) {
+        if (host.addr.ss.ss_family == AF_INET) {
+            hostList4.push_back(host);
+        }
+        if (host.addr.ss.ss_family == AF_INET6) {
+            hostList6.push_back(host);
+        }
+    }
+
+    auto connectDelay = 0;
+    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i +=1) {
+        if (i < hostList4.size()) {
+            const auto host = hostList4[i];
+            const auto candidate = std::make_shared<PeerCandidate>(
+                    this,
+                    mSdpOffer, mSdpAnswer,
+                    mLoopScheduler,
+                    host,
+                    mEpollHandle,
+                    std::chrono::milliseconds(connectDelay));
+            mConnectingCandidateList.push_back(candidate);
+        }
+        if (i < hostList6.size()) {
+            const auto host = hostList6[i];
+            const auto candidate = std::make_shared<PeerCandidate>(
+                    this,
+                    mSdpOffer, mSdpAnswer,
+                    mLoopScheduler,
+                    host,
+                    mEpollHandle,
+                    std::chrono::milliseconds(connectDelay));
+            mConnectingCandidateList.push_back(candidate);
+       }
+
+        connectDelay += 100;
+    }
+}
+
 void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
 {
     std::lock_guard lock(mMutex);
@@ -420,10 +424,29 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
     setConnectionState(ConnectionState::Connected);
 }
 
-void PeerConnection::onCandidateFailed(PeerCandidate* candidate, const Error& error)
+void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
 {
     LOG(SRTC_LOG_E, "Candidate failed: %d %s", error.mCode, error.mMessage.c_str());
-    setConnectionState(ConnectionState::Failed);
+
+    if (mSelectedCandidate.get() == candidate) {
+        // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
+        mSelectedCandidate.reset();
+        startConnecting();
+    } else {
+        // We are connecting
+        for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {
+            if (iter->get() == candidate) {
+                iter = mConnectingCandidateList.erase(iter);
+            } else {
+                ++iter;
+            }
+        }
+
+        // We have tried all candidates and they all failed
+        if (mConnectingCandidateList.empty()) {
+            setConnectionState(ConnectionState::Failed);
+        }
+    }
 }
 
 }

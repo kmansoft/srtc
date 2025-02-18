@@ -28,7 +28,6 @@ struct Host {
     union anyaddr addr;
 };
 
-
 std::string to_string(const anyaddr& addr);
 
 #if defined __has_attribute && __has_attribute(guarded_by)

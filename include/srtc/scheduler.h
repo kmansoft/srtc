@@ -21,6 +21,7 @@ class RealScheduler;
 class Task {
 public:
     virtual void cancel() = 0;
+    virtual std::shared_ptr<Task> update(const std::chrono::milliseconds& delay) = 0;
 
     virtual ~Task();
 };
@@ -93,6 +94,7 @@ private:
         ~TaskImpl() override;
 
         void cancel() override;
+        std::shared_ptr<Task> update(const Delay& delay) override;
 
         const std::weak_ptr<ThreadScheduler> mOwner;
         const When mWhen;
@@ -111,6 +113,8 @@ private:
     };
 
     void cancelImpl(const std::shared_ptr<TaskImpl>& task);
+    std::shared_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& task,
+                                     const Delay& delay);
 
     void threadFunc(std::string name);
 
@@ -157,6 +161,7 @@ private:
         ~TaskImpl() override;
 
         void cancel() override;
+        std::shared_ptr<Task> update(const Delay& delay) override;
 
         const std::weak_ptr<LoopScheduler> mOwner;
         const When mWhen;
@@ -175,6 +180,8 @@ private:
     void assertCurrentThread() const;
 
     void cancelImpl(std::shared_ptr<TaskImpl> &task);
+    std::shared_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& task,
+                                     const Delay& delay);
 
     std::thread::id mThreadId;
     std::vector<std::shared_ptr<TaskImpl>> mTaskQueue;
@@ -201,17 +208,23 @@ private:
     class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
     public:
         TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
-                 const std::weak_ptr<Task>& task);
+                 const std::weak_ptr<Task>& task,
+                 const Func& func);
 
         ~TaskImpl() override;
 
         void cancel() override;
+        std::shared_ptr<Task> update(const Delay& delay) override;
 
         const std::weak_ptr<ScopedScheduler> mOwner;
         const std::weak_ptr<Task> mTask;
+        const Func mFunc;
     };
 
     void cancelImpl(const std::shared_ptr<TaskImpl>& task);
+    std::shared_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& task,
+                                     const Delay& delay);
+
     void removeExpiredLocked() SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
     std::vector<std::shared_ptr<TaskImpl>> mSubmitted SRTC_GUARDED_BY(mMutex);

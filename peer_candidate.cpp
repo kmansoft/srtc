@@ -14,6 +14,8 @@
 #include <cstring>
 #include <cassert>
 
+#include <sys/epoll.h>
+
 #define LOG(level, ...) srtc::log(level, "PeerCandidate", __VA_ARGS__)
 
 namespace {
@@ -24,6 +26,9 @@ int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
 }
 
 constexpr auto kIceMessageBufferSize = 2048;
+
+constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(5000);
+constexpr std::chrono::milliseconds kReceiveTimeout = std::chrono::milliseconds (5000);
 
 // GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
@@ -155,34 +160,37 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::shared_ptr<SdpAnswer>& answer,
                              const std::shared_ptr<RealScheduler>& scheduler,
                              const Host& host,
+                             int epollHandle,
                              const Scheduler::Delay& startDelay)
     : mListener(listener)
     , mOffer(offer)
     , mAnswer(answer)
     , mHost(host)
+    , mEpollHandle(epollHandle)
     , mSocket(std::make_shared<Socket>(host.addr))
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
-    , mScheduler(scheduler)
+    , mScheduler(std::make_shared<ScopedScheduler>(scheduler))
 {
     assert(mListener);
+    assert(mEpollHandle);
 
-    mScheduler.submit(startDelay, [this] {
+    struct epoll_event ev = { };
+    ev.events = EPOLLIN;
+    ev.data.ptr = this;
+    epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, mSocket->fd(), &ev);
+
+    mScheduler->submit(startDelay, [this] {
         startConnecting();
     });
 }
 
 PeerCandidate::~PeerCandidate()
 {
-    if (mDtlsSsl) {
-        SSL_shutdown(mDtlsSsl);
-        SSL_free(mDtlsSsl);
-    }
+    epoll_ctl(mEpollHandle, EPOLL_CTL_DEL, mSocket->fd(), nullptr);
 
-    if (mDtlsCtx) {
-        SSL_CTX_free(mDtlsCtx);
-    }
+    freeDTLS();
 }
 
 int PeerCandidate::getSocketFd() const
@@ -284,7 +292,7 @@ void PeerCandidate::process()
         if (!SSL_CTX_check_private_key(mDtlsCtx)) {
             LOG(SRTC_LOG_V, "ERROR: invalid private key");
             mDtlsState = DtlsState::Failed;
-            emitOnFailed({ Error::Code::InvalidData, "Invalid private key"});
+            emitOnFailedToConnect({ Error::Code::InvalidData, "Invalid private key"});
         } else {
             SSL_CTX_set_verify(mDtlsCtx, SSL_VERIFY_PEER, verify_callback);
 
@@ -312,8 +320,19 @@ void PeerCandidate::process()
 
 void PeerCandidate::startConnecting()
 {
+    // Start from scratch
+    mDtlsState = DtlsState::Activating;
+    mSentUseCandidate = false;
+
     // Notify the listener
     emitOnConnecting();
+
+    // We have a timeout
+    mTaskConnectTimeout = mScheduler->submit(
+            kConnectTimeout,
+            [this] {
+            emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout"});
+    });
 
     // Open the conversation by sending an STUN binding request
     const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
@@ -428,7 +447,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                 // Error, no certificate
                 LOG(SRTC_LOG_E, "There is no DTLS server certificate");
                 mDtlsState = DtlsState::Failed;
-                emitOnFailed({ Error::Code::InvalidData, "There is no DTLS server certificate"});
+                emitOnFailedToConnect({ Error::Code::InvalidData, "There is no DTLS server certificate"});
             } else {
                 uint8_t fpBuf[32] = {};
                 unsigned int fpSize = {};
@@ -448,36 +467,36 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                     if (srtpError.isOk()) {
                         mSrtp = srtpConn;
                         mDtlsState = DtlsState::Completed;
+
                         emitOnDtlsConnected();
+
+                        if (const auto task = mTaskConnectTimeout.lock()) {
+                            task->cancel();
+                        }
+
+                        updateReceiveTimeout();
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
                         mDtlsState = DtlsState::Failed;
-                        emitOnFailed(srtpError);
+                        emitOnFailedToConnect(srtpError);
                     }
                 } else {
                     // Error, certificate hash does not match
                     LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
                     mDtlsState = DtlsState::Failed;
-                    emitOnFailed({ Error::Code::InvalidData, "Certificate hash doesn't match"});
+                    emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match"});
                 }
             }
         } else {
             // Error during DTLS handshake
             LOG(SRTC_LOG_E, "Failed during DTLS handshake");
             mDtlsState = DtlsState::Failed;
-            emitOnFailed({ Error::Code::InvalidData, "Failure during DTLS handshake"});
+            emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake"});
         }
 
         if (mDtlsState == DtlsState::Failed) {
-            SSL_shutdown(mDtlsSsl);
-            SSL_free(mDtlsSsl);
-            mDtlsSsl = nullptr;
-
-            if (mDtlsCtx) {
-                SSL_CTX_free(mDtlsCtx);
-                mDtlsCtx = nullptr;
-            }
+            freeDTLS();
         }
     }
 }
@@ -496,6 +515,8 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
                                                     size_t unprotectedSize)
 {
+    updateReceiveTimeout();
+
     ByteReader rtcpReader = { buf.data(), unprotectedSize };
 
     const auto rtcpRC = rtcpReader.readU8() & 0x1f;
@@ -647,6 +668,20 @@ BIO *PeerCandidate::BIO_new_dgram(PeerCandidate* pc) {
     return b;
 }
 
+void PeerCandidate::freeDTLS()
+{
+    if (mDtlsSsl) {
+        SSL_shutdown(mDtlsSsl);
+        SSL_free(mDtlsSsl);
+        mDtlsSsl = nullptr;
+    }
+
+    if (mDtlsCtx) {
+        SSL_CTX_free(mDtlsCtx);
+        mDtlsCtx = nullptr;
+    }
+}
+
 // State
 
 void PeerCandidate::emitOnConnecting() {
@@ -663,9 +698,32 @@ void PeerCandidate::emitOnDtlsConnected()
     mListener->onCandidateDtlsConnected(this);
 }
 
-void PeerCandidate::emitOnFailed(const Error& error)
+void PeerCandidate::emitOnFailedToConnect(const Error& error)
 {
-    mListener->onCandidateFailed(this, error);
+    mListener->onCandidateFailedToConnect(this, error);
+}
+
+void PeerCandidate::updateReceiveTimeout()
+{
+    if (const auto task = mTaskReceiveTimeout.lock()) {
+        mTaskReceiveTimeout = task->update(kReceiveTimeout);
+    } else {
+        mTaskReceiveTimeout = mScheduler->submit(kReceiveTimeout, [this] {
+            onReceiveTimeout();
+        });
+    }
+}
+
+void PeerCandidate::onReceiveTimeout()
+{
+    if (const auto ptr = mTaskReceiveTimeout.lock()) {
+        ptr->cancel();
+    }
+
+    mSrtp.reset();
+
+    freeDTLS();
+    startConnecting();
 }
 
 }

@@ -64,6 +64,8 @@ private:
 
     void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
+    void startConnecting();
+
     bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
@@ -79,13 +81,12 @@ private:
 
     std::list<PeerCandidate::FrameToSend> mFrameSendQueue;
 
-    // PeerCandiateListener
+    // PeerCandidateListener
     void onCandidateHasDataToSend(PeerCandidate* candidate) override;
-
     void onCandidateConnecting(PeerCandidate* candidate) override;
     void onCandidateIceConnected(PeerCandidate* candidate) override;
     void onCandidateDtlsConnected(PeerCandidate* candidate) override;
-    void onCandidateFailed(PeerCandidate* candidate, const Error& error) override;
+    void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
@@ -101,6 +102,7 @@ private:
     std::shared_ptr<LoopScheduler> mLoopScheduler;
     std::shared_ptr<PeerCandidate> mSelectedCandidate;
     std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
+    int mEpollHandle SRTC_GUARDED_BY(mMutex);
 };
 
 }

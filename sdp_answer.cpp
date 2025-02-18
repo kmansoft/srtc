@@ -392,7 +392,6 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
         return { Error::Code::InvalidData, "No hosts to connect to" };
     }
 
-
     if (mediaStateVideo.id <= 0 && mediaStateAudio.id <= 0) {
         return { Error::Code::InvalidData, "No media tracks" };
     }
