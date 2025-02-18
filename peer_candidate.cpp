@@ -399,6 +399,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
             const auto icePassword = mAnswer->getIcePassword();
 
             if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
+                updateReceiveTimeout();
+
                 if (!mSentUseCandidate) {
                     mSentUseCandidate = true;
 
@@ -703,6 +705,11 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
     mListener->onCandidateFailedToConnect(this, error);
 }
 
+void PeerCandidate::emitOnLostConnection(const srtc::Error &error)
+{
+    mListener->onCandidateLostConnection(this, error);
+}
+
 void PeerCandidate::updateReceiveTimeout()
 {
     if (const auto task = mTaskReceiveTimeout.lock()) {
@@ -720,10 +727,7 @@ void PeerCandidate::onReceiveTimeout()
         ptr->cancel();
     }
 
-    mSrtp.reset();
-
-    freeDTLS();
-    startConnecting();
+    emitOnLostConnection({ Error::Code::InvalidData, "Receive timeout" });
 }
 
 }

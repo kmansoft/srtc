@@ -87,6 +87,7 @@ private:
     void onCandidateIceConnected(PeerCandidate* candidate) override;
     void onCandidateDtlsConnected(PeerCandidate* candidate) override;
     void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
+    void onCandidateLostConnection(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };

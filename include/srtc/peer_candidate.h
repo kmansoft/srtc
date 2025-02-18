@@ -116,6 +116,7 @@ private:
     void emitOnIceConnected();
     void emitOnDtlsConnected();
     void emitOnFailedToConnect(const Error& error);
+    void emitOnLostConnection(const Error& error);
 
     // Receive timeout
     void updateReceiveTimeout();

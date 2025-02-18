@@ -426,27 +426,30 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
 {
-    LOG(SRTC_LOG_E, "Candidate failed: %d %s", error.mCode, error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s", error.mCode, error.mMessage.c_str());
 
-    if (mSelectedCandidate.get() == candidate) {
-        // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
-        mSelectedCandidate.reset();
-        startConnecting();
-    } else {
-        // We are connecting
-        for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {
-            if (iter->get() == candidate) {
-                iter = mConnectingCandidateList.erase(iter);
-            } else {
-                ++iter;
-            }
-        }
-
-        // We have tried all candidates and they all failed
-        if (mConnectingCandidateList.empty()) {
-            setConnectionState(ConnectionState::Failed);
+    // We are connecting
+    for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {
+        if (iter->get() == candidate) {
+            iter = mConnectingCandidateList.erase(iter);
+        } else {
+            ++iter;
         }
     }
+
+    // We have tried all candidates and they all failed
+    if (mConnectingCandidateList.empty()) {
+        setConnectionState(ConnectionState::Failed);
+    }
+}
+
+void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate *candidate, const srtc::Error &error)
+{
+    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s", error.mCode, error.mMessage.c_str());
+
+    // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
+    mSelectedCandidate.reset();
+    startConnecting();
 }
 
 }

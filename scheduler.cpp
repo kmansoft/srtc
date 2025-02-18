@@ -42,13 +42,13 @@ void ThreadScheduler::TaskImpl::cancel()
     }
 }
 
-std::shared_ptr<Task> ThreadScheduler::TaskImpl::update(const std::chrono::milliseconds& delay)
+std::weak_ptr<Task> ThreadScheduler::TaskImpl::update(const std::chrono::milliseconds& delay)
 {
     if (const auto owner = mOwner.lock()) {
         auto self = shared_from_this();
         return owner->updateImpl(self, delay);
     }
-    return nullptr;
+    return {};
 }
 
 ThreadScheduler::ThreadScheduler(const std::string& name)
@@ -77,6 +77,9 @@ ThreadScheduler::~ThreadScheduler()
 std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
                                             const Func& func)
 {
+    // Please instantiate using std::make_shared
+    assert(weak_from_this().lock());
+
     const auto when = std::chrono::steady_clock::now() + delay;
     const auto task = std::make_shared<TaskImpl>(
             weak_from_this(),
@@ -126,8 +129,8 @@ void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
     });
 }
 
-std::shared_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
-                                                  const srtc::Scheduler::Delay& delay)
+std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+                                                const srtc::Scheduler::Delay& delay)
 {
     std::unique_lock lock(mMutex);
 
@@ -229,14 +232,14 @@ void LoopScheduler::TaskImpl::cancel()
     }
 }
 
-std::shared_ptr<Task> LoopScheduler::TaskImpl::update(const Delay& delay)
+std::weak_ptr<Task> LoopScheduler::TaskImpl::update(const Delay& delay)
 {
     if (const auto owner = mOwner.lock()) {
         auto self = shared_from_this();
         return owner->updateImpl(self, delay);
     }
 
-    return nullptr;
+    return {};
 }
 
 LoopScheduler::LoopScheduler()
@@ -252,6 +255,9 @@ LoopScheduler::~LoopScheduler()
 std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
                                             const Func& func)
 {
+    // Please instantiate using std::make_shared
+    assert(weak_from_this().lock());
+
     assertCurrentThread();
 
     const auto when = std::chrono::steady_clock::now() + delay;
@@ -326,8 +332,8 @@ void LoopScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
     }
 }
 
-std::shared_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
-                                                const srtc::Scheduler::Delay& delay)
+std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+                                              const srtc::Scheduler::Delay& delay)
 {
     assertCurrentThread();
 
@@ -373,14 +379,14 @@ void ScopedScheduler::TaskImpl::cancel()
     }
 }
 
-std::shared_ptr<Task> ScopedScheduler::TaskImpl::update(const Delay& delay)
+std::weak_ptr<Task> ScopedScheduler::TaskImpl::update(const Delay& delay)
 {
     if (const auto owner = mOwner.lock()) {
         auto self = shared_from_this();
         return owner->updateImpl(self, delay);
     }
 
-    return nullptr;
+    return {};
 }
 
 ScopedScheduler::ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler)
@@ -406,6 +412,9 @@ ScopedScheduler::~ScopedScheduler()
 std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
                                             const Func& func)
 {
+    // Please instantiate using std::make_shared
+    assert(weak_from_this().lock());
+
     std::lock_guard lock(mMutex);
 
     removeExpiredLocked();
@@ -441,7 +450,7 @@ void ScopedScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
     }
 }
 
-std::shared_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
                                                   const Delay& delay)
 {
     std::lock_guard lock(mMutex);
@@ -452,7 +461,7 @@ std::shared_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl
         return ptr->update(delay);
     }
 
-    return nullptr;
+    return {};
 }
 
 void ScopedScheduler::removeExpiredLocked()
