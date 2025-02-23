@@ -31,6 +31,8 @@ constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(
 constexpr std::chrono::milliseconds kReceiveTimeout = std::chrono::milliseconds (5000);
 constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::milliseconds (1000);
 constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds (5000);
+constexpr std::chrono::milliseconds kKeepAliveStartTimeout = std::chrono::milliseconds(2500);
+constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(500);
 
 // GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
@@ -255,6 +257,8 @@ void PeerCandidate::process()
                         } else {
                             (void) mSocket->send(packetData.data(), protectedSize);
                         }
+
+                        updateKeepAliveTimeout();
                     }
                 } else {
                     LOG(SRTC_LOG_V, "SRTP is not initialized yet");
@@ -350,7 +354,6 @@ void PeerCandidate::startConnecting()
     addSendRaw({
                        mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
                });
-
 }
 
 void PeerCandidate::addSendRaw(ByteBuffer&& buf)
@@ -484,6 +487,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                         }
 
                         updateReceiveTimeout();
+                        updateKeepAliveTimeout();
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
@@ -743,6 +747,43 @@ void PeerCandidate::onReceiveTimeout()
     }
 
     emitOnLostConnection({ Error::Code::InvalidData, "Receive timeout" });
+}
+
+void PeerCandidate::updateKeepAliveTimeout() {
+    if (const auto task = mTaskKeepAliveTimeout.lock()) {
+        mTaskKeepAliveTimeout = task->update(kKeepAliveStartTimeout);
+    } else {
+        mTaskKeepAliveTimeout = mScheduler.submit(kKeepAliveStartTimeout, [this] {
+            onKeepAliveTimeout();
+        });
+    }
+
+    if (const auto task = mTaskSendKeepAlive.lock()) {
+        task->cancel();
+    }
+}
+
+void PeerCandidate::onKeepAliveTimeout()
+{
+    sendKeepAlive();
+}
+
+void PeerCandidate::sendKeepAlive()
+{
+    LOG(SRTC_LOG_V, "Sending a keep alive STUN request");
+
+    const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
+                                                                             mIceMessageBuffer.get(),
+                                                                             kIceMessageBufferSize,
+                                                                             mOffer, mAnswer,
+                                                                             false);
+    addSendRaw({
+                       mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
+               });
+
+    mScheduler.submit(kKeepAliveSendTimeout, [this] {
+       sendKeepAlive();
+    });
 }
 
 }

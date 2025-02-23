@@ -123,11 +123,16 @@ private:
     // Receive timeout
     void updateReceiveTimeout();
     void onReceiveTimeout();
+    void updateKeepAliveTimeout();
+    void onKeepAliveTimeout();
+    void sendKeepAlive();
 
     // Scheduler and tasks
     std::weak_ptr<Task> mTaskConnectTimeout;
     std::weak_ptr<Task> mTaskReceiveTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
+    std::weak_ptr<Task> mTaskKeepAliveTimeout;
+    std::weak_ptr<Task> mTaskSendKeepAlive;
 
     ScopedScheduler mScheduler;
 };
