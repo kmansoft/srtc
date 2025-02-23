@@ -64,6 +64,8 @@ private:
     void onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
                                          size_t unprotectedSize);
 
+    void forgetExpiredStunRequests();
+
     PeerCandidateListener* const mListener;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
@@ -125,6 +127,7 @@ private:
     // Scheduler and tasks
     std::weak_ptr<Task> mTaskConnectTimeout;
     std::weak_ptr<Task> mTaskReceiveTimeout;
+    std::weak_ptr<Task> mTaskExpireStunRequests;
 
     ScopedScheduler mScheduler;
 };

@@ -120,6 +120,19 @@ bool IceAgent::forgetTransaction(StunTransactionId id)
     return false;
 }
 
+void IceAgent::forgetExpiredTransactions(const std::chrono::milliseconds& expiration)
+{
+    const auto now = std::chrono::steady_clock::now();
+
+    for (auto it = mTransactionList.begin(); it != mTransactionList.end(); ) {
+        if (it->when < now - expiration) {
+            it = mTransactionList.erase(it);
+        } else {
+            ++ it;
+        }
+    }
+}
+
 bool IceAgent::verifyRequestMessage(StunMessage* msg,
                                     const std::string& username,
                                     const std::string& password)

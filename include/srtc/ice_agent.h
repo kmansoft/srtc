@@ -32,6 +32,8 @@ public:
 
     bool forgetTransaction(StunTransactionId id);
 
+    void forgetExpiredTransactions(const std::chrono::milliseconds& expiration);
+
     bool verifyRequestMessage(StunMessage* msg,
                               const std::string& username,
                               const std::string& password);

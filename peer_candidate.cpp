@@ -29,6 +29,8 @@ constexpr auto kIceMessageBufferSize = 2048;
 
 constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(5000);
 constexpr std::chrono::milliseconds kReceiveTimeout = std::chrono::milliseconds (5000);
+constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::milliseconds (1000);
+constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds (5000);
 
 // GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
@@ -334,6 +336,11 @@ void PeerCandidate::startConnecting()
             emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout"});
     });
 
+    // Trim stun requests from time to time
+    mTaskExpireStunRequests = mScheduler.submit(kExpireStunPeriod, [this] {
+        forgetExpiredStunRequests();
+    });
+
     // Open the conversation by sending an STUN binding request
     const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
                                                                              mIceMessageBuffer.get(),
@@ -588,6 +595,14 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
             }
         }
     }
+}
+
+void PeerCandidate::forgetExpiredStunRequests()
+{
+    mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
+    mScheduler.submit(kExpireStunPeriod, [this] {
+        forgetExpiredStunRequests();
+    });
 }
 
 // Custom BIO for DGRAM

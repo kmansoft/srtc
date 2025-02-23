@@ -316,6 +316,10 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     mLoopScheduler.reset();
 
     setConnectionState(ConnectionState::Closed);
+
+    // Clear everything on this thread before quitting
+    mConnectingCandidateList.clear();
+    mSelectedCandidate.reset();
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)
