@@ -190,8 +190,7 @@ private:
 // ----- ScopedScheduler
 
 class ScopedScheduler final :
-        public Scheduler,
-        public std::enable_shared_from_this<ScopedScheduler> {
+        public Scheduler {
 public:
     explicit ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler);
 
@@ -207,7 +206,7 @@ public:
 private:
     class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
     public:
-        TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
+        TaskImpl(ScopedScheduler* owner,
                  const std::weak_ptr<Task>& task,
                  const Func& func);
 
@@ -216,7 +215,7 @@ private:
         void cancel() override;
         std::weak_ptr<Task> update(const Delay& delay) override;
 
-        const std::weak_ptr<ScopedScheduler> mOwner;
+        ScopedScheduler* const mOwner;
         const std::weak_ptr<Task> mTask;
         const Func mFunc;
     };

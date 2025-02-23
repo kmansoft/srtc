@@ -359,34 +359,27 @@ std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& t
 
 // ScopedScheduler
 
-ScopedScheduler::TaskImpl::TaskImpl(const std::weak_ptr<ScopedScheduler>& owner,
+ScopedScheduler::TaskImpl::TaskImpl(ScopedScheduler* owner,
                                     const std::weak_ptr<Task>& task,
                                     const Func& func)
     : mOwner(owner)
     , mTask(task)
     , mFunc(func)
 {
-    assert(mOwner.lock());
 }
 
 ScopedScheduler::TaskImpl::~TaskImpl() = default;
 
 void ScopedScheduler::TaskImpl::cancel()
 {
-    if (const auto owner = mOwner.lock()) {
-        auto self = shared_from_this();
-        owner->cancelImpl(self);
-    }
+    auto self = shared_from_this();
+    mOwner->cancelImpl(self);
 }
 
 std::weak_ptr<Task> ScopedScheduler::TaskImpl::update(const Delay& delay)
 {
-    if (const auto owner = mOwner.lock()) {
-        auto self = shared_from_this();
-        return owner->updateImpl(self, delay);
-    }
-
-    return {};
+    auto self = shared_from_this();
+    return mOwner->updateImpl(self, delay);
 }
 
 ScopedScheduler::ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler)
@@ -412,15 +405,12 @@ ScopedScheduler::~ScopedScheduler()
 std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
                                             const Func& func)
 {
-    // Please instantiate using std::make_shared
-    assert(weak_from_this().lock());
-
     std::lock_guard lock(mMutex);
 
     removeExpiredLocked();
 
     const auto task = mScheduler->submit(delay, func);
-    const auto impl = std::make_shared<TaskImpl>(weak_from_this(), task, func);
+    const auto impl = std::make_shared<TaskImpl>(this, task, func);
     mSubmitted.push_back(impl);
 
     return impl;

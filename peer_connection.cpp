@@ -109,6 +109,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 
         // Event handle for talking to the network thread and the network thread itself
         mEventHandle = eventfd(0, EFD_NONBLOCK);
+        mEpollHandle = epoll_create(1);
         mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
     }
 
@@ -224,11 +225,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     mLoopScheduler = std::make_shared<LoopScheduler>();
 
     // We will be polling, the size arg is obsolete
-
+    int epollHandle;
     {
         std::lock_guard lock(mMutex);
 
-        mEpollHandle = epoll_create(1);
+        epollHandle = mEpollHandle;
 
         struct epoll_event ev = {  };
 
@@ -245,7 +246,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     while (true) {
         // Epoll for incoming data
         struct epoll_event epollEvent[10];
-        const auto nfds = epoll_wait(mEpollHandle, epollEvent,
+        const auto nfds = epoll_wait(epollHandle, epollEvent,
                                      sizeof(epollEvent) / sizeof(epollEvent[0]),
                                      mLoopScheduler->getTimeoutMillis(1000));
 
@@ -309,6 +310,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     {
         std::lock_guard lock(mMutex);
         close(mEpollHandle);
+        mEpollHandle = -1;
     }
 
     mLoopScheduler.reset();

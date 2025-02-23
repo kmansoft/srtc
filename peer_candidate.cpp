@@ -171,7 +171,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
-    , mScheduler(std::make_shared<ScopedScheduler>(scheduler))
+    , mScheduler(scheduler)
 {
     assert(mListener);
     assert(mEpollHandle);
@@ -181,7 +181,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     ev.data.ptr = this;
     epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, mSocket->fd(), &ev);
 
-    mScheduler->submit(startDelay, [this] {
+    mScheduler.submit(startDelay, [this] {
         startConnecting();
     });
 }
@@ -328,7 +328,7 @@ void PeerCandidate::startConnecting()
     emitOnConnecting();
 
     // We have a timeout
-    mTaskConnectTimeout = mScheduler->submit(
+    mTaskConnectTimeout = mScheduler.submit(
             kConnectTimeout,
             [this] {
             emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout"});
@@ -715,7 +715,7 @@ void PeerCandidate::updateReceiveTimeout()
     if (const auto task = mTaskReceiveTimeout.lock()) {
         mTaskReceiveTimeout = task->update(kReceiveTimeout);
     } else {
-        mTaskReceiveTimeout = mScheduler->submit(kReceiveTimeout, [this] {
+        mTaskReceiveTimeout = mScheduler.submit(kReceiveTimeout, [this] {
             onReceiveTimeout();
         });
     }

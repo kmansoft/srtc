@@ -126,7 +126,7 @@ private:
     std::weak_ptr<Task> mTaskConnectTimeout;
     std::weak_ptr<Task> mTaskReceiveTimeout;
 
-    std::shared_ptr<ScopedScheduler> mScheduler;
+    ScopedScheduler mScheduler;
 };
 
 }

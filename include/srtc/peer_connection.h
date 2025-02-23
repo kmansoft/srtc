@@ -103,7 +103,7 @@ private:
     std::shared_ptr<LoopScheduler> mLoopScheduler;
     std::shared_ptr<PeerCandidate> mSelectedCandidate;
     std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
-    int mEpollHandle SRTC_GUARDED_BY(mMutex);
+    int mEpollHandle SRTC_GUARDED_BY(mMutex) = { 0 };
 };
 
 }
