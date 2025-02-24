@@ -24,9 +24,13 @@ Scheduler::~Scheduler() = default;
 ThreadScheduler::TaskImpl::TaskImpl(
         const std::weak_ptr<ThreadScheduler>& owner,
         const When& when,
+        const char* file,
+        int line,
         const Func& func)
     : mOwner(owner)
     , mWhen(when)
+    , mFile(file)
+    , mLine(line)
     , mFunc(func)
 {
     assert(mOwner.lock());
@@ -75,6 +79,8 @@ ThreadScheduler::~ThreadScheduler()
 }
 
 std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
+                                            const char* file,
+                                            int line,
                                             const Func& func)
 {
     // Please instantiate using std::make_shared
@@ -84,6 +90,8 @@ std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
     const auto task = std::make_shared<TaskImpl>(
             weak_from_this(),
             when,
+            file,
+            line,
             func);
 
     {
@@ -129,12 +137,12 @@ void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
     });
 }
 
-std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
                                                 const srtc::Scheduler::Delay& delay)
 {
     std::unique_lock lock(mMutex);
 
-    if (const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), task); iter != mTaskQueue.end()) {
+    if (const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), oldTask); iter != mTaskQueue.end()) {
         mTaskQueue.erase(iter);
     }
 
@@ -142,7 +150,9 @@ std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>&
     const auto newTask = std::make_shared<TaskImpl>(
             weak_from_this(),
             when,
-            task->mFunc);
+            oldTask->mFile,
+            oldTask->mLine,
+            oldTask->mFunc);
 
     mTaskQueue.insert(std::upper_bound(
             mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
@@ -214,9 +224,13 @@ void ThreadScheduler::threadFunc(const std::string name)
 LoopScheduler::TaskImpl::TaskImpl(
         const std::weak_ptr<LoopScheduler>& owner,
         const When& when,
+        const char* file,
+        int line,
         const Func& func)
         : mOwner(owner)
         , mWhen(when)
+        , mFile(file)
+        , mLine(line)
         , mFunc(func)
 {
     assert(mOwner.lock());
@@ -253,10 +267,16 @@ LoopScheduler::~LoopScheduler()
 }
 
 std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
-                                            const Func& func)
+                                          const char* file,
+                                          int line,
+                                          const Func& func)
 {
     // Please instantiate using std::make_shared
     assert(weak_from_this().lock());
+
+    if (line == 781) {
+        LOG(SRTC_LOG_V, "submit for %s %d", file, line);
+    }
 
     assertCurrentThread();
 
@@ -264,6 +284,8 @@ std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
     const auto task = std::make_shared<TaskImpl>(
             weak_from_this(),
             when,
+            file,
+            line,
             func);
 
     mTaskQueue.insert(std::upper_bound(
@@ -332,12 +354,12 @@ void LoopScheduler::cancelImpl(std::shared_ptr<TaskImpl>& task)
     }
 }
 
-std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
                                               const srtc::Scheduler::Delay& delay)
 {
     assertCurrentThread();
 
-    if (const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), task); iter != mTaskQueue.end()) {
+    if (const auto iter = std::find(mTaskQueue.begin(), mTaskQueue.end(), oldTask); iter != mTaskQueue.end()) {
         mTaskQueue.erase(iter);
     }
 
@@ -348,7 +370,9 @@ std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& t
     const auto newTask = std::make_shared<TaskImpl>(
             weak_from_this(),
             when,
-            task->mFunc);
+            oldTask->mFile,
+            oldTask->mLine,
+            oldTask->mFunc);
 
     mTaskQueue.insert(std::upper_bound(
             mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
@@ -361,9 +385,13 @@ std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& t
 
 ScopedScheduler::TaskImpl::TaskImpl(ScopedScheduler* owner,
                                     const std::weak_ptr<Task>& task,
+                                    const char* file,
+                                    int line,
                                     const Func& func)
     : mOwner(owner)
     , mTask(task)
+    , mFile(file)
+    , mLine(line)
     , mFunc(func)
 {
 }
@@ -395,22 +423,26 @@ ScopedScheduler::~ScopedScheduler()
               "Submitted contains %zd items", mSubmitted.size());
 
     for (const auto& iter : mSubmitted) {
+
         if (const auto task = iter->mTask.lock()) {
             task->cancel();
         }
     }
+
     mSubmitted.clear();
 }
 
 std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
+                                            const char* file,
+                                            int line,
                                             const Func& func)
 {
     std::lock_guard lock(mMutex);
 
     removeExpiredLocked();
 
-    const auto task = mScheduler->submit(delay, func);
-    const auto impl = std::make_shared<TaskImpl>(this, task, func);
+    const auto task = mScheduler->submit(delay, file, line, func);
+    const auto impl = std::make_shared<TaskImpl>(this, task, file, line, func);
     mSubmitted.push_back(impl);
 
     return impl;
@@ -440,15 +472,22 @@ void ScopedScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
     }
 }
 
-std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& task,
+std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
                                                   const Delay& delay)
 {
     std::lock_guard lock(mMutex);
 
     removeExpiredLocked();
 
-    if (const auto ptr = task->mTask.lock()) {
-        return ptr->update(delay);
+    if (const auto iter = std::find(mSubmitted.begin(), mSubmitted.end(), oldTask); iter != mSubmitted.end()) {
+        mSubmitted.erase(iter);
+    }
+
+    if (const auto ptr = oldTask->mTask.lock()) {
+        const auto updated =  ptr->update(delay);
+        const auto newTask = std::make_shared<TaskImpl>(this, updated, oldTask->mFile, oldTask->mLine, oldTask->mFunc);
+        mSubmitted.push_back(newTask);
+        return newTask;
     }
 
     return {};

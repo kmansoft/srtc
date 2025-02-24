@@ -75,6 +75,7 @@ private:
     const std::shared_ptr<IceAgent> mIceAgent;
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
     const std::shared_ptr<SendHistory> mSendHistory;
+    const uint32_t mUniqueId;
 
     std::shared_ptr<SrtpConnection> mSrtp;
 
@@ -120,7 +121,11 @@ private:
     void emitOnFailedToConnect(const Error& error);
     void emitOnLostConnection(const Error& error);
 
-    // Receive timeout
+    // Sending STUN requests and responses
+    void sendStunBindingRequest();
+    void sendStunBindingResponse();
+
+    // Timeouts
     void updateReceiveTimeout();
     void onReceiveTimeout();
     void updateKeepAliveTimeout();
@@ -129,6 +134,8 @@ private:
 
     // Scheduler and tasks
     std::weak_ptr<Task> mTaskConnectTimeout;
+    std::weak_ptr<Task> mTaskSendStunConnectRequest;
+    std::weak_ptr<Task> mTaskSendStunConnectResponse;
     std::weak_ptr<Task> mTaskReceiveTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskKeepAliveTimeout;

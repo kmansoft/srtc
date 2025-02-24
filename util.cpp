@@ -1,5 +1,7 @@
 #include "srtc/util.h"
 
+#include <cstring>
+
 namespace srtc {
 
 std::string bin_to_hex(const uint8_t *buf,

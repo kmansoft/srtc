@@ -359,6 +359,8 @@ void PeerConnection::startConnecting()
 
     std::lock_guard lock(mMutex);
 
+    mFrameSendQueue.clear();
+
     // Interleave IPv4 and IPv6 candidates
     std::vector<Host> hostList4;
     std::vector<Host> hostList6;

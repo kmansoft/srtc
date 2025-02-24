@@ -20,6 +20,8 @@
 
 namespace {
 
+std::atomic<uint32_t> gNextUniqueId = 0;
+
 int verify_callback(int ok, X509_STORE_CTX *store_ctx) {
     // We verify cert has ourselves after the handshake has completed
     return 1;
@@ -33,6 +35,7 @@ constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::millisecond
 constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds (5000);
 constexpr std::chrono::milliseconds kKeepAliveStartTimeout = std::chrono::milliseconds(2500);
 constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(500);
+constexpr std::chrono::milliseconds kConnectRepeatTimeout = std::chrono::milliseconds(100);
 
 // GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
@@ -175,23 +178,28 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
+    , mUniqueId(++gNextUniqueId)
     , mScheduler(scheduler)
 {
     assert(mListener);
     assert(mEpollHandle);
+
+    LOG(SRTC_LOG_V, "Constructor for %p %d", static_cast<void*>(this), mUniqueId);
 
     struct epoll_event ev = { };
     ev.events = EPOLLIN;
     ev.data.ptr = this;
     epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, mSocket->fd(), &ev);
 
-    mScheduler.submit(startDelay, [this] {
+    mScheduler.submit(startDelay, __FILE__, __LINE__, [this] {
         startConnecting();
     });
 }
 
 PeerCandidate::~PeerCandidate()
 {
+    LOG(SRTC_LOG_V, "Destructor for %p %d", static_cast<void*>(this), mUniqueId);
+
     epoll_ctl(mEpollHandle, EPOLL_CTL_DEL, mSocket->fd(), nullptr);
 
     freeDTLS();
@@ -334,26 +342,17 @@ void PeerCandidate::startConnecting()
     emitOnConnecting();
 
     // We have a timeout
-    mTaskConnectTimeout = mScheduler.submit(
-            kConnectTimeout,
-            [this] {
-            emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout"});
+    mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
+        emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout"});
     });
 
     // Trim stun requests from time to time
-    mTaskExpireStunRequests = mScheduler.submit(kExpireStunPeriod, [this] {
+    mTaskExpireStunRequests = mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] {
         forgetExpiredStunRequests();
     });
 
     // Open the conversation by sending an STUN binding request
-    const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
-                                                                             mIceMessageBuffer.get(),
-                                                                             kIceMessageBufferSize,
-                                                                             mOffer, mAnswer,
-                                                                             false);
-    addSendRaw({
-                       mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
-               });
+    sendStunBindingRequest();
 }
 
 void PeerCandidate::addSendRaw(ByteBuffer&& buf)
@@ -414,18 +413,13 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                 if (!mSentUseCandidate) {
                     mSentUseCandidate = true;
 
+                    if (const auto task = mTaskSendStunConnectRequest.lock()) {
+                        task->cancel();
+                    }
+
                     emitOnIceConnected();
 
-                    const auto iceMessageBindingRequest2 = make_stun_message_binding_request(
-                            mIceAgent,
-                            mIceMessageBuffer.get(),
-                            kIceMessageBufferSize,
-                            mOffer, mAnswer,
-                            true);
-                    addSendRaw({
-                                       mIceMessageBuffer.get(),
-                                       stun_message_length(
-                                               &iceMessageBindingRequest2)});
+                    sendStunBindingResponse();
 
                     mDtlsState = DtlsState::Activating;
                 }
@@ -445,6 +439,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
         const auto r1 = SSL_do_handshake(mDtlsSsl);
         const auto err = SSL_get_error(mDtlsSsl, r1);
         LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
+
+        if (const auto task = mTaskSendStunConnectResponse.lock()) {
+            task->cancel();
+        }
 
         if (err == SSL_ERROR_WANT_READ) {
             LOG(SRTC_LOG_V, "Still in progress");
@@ -604,7 +602,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
 void PeerCandidate::forgetExpiredStunRequests()
 {
     mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
-    mScheduler.submit(kExpireStunPeriod, [this] {
+    mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] {
         forgetExpiredStunRequests();
     });
 }
@@ -729,12 +727,52 @@ void PeerCandidate::emitOnLostConnection(const srtc::Error &error)
     mListener->onCandidateLostConnection(this, error);
 }
 
+void PeerCandidate::sendStunBindingRequest()
+{
+    LOG(SRTC_LOG_V, "Sending STUN binding request %d", mUniqueId);
+
+    const auto iceMessage = make_stun_message_binding_request(
+            mIceAgent,
+            mIceMessageBuffer.get(),
+            kIceMessageBufferSize,
+            mOffer, mAnswer,
+            false);
+    addSendRaw({
+                       mIceMessageBuffer.get(), stun_message_length(&iceMessage)
+               });
+
+    mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatTimeout, __FILE__, __LINE__, [this] {
+        sendStunBindingRequest();
+    });
+}
+
+void PeerCandidate::sendStunBindingResponse()
+{
+    LOG(SRTC_LOG_V, "Sending STUN binding response %d", mUniqueId);
+
+    const auto iceMessage = make_stun_message_binding_request(
+            mIceAgent,
+            mIceMessageBuffer.get(),
+            kIceMessageBufferSize,
+            mOffer, mAnswer,
+            true);
+
+    addSendRaw({
+                       mIceMessageBuffer.get(),
+                       stun_message_length(&iceMessage)
+    });
+
+    mTaskSendStunConnectResponse = mScheduler.submit(kConnectRepeatTimeout, __FILE__, __LINE__, [this] {
+        sendStunBindingResponse();
+    });
+}
+
 void PeerCandidate::updateReceiveTimeout()
 {
     if (const auto task = mTaskReceiveTimeout.lock()) {
         mTaskReceiveTimeout = task->update(kReceiveTimeout);
     } else {
-        mTaskReceiveTimeout = mScheduler.submit(kReceiveTimeout, [this] {
+        mTaskReceiveTimeout = mScheduler.submit(kReceiveTimeout, __FILE__, __LINE__, [this] {
             onReceiveTimeout();
         });
     }
@@ -753,7 +791,7 @@ void PeerCandidate::updateKeepAliveTimeout() {
     if (const auto task = mTaskKeepAliveTimeout.lock()) {
         mTaskKeepAliveTimeout = task->update(kKeepAliveStartTimeout);
     } else {
-        mTaskKeepAliveTimeout = mScheduler.submit(kKeepAliveStartTimeout, [this] {
+        mTaskKeepAliveTimeout = mScheduler.submit(kKeepAliveStartTimeout, __FILE__, __LINE__, [this] {
             onKeepAliveTimeout();
         });
     }
@@ -770,7 +808,7 @@ void PeerCandidate::onKeepAliveTimeout()
 
 void PeerCandidate::sendKeepAlive()
 {
-    LOG(SRTC_LOG_V, "Sending a keep alive STUN request");
+    LOG(SRTC_LOG_V, "Sending a keep alive STUN request %d", mUniqueId);
 
     const auto iceMessageBindingRequest1 = make_stun_message_binding_request(mIceAgent,
                                                                              mIceMessageBuffer.get(),
@@ -781,7 +819,7 @@ void PeerCandidate::sendKeepAlive()
                        mIceMessageBuffer.get(), stun_message_length(&iceMessageBindingRequest1)
                });
 
-    mScheduler.submit(kKeepAliveSendTimeout, [this] {
+    mScheduler.submit(kKeepAliveSendTimeout, __FILE__, __LINE__, [this] {
        sendKeepAlive();
     });
 }
