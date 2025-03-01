@@ -258,14 +258,7 @@ void PeerCandidate::process()
                     const auto protectedSize = mSrtp->protectOutgoing(packetData);
                     if (protectedSize > 0) {
                         // And send
-                        const auto randomValue = lrand48() % 100;
-                        if (randomValue <= 5 && item.track->getCodec() == Codec::H264) {
-                            LOG(SRTC_LOG_V, "NOT sending an RTP packet with SSRC = %u, SEQ = %u",
-                                packet->getSSRC(), packet->getSequence());
-                        } else {
-                            (void) mSocket->send(packetData.data(), protectedSize);
-                        }
-
+                        (void) mSocket->send(packetData.data(), protectedSize);
                         updateKeepAliveTimeout();
                     }
                 } else {
