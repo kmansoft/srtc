@@ -4,18 +4,21 @@ This is srtc, a simple WebRTC library (publish side only so far).
 
 Features:
 
-- Depends on OpenSSL (or BoringSSL) and [Cisco's libSRTP](https://github.com/cisco/libsrtp).
-- Portable code in "conservative" C++ (uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI).
-- Only one thread per PeerConnection.
-- Supports H264 (arbitrary profile ID) for video and Opus for audio.
+- Depends on OpenSSL (or BoringSSL) and [Cisco's libSRTP](https://github.com/cisco/libsrtp), nothing else.
+- Portable code in "conservative" C++
+- Conservative means it uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI.
+- Only one worker thread per PeerConnection.
+- Supports H264 (arbitrary profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
 - SDP offer generation and SDP response parsing.
-- Retransmits of packets reported lost by the received, which uses RTX if supported.
+- Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
-- Supports Linux including Android but might compile on MacOS too (not tested).
+- Supports Linux including Android but might work on MacOS too (not tested).
 - Android demo has been tested with Pion and Amazon IVS (Interactive Video Service).
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 
-Envisioned use case - publishing media from a server side system i.e. where network bandwidth is good and where you
+### Envisioned use case 
+
+Can be used for publishing media from a server side system i.e. where network bandwidth is good and where you
 want to run multiple (hundreds or perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's
 implementation is not a good choice due to its hunger for threads.
 
@@ -54,20 +57,22 @@ it should compile and work on MacOS too but that's not been tested as I don't ow
 Android was chosen for the demo because it's an easy way to capture video and audio and encode them to
 H264 and Opus. Sorry I'm not familiar with how to capture and encode media on desktop Linux.
 
+For the interface between Android code and the srtc library, please see `jni_peer_connection.h / .cpp` in that project.
+
 ### Disclamier
 
 I work for [Amazon IVS (Interactive Video Service)](https://ivs.rocks/) which is part of [Twitch](https://www.twitch.tv/).
 
-This is my side project.
+This library, srtc, is my side project.
 
 ### Future plans
 
-First, I'd like to get rid of Cisco's SRTP library and replace it with my own code using OpenSSL / BoringSSL directly.
+First, I'd like to replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly.
 
 Second, I'd lke to implement support for Simulcast (multiple video qualities on the same peer connection). There is a
-problem with this though - since I work for IVS, I know how IVS handles Simulcast but this information is
-not public, so I can't use this knowledge or publish code based on that. If you know of a WebRTC server which
-I can use instead, please let me know.
+problem with this though - since I work for IVS, I know how IVS handles Simulcast but this information is not public,
+so I can't use this knowledge or publish public code based on that. If you know of a WebRTC server which  I can use
+instead, please let me know.
 
-Third, Google's congestion control / bandwidth measurement extensions may be useful. Extensions in general are
-currently parsed from the SDP but are not implemented at the RTP level (not that it's difficult).
+Third, Google's congestion control / bandwidth measurement extensions may be useful. Extensions in general are currently
+parsed from the SDP but are not implemented at the RTP level (not that it's difficult).
