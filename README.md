@@ -76,3 +76,7 @@ instead, please let me know.
 
 Third, Google's congestion control / bandwidth measurement extensions may be useful. Extensions in general are currently
 parsed from the SDP but are not implemented at the RTP level (not that it's difficult).
+
+Fourth, support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
+like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
+supports those.  
