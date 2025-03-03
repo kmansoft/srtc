@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <unistd.h>
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
