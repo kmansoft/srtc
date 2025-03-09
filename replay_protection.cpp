@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cstring>
 
+#include <limits>
+
 namespace {
 
 uint32_t getRolloverForwadDistance(uint32_t maxPossibleValue, uint32_t curMaxValue, uint32_t value)
@@ -48,6 +50,10 @@ ReplayProtection::ReplayProtection(uint32_t maxPossibleValue,
     , mStorage(nullptr)
     , mCurMax(0)    // not used until we allocate mStorage
 {
+    assert(
+            maxPossibleValue == std::numeric_limits<uint16_t>::max() ||
+            maxPossibleValue == std::numeric_limits<uint32_t>::max()
+            );
     assert(size <= 4096);
 }
 
@@ -120,10 +126,10 @@ bool ReplayProtection::set(uint32_t value)
 
 void ReplayProtection::setForward(uint32_t value)
 {
-    mCurMax = (mCurMax + 1) % (mMaxPossibleValue + 1);
+    mCurMax = (mCurMax + 1) & mMaxPossibleValue;
     while (mCurMax != value) {
         clearImpl(mStorage, mStorageSize, mCurMax);
-        mCurMax = (mCurMax + 1) % (mMaxPossibleValue + 1);
+        mCurMax = (mCurMax + 1) & mMaxPossibleValue;
     }
 
     setImpl(mStorage, mStorageSize, mCurMax);
