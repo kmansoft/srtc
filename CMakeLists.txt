@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED YES)
 
 include(ExternalProject)
+include(FetchContent)
 
 # srtc
 
@@ -27,6 +28,7 @@ add_library(srtc
         include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
+        include/srtc/replay_protection.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
         include/srtc/scheduler.h
@@ -52,6 +54,7 @@ add_library(srtc
         peer_candidate.cpp
         peer_connection.cpp
         random_generator.cpp
+        replay_protection.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
         sdp_answer.cpp
@@ -135,7 +138,7 @@ ExternalProject_Add(
 target_include_directories(srtc PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
 
-target_link_directories(srtc PRIVATE
+target_link_directories(srtc PUBLIC
         "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
 add_dependencies(srtc srtp)
@@ -151,3 +154,38 @@ target_include_directories(srtc PRIVATE
 
 target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/srtc/stun")
+
+# Google Test
+
+FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# Test executable
+
+add_executable(
+        srtc_test
+        EXCLUDE_FROM_ALL
+        test_replay_protection.cpp
+)
+target_include_directories(
+        srtc_test
+        PRIVATE
+        include
+)
+add_dependencies(srtc_test srtc srtp)
+target_link_libraries(
+        srtc_test
+        GTest::gtest_main
+        srtc
+        srtp3
+)
+
+if(NOT ANDROID)
+    include(GoogleTest)
+    gtest_discover_tests(srtc_test)
+endif()

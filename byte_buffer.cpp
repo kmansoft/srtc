@@ -72,8 +72,22 @@ bool ByteBuffer::empty() const
 void ByteBuffer::clear()
 {
     delete[] mBuf;
+    mBuf = nullptr;
     mLen = 0;
     mCap = 0;
+}
+
+void ByteBuffer::assign(const uint8_t* src, size_t size)
+{
+    delete[] mBuf;
+    if (size) {
+        mBuf = new uint8_t[size];
+        std::memcpy(mBuf, src, size);
+    } else {
+        mBuf = nullptr;
+    }
+    mLen = size;
+    mCap =  size;
 }
 
 void ByteBuffer::resize(size_t size)
