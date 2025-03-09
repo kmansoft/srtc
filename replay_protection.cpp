@@ -13,24 +13,24 @@ uint32_t getForwadDistance(uint32_t maxPossibleValue, uint32_t curMaxValue, uint
 
 bool isSet(const uint8_t* storage, uint32_t storageSize, uint32_t value)
 {
-    const auto index = (value % 8) % storageSize;
-    const auto shift = value % 7;
+    const auto index = (value / 8) % storageSize;
+    const auto shift = value % (8 - 1);
 
     return (storage[index] & (1 << shift)) != 0;
 }
 
 void setImpl(uint8_t* storage, uint32_t storageSize, uint32_t value)
 {
-    const auto index = (value % 8) % storageSize;;
-    const auto shift = value % 7;
+    const auto index = (value / 8) % storageSize;;
+    const auto shift = value % (8 - 1);
 
     storage[index] |= (1 << shift);
 }
 
 void clearImpl(uint8_t* storage, uint32_t storageSize, uint32_t value)
 {
-    const auto index = (value % 8) % storageSize;;
-    const auto shift = value % 7;
+    const auto index = (value / 8) % storageSize;;
+    const auto shift = value % (8 - 1);
 
     storage[index] &= ~(1 << shift);
 }
