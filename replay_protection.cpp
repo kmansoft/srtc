@@ -7,7 +7,7 @@ namespace {
 
 uint32_t getForwadDistance(uint32_t maxPossibleValue, uint32_t curMaxValue, uint32_t value)
 {
-    assert(curMaxValue >= value);
+    assert(curMaxValue > value);
     return maxPossibleValue - curMaxValue + 1 + value;
 }
 
