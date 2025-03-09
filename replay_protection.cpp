@@ -45,7 +45,7 @@ ReplayProtection::ReplayProtection(uint32_t maxPossibleValue,
                                    uint32_t size)
     : mMaxPossibleValue(maxPossibleValue)
     , mSize(size)
-    , mStorageSize((size + 7) / 8)
+    , mStorageSize((size + 8 - 1) / 8)
     , mMaxDistanceForward(size / 4)
     , mStorage(nullptr)
     , mCurMax(0)    // not used until we allocate mStorage
@@ -114,7 +114,7 @@ bool ReplayProtection::set(uint32_t value)
         setForward(value);
         return true;
     } else {
-        const auto distance = mMaxPossibleValue - mCurMax + 1 + value;
+        const auto distance = mCurMax - value;
         if (distance >= mSize) {
             return false;
         }
