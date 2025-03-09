@@ -5,7 +5,7 @@
 
 namespace {
 
-uint32_t getForwadDistance(uint32_t maxPossibleValue, uint32_t curMaxValue, uint32_t value)
+uint32_t getRolloverForwadDistance(uint32_t maxPossibleValue, uint32_t curMaxValue, uint32_t value)
 {
     assert(curMaxValue > value);
     return maxPossibleValue - curMaxValue + 1 + value;
@@ -70,7 +70,7 @@ bool ReplayProtection::canProceed(uint32_t value)
             return false;
         }
         return true;
-    } else if (getForwadDistance(mMaxPossibleValue, mCurMax, value) <= mMaxDistanceForward) {
+    } else if (getRolloverForwadDistance(mMaxPossibleValue, mCurMax, value) <= mMaxDistanceForward) {
         return true;
     } else {
         const auto distance = mCurMax - value;
@@ -104,7 +104,7 @@ bool ReplayProtection::set(uint32_t value)
 
         setForward(value);
         return true;
-    } else if (getForwadDistance(mMaxPossibleValue, mCurMax, value) <= mMaxDistanceForward) {
+    } else if (getRolloverForwadDistance(mMaxPossibleValue, mCurMax, value) <= mMaxDistanceForward) {
         setForward(value);
         return true;
     } else {
