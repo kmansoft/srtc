@@ -406,9 +406,7 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                 if (!mSentUseCandidate) {
                     mSentUseCandidate = true;
 
-                    if (const auto task = mTaskSendStunConnectRequest.lock()) {
-                        task->cancel();
-                    }
+                    Task::cancelHelper(mTaskSendStunConnectRequest);
 
                     emitOnIceConnected();
 
@@ -433,9 +431,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
         const auto err = SSL_get_error(mDtlsSsl, r1);
         LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
 
-        if (const auto task = mTaskSendStunConnectResponse.lock()) {
-            task->cancel();
-        }
+        Task::cancelHelper(mTaskSendStunConnectResponse);
 
         if (err == SSL_ERROR_WANT_READ) {
             LOG(SRTC_LOG_V, "Still in progress");
@@ -473,9 +469,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
                         emitOnDtlsConnected();
 
-                        if (const auto task = mTaskConnectTimeout.lock()) {
-                            task->cancel();
-                        }
+                        Task::cancelHelper(mTaskConnectTimeout);
 
                         updateReceiveTimeout();
                         updateKeepAliveTimeout();
@@ -780,7 +774,8 @@ void PeerCandidate::onReceiveTimeout()
     emitOnLostConnection({ Error::Code::InvalidData, "Receive timeout" });
 }
 
-void PeerCandidate::updateKeepAliveTimeout() {
+void PeerCandidate::updateKeepAliveTimeout()
+{
     if (const auto task = mTaskKeepAliveTimeout.lock()) {
         mTaskKeepAliveTimeout = task->update(kKeepAliveStartTimeout);
     } else {
@@ -789,9 +784,7 @@ void PeerCandidate::updateKeepAliveTimeout() {
         });
     }
 
-    if (const auto task = mTaskSendKeepAlive.lock()) {
-        task->cancel();
-    }
+    Task::cancelHelper(mTaskSendKeepAlive);
 }
 
 void PeerCandidate::onKeepAliveTimeout()

@@ -13,6 +13,14 @@ namespace srtc {
 
 Task::~Task() = default;
 
+void Task::cancelHelper(std::weak_ptr<Task>& ptr)
+{
+    if (const auto task = ptr.lock()) {
+        task->cancel();
+    }
+    ptr.reset();
+}
+
 // ----- Scheduler
 
 Scheduler::Scheduler() = default;

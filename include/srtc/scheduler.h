@@ -25,6 +25,8 @@ public:
     virtual std::weak_ptr<Task> update(const std::chrono::milliseconds& delay) = 0;
 
     virtual ~Task();
+
+    static void cancelHelper(std::weak_ptr<Task>& ptr);
 };
 
 // ----- Scheduler
