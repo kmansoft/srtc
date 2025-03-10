@@ -257,8 +257,18 @@ void PeerCandidate::process()
                 if (mSrtp) {
                     const auto protectedSize = mSrtp->protectOutgoing(packetData);
                     if (protectedSize > 0) {
+#ifdef NDEBUG
                         // And send
                         (void) mSocket->send(packetData.data(), protectedSize);
+#else
+                        // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
+                        const auto randomValue = mrand48() % 100;
+                        if (randomValue < 5) {
+                            LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
+                        } else {
+                            (void) mSocket->send(packetData.data(), protectedSize);
+                        }
+#endif
                         updateKeepAliveTimeout();
                     }
                 } else {
