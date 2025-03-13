@@ -3,6 +3,8 @@
 #include "srtc/error.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_packet_source.h"
+#include "srtc/replay_protection.h"
+#include "srtc/srtp_util.h"
 
 #include <srtp.h>
 #include <openssl/ssl.h>
@@ -27,15 +29,21 @@ public:
     SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                    ByteBuffer&& srtpServerKeyBuf,
                    size_t keySize,
+                   size_t saltSize,
                    bool isSetupActive,
+                   unsigned long profileId,
                    srtp_profile_t profile);
 
 private:
     const ByteBuffer mSrtpClientKeyBuf;
     const ByteBuffer mSrtpServerKeyBuf;
     const size_t mKeySize;
+    const size_t mSaltSize;
     const bool mIsSetupActive;
-    const srtp_profile_t mProfile;
+    const unsigned long mProfileId;
+    const srtp_profile_t mProfileT;
+
+    CryptoBytes mReceiveMasterKey, mReceiveMasterSalt;
 
     srtp_policy_t mSrtpReceivePolicy;
     srtp_policy_t mSrtpSendPolicy;
@@ -60,14 +68,24 @@ private:
         }
     };
 
-    using ChannelMap = std::unordered_map<ChannelKey, srtp_t, hash_channel_key, equal_to_channel_key>;
+    struct ChannelValue {
+        srtp_t srtp;
+        std::unique_ptr<ReplayProtection> replayProtection;
+    };
+
+    using ChannelMap = std::unordered_map<ChannelKey, ChannelValue, hash_channel_key, equal_to_channel_key>;
 
     ChannelMap mSrtpInMap;
     ChannelMap mSrtpOutMap;
 
-    srtp_t ensureSrtpChannel(ChannelMap& map,
-                             const ChannelKey& key,
-                             const srtp_policy_t* policy);
+    ChannelValue& ensureSrtpChannel(ChannelMap& map,
+                                    const ChannelKey& key,
+                                    const srtp_policy_t* policy,
+                                    uint32_t maxPossibleValueForReplayProtection);
+
+    size_t unprotectIncomingControlAESGCM(ChannelValue& channelValue,
+                                          const ByteBuffer& encrypted,
+                                          ByteBuffer& decrypted);
 };
 
 }

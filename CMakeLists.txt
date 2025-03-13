@@ -38,6 +38,7 @@ add_library(srtc
         include/srtc/socket.h
         include/srtc/srtc.h
         include/srtc/srtp_connection.h
+        include/srtc/srtp_util.h
         include/srtc/track.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
@@ -64,6 +65,7 @@ add_library(srtc
         socket.cpp
         srtc.cpp
         srtp_connection.cpp
+        srtp_util.cpp
         track.cpp
         util.cpp
         x509_certificate.cpp
