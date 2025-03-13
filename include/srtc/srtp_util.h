@@ -31,7 +31,7 @@ public:
 
     void writeU8(uint8_t value);
     void writeU16(uint16_t value);
-    void writeU32(uint16_t value);
+    void writeU32(uint32_t value);
 
 private:
     CryptoBytes& mBytes;

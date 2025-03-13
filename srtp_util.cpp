@@ -74,7 +74,7 @@ void CryptoBytesWriter::writeU16(uint16_t value)
     }
 }
 
-void CryptoBytesWriter::writeU32(uint16_t value)
+void CryptoBytesWriter::writeU32(uint32_t value)
 {
     assert(mPos <= sizeof(mBytes.v8) - 4);
     if (mPos <= sizeof(mBytes.v8) - 4) {

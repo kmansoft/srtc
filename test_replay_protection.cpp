@@ -6,14 +6,11 @@ namespace {
     constexpr uint32_t kSize = 2048;
 }
 
-TEST(HelloTest, BasicAssertions) {
-    EXPECT_STRNE("hello", "world");
-    EXPECT_EQ(7 * 6, 42);
-}
-
 // Replay protection
 
 TEST(ReplayProtection, TestEmpty) {
+
+    std::cout << "ReplayProtection TestEmpty" << std::endl;
 
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
@@ -106,7 +103,7 @@ TEST(ReplayProtection, TestTooMuchForwardSimple)
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
         uint16_t value = 42926;
-        replay_16.set(value);
+        ASSERT_TRUE(replay_16.set(value));
 
         ASSERT_FALSE(replay_16.canProceed(value + kSize / 2));
         ASSERT_FALSE(replay_16.canProceed(value - kSize));
@@ -121,7 +118,7 @@ TEST(ReplayProtection, TestRollover16)
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
         const auto value = std::numeric_limits<uint16_t>::max() - 100;
-        replay_16.set(value);
+        ASSERT_TRUE(replay_16.set(value));
 
         ASSERT_FALSE(replay_16.canProceed(
                 static_cast<uint16_t>(value + kSize / 2)));
@@ -145,7 +142,7 @@ TEST(ReplayProtection, TestRollover32)
     srtc::ReplayProtection replay_32(std::numeric_limits<uint32_t>::max(), kSize);
     {
         uint32_t value = std::numeric_limits<uint32_t>::max() - 100;
-        replay_32.set(value);
+        ASSERT_TRUE(replay_32.set(value));
 
         ASSERT_FALSE(replay_32.canProceed(
                 static_cast<uint32_t>(value + kSize / 2)));

@@ -137,13 +137,18 @@ ExternalProject_Add(
         CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
 )
 
-target_include_directories(srtc PRIVATE
-        "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
-
-target_link_directories(srtc PUBLIC
-        "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
+set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
+set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
 add_dependencies(srtc srtp)
+
+target_include_directories(srtc
+        PRIVATE
+        "${SRTP_INCLUDE_DIR}")
+
+target_link_directories(srtc
+        PUBLIC
+        "${SRTP_LIBRARY_DIR}")
 
 # STUN
 
@@ -173,21 +178,34 @@ add_executable(
         srtc_test
         EXCLUDE_FROM_ALL
         test_replay_protection.cpp
+        test_srtp_key_derivation.cpp
 )
+
 target_include_directories(
         srtc_test
         PRIVATE
-        include
+        "${SRTP_INCLUDE_DIR}"
+        "${OPENSSL_INCLUDE_DIR}"
 )
+
+target_link_directories(
+        srtc_test
+        PRIVATE
+        "${SRTP_LIBRARY_DIR}"
+)
+
 add_dependencies(srtc_test srtc srtp)
+
 target_link_libraries(
         srtc_test
         GTest::gtest_main
         srtc
         srtp3
+        OpenSSL::Crypto
+        OpenSSL::SSL
 )
 
-if(NOT ANDROID)
+if(NOT CMAKE_CROSSCOMPILING)
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
 endif()
