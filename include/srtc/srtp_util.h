@@ -5,14 +5,12 @@
 
 namespace srtc {
 
+class CryptoBytesWriter;
+
 class CryptoBytes {
 public:
-    union {
-        // Enough for AES 128 to AES 256 key sizes
-        uint8_t v8[32] = { };
-        uint16_t v16[16];
-        uint32_t v32[8];
-    };
+    // Enough for AES 128 to AES 256 key sizes
+    uint8_t v8[32] = { };
 
     CryptoBytes();
 
@@ -22,7 +20,15 @@ public:
     [[nodiscard]] uint8_t* data();
     [[nodiscard]] const uint8_t* data() const;
 
+    [[nodiscard]] bool empty() const;
+    [[nodiscard]] size_t size() const;
+
     CryptoBytes& operator^=(const CryptoBytes& other);
+
+private:
+    friend CryptoBytesWriter;
+
+    size_t mSize;
 };
 
 class CryptoBytesWriter {
@@ -33,9 +39,10 @@ public:
     void writeU16(uint16_t value);
     void writeU32(uint32_t value);
 
+    void append(const uint8_t* data, size_t size);
+
 private:
     CryptoBytes& mBytes;
-    size_t mPos;
 };
 
 }

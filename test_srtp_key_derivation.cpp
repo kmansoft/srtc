@@ -8,7 +8,7 @@
 
 #include <srtp.h>
 #include <openssl/srtp.h>
-#include <openssl/evp.h>
+#include <openssl/aes.h>
 
 // Init Cisco's libSRTP
 
@@ -20,11 +20,14 @@ void initLibSRTP()
 {
     std::call_once(gSrtpInitFlag, [] {
                        srtp_init();
+                       OpenSSL_add_all_algorithms();
+                       OpenSSL_add_all_ciphers();
+                       OpenSSL_add_all_digests();
                    }
     );
 }
 
-size_t setFromHex(srtc::CryptoBytes& bytes, const char* hex)
+void setFromHex(srtc::CryptoBytes& bytes, const char* hex)
 {
     srtc::CryptoBytesWriter w(bytes);
 
@@ -53,8 +56,6 @@ size_t setFromHex(srtc::CryptoBytes& bytes, const char* hex)
             byteCount += 1;
         }
     }
-
-    return byteCount;
 }
 
 std::string toHex(const uint8_t* data, size_t len) {
@@ -72,62 +73,40 @@ std::string toHex(const uint8_t* data, size_t len) {
     return s;
 }
 
-std::string toHex(const srtc::CryptoBytes& bytes, size_t len)
+std::string toHex(const srtc::CryptoBytes& bytes)
 {
-    return toHex(bytes.data(), len);
+    return toHex(bytes.data(), bytes.size());
 }
 
-size_t deriveKey(const srtc::CryptoBytes& masterKey,
-                 size_t masterKeyLen,
+void deriveKey(const srtc::CryptoBytes& masterKey,
                  const srtc::CryptoBytes& masterSalt,
-                 size_t masterSaltLen,
                  uint8_t label,
-                 srtc::CryptoBytes& output)
+                 srtc::CryptoBytes& output,
+                 size_t desiredOutputSize)
 {
-    assert(masterKeyLen == 16 || masterKeyLen == 32);
-    assert(masterSaltLen == 12 || masterSaltLen == 14);
+    assert(masterKey.size() == 16 || masterKey.size() == 32);
+    assert(masterSalt.size() == 12 || masterSalt.size() == 14);
 
-    const auto masterKeyStr = toHex(masterKey, masterKeyLen);
-    const auto masterSaltStr = toHex(masterSalt, masterSaltLen);
+    assert(desiredOutputSize == 12 || desiredOutputSize == 14 || desiredOutputSize == 16);
 
     // https://datatracker.ietf.org/doc/html/rfc3711#appendix-B.3
 
     uint8_t input[16] = {};
-    std::memcpy(input, masterSalt.data(), masterSaltLen);
+    std::memcpy(input, masterSalt.data(), masterSalt.size());
     input[7] ^= label;
 
-    const auto inputStr = toHex(input, 16);
-
-    const auto ctx = EVP_CIPHER_CTX_new();
+    srtc::CryptoBytesWriter outputWriter(output);
 
     uint8_t outbuf[16];
-    int outlen = 0;
-    int outtotal = 0;
 
-    const auto cipher = masterKeyLen == 16 ?
-                        EVP_aes_128_ctr() : EVP_aes_256_ctr();
-    if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), nullptr)) {
-        goto exit;
+    AES_KEY aeskey;
+
+    if (AES_set_encrypt_key(masterKey.data(), static_cast<int>(masterKey.size() * 8), &aeskey) != 0) {
+        return;
     }
+    AES_encrypt(input, outbuf, &aeskey);
 
-    if (!EVP_EncryptUpdate(ctx, outbuf, &outlen, input, 16)) {
-        goto exit;
-    }
-    outtotal = outlen;
-
-    if (!EVP_EncryptFinal_ex(ctx, outbuf + outlen, &outlen)) {
-        outtotal = 0;
-        goto exit;
-    }
-    outtotal += outlen;
-
-    output.assign(outbuf, outtotal);
-
-exit:
-    const auto outputStr = toHex(outbuf, outtotal);
-
-    EVP_CIPHER_CTX_free(ctx);
-    return outtotal;
+    outputWriter.append(outbuf, desiredOutputSize);
 }
 
 }
@@ -135,21 +114,31 @@ exit:
 // Key derivation
 
 TEST(KeyDerivation, TestRfc) {
+    std::cout << "KeyDerivation TestRfc" << std::endl;
+
+    initLibSRTP();
 
     srtc::CryptoBytes masterKey;
-    const auto masterKeyLen = setFromHex(masterKey, "E1F97A0D3E018BE0D64FA32C06DE4139");
+    setFromHex(masterKey, "E1F97A0D3E018BE0D64FA32C06DE4139");
 
     srtc::CryptoBytes masterSalt;
-    const auto masterSaltLen = setFromHex(masterSalt, "0EC675AD498AFEEBB6960B3AABE6");
+    setFromHex(masterSalt, "0EC675AD498AFEEBB6960B3AABE6");
 
     srtc::CryptoBytes outputLabel0;
-    const auto outputLabel0Len = deriveKey(masterKey, masterKeyLen, masterSalt, masterSaltLen, 0, outputLabel0);
-    ASSERT_TRUE(outputLabel0Len > 0);
+    deriveKey(masterKey, masterSalt, 0, outputLabel0, 16);
+    ASSERT_TRUE(outputLabel0.size() == 16);
 
-    const auto outputLabel0Str = toHex(outputLabel0, outputLabel0Len);
-
+    const auto outputLabel0Str = toHex(outputLabel0);
     std::cout << outputLabel0Str << std::endl;
+    ASSERT_EQ(outputLabel0Str, "C61E7A93744F39EE10734AFE3FF7A087");
 
+    srtc::CryptoBytes outputLabel2;
+    deriveKey(masterKey, masterSalt, 2, outputLabel2, 14);
+    ASSERT_TRUE(outputLabel2.size() == 14);
+
+    const auto outputLabel2Str = toHex(outputLabel2);
+    std::cout << outputLabel2Str << std::endl;
+    ASSERT_EQ(outputLabel2Str, "30CBBC08863D8C85D49DB34A9AE1");
 }
 
 
@@ -193,6 +182,14 @@ TEST(KeyDerivation, TestSimpleInbound) {
     // This performs key derivation
     srtp_t srtp = nullptr;
     srtp_create(&srtp, &policy);
+
+    // Now try ours
+    srtc::CryptoBytes outputLabel5;
+    deriveKey(masterKey, masterSalt, 5, outputLabel5, 12);
+
+    const auto outputLabel5Str = toHex(outputLabel5);
+    std::cout << outputLabel5Str << std::endl;
+    ASSERT_EQ(outputLabel5Str, "531B07167D1305116AFFD2B4");
 
     // Cleanup
     srtp_dealloc(srtp);
