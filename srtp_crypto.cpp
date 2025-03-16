@@ -104,7 +104,7 @@ size_t SrtpCrypto::unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
         return 0;
     }
 
-    const auto ctx = mCipherDecryptCTX;
+    const auto ctx = mReceiveCipherCtx;
     if (!ctx) {
         return 0;
     }
@@ -205,7 +205,7 @@ SrtpCrypto::SrtpCrypto(uint16_t profileId,
     , mReceiveRtcpKey(receiveRtcpKey)
     , mReceiveRtcpSalt(receiveRtcpSalt)
 {
-    mCipherDecryptCTX = EVP_CIPHER_CTX_new();
+    mReceiveCipherCtx = EVP_CIPHER_CTX_new();
 
     const EVP_CIPHER* cipher;
     switch (mProfileId) {
@@ -215,20 +215,24 @@ SrtpCrypto::SrtpCrypto(uint16_t profileId,
         case SRTP_AEAD_AES_128_GCM:
             cipher = EVP_aes_128_gcm();
             break;
+        case SRTP_AES128_CM_SHA1_80:
+        case SRTP_AES128_CM_SHA1_32:
+            cipher = EVP_aes_128_ctr();
+            break;
         default:
             cipher = nullptr;
             break;
     }
 
     if (cipher) {
-        EVP_DecryptInit_ex(mCipherDecryptCTX, cipher, nullptr, nullptr, nullptr);
+        EVP_DecryptInit_ex(mReceiveCipherCtx, cipher, nullptr, nullptr, nullptr);
     }
 }
 
 SrtpCrypto::~SrtpCrypto()
 {
-    if (mCipherDecryptCTX) {
-        EVP_CIPHER_CTX_free(mCipherDecryptCTX);
+    if (mReceiveCipherCtx) {
+        EVP_CIPHER_CTX_free(mReceiveCipherCtx);
     }
 }
 

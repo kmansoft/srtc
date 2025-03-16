@@ -36,7 +36,7 @@ private:
     const uint16_t mProfileId;
     const CryptoBytes mReceiveRtcpKey, mReceiveRtcpSalt;
 
-    struct evp_cipher_ctx_st* mCipherDecryptCTX;
+    struct evp_cipher_ctx_st* mReceiveCipherCtx;
 
 };
 

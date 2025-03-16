@@ -44,31 +44,31 @@ TEST(SrtpCrypto, RtcpReceive)
 
     for (const auto openSSlProfile : kOpenSslProfileList) {
         const char* srtpProfileName;
-        srtp_profile_t srtpProfile;
+        srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
         switch (openSSlProfile) {
             case SRTP_AEAD_AES_256_GCM:
                 srtpProfileName = "SRTP_AEAD_AES_256_GCM";
-                srtpProfile = srtp_profile_aead_aes_256_gcm;
+                srtpProfileId = srtp_profile_aead_aes_256_gcm;
                 srtpKeySize = SRTP_AES_256_KEY_LEN;
                 srtpSaltSize = SRTP_AEAD_SALT_LEN;
                 break;
             case SRTP_AEAD_AES_128_GCM:
                 srtpProfileName = "SRTP_AEAD_AES_128_GCM";
-                srtpProfile = srtp_profile_aead_aes_128_gcm;
+                srtpProfileId = srtp_profile_aead_aes_128_gcm;
                 srtpKeySize = SRTP_AES_128_KEY_LEN;
                 srtpSaltSize = SRTP_AEAD_SALT_LEN;
                 break;
             case SRTP_AES128_CM_SHA1_80:
                 srtpProfileName = "SRTP_AES128_CM_SHA1_80";
-                srtpProfile = srtp_profile_aes128_cm_sha1_80;
+                srtpProfileId = srtp_profile_aes128_cm_sha1_80;
                 srtpKeySize = SRTP_AES_128_KEY_LEN;
                 srtpSaltSize = SRTP_SALT_LEN;
                 break;
             case SRTP_AES128_CM_SHA1_32:
                 srtpProfileName = "SRTP_AES128_CM_SHA1_32";
-                srtpProfile = srtp_profile_aes128_cm_sha1_32;
+                srtpProfileId = srtp_profile_aes128_cm_sha1_32;
                 srtpKeySize = SRTP_AES_128_KEY_LEN;
                 srtpSaltSize = SRTP_SALT_LEN;
                 break;
@@ -105,8 +105,8 @@ TEST(SrtpCrypto, RtcpReceive)
         srtpPolicy.key = bufMasterCombined.data();
         srtpPolicy.allow_repeat_tx = true;
 
-        srtp_crypto_policy_set_from_profile_for_rtp(&srtpPolicy.rtp, srtpProfile);
-        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpPolicy.rtcp, srtpProfile);
+        srtp_crypto_policy_set_from_profile_for_rtp(&srtpPolicy.rtp, srtpProfileId);
+        srtp_crypto_policy_set_from_profile_for_rtcp(&srtpPolicy.rtcp, srtpProfileId);
 
         srtp_t srtp = nullptr;
         ASSERT_EQ(srtp_create(&srtp, &srtpPolicy), srtp_err_status_ok);
