@@ -154,10 +154,10 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
     const EVP_CIPHER* cipher;
     switch (masterKey.size()) {
         case 16:
-            cipher = EVP_aes_128_ctr();
+            cipher = EVP_aes_128_ecb();
             break;
         case 32:
-            cipher = EVP_aes_256_ctr();
+            cipher = EVP_aes_256_ecb();
             break;
         default:
             goto fail;
@@ -167,10 +167,10 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
         input[14] = (blockIndex >> 16) & 0xff;
         input[15] = blockIndex & 0xff;
 
-        if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), input)) {
+        if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), zeroes)) {
             goto fail;
         }
-        if (!EVP_EncryptUpdate(ctx, outbuf, &outlen, zeroes, 16)) {
+        if (!EVP_EncryptUpdate(ctx, outbuf, &outlen, input, 16)) {
             goto fail;
         }
         assert(outlen == 16);
