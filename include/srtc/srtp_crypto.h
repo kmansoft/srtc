@@ -21,8 +21,8 @@ public:
 
     ~SrtpCrypto();
 
-    [[nodiscard]] size_t unprotectReceiveRtcp(const ByteBuffer& packet,
-                                              ByteBuffer& plain);
+    size_t unprotectReceiveRtcp(const ByteBuffer& packet,
+                                ByteBuffer& plain);
 
     // Implementation
     SrtpCrypto(uint16_t profileId,

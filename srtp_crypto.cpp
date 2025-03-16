@@ -80,6 +80,8 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
 size_t SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
                                         ByteBuffer& plain)
 {
+    plain.resize(0);
+
     switch (mProfileId) {
         case SRTP_AEAD_AES_256_GCM:
         case SRTP_AEAD_AES_128_GCM:
@@ -190,6 +192,7 @@ size_t SrtpCrypto::unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
 fail:
     if (final_ret > 0) {
         assert(plain_len == plainSize);
+        plain.resize(plainSize);
         return plainSize;
     }
     return 0;

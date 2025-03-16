@@ -183,6 +183,7 @@ add_executable(
         EXCLUDE_FROM_ALL
         test_replay_protection.cpp
         test_srtp_key_derivation.cpp
+        test_srtp_crypto.cpp
 )
 
 target_include_directories(

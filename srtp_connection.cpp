@@ -187,8 +187,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 
     if (mProfileT == SRTP_AEAD_AES_256_GCM || mProfileT == SRTP_AEAD_AES_128_GCM) {
         // Test code
-        const auto unprotectedSize = mCrypto->unprotectReceiveRtcp(packetData, plain);
-        plain.resize(unprotectedSize);
+        mCrypto->unprotectReceiveRtcp(packetData, plain);
     }
 
     auto data = packetData.data();
