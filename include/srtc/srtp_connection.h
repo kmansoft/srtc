@@ -33,8 +33,6 @@ public:
     // Implementation
     SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                    ByteBuffer&& srtpServerKeyBuf,
-                   size_t keySize,
-                   size_t saltSize,
                    const std::shared_ptr<SrtpCrypto>& crypto,
                    bool isSetupActive,
                    srtp_profile_t profile);
@@ -42,8 +40,6 @@ public:
 private:
     const ByteBuffer mSrtpClientKeyBuf;
     const ByteBuffer mSrtpServerKeyBuf;
-    const size_t mKeySize;
-    const size_t mSaltSize;
     const std::shared_ptr<SrtpCrypto> mCrypto;
     const bool mIsSetupActive;
     const srtp_profile_t mProfileT;

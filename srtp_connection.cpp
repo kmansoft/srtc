@@ -118,7 +118,6 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
     const auto conn = std::make_shared<SrtpConnection>(
             std::move(srtpClientKeyBuf), std::move(srtpServerKeyBuf),
-            srtpKeySize, srtpSaltSize,
             crypto,
             isSetupActive,
             srtpProfile);
@@ -214,15 +213,11 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 
 SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                                ByteBuffer&& srtpServerKeyBuf,
-                               size_t keySize,
-                               size_t saltSize,
                                const std::shared_ptr<SrtpCrypto>& crypto,
                                bool isSetupActive,
                                srtp_profile_t profileT)
     : mSrtpClientKeyBuf(std::move(srtpClientKeyBuf))
     , mSrtpServerKeyBuf(std::move(srtpServerKeyBuf))
-    , mKeySize(keySize)
-    , mSaltSize(saltSize)
     , mCrypto(crypto)
     , mIsSetupActive(isSetupActive)
     , mProfileT(profileT)
