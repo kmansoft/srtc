@@ -2,8 +2,29 @@
 
 #include <cstring>
 #include <cassert>
+#include <mutex>
+
+#include <openssl/evp.h>
+#include <openssl/err.h>
+
+namespace {
+
+std::once_flag gInitFlag;
+
+void initOpenSSL() {
+    std::call_once(gInitFlag, []{
+        OpenSSL_add_all_algorithms();
+        OpenSSL_add_all_ciphers();
+        OpenSSL_add_all_digests();
+        ERR_load_crypto_strings();
+    });
+}
+
+}
 
 namespace srtc {
+
+// ----- CryptoBytes
 
 CryptoBytes::CryptoBytes()
     : mSize(0)
@@ -63,6 +84,8 @@ CryptoBytes& CryptoBytes::operator^=(const CryptoBytes& other)
     return *this;
 }
 
+// ----- CryptoBytesWriter
+
 CryptoBytesWriter::CryptoBytesWriter(CryptoBytes& bytes)
     : mBytes(bytes)
 {
@@ -104,6 +127,76 @@ void CryptoBytesWriter::append(const uint8_t* data, size_t size)
         std::memcpy(mBytes.v8 + mBytes.mSize, data, size);
         mBytes.mSize += size;
     }
+}
+
+// ----- KeyDerivation
+
+bool KeyDerivation::generate(const CryptoBytes& masterKey,
+                             const CryptoBytes& masterSalt,
+                             uint8_t label,
+                             srtc::CryptoBytes& output,
+                             size_t desiredOutputSize)
+{
+    assert(masterKey.size() == 16 || masterKey.size() == 32);
+    assert(masterSalt.size() == 12 || masterSalt.size() == 14);
+
+    assert(desiredOutputSize > 0 && desiredOutputSize <= 32);
+
+    // https://datatracker.ietf.org/doc/html/rfc3711#appendix-B.3
+
+    uint8_t input[16] = {};
+    std::memcpy(input, masterSalt.data(), masterSalt.size());
+    input[7] ^= label;
+
+    uint8_t zeroes[16] = {};
+
+    uint8_t outbuf[16];
+    int outlen = 0;
+
+    const auto blockCount = (desiredOutputSize + 15) / 16;
+    bool res = false;
+
+    srtc::CryptoBytesWriter outputWriter(output);
+
+    const auto ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        goto fail;
+    }
+
+    const EVP_CIPHER* cipher;
+    switch (masterKey.size()) {
+        case 16:
+            cipher = EVP_aes_128_ctr();
+            break;
+        case 32:
+            cipher = EVP_aes_256_ctr();
+            break;
+        default:
+            goto fail;
+    }
+
+    for (auto blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+        input[14] = (blockIndex >> 16) & 0xff;
+        input[15] = blockIndex & 0xff;
+
+        if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), input)) {
+            goto fail;
+        }
+        if (!EVP_EncryptUpdate(ctx, outbuf, &outlen, zeroes, 16)) {
+            goto fail;
+        }
+        assert(outlen == 16);
+
+        outputWriter.append(outbuf,
+        (blockIndex < blockCount - 1)
+                ? 16
+                : (desiredOutputSize - 16 * blockIndex));
+    }
+    res = true;
+
+fail:
+    EVP_CIPHER_CTX_free(ctx);
+    return res;
 }
 
 }

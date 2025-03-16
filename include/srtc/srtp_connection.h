@@ -44,6 +44,7 @@ private:
     const srtp_profile_t mProfileT;
 
     CryptoBytes mReceiveMasterKey, mReceiveMasterSalt;
+    CryptoBytes mReceiveRtcpKey, mReceiveRtcpSalt;
 
     srtp_policy_t mSrtpReceivePolicy;
     srtp_policy_t mSrtpSendPolicy;

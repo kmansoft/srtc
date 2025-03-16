@@ -7,6 +7,8 @@ namespace srtc {
 
 class CryptoBytesWriter;
 
+// ----- CryptoBytes
+
 class CryptoBytes {
 public:
     // Enough for AES 128 to AES 256 key sizes
@@ -31,9 +33,11 @@ private:
     size_t mSize;
 };
 
+// ----- CryptoBytesWriter
+
 class CryptoBytesWriter {
 public:
-    CryptoBytesWriter(CryptoBytes& bytes);
+    explicit CryptoBytesWriter(CryptoBytes& bytes);
 
     void writeU8(uint8_t value);
     void writeU16(uint16_t value);
@@ -43,6 +47,22 @@ public:
 
 private:
     CryptoBytes& mBytes;
+};
+
+// ----- KeyDerivation
+
+class KeyDerivation {
+public:
+    static constexpr uint8_t kLabelRtpCipher = 0;
+    static constexpr uint8_t kLabelRtpSalt = 2;
+    static constexpr uint8_t kLabelRtcpCipher = 3;
+    static constexpr uint8_t kLabelRtcpSalt = 5;
+
+    [[nodiscard]] static bool generate(const CryptoBytes& masterKey,
+                                       const CryptoBytes& masterSalt,
+                                       uint8_t label,
+                                       srtc::CryptoBytes& output,
+                                       size_t desiredOutputSize);
 };
 
 }

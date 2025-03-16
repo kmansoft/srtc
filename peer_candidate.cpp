@@ -37,7 +37,6 @@ constexpr std::chrono::milliseconds kKeepAliveStartTimeout = std::chrono::millis
 constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(500);
 constexpr std::chrono::milliseconds kConnectRepeatTimeout = std::chrono::milliseconds(100);
 
-// GCM support requires libsrtp to be build with OpenSSL which is what we do
 constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
@@ -263,7 +262,7 @@ void PeerCandidate::process()
 #else
                         // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
                         const auto randomValue = mrand48() % 100;
-                        if (randomValue < 5) {
+                        if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
                             (void) mSocket->send(packetData.data(), protectedSize);
