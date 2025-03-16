@@ -18,6 +18,7 @@
 
 #include <openssl/srtp.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 namespace {
 
@@ -55,12 +56,17 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
             return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id"}};
     }
 
-    CryptoBytes receiveRtcpKey, receiveRtcpSalt;
+    CryptoBytes receiveRtcpKey, receiveRtcpAuth, receiveRtcpSalt;
 
     if (!KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
                                  KeyDerivation::kLabelRtcpKey,
                                  receiveRtcpKey,
                                  receiveMasterKey.size())
+            ||
+        ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
+                                  KeyDerivation::kLabelRtcpAuth,
+                                  receiveRtcpAuth,
+                                  20)
             ||
         ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
                                   KeyDerivation::kLabelRtcpSalt,
@@ -71,7 +77,7 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
     }
 
     return {
-            std::make_shared<SrtpCrypto>(profileId, receiveRtcpKey, receiveRtcpSalt),
+            std::make_shared<SrtpCrypto>(profileId, receiveRtcpKey, receiveRtcpAuth, receiveRtcpSalt),
             Error::OK
     };
 
@@ -85,14 +91,38 @@ size_t SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
     switch (mProfileId) {
         case SRTP_AEAD_AES_256_GCM:
         case SRTP_AEAD_AES_128_GCM:
-            return unprotectReceiveRtcpAESGCM(packet, plain);
+            return unprotectReceiveRtcpGCM(packet, plain);
+        case SRTP_AES128_CM_SHA1_80:
+        case SRTP_AES128_CM_SHA1_32:
+            return unprotectReceiveRtcpCM(packet, plain);
         default:
             return 0;
     }
 }
 
-size_t SrtpCrypto::unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
-                                              ByteBuffer& plain)
+void SrtpCrypto::computeReceiveRtcpIV(CryptoBytes& iv,
+                                      uint32_t ssrc,
+                                      uint32_t seq)
+{
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
+    CryptoBytesWriter ivw(iv);
+
+    if (mReceiveRtcpSalt.size() == 14) {
+        ivw.writeU8(0);
+        ivw.writeU8(0);
+    }
+
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(seq);
+    iv ^= mReceiveRtcpSalt;
+}
+
+size_t SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
+                                           ByteBuffer& plain)
 {
     const auto encryptedSize = packet.size();
     if (encryptedSize <= 4 + 4 + 16 + 4) {
@@ -119,16 +149,8 @@ size_t SrtpCrypto::unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
     const auto isEncrypted = (kRTCP_EncryptedBit & trailer) != 0;
 
     // Compute the IV
-    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
     CryptoBytes iv;
-    CryptoBytesWriter ivw(iv);
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(ssrc);
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(seq);
-    iv ^= mReceiveRtcpSalt;
+    computeReceiveRtcpIV(iv, ssrc, seq);
 
     // Output buffer
     const auto plainSize = encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize;
@@ -198,11 +220,108 @@ fail:
     return 0;
 }
 
+size_t SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
+                                          ByteBuffer& plain)
+{
+    const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
+
+    const auto encryptedSize = packet.size();
+    if (encryptedSize <= 4 + 4 + 4 + digestSize) {
+        // 4 byte RTCP header
+        // 4 byte SSRC
+        // ... ciphertext
+        // 4 byte SRTCP index
+        // 10 byte HMAC-SHA1 digest
+        return 0;
+    }
+
+    const auto ctx = mReceiveCipherCtx;
+    if (!ctx) {
+        return 0;
+    }
+
+    const auto encrypedData = packet.data();
+    const auto digestPtr = encrypedData + encryptedSize - digestSize;
+
+    uint8_t digest[20] = {};   // 160 bits
+    unsigned int digest_len = 0;
+
+    if (!HMAC(EVP_sha1(),
+              mReceiveRtcpAuth.data(),
+              static_cast<int>(mReceiveRtcpAuth.size()),
+              encrypedData, digestPtr - encrypedData, digest, &digest_len)) {
+        return 0;
+    }
+
+    if (std::memcmp(digest, digestPtr, digestSize) != 0) {
+        // Digest validation failed
+        return 0;
+    }
+
+    const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + 4));
+    const uint32_t trailer = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + encryptedSize - digestSize - 4));
+    const uint32_t seq = ~kRTCP_EncryptedBit & trailer;
+    const auto isEncrypted = (kRTCP_EncryptedBit & trailer) != 0;
+
+    // Compute the IV
+    CryptoBytes iv;
+    computeReceiveRtcpIV(iv, ssrc, seq);
+
+    // Output buffer
+    const auto plainSize = encryptedSize - digestSize - kRTCP_TrailerSize;
+    plain.reserve(plainSize);
+
+    const auto plainData = plain.data();
+
+    int len = 0, plain_len = 0;
+    int final_ret = 0;
+
+    // The header is not encrypted
+    std::memcpy(plainData, encrypedData, kRTCP_HeaderSize);
+    plain_len = kRTCP_HeaderSize;
+
+    // The main body
+    if (isEncrypted) {
+        // Set key and iv
+        if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcpKey.data(), iv.data())) {
+            goto fail;
+        }
+
+        // Decrypt
+        if (!EVP_DecryptUpdate(ctx, plainData + kRTCP_HeaderSize, &len, encrypedData + kRTCP_HeaderSize,
+                               static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize))) {
+            goto fail;
+        }
+        plain_len += len;
+
+        // Finalize
+        final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
+        if (final_ret > 0) {
+            plain_len += len;
+        }
+    } else {
+        std::memcpy(plainData + kRTCP_HeaderSize, encrypedData + kRTCP_HeaderSize,
+                    encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
+        plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
+        final_ret = 1;
+    }
+
+    fail:
+    if (final_ret > 0) {
+        assert(plain_len == plainSize);
+        plain.resize(plainSize);
+        return plainSize;
+    }
+    return 0;
+}
+
 SrtpCrypto::SrtpCrypto(uint16_t profileId,
                        const CryptoBytes& receiveRtcpKey,
+                       const CryptoBytes& receiveRtcpAuth,
                        const CryptoBytes& receiveRtcpSalt)
     : mProfileId(profileId)
     , mReceiveRtcpKey(receiveRtcpKey)
+    , mReceiveRtcpAuth(receiveRtcpAuth)
     , mReceiveRtcpSalt(receiveRtcpSalt)
 {
     mReceiveCipherCtx = EVP_CIPHER_CTX_new();

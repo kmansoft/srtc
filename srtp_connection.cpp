@@ -32,7 +32,7 @@ std::once_flag gSrtpInitFlag;
 namespace srtc {
 
 const char* const SrtpConnection::kSrtpCipherList =
-        "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
+    "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
 
 std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dtls_ssl, bool isSetupActive)
 {
@@ -184,11 +184,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
                                                  std::numeric_limits<uint32_t>::max());
 
     ByteBuffer plain;
-
-    if (mProfileT == SRTP_AEAD_AES_256_GCM || mProfileT == SRTP_AEAD_AES_128_GCM) {
-        // Test code
-        mCrypto->unprotectReceiveRtcp(packetData, plain);
-    }
+    mCrypto->unprotectReceiveRtcp(packetData, plain);
 
     auto data = packetData.data();
     auto size1 = packetData.size();
@@ -202,10 +198,8 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
         return 0;
     }
 
-    if (mProfileT == SRTP_AEAD_AES_256_GCM || mProfileT == SRTP_AEAD_AES_128_GCM) {
-        assert(plain.size() == size2);
-        assert(std::memcmp(plain.data(), data, size2) == 0);
-    }
+    assert(plain.size() == size2);
+    assert(std::memcmp(plain.data(), data, size2) == 0);
 
     return size2;
 }

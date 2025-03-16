@@ -56,6 +56,7 @@ public:
     static constexpr uint8_t kLabelRtpKey = 0;
     static constexpr uint8_t kLabelRtpSalt = 2;
     static constexpr uint8_t kLabelRtcpKey = 3;
+    static constexpr uint8_t kLabelRtcpAuth = 4;
     static constexpr uint8_t kLabelRtcpSalt = 5;
 
     [[nodiscard]] static bool generate(const CryptoBytes& masterKey,

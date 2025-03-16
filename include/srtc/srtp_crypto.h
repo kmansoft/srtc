@@ -27,17 +27,22 @@ public:
     // Implementation
     SrtpCrypto(uint16_t profileId,
                const CryptoBytes& receiveRtcpKey,
+               const CryptoBytes& receiveRtcpAuth,
                const CryptoBytes& receiveRtcpSalt);
 
 private:
-    [[nodiscard]] size_t unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
-                                                    ByteBuffer& plain);
+    void computeReceiveRtcpIV(CryptoBytes& iv,
+                              uint32_t ssrc,
+                              uint32_t seq);
+    [[nodiscard]] size_t unprotectReceiveRtcpGCM(const ByteBuffer& packet,
+                                                 ByteBuffer& plain);
+    [[nodiscard]] size_t unprotectReceiveRtcpCM(const ByteBuffer& packet,
+                                                ByteBuffer& plain);
 
     const uint16_t mProfileId;
-    const CryptoBytes mReceiveRtcpKey, mReceiveRtcpSalt;
+    const CryptoBytes mReceiveRtcpKey, mReceiveRtcpAuth, mReceiveRtcpSalt;
 
     struct evp_cipher_ctx_st* mReceiveCipherCtx;
-
 };
 
 }
