@@ -1,0 +1,232 @@
+// Some code in this file is based on Cisco's libSRTP
+// https://github.com/cisco/libsrtp
+// Copyright (c) 2001-2017 Cisco Systems, Inc.
+// All rights reserved.
+// Neither the name of the Cisco Systems, Inc. nor the names of its
+// contributors may be used to endorse or promote products derived
+// from this software without specific prior written permission.
+
+#include "srtc/srtp_crypto.h"
+#include "srtc/srtp_util.h"
+#include "srtc/byte_buffer.h"
+#include "srtc/srtp_openssl.h"
+
+#include <arpa/inet.h>
+
+#include <cstring>
+#include <cassert>
+
+#include <openssl/srtp.h>
+#include <openssl/evp.h>
+
+namespace {
+
+constexpr size_t kAESGCM_TagSize = 16;
+
+constexpr uint32_t kRTCP_EncryptedBit = 0x80000000u;
+constexpr size_t kRTCP_HeaderSize = 8u;
+constexpr size_t kRTCP_TrailerSize = 4u;
+
+}
+
+namespace srtc {
+
+std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
+        uint16_t profileId,
+        const CryptoBytes& receiveMasterKey,
+        const CryptoBytes& receiveMasterSalt)
+{
+    initOpenSSL();
+
+    if (receiveMasterKey.empty()) {
+        return { nullptr, { Error::Code::InvalidData, "Master key is empty"}};
+    }
+    if (receiveMasterSalt.empty()) {
+        return { nullptr, { Error::Code::InvalidData, "Master salt is empty"}};
+    }
+
+    switch (profileId) {
+        case SRTP_AEAD_AES_256_GCM:
+        case SRTP_AEAD_AES_128_GCM:
+        case SRTP_AES128_CM_SHA1_80:
+        case SRTP_AES128_CM_SHA1_32:
+            break;
+        default:
+            return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id"}};
+    }
+
+    CryptoBytes receiveRtcpKey, receiveRtcpSalt;
+
+    if (!KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
+                                 KeyDerivation::kLabelRtcpKey,
+                                 receiveRtcpKey,
+                                 receiveMasterKey.size())
+            ||
+        ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
+                                  KeyDerivation::kLabelRtcpSalt,
+                                  receiveRtcpSalt,
+                                  receiveMasterSalt.size())
+    ) {
+        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
+    }
+
+    return {
+            std::make_shared<SrtpCrypto>(profileId, receiveRtcpKey, receiveRtcpSalt),
+            Error::OK
+    };
+
+}
+
+size_t SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
+                                        ByteBuffer& plain)
+{
+    switch (mProfileId) {
+        case SRTP_AEAD_AES_256_GCM:
+        case SRTP_AEAD_AES_128_GCM:
+            return unprotectReceiveRtcpAESGCM(packet, plain);
+        default:
+            return 0;
+    }
+}
+
+size_t SrtpCrypto::unprotectReceiveRtcpAESGCM(const ByteBuffer& packet,
+                                              ByteBuffer& plain)
+{
+    const auto encryptedSize = packet.size();
+    if (encryptedSize <= 4 + 4 + 16 + 4) {
+        // 4 byte RTCP header
+        // 4 byte SSRC
+        // ... ciphertext
+        // 16 byte AES GCM tag
+        // 4 byte SRTCP index
+        return 0;
+    }
+
+    const auto ctx = mCipherDecryptCTX;
+    if (!ctx) {
+        return 0;
+    }
+
+    const auto encrypedData = packet.data();
+
+    // Extract ssrc and seq
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.2
+    const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + 4));
+    const uint32_t trailer = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + encryptedSize - 4));
+    const uint32_t seq = ~kRTCP_EncryptedBit & trailer;
+    const auto isEncrypted = (kRTCP_EncryptedBit & trailer) != 0;
+
+    // Compute the IV
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
+    CryptoBytes iv;
+    CryptoBytesWriter ivw(iv);
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(seq);
+    iv ^= mReceiveRtcpSalt;
+
+    // Output buffer
+    const auto plainSize = encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize;
+    plain.reserve(plainSize);
+
+    const auto plainData = plain.data();
+
+    int len = 0, plain_len = 0;
+    int final_ret = 0;
+
+    // Set key and iv
+    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcpKey.data(), iv.data())) {
+        goto fail;
+    }
+
+    // Set tag
+    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kAESGCM_TagSize,
+                             encrypedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize)) {
+        goto fail;
+    }
+
+    // AAD
+    if (isEncrypted) {
+        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData, kRTCP_HeaderSize)) {
+            goto fail;
+        }
+    } else {
+        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData,
+                               static_cast<int>(encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
+            goto fail;
+        }
+    }
+
+    if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData + encryptedSize - kRTCP_TrailerSize, kRTCP_TrailerSize)) {
+        goto fail;
+    }
+
+    // The header is not encrypted
+    std::memcpy(plainData, encrypedData, kRTCP_HeaderSize);
+    plain_len = kRTCP_HeaderSize;
+
+    // Encrypted portion
+    if (isEncrypted) {
+        if (!EVP_DecryptUpdate(ctx, plainData + kRTCP_HeaderSize, &len, encrypedData + kRTCP_HeaderSize,
+                               static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
+            goto fail;
+        }
+        plain_len += len;
+    } else {
+        std::memcpy(plainData + kRTCP_HeaderSize, encrypedData + kRTCP_HeaderSize,
+                    encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
+        plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
+    }
+
+    // Finalize, this validated the TAG
+    final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
+    if (final_ret > 0) {
+        plain_len += len;
+    }
+
+fail:
+    if (final_ret > 0) {
+        assert(plain_len == plainSize);
+        return plainSize;
+    }
+    return 0;
+}
+
+SrtpCrypto::SrtpCrypto(uint16_t profileId,
+                       const CryptoBytes& receiveRtcpKey,
+                       const CryptoBytes& receiveRtcpSalt)
+    : mProfileId(profileId)
+    , mReceiveRtcpKey(receiveRtcpKey)
+    , mReceiveRtcpSalt(receiveRtcpSalt)
+{
+    mCipherDecryptCTX = EVP_CIPHER_CTX_new();
+
+    const EVP_CIPHER* cipher;
+    switch (mProfileId) {
+        case SRTP_AEAD_AES_256_GCM:
+            cipher = EVP_aes_256_gcm();
+            break;
+        case SRTP_AEAD_AES_128_GCM:
+            cipher = EVP_aes_128_gcm();
+            break;
+        default:
+            cipher = nullptr;
+            break;
+    }
+
+    if (cipher) {
+        EVP_DecryptInit_ex(mCipherDecryptCTX, cipher, nullptr, nullptr, nullptr);
+    }
+}
+
+SrtpCrypto::~SrtpCrypto()
+{
+    if (mCipherDecryptCTX) {
+        EVP_CIPHER_CTX_free(mCipherDecryptCTX);
+    }
+}
+
+}

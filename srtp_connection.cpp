@@ -7,6 +7,7 @@
 // from this software without specific prior written permission.
 
 #include "srtc/srtp_connection.h"
+#include "srtc/srtp_crypto.h"
 #include "srtc/logging.h"
 
 #include "srtp.h"
@@ -14,6 +15,8 @@
 #include <mutex>
 
 #include <arpa/inet.h>
+
+#include <openssl/ssl.h>
 
 #include <cassert>
 #include <cstring>
@@ -24,16 +27,12 @@ namespace {
 
 std::once_flag gSrtpInitFlag;
 
-constexpr size_t kAESGCM_IVSize = 12;
-constexpr size_t kAESGCM_TagSize = 16;
-
-constexpr uint32_t kRTCP_EncryptedBit = 0x80000000u;
-constexpr size_t kRTCP_HeaderSize = 8u;
-constexpr size_t kRTCP_TrailerSize = 4u;
-
 }
 
 namespace srtc {
+
+const char* const SrtpConnection::kSrtpCipherList =
+        "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
 
 std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dtls_ssl, bool isSetupActive)
 {
@@ -93,6 +92,22 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
     const auto srtpClientSalt = srtpServerKey + srtpKeySize;
     const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
 
+    CryptoBytes receiveMasterKey, receiveMasterSalt;
+
+    if (isSetupActive) {
+        receiveMasterKey.assign(srtpClientKey, srtpKeySize);
+        receiveMasterSalt.assign(srtpClientSalt, srtpSaltSize);
+    } else {
+        receiveMasterKey.assign(srtpServerKey, srtpKeySize);
+        receiveMasterSalt.assign(srtpServerSalt, srtpSaltSize);
+    }
+
+    const auto [crypto, error] = SrtpCrypto::create(srtpProfileName->id,
+                                                    receiveMasterKey, receiveMasterSalt);
+    if (error.isError()) {
+        return { nullptr, error };
+    }
+
     ByteBuffer srtpClientKeyBuf;
     srtpClientKeyBuf.append(srtpClientKey, srtpKeySize);
     srtpClientKeyBuf.append(srtpClientSalt, srtpSaltSize);
@@ -103,8 +118,10 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
     const auto conn = std::make_shared<SrtpConnection>(
             std::move(srtpClientKeyBuf), std::move(srtpServerKeyBuf),
-            srtpKeySize, srtpSaltSize, isSetupActive,
-            srtpProfileName->id, srtpProfile);
+            srtpKeySize, srtpSaltSize,
+            crypto,
+            isSetupActive,
+            srtpProfile);
     return { conn, Error::OK };
 }
 
@@ -171,7 +188,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
 
     if (mProfileT == SRTP_AEAD_AES_256_GCM || mProfileT == SRTP_AEAD_AES_128_GCM) {
         // Test code
-        const auto unprotectedSize = unprotectIncomingControlAESGCM(channelValue, packetData, plain);
+        const auto unprotectedSize = mCrypto->unprotectReceiveRtcp(packetData, plain);
         plain.resize(unprotectedSize);
     }
 
@@ -187,7 +204,7 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
         return 0;
     }
 
-    if (!plain.empty()) {
+    if (mProfileT == SRTP_AEAD_AES_256_GCM || mProfileT == SRTP_AEAD_AES_128_GCM) {
         assert(plain.size() == size2);
         assert(std::memcmp(plain.data(), data, size2) == 0);
     }
@@ -195,134 +212,19 @@ size_t SrtpConnection::unprotectIncomingControl(ByteBuffer& packetData)
     return size2;
 }
 
-size_t SrtpConnection::unprotectIncomingControlAESGCM(ChannelValue& channelValue,
-                                                      const ByteBuffer& encrypted,
-                                                      ByteBuffer& plain)
-{
-    const auto encryptedSize = encrypted.size();
-    if (encryptedSize <= 4 + 4 + 16 + 4) {
-        // 4 byte RTCP header
-        // 4 byte SSRC
-        // ... ciphertext
-        // 16 byte AES GCM tag
-        // 4 byte SRTCP index
-        return 0;
-    }
-
-    const auto encrypedData = encrypted.data();
-
-    // Extract ssrc and seq
-    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.2
-    const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + 4));
-    const uint32_t trailer = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + encryptedSize - 4));
-    const uint32_t seq = ~kRTCP_EncryptedBit & trailer;
-    const auto isEncrypted = (kRTCP_EncryptedBit & trailer) != 0;
-
-    // Compute the IV
-    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
-    CryptoBytes iv;
-    CryptoBytesWriter ivw(iv);
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(ssrc);
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(seq);
-    iv ^= mReceiveRtcpSalt;
-
-    auto ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        return 0;
-    }
-
-    // Output buffer
-    const auto plainSize = encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize;
-    plain.reserve(plainSize);
-    const auto plainData = plain.data();
-
-    int len = 0, plain_len = 0;
-    int final_ret = 0;
-
-    auto cipher = mProfileId == SRTP_AEAD_AES_256_GCM ? EVP_aes_256_gcm() : EVP_aes_128_gcm();
-    if (!EVP_DecryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr)) {
-        goto fail;
-    }
-
-    // Set key and iv
-    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcpKey.data(), iv.data())) {
-        goto fail;
-    }
-
-    // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kAESGCM_TagSize,
-                             encrypedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize)) {
-        goto fail;
-    }
-
-    // AAD
-    if (isEncrypted) {
-        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData, kRTCP_HeaderSize)) {
-            goto fail;
-        }
-    } else {
-        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData,
-                               static_cast<int>(encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
-            goto fail;
-        }
-    }
-
-    if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData + encryptedSize - kRTCP_TrailerSize, kRTCP_TrailerSize)) {
-        goto fail;
-    }
-
-    // The header is not encrypted
-    std::memcpy(plainData, encrypedData, kRTCP_HeaderSize);
-    plain_len = kRTCP_HeaderSize;
-
-    // Encrypted portion
-    if (isEncrypted) {
-        if (!EVP_DecryptUpdate(ctx, plainData + kRTCP_HeaderSize, &len, encrypedData + kRTCP_HeaderSize,
-                               static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
-            goto fail;
-        }
-        plain_len += len;
-    } else {
-        std::memcpy(plainData + kRTCP_HeaderSize, encrypedData + kRTCP_HeaderSize,
-                    encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
-        plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
-    }
-
-    // Finalize, this validated the TAG
-    final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
-    if (final_ret > 0) {
-        plain_len += len;
-    }
-
-fail:
-    // Cleanup
-    EVP_CIPHER_CTX_free(ctx);
-
-    if (final_ret > 0) {
-        assert(plain_len == plainSize);
-        return plainSize;
-    } else {
-        return 0;
-    }
-}
-
 SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                                ByteBuffer&& srtpServerKeyBuf,
                                size_t keySize,
                                size_t saltSize,
+                               const std::shared_ptr<SrtpCrypto>& crypto,
                                bool isSetupActive,
-                               unsigned long profileId,
                                srtp_profile_t profileT)
     : mSrtpClientKeyBuf(std::move(srtpClientKeyBuf))
     , mSrtpServerKeyBuf(std::move(srtpServerKeyBuf))
     , mKeySize(keySize)
     , mSaltSize(saltSize)
+    , mCrypto(crypto)
     , mIsSetupActive(isSetupActive)
-    , mProfileId(profileId)
     , mProfileT(profileT)
 {
     // Receive policy
@@ -334,21 +236,6 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
     srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpReceivePolicy.rtp, mProfileT);
     srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpReceivePolicy.rtcp, mProfileT);
 
-    // Receive master key and salt
-    if (mIsSetupActive) {
-        mReceiveMasterKey.assign(mSrtpClientKeyBuf.data(), mKeySize);
-        mReceiveMasterSalt.assign(mSrtpClientKeyBuf.data() + mKeySize, mSaltSize);
-    } else {
-        mReceiveMasterKey.assign(mSrtpServerKeyBuf.data(), mKeySize);
-        mReceiveMasterSalt.assign(mSrtpServerKeyBuf.data() + mKeySize, mSaltSize);
-    }
-
-    (void) KeyDerivation::generate(mReceiveMasterKey, mReceiveMasterSalt,
-                            KeyDerivation::kLabelRtcpCipher,
-                            mReceiveRtcpKey, keySize);
-    (void) KeyDerivation::generate(mReceiveMasterKey, mReceiveMasterSalt,
-                                   KeyDerivation::kLabelRtcpSalt,
-                                   mReceiveRtcpSalt, saltSize);
     // Send policy
     std::memset(&mSrtpSendPolicy, 0, sizeof(mSrtpSendPolicy));
     mSrtpSendPolicy.ssrc.type = ssrc_any_outbound;

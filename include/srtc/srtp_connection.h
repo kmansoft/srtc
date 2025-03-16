@@ -7,16 +7,21 @@
 #include "srtc/srtp_util.h"
 
 #include <srtp.h>
-#include <openssl/ssl.h>
 
 #include <memory>
 #include <unordered_map>
 
+struct ssl_st;
+
 namespace srtc {
+
+class SrtpCrypto;
 
 class SrtpConnection {
 public:
-    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(SSL* dtls_ssl, bool isSetupActive);
+    static const char* const kSrtpCipherList;
+
+    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
     ~SrtpConnection();
 
     // Returns 0 on error
@@ -30,8 +35,8 @@ public:
                    ByteBuffer&& srtpServerKeyBuf,
                    size_t keySize,
                    size_t saltSize,
+                   const std::shared_ptr<SrtpCrypto>& crypto,
                    bool isSetupActive,
-                   unsigned long profileId,
                    srtp_profile_t profile);
 
 private:
@@ -39,12 +44,9 @@ private:
     const ByteBuffer mSrtpServerKeyBuf;
     const size_t mKeySize;
     const size_t mSaltSize;
+    const std::shared_ptr<SrtpCrypto> mCrypto;
     const bool mIsSetupActive;
-    const unsigned long mProfileId;
     const srtp_profile_t mProfileT;
-
-    CryptoBytes mReceiveMasterKey, mReceiveMasterSalt;
-    CryptoBytes mReceiveRtcpKey, mReceiveRtcpSalt;
 
     srtp_policy_t mSrtpReceivePolicy;
     srtp_policy_t mSrtpSendPolicy;
@@ -83,10 +85,6 @@ private:
                                     const ChannelKey& key,
                                     const srtp_policy_t* policy,
                                     uint32_t maxPossibleValueForReplayProtection);
-
-    size_t unprotectIncomingControlAESGCM(ChannelValue& channelValue,
-                                          const ByteBuffer& encrypted,
-                                          ByteBuffer& decrypted);
 };
 
 }

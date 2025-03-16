@@ -38,6 +38,8 @@ add_library(srtc
         include/srtc/socket.h
         include/srtc/srtc.h
         include/srtc/srtp_connection.h
+        include/srtc/srtp_crypto.h
+        include/srtc/srtp_openssl.h
         include/srtc/srtp_util.h
         include/srtc/track.h
         include/srtc/util.h
@@ -65,6 +67,8 @@ add_library(srtc
         socket.cpp
         srtc.cpp
         srtp_connection.cpp
+        srtp_crypto.cpp
+        srtp_openssl.cpp
         srtp_util.cpp
         track.cpp
         util.cpp

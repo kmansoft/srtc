@@ -1,4 +1,5 @@
 #include "srtc/srtp_util.h"
+#include "srtc/srtp_openssl.h"
 
 #include <cstring>
 #include <cassert>
@@ -6,21 +7,6 @@
 
 #include <openssl/evp.h>
 #include <openssl/err.h>
-
-namespace {
-
-std::once_flag gInitFlag;
-
-void initOpenSSL() {
-    std::call_once(gInitFlag, []{
-        OpenSSL_add_all_algorithms();
-        OpenSSL_add_all_ciphers();
-        OpenSSL_add_all_digests();
-        ERR_load_crypto_strings();
-    });
-}
-
-}
 
 namespace srtc {
 
@@ -137,6 +123,8 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
                              srtc::CryptoBytes& output,
                              size_t desiredOutputSize)
 {
+    initOpenSSL();
+
     assert(masterKey.size() == 16 || masterKey.size() == 32);
     assert(masterSalt.size() == 12 || masterSalt.size() == 14);
 
