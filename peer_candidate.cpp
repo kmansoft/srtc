@@ -514,19 +514,19 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
     if (is_rtcp_message(buf) && mSrtp) {
-        const auto unprotectedSize = mSrtp->unprotectIncomingControl(buf);
-        if (unprotectedSize >= 8) {
-            LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
-            onReceivedRtcMessageUnprotected(buf, unprotectedSize);
+        ByteBuffer output;
+        if (mSrtp->unprotectIncomingControl(buf, output)) {
+            LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+            onReceivedRtcMessageUnprotected(output);
         }
     }
 }
 
-void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
-                                                    size_t unprotectedSize)
+void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 {
     updateReceiveTimeout();
 
+    const auto unprotectedSize = buf.size();
     ByteReader rtcpReader = { buf.data(), unprotectedSize };
 
     const auto rtcpRC = rtcpReader.readU8() & 0x1f;

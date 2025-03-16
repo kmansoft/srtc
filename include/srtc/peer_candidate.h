@@ -61,8 +61,7 @@ private:
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
     void onReceivedRtcMessage(ByteBuffer&& buf);
-    void onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
-                                         size_t unprotectedSize);
+    void onReceivedRtcMessageUnprotected(const ByteBuffer& buf);
 
     void forgetExpiredStunRequests();
 

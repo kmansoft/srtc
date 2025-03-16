@@ -151,13 +151,12 @@ TEST(SrtpCrypto, RtcpReceive)
 
             // Decrypt using our crypto
             srtc::ByteBuffer decryptedPacket;
-            const auto decryptedSize = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
-            ASSERT_GT(decryptedSize, 0);
-            decryptedPacket.resize(decryptedSize);
+            const auto decryptedResult = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
+            ASSERT_TRUE(decryptedResult);
 
             // The packet should be equal to the source
             ASSERT_EQ(decryptedPacket.size(), sourcePacket.size());
-            ASSERT_EQ(std::memcmp(decryptedPacket.data(), sourcePacket.data(), decryptedSize), 0);
+            ASSERT_EQ(std::memcmp(decryptedPacket.data(), sourcePacket.data(), decryptedPacket.size()), 0);
         }
 
         // Cleanup

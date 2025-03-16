@@ -27,21 +27,24 @@ public:
     // Returns 0 on error
     size_t protectOutgoing(ByteBuffer& packetData);
 
-    // Returns 0 on error
-    size_t unprotectIncomingControl(ByteBuffer& packetData);
+    // Returns false on error
+    bool unprotectIncomingControl(const ByteBuffer& packetData,
+                                  ByteBuffer& output);
 
     // Implementation
     SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                    ByteBuffer&& srtpServerKeyBuf,
                    const std::shared_ptr<SrtpCrypto>& crypto,
                    bool isSetupActive,
-                   srtp_profile_t profile);
+                   uint16_t profileS,
+                   srtp_profile_t profileT);
 
 private:
     const ByteBuffer mSrtpClientKeyBuf;
     const ByteBuffer mSrtpServerKeyBuf;
     const std::shared_ptr<SrtpCrypto> mCrypto;
     const bool mIsSetupActive;
+    const uint16_t mProfileS;
     const srtp_profile_t mProfileT;
 
     srtp_policy_t mSrtpReceivePolicy;
@@ -81,6 +84,9 @@ private:
                                     const ChannelKey& key,
                                     const srtp_policy_t* policy,
                                     uint32_t maxPossibleValueForReplayProtection);
+
+    bool getRtcpSequenceNumber(const ByteBuffer& packet,
+                               uint32_t& outSequenceNumber) const;
 };
 
 }

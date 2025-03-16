@@ -11,7 +11,7 @@ public:
     ~ReplayProtection();
 
     [[nodiscard]] bool canProceed(uint32_t value);
-    [[nodiscard]] bool set(uint32_t value);
+    bool set(uint32_t value);
 
 private:
     const uint32_t mMaxPossibleValue;

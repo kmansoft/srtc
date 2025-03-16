@@ -83,8 +83,8 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
 
 }
 
-size_t SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
-                                        ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
+                                      ByteBuffer& plain)
 {
     plain.resize(0);
 
@@ -96,7 +96,8 @@ size_t SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
         case SRTP_AES128_CM_SHA1_32:
             return unprotectReceiveRtcpCM(packet, plain);
         default:
-            return 0;
+            assert(false);
+            return false;
     }
 }
 
@@ -121,8 +122,8 @@ void SrtpCrypto::computeReceiveRtcpIV(CryptoBytes& iv,
     iv ^= mReceiveRtcpSalt;
 }
 
-size_t SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
-                                           ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
+                                         ByteBuffer& plain)
 {
     const auto encryptedSize = packet.size();
     if (encryptedSize <= 4 + 4 + 16 + 4) {
@@ -131,12 +132,12 @@ size_t SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
         // ... ciphertext
         // 16 byte AES GCM tag
         // 4 byte SRTCP index
-        return 0;
+        return false;
     }
 
     const auto ctx = mReceiveCipherCtx;
     if (!ctx) {
-        return 0;
+        return false;
     }
 
     const auto encrypedData = packet.data();
@@ -215,13 +216,13 @@ fail:
     if (final_ret > 0) {
         assert(plain_len == plainSize);
         plain.resize(plainSize);
-        return plainSize;
+        return true;
     }
-    return 0;
+    return false;
 }
 
-size_t SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
-                                          ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
+                                        ByteBuffer& plain)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
@@ -232,12 +233,12 @@ size_t SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
         // ... ciphertext
         // 4 byte SRTCP index
         // 10 byte HMAC-SHA1 digest
-        return 0;
+        return false;
     }
 
     const auto ctx = mReceiveCipherCtx;
     if (!ctx) {
-        return 0;
+        return false;
     }
 
     const auto encrypedData = packet.data();
@@ -250,12 +251,12 @@ size_t SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
               mReceiveRtcpAuth.data(),
               static_cast<int>(mReceiveRtcpAuth.size()),
               encrypedData, digestPtr - encrypedData, digest, &digest_len)) {
-        return 0;
+        return false;
     }
 
     if (std::memcmp(digest, digestPtr, digestSize) != 0) {
         // Digest validation failed
-        return 0;
+        return false;
     }
 
     const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(encrypedData + 4));
@@ -310,9 +311,9 @@ size_t SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     if (final_ret > 0) {
         assert(plain_len == plainSize);
         plain.resize(plainSize);
-        return plainSize;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 SrtpCrypto::SrtpCrypto(uint16_t profileId,

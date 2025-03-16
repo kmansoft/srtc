@@ -16,13 +16,12 @@ public:
     [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(
             uint16_t profileId,
             const CryptoBytes& receiveMasterKey,
-            const CryptoBytes& receiveMasterSalt
-            );
+            const CryptoBytes& receiveMasterSalt);
 
     ~SrtpCrypto();
 
-    size_t unprotectReceiveRtcp(const ByteBuffer& packet,
-                                ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet,
+                                            ByteBuffer& plain);
 
     // Implementation
     SrtpCrypto(uint16_t profileId,
@@ -34,10 +33,10 @@ private:
     void computeReceiveRtcpIV(CryptoBytes& iv,
                               uint32_t ssrc,
                               uint32_t seq);
-    [[nodiscard]] size_t unprotectReceiveRtcpGCM(const ByteBuffer& packet,
-                                                 ByteBuffer& plain);
-    [[nodiscard]] size_t unprotectReceiveRtcpCM(const ByteBuffer& packet,
-                                                ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet,
+                                               ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveRtcpCM(const ByteBuffer& packet,
+                                              ByteBuffer& plain);
 
     const uint16_t mProfileId;
     const CryptoBytes mReceiveRtcpKey, mReceiveRtcpAuth, mReceiveRtcpSalt;
