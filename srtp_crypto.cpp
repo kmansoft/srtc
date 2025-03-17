@@ -114,7 +114,7 @@ bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
     switch (mProfileId) {
         case SRTP_AEAD_AES_256_GCM:
         case SRTP_AEAD_AES_128_GCM:
-            return false;
+            return protectSendRtpGCM(packet, rolloverCount, encrypted);
         case SRTP_AES128_CM_SHA1_80:
         case SRTP_AES128_CM_SHA1_32:
             return protectSendRtpCM(packet, rolloverCount, encrypted);
@@ -122,6 +122,87 @@ bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
             assert(false);
             return false;
     }
+}
+
+bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet,
+                                   uint32_t rolloverCount,
+                                   ByteBuffer& encrypted)
+{
+    const auto ctx = mSendCipherCtx;
+    if (!ctx) {
+        return false;
+    }
+
+    const size_t digestSize = kAESGCM_TagSize;
+
+    const auto packetData = packet.data();
+    const auto packetSize = packet.size();
+
+    const uint16_t sequence = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 2));
+    const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData + 8));
+
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-8.1
+    CryptoBytes iv;
+    CryptoWriter ivw(iv);
+    ivw.writeU16(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU32(rolloverCount);
+    ivw.writeU16(sequence);
+    iv ^= mSendRtp.salt;
+
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-7.1
+    const auto encryptedSize = packetSize + digestSize;
+
+    encrypted.reserve(encryptedSize);
+    const auto encryptedData = encrypted.data();
+
+    // The header is not encrypted
+    const auto headerSize = 4 + 4 + 4;  // TODO extension
+    std::memcpy(encryptedData, packetData, headerSize);
+
+    // Encryption
+    int len = 0, total_len = 0;
+    int final_ret = 0;
+    uint8_t digest[kAESGCM_TagSize] = {};
+
+    // Set key and iv
+    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtp.key.data(), iv.data())) {
+        goto fail;
+    }
+
+    // The header is AAD
+    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, headerSize)) {
+        goto fail;
+    }
+
+    // Encrypt the body
+    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+                           static_cast<int>(packetSize - headerSize))) {
+        goto fail;
+    }
+    total_len = len;
+
+    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
+    if (final_ret > 0) {
+        total_len += len;
+    }
+
+    // Get tag
+    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kAESGCM_TagSize, digest)) {
+        final_ret = 0;
+        goto fail;
+    }
+
+    // Copy it to after the data
+    std::memcpy(encryptedData + encryptedSize - digestSize, digest, kAESGCM_TagSize);
+
+fail:
+    if (final_ret > 0) {
+        assert(total_len + headerSize + digestSize == encryptedSize);
+        encrypted.resize(encryptedSize);
+        return true;
+    }
+    return false;
 }
 
 bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,

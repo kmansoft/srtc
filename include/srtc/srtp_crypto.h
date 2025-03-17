@@ -45,6 +45,9 @@ public:
                const CryptoVectors& receiveRtcp);
 
 private:
+    [[nodiscard]] bool protectSendRtpGCM(const ByteBuffer& packet,
+                                         uint32_t rolloverCount,
+                                         ByteBuffer& encrypted);
     [[nodiscard]] bool protectSendRtpCM(const ByteBuffer& packet,
                                         uint32_t rolloverCount,
                                         ByteBuffer& encrypted);

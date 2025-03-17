@@ -187,8 +187,8 @@ TEST(SrtpCrypto, RtpSend)
     srtc::initOpenSSL();
 
     static const uint16_t kOpenSslProfileList[] = {
-//            SRTP_AEAD_AES_256_GCM,
-//            SRTP_AEAD_AES_128_GCM,
+            SRTP_AEAD_AES_256_GCM,
+            SRTP_AEAD_AES_128_GCM,
             SRTP_AES128_CM_SHA1_80,
             SRTP_AES128_CM_SHA1_32
     };
@@ -276,7 +276,7 @@ TEST(SrtpCrypto, RtpSend)
         // Randomly generate RTCP packets, encrypt them using libSRTP and our crypto.
         // Verify that the result of encryption is the same for both.
         uint32_t ssrc = 0x12345678;
-        uint16_t sequence = 61000;
+        uint16_t sequence = 65000;
         uint32_t rolloverCount = 0;
         uint32_t timestamp = 10000;
 
