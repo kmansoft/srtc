@@ -5,7 +5,7 @@
 
 namespace srtc {
 
-class CryptoBytesWriter;
+class CryptoWriter;
 
 // ----- CryptoBytes
 
@@ -28,16 +28,16 @@ public:
     CryptoBytes& operator^=(const CryptoBytes& other);
 
 private:
-    friend CryptoBytesWriter;
+    friend CryptoWriter;
 
     size_t mSize;
 };
 
-// ----- CryptoBytesWriter
+// ----- CryptoWriter
 
-class CryptoBytesWriter {
+class CryptoWriter {
 public:
-    explicit CryptoBytesWriter(CryptoBytes& bytes);
+    explicit CryptoWriter(CryptoBytes& bytes);
 
     void writeU8(uint8_t value);
     void writeU16(uint16_t value);
@@ -54,6 +54,7 @@ private:
 class KeyDerivation {
 public:
     static constexpr uint8_t kLabelRtpKey = 0;
+    static constexpr uint8_t kLabelRtpAuth = 1;
     static constexpr uint8_t kLabelRtpSalt = 2;
     static constexpr uint8_t kLabelRtcpKey = 3;
     static constexpr uint8_t kLabelRtcpAuth = 4;

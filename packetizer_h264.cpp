@@ -90,9 +90,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     writer.write(csd.data(), csd.size());
                 }
 
+                const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(
                         std::make_shared<RtpPacket>(
-                            track, false, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
+                            track, false, rollover, sequence, frameTimestamp, std::move(payload)));
             }
         }
 
@@ -105,10 +106,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
+                const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer { parser.currData(), parser.currDataSize() };
                 result.push_back(
                         std::make_shared<RtpPacket>(
-                            track, true, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
+                            track, true, rollover, sequence, frameTimestamp, std::move(payload)));
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -124,6 +126,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
                 auto packetNumber = 0;
                 while (dataSize > 0) {
+                    const auto [rollover, sequence] = packetSource->getNextSequence();
+
                     ByteBuffer payload;
                     ByteWriter writer(payload);
 
@@ -143,7 +147,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
                     result.push_back(
                             std::make_shared<RtpPacket>(
-                                    track, isEnd, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
+                                    track, isEnd, rollover, sequence, frameTimestamp, std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

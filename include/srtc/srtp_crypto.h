@@ -6,42 +6,67 @@
 #include "srtc/srtp_util.h"
 
 struct evp_cipher_ctx_st;
+struct evp_cipher_st;
 
 namespace srtc {
 
 class ByteBuffer;
+class HmacSha1;
 
 class SrtpCrypto {
 public:
     [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(
             uint16_t profileId,
+            const CryptoBytes& sendMasterKey,
+            const CryptoBytes& sendMasterSalt,
             const CryptoBytes& receiveMasterKey,
             const CryptoBytes& receiveMasterSalt);
 
     ~SrtpCrypto();
 
+    [[nodiscard]] bool protectSendRtp(uint32_t rolloverCount,
+                                      const ByteBuffer& packet,
+                                      ByteBuffer& encrypted);
+
     [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet,
                                             ByteBuffer& plain);
 
     // Implementation
+    struct CryptoVectors {
+        CryptoBytes key;
+        CryptoBytes auth;
+        CryptoBytes salt;
+    };
+
     SrtpCrypto(uint16_t profileId,
-               const CryptoBytes& receiveRtcpKey,
-               const CryptoBytes& receiveRtcpAuth,
-               const CryptoBytes& receiveRtcpSalt);
+               // Send RTP
+               const CryptoVectors& sendRtp,
+               // Receive RTCP
+               const CryptoVectors& receiveRtcp);
 
 private:
-    void computeReceiveRtcpIV(CryptoBytes& iv,
-                              uint32_t ssrc,
-                              uint32_t seq);
+    [[nodiscard]] bool protectSendRtpGCM(uint32_t rolloverCount,
+                                         const ByteBuffer& packet,
+                                         ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendRtpCM(uint32_t rolloverCount,
+                                        const ByteBuffer& packet,
+                                        ByteBuffer& encrypted);
+
     [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet,
                                                ByteBuffer& plain);
     [[nodiscard]] bool unprotectReceiveRtcpCM(const ByteBuffer& packet,
                                               ByteBuffer& plain);
 
-    const uint16_t mProfileId;
-    const CryptoBytes mReceiveRtcpKey, mReceiveRtcpAuth, mReceiveRtcpSalt;
+    [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 
+    const uint16_t mProfileId;
+    const CryptoVectors mSendRtp;
+    const CryptoVectors mReceiveRtcp;
+
+    struct evp_cipher_ctx_st* mSendCipherCtx;
     struct evp_cipher_ctx_st* mReceiveCipherCtx;
+
+    std::shared_ptr<HmacSha1> mHmacSha1;
 };
 
 }

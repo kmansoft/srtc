@@ -18,6 +18,7 @@ public:
 
     RtpPacket(const std::shared_ptr<Track>& track,
               bool marker,
+              uint32_t rollover,
               uint16_t sequence,
               uint32_t timestamp,
               ByteBuffer&& payload);
@@ -29,14 +30,20 @@ public:
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
 
-    [[nodiscard]] ByteBuffer generate() const;
-    [[nodiscard]] ByteBuffer generateRtx() const;
+    struct Output {
+        uint32_t rollover;
+        ByteBuffer buf;
+    };
+
+    [[nodiscard]] Output generate() const;
+    [[nodiscard]] Output generateRtx() const;
 
 private:
     const std::shared_ptr<Track> mTrack;
     const uint32_t mSSRC;
     const uint8_t mPayloadId;
     const bool mMarker;
+    const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
     const ByteBuffer mPayload;

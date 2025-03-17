@@ -255,20 +255,20 @@ void PeerCandidate::process()
                 }
 
                 // Generate
-                auto packetData = packet->generate();
+                const auto packetData = packet->generate();
                 if (mSrtp) {
-                    const auto protectedSize = mSrtp->protectOutgoing(packetData);
-                    if (protectedSize > 0) {
+                    ByteBuffer protectedData;
+                    if (mSrtp->protectOutgoing(packetData.rollover, packetData.buf, protectedData)) {
 #ifdef NDEBUG
                         // And send
-                        (void) mSocket->send(packetData.data(), protectedSize);
+                        (void) mSocket->send(protectedData.data(), protectedData.size());
 #else
                         // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
                         const auto randomValue = mrand48() % 100;
                         if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
-                            (void) mSocket->send(packetData.data(), protectedSize);
+                            (void) mSocket->send(protectedData.data(), protectedData.size());
                         }
 #endif
                         updateKeepAliveTimeout();
@@ -570,17 +570,17 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                             const auto packet = mSendHistory->find(rtcpSSRC_1, seq);
                             if (packet && mSrtp) {
                                 // Generate
-                                ByteBuffer packetData;
+                                RtpPacket::Output packetData;
                                 if (packet->getTrack()->getRtxPayloadId() > 0) {
                                     packetData = packet->generateRtx();
                                 } else {
                                     packetData = packet->generate();
                                 }
 
-                                const auto protectedSize = mSrtp->protectOutgoing(packetData);
-                                if (protectedSize > 0) {
+                                ByteBuffer protectedData;
+                                if (mSrtp->protectOutgoing(packetData.rollover, packetData.buf, protectedData)) {
                                     // And send
-                                    const auto sentSize = mSocket->send(packetData.data(), protectedSize);
+                                    const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
                                     LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
                                         packet->getSSRC(), packet->getSequence(), sentSize);
                                 }

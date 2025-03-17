@@ -9,7 +9,9 @@ RtpPacketSource::RtpPacketSource(uint32_t ssrc,
                                  uint8_t payloadId)
     : mSSRC(ssrc)
     , mPayloadId(payloadId)
-    , mNextSequence(static_cast<uint16_t>(lrand48()))
+    , mGeneratedCount(0)
+    , mRollover(0)
+    , mNextSequence(10000 + static_cast<uint16_t>(lrand48() % 20000))
 {
 }
 
@@ -24,9 +26,16 @@ uint8_t RtpPacketSource::getPayloadId() const
     return mPayloadId;
 }
 
-uint16_t RtpPacketSource::getNextSequence()
+std::pair<uint32_t, uint16_t> RtpPacketSource::getNextSequence()
 {
-    return mNextSequence++;
+    mGeneratedCount += 1;
+    mNextSequence += 1;
+
+    if (mGeneratedCount > 1 && mNextSequence == 0) {
+        mRollover += 1;
+    }
+
+    return { mRollover, mNextSequence };
 }
 
 }

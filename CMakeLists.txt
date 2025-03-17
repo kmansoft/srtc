@@ -39,6 +39,7 @@ add_library(srtc
         include/srtc/srtc.h
         include/srtc/srtp_connection.h
         include/srtc/srtp_crypto.h
+        include/srtc/srtp_hmac_sha1.h
         include/srtc/srtp_openssl.h
         include/srtc/srtp_util.h
         include/srtc/track.h
@@ -58,6 +59,7 @@ add_library(srtc
         peer_connection.cpp
         random_generator.cpp
         replay_protection.cpp
+        replay_protection.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
         sdp_answer.cpp
@@ -68,6 +70,7 @@ add_library(srtc
         srtc.cpp
         srtp_connection.cpp
         srtp_crypto.cpp
+        srtp_hmac_sha1.cpp
         srtp_openssl.cpp
         srtp_util.cpp
         track.cpp
@@ -81,7 +84,6 @@ target_link_libraries(
         srtc
         PRIVATE
         stun
-        srtp3
 )
 
 # Android specific
@@ -113,46 +115,6 @@ target_link_libraries(srtc
         OpenSSL::SSL
 )
 
-# LibSRTP
-
-list(APPEND LIBSRTP_CMAKE_ARGS
-        "-DLIBSRTP_TEST_APPS=OFF"
-        "-DENABLE_OPENSSL=ON"
-        "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-)
-
-if(ANDROID)
-    list(APPEND LIBSRTP_CMAKE_ARGS
-        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-        -DANDROID_ABI=${ANDROID_ABI}
-        -DANDROID_PLATFORM=android-29
-        -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
-    )
-endif()
-
-ExternalProject_Add(
-        srtp
-        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
-        GIT_TAG "76f23aa78124381a9681b7b1a14c52c6cd40ea21"
-        SOURCE_DIR "external/libsrtp"
-        INSTALL_COMMAND ""
-        UPDATE_DISCONNECTED ON
-        CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
-)
-
-set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
-set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
-
-add_dependencies(srtc srtp)
-
-target_include_directories(srtc
-        PRIVATE
-        "${SRTP_INCLUDE_DIR}")
-
-target_link_directories(srtc
-        PUBLIC
-        "${SRTP_LIBRARY_DIR}")
-
 # STUN
 
 add_subdirectory(stun)
@@ -174,6 +136,36 @@ FetchContent_Declare(
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
+
+# LibSRTP - only for tests
+
+list(APPEND LIBSRTP_CMAKE_ARGS
+        "-DLIBSRTP_TEST_APPS=OFF"
+        "-DENABLE_OPENSSL=ON"
+        "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+        )
+
+if(ANDROID)
+    list(APPEND LIBSRTP_CMAKE_ARGS
+            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+            -DANDROID_ABI=${ANDROID_ABI}
+            -DANDROID_PLATFORM=android-29
+            -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
+            )
+endif()
+
+ExternalProject_Add(
+        srtp
+        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
+        GIT_TAG "76f23aa78124381a9681b7b1a14c52c6cd40ea21"
+        SOURCE_DIR "external/libsrtp"
+        INSTALL_COMMAND ""
+        UPDATE_DISCONNECTED ON
+        CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
+)
+
+set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
+set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
 # Test executable
 
