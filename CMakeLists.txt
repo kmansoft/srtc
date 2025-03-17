@@ -133,8 +133,7 @@ endif()
 ExternalProject_Add(
         srtp
         GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
-        GIT_TAG "def2d648c52bd5e9ea6ba6733c052c1c6d791a99"
-        GIT_SHALLOW ON
+        GIT_TAG "76f23aa78124381a9681b7b1a14c52c6cd40ea21"
         SOURCE_DIR "external/libsrtp"
         INSTALL_COMMAND ""
         UPDATE_DISCONNECTED ON
