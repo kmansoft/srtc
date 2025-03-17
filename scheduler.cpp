@@ -371,9 +371,6 @@ std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& o
         mTaskQueue.erase(iter);
     }
 
-    srtc::log(SRTC_LOG_V, "LoopScheduler", "Update for delay %d ms",
-              static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(delay).count()));
-
     const auto when = std::chrono::steady_clock::now() + delay;
     const auto newTask = std::make_shared<TaskImpl>(
             weak_from_this(),

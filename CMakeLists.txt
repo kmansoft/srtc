@@ -38,6 +38,9 @@ add_library(srtc
         include/srtc/socket.h
         include/srtc/srtc.h
         include/srtc/srtp_connection.h
+        include/srtc/srtp_crypto.h
+        include/srtc/srtp_openssl.h
+        include/srtc/srtp_util.h
         include/srtc/track.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
@@ -64,6 +67,9 @@ add_library(srtc
         socket.cpp
         srtc.cpp
         srtp_connection.cpp
+        srtp_crypto.cpp
+        srtp_openssl.cpp
+        srtp_util.cpp
         track.cpp
         util.cpp
         x509_certificate.cpp
@@ -135,13 +141,18 @@ ExternalProject_Add(
         CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
 )
 
-target_include_directories(srtc PRIVATE
-        "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
-
-target_link_directories(srtc PUBLIC
-        "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
+set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
+set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
 add_dependencies(srtc srtp)
+
+target_include_directories(srtc
+        PRIVATE
+        "${SRTP_INCLUDE_DIR}")
+
+target_link_directories(srtc
+        PUBLIC
+        "${SRTP_LIBRARY_DIR}")
 
 # STUN
 
@@ -171,21 +182,35 @@ add_executable(
         srtc_test
         EXCLUDE_FROM_ALL
         test_replay_protection.cpp
+        test_srtp_key_derivation.cpp
+        test_srtp_crypto.cpp
 )
+
 target_include_directories(
         srtc_test
         PRIVATE
-        include
+        "${SRTP_INCLUDE_DIR}"
+        "${OPENSSL_INCLUDE_DIR}"
 )
+
+target_link_directories(
+        srtc_test
+        PRIVATE
+        "${SRTP_LIBRARY_DIR}"
+)
+
 add_dependencies(srtc_test srtc srtp)
+
 target_link_libraries(
         srtc_test
         GTest::gtest_main
         srtc
         srtp3
+        OpenSSL::Crypto
+        OpenSSL::SSL
 )
 
-if(NOT ANDROID)
+if(NOT CMAKE_CROSSCOMPILING)
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
 endif()

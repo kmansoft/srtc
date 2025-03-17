@@ -3,39 +3,49 @@
 #include "srtc/error.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_packet_source.h"
+#include "srtc/replay_protection.h"
+#include "srtc/srtp_util.h"
 
 #include <srtp.h>
-#include <openssl/ssl.h>
 
 #include <memory>
 #include <unordered_map>
 
+struct ssl_st;
+
 namespace srtc {
+
+class SrtpCrypto;
 
 class SrtpConnection {
 public:
-    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(SSL* dtls_ssl, bool isSetupActive);
+    static const char* const kSrtpCipherList;
+
+    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
     ~SrtpConnection();
 
     // Returns 0 on error
     size_t protectOutgoing(ByteBuffer& packetData);
 
-    // Returns 0 on error
-    size_t unprotectIncomingControl(ByteBuffer& packetData);
+    // Returns false on error
+    bool unprotectIncomingControl(const ByteBuffer& packetData,
+                                  ByteBuffer& output);
 
     // Implementation
     SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
                    ByteBuffer&& srtpServerKeyBuf,
-                   size_t keySize,
+                   const std::shared_ptr<SrtpCrypto>& crypto,
                    bool isSetupActive,
-                   srtp_profile_t profile);
+                   uint16_t profileS,
+                   srtp_profile_t profileT);
 
 private:
     const ByteBuffer mSrtpClientKeyBuf;
     const ByteBuffer mSrtpServerKeyBuf;
-    const size_t mKeySize;
+    const std::shared_ptr<SrtpCrypto> mCrypto;
     const bool mIsSetupActive;
-    const srtp_profile_t mProfile;
+    const uint16_t mProfileS;
+    const srtp_profile_t mProfileT;
 
     srtp_policy_t mSrtpReceivePolicy;
     srtp_policy_t mSrtpSendPolicy;
@@ -60,14 +70,23 @@ private:
         }
     };
 
-    using ChannelMap = std::unordered_map<ChannelKey, srtp_t, hash_channel_key, equal_to_channel_key>;
+    struct ChannelValue {
+        srtp_t srtp;
+        std::unique_ptr<ReplayProtection> replayProtection;
+    };
+
+    using ChannelMap = std::unordered_map<ChannelKey, ChannelValue, hash_channel_key, equal_to_channel_key>;
 
     ChannelMap mSrtpInMap;
     ChannelMap mSrtpOutMap;
 
-    srtp_t ensureSrtpChannel(ChannelMap& map,
-                             const ChannelKey& key,
-                             const srtp_policy_t* policy);
+    ChannelValue& ensureSrtpChannel(ChannelMap& map,
+                                    const ChannelKey& key,
+                                    const srtp_policy_t* policy,
+                                    uint32_t maxPossibleValueForReplayProtection);
+
+    bool getRtcpSequenceNumber(const ByteBuffer& packet,
+                               uint32_t& outSequenceNumber) const;
 };
 
 }

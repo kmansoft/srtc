@@ -10,11 +10,14 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/util.h"
 #include "srtc/x509_certificate.h"
+#include "srtc/srtp_openssl.h"
 
 #include <cstring>
 #include <cassert>
 
 #include <sys/epoll.h>
+
+#include <openssl/ssl.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerCandidate", __VA_ARGS__)
 
@@ -36,9 +39,6 @@ constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::millisecon
 constexpr std::chrono::milliseconds kKeepAliveStartTimeout = std::chrono::milliseconds(2500);
 constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(500);
 constexpr std::chrono::milliseconds kConnectRepeatTimeout = std::chrono::milliseconds(100);
-
-// GCM support requires libsrtp to be build with OpenSSL which is what we do
-constexpr auto kSrtpCipherList = "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference,
@@ -186,6 +186,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
     LOG(SRTC_LOG_V, "Constructor for %p %d", static_cast<void*>(this), mUniqueId);
 
+    initOpenSSL();
+
     struct epoll_event ev = { };
     ev.events = EPOLLIN;
     ev.data.ptr = this;
@@ -263,7 +265,7 @@ void PeerCandidate::process()
 #else
                         // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
                         const auto randomValue = mrand48() % 100;
-                        if (randomValue < 5) {
+                        if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
                             (void) mSocket->send(packetData.data(), protectedSize);
@@ -322,7 +324,7 @@ void PeerCandidate::process()
             mDtlsBio = BIO_new_dgram(this);
             SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
 
-            SSL_set_tlsext_use_srtp(mDtlsSsl, kSrtpCipherList);
+            SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
             SSL_set_connect_state(mDtlsSsl);
 
             if (mAnswer->isSetupActive()) {
@@ -512,19 +514,19 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
     if (is_rtcp_message(buf) && mSrtp) {
-        const auto unprotectedSize = mSrtp->unprotectIncomingControl(buf);
-        if (unprotectedSize >= 8) {
-            LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", unprotectedSize);
-            onReceivedRtcMessageUnprotected(buf, unprotectedSize);
+        ByteBuffer output;
+        if (mSrtp->unprotectIncomingControl(buf, output)) {
+            LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+            onReceivedRtcMessageUnprotected(output);
         }
     }
 }
 
-void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf,
-                                                    size_t unprotectedSize)
+void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 {
     updateReceiveTimeout();
 
+    const auto unprotectedSize = buf.size();
     ByteReader rtcpReader = { buf.data(), unprotectedSize };
 
     const auto rtcpRC = rtcpReader.readU8() & 0x1f;
