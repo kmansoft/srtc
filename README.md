@@ -4,7 +4,7 @@ This is srtc, a simple WebRTC library (publish side only so far).
 
 Features:
 
-- Depends on OpenSSL (or BoringSSL) and [Cisco's libSRTP](https://github.com/cisco/libsrtp), nothing else.
+- Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++
 - Conservative means it uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI.
 - Only one worker thread per PeerConnection.
@@ -67,8 +67,7 @@ This library, srtc, is my side project.
 
 ### Future plans
 
-First, I'd like to replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly. This is currently
-in progress (incoming RTCP packets are decypted using our own code).
+First, I'd like to replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly. This is done.
 
 Second, I'd lke to implement support for Simulcast (multiple video qualities on the same peer connection). There is a
 problem with this though - since I work for IVS, I know how IVS handles Simulcast but this information is not public,
