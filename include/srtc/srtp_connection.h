@@ -47,7 +47,6 @@ private:
     const uint16_t mProfileS;
     const srtp_profile_t mProfileT;
 
-    srtp_policy_t mSrtpReceivePolicy;
     srtp_policy_t mSrtpSendPolicy;
 
     struct ChannelKey {

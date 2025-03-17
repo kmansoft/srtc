@@ -128,11 +128,17 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 SrtpConnection::~SrtpConnection()
 {
     for (auto& iter : mSrtpInMap) {
-        srtp_dealloc(iter.second.srtp);
+        const auto srtp = iter.second.srtp;
+        if (srtp) {
+            srtp_dealloc(srtp);
+        }
     }
 
     for (auto& iter : mSrtpOutMap) {
-        srtp_dealloc(iter.second.srtp);
+        const auto srtp = iter.second.srtp;
+        if (srtp) {
+            srtp_dealloc(srtp);
+        }
     }
 }
 
@@ -185,7 +191,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData,
     key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4));
     key.payloadId = 0;
 
-    auto& channelValue = ensureSrtpChannel(mSrtpInMap, key, &mSrtpReceivePolicy,
+    auto& channelValue = ensureSrtpChannel(mSrtpInMap, key, nullptr,
                                                  std::numeric_limits<uint32_t>::max());
 
 
@@ -221,15 +227,6 @@ SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
     , mProfileS(profileS)
     , mProfileT(profileT)
 {
-    // Receive policy
-    std::memset(&mSrtpReceivePolicy, 0, sizeof(mSrtpReceivePolicy));
-    mSrtpReceivePolicy.ssrc.type = ssrc_any_inbound;
-    mSrtpReceivePolicy.key = mIsSetupActive ? mSrtpClientKeyBuf.data() : mSrtpServerKeyBuf.data();
-    mSrtpReceivePolicy.allow_repeat_tx = false;
-
-    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpReceivePolicy.rtp, mProfileT);
-    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpReceivePolicy.rtcp, mProfileT);
-
     // Send policy
     std::memset(&mSrtpSendPolicy, 0, sizeof(mSrtpSendPolicy));
     mSrtpSendPolicy.ssrc.type = ssrc_any_outbound;
@@ -251,7 +248,9 @@ SrtpConnection::ChannelValue& SrtpConnection::ensureSrtpChannel(ChannelMap& map,
     }
 
     srtp_t srtp = nullptr;
-    srtp_create(&srtp, policy);
+    if (policy) {
+        srtp_create(&srtp, policy);
+    }
 
     auto replayProtection = maxPossibleValueForReplayProtection != 0
             ? std::make_unique<ReplayProtection>(maxPossibleValueForReplayProtection, 2048)
