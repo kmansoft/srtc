@@ -276,7 +276,7 @@ TEST(SrtpCrypto, RtpSend)
         // Randomly generate RTCP packets, encrypt them using libSRTP and our crypto.
         // Verify that the result of encryption is the same for both.
         uint32_t ssrc = 0x12345678;
-        uint16_t sequence = 65000;
+        uint16_t sequence = 61000;
         uint32_t rolloverCount = 0;
         uint32_t timestamp = 10000;
 

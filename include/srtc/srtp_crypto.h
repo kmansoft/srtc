@@ -49,9 +49,6 @@ private:
                                         uint32_t rolloverCount,
                                         ByteBuffer& encrypted);
 
-    void computeReceiveRtcpIV(CryptoBytes& iv,
-                              uint32_t ssrc,
-                              uint32_t seq);
     [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet,
                                                ByteBuffer& plain);
     [[nodiscard]] bool unprotectReceiveRtcpCM(const ByteBuffer& packet,

@@ -235,27 +235,6 @@ bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
     }
 }
 
-void SrtpCrypto::computeReceiveRtcpIV(CryptoBytes& iv,
-                                      uint32_t ssrc,
-                                      uint32_t seq)
-{
-    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
-    CryptoWriter ivw(iv);
-
-    if (mReceiveRtcp.salt.size() == 14) {
-        ivw.writeU8(0);
-        ivw.writeU8(0);
-    }
-
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(ssrc);
-    ivw.writeU8(0);
-    ivw.writeU8(0);
-    ivw.writeU32(seq);
-    iv ^= mReceiveRtcp.salt;
-}
-
 bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
                                          ByteBuffer& plain)
 {
@@ -284,8 +263,15 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
     const auto isEncrypted = (kRTCP_EncryptedBit & trailer) != 0;
 
     // Compute the IV
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
     CryptoBytes iv;
-    computeReceiveRtcpIV(iv, ssrc, seq);
+    CryptoWriter ivw(iv);
+    ivw.writeU16(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(seq);
+    iv ^= mReceiveRtcp.salt;
 
     // Output buffer
     const auto plainSize = encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize;
@@ -398,7 +384,15 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
 
     // Compute the IV
     CryptoBytes iv;
-    computeReceiveRtcpIV(iv, ssrc, seq);
+    CryptoWriter ivw(iv);
+
+    ivw.writeU16(0);
+    ivw.writeU16(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU8(0);
+    ivw.writeU8(0);
+    ivw.writeU32(seq);
+    iv ^= mReceiveRtcp.salt;
 
     // Output buffer
     const auto plainSize = encryptedSize - digestSize - kRTCP_TrailerSize;
