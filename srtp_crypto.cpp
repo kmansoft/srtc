@@ -6,9 +6,10 @@
 // contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 
+#include "srtc/byte_buffer.h"
 #include "srtc/srtp_crypto.h"
 #include "srtc/srtp_util.h"
-#include "srtc/byte_buffer.h"
+#include "srtc/srtp_hmac_sha1.h"
 #include "srtc/srtp_openssl.h"
 
 #include <arpa/inet.h>
@@ -102,6 +103,118 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
             std::make_shared<SrtpCrypto>(profileId, sendRtp, receiveRtcp),
             Error::OK
     };
+}
+
+bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
+                                uint32_t rolloverCount,
+                                ByteBuffer& encrypted)
+{
+    encrypted.resize(0);
+
+    switch (mProfileId) {
+        case SRTP_AEAD_AES_256_GCM:
+        case SRTP_AEAD_AES_128_GCM:
+            return false;
+        case SRTP_AES128_CM_SHA1_80:
+        case SRTP_AES128_CM_SHA1_32:
+            return protectSendRtpCM(packet, rolloverCount, encrypted);
+        default:
+            assert(false);
+            return false;
+    }
+}
+
+bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,
+                                  uint32_t rolloverCount,
+                                  ByteBuffer& encrypted)
+{
+    const auto ctx = mSendCipherCtx;
+    if (!ctx) {
+        return false;
+    }
+
+    size_t digestSize;
+    switch (mProfileId) {
+        case SRTP_AES128_CM_SHA1_80:
+            digestSize = 10;
+            break;
+        case SRTP_AES128_CM_SHA1_32:
+            digestSize = 4;
+            break;
+        default:
+            assert(false);
+            return false;
+    }
+
+    const auto packetData = packet.data();
+    const auto packetSize = packet.size();
+
+    const uint16_t sequence = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 2));
+    const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData + 8));
+
+    // https://datatracker.ietf.org/doc/html/rfc3711#section-4.1.1
+    CryptoBytes iv;
+    CryptoWriter ivw(iv);
+    ivw.writeU32(0);
+    ivw.writeU32(ssrc);
+    ivw.writeU32(rolloverCount);
+    ivw.writeU16(sequence);
+    ivw.writeU16(0);
+    iv ^= mSendRtp.salt;
+
+    // https://datatracker.ietf.org/doc/html/rfc3711#section-3.1
+    const auto encryptedSize = packetSize + digestSize;
+
+    encrypted.reserve(encryptedSize);
+    const auto encryptedData = encrypted.data();
+
+    // The header is not encrypted
+    const auto headerSize = 4 + 4 + 4;  // TODO extension
+    std::memcpy(encryptedData, packetData, headerSize);
+
+    // We will need the trailer for the authentication tag
+    const uint32_t trailer = htonl(rolloverCount);
+
+    // Encryption
+    int len = 0, total_len = 0;
+    int final_ret = 0;
+    uint8_t digest[20] = {};
+
+    // Set key and iv
+    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtp.key.data(), iv.data())) {
+        goto fail;
+    }
+
+    // Encrypt the body
+    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+                           static_cast<int>(packetSize - headerSize))) {
+        goto fail;
+    }
+    total_len = len;
+
+    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
+    if (final_ret > 0) {
+        total_len += len;
+    }
+
+    // Authentication tag, https://datatracker.ietf.org/doc/html/rfc3711#section-4.2
+    if (!mHmacSha1->reset(mSendRtp.auth.data(), mSendRtp.auth.size())) {
+        final_ret = 0;
+        goto fail;
+    }
+    mHmacSha1->update(encryptedData, packetSize);
+    mHmacSha1->update(reinterpret_cast<const uint8_t*>(&trailer), sizeof(trailer));
+    mHmacSha1->final(digest);
+
+    std::memcpy(encryptedData + encryptedSize - digestSize, digest, digestSize);
+
+fail:
+    if (final_ret > 0) {
+        assert(total_len + headerSize + digestSize == encryptedSize);
+        encrypted.resize(encryptedSize);
+        return true;
+    }
+    return false;
 }
 
 bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
@@ -227,7 +340,7 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
         plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
     }
 
-    // Finalize, this validated the TAG
+    // Finalize, this validates the GCM auth tag
     final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
     if (final_ret > 0) {
         plain_len += len;
@@ -266,14 +379,12 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     const auto digestPtr = encrypedData + encryptedSize - digestSize;
 
     uint8_t digest[20] = {};   // 160 bits
-    unsigned int digest_len = 0;
 
-    if (!HMAC(EVP_sha1(),
-              mReceiveRtcp.auth.data(),
-              static_cast<int>(mReceiveRtcp.auth.size()),
-              encrypedData, digestPtr - encrypedData, digest, &digest_len)) {
+    if (!mHmacSha1->reset(mReceiveRtcp.auth.data(), mReceiveRtcp.auth.size())) {
         return false;
     }
+    mHmacSha1->update(encrypedData, digestPtr - encrypedData);
+    mHmacSha1->final(digest);
 
     if (std::memcmp(digest, digestPtr, digestSize) != 0) {
         // Digest validation failed
@@ -345,6 +456,7 @@ SrtpCrypto::SrtpCrypto(uint16_t profileId,
     , mReceiveRtcp(receiveRtcp)
     , mSendCipherCtx(nullptr)
     , mReceiveCipherCtx(nullptr)
+    , mHmacSha1(std::make_shared<HmacSha1>())
 {
     const auto sendCipher = createCipher();
     if (sendCipher) {

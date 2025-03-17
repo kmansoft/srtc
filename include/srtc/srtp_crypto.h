@@ -11,6 +11,7 @@ struct evp_cipher_st;
 namespace srtc {
 
 class ByteBuffer;
+class HmacSha1;
 
 class SrtpCrypto {
 public:
@@ -22,6 +23,10 @@ public:
             const CryptoBytes& receiveMasterSalt);
 
     ~SrtpCrypto();
+
+    [[nodiscard]] bool protectSendRtp(const ByteBuffer& packet,
+                                      uint32_t rolloverCount,
+                                      ByteBuffer& encrypted);
 
     [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet,
                                             ByteBuffer& plain);
@@ -40,6 +45,10 @@ public:
                const CryptoVectors& receiveRtcp);
 
 private:
+    [[nodiscard]] bool protectSendRtpCM(const ByteBuffer& packet,
+                                        uint32_t rolloverCount,
+                                        ByteBuffer& encrypted);
+
     void computeReceiveRtcpIV(CryptoBytes& iv,
                               uint32_t ssrc,
                               uint32_t seq);
@@ -56,6 +65,8 @@ private:
 
     struct evp_cipher_ctx_st* mSendCipherCtx;
     struct evp_cipher_ctx_st* mReceiveCipherCtx;
+
+    std::shared_ptr<HmacSha1> mHmacSha1;
 };
 
 }
