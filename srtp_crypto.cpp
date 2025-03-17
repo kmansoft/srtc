@@ -34,15 +34,17 @@ namespace srtc {
 
 std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
         uint16_t profileId,
+        const CryptoBytes& sendMasterKey,
+        const CryptoBytes& sendMasterSalt,
         const CryptoBytes& receiveMasterKey,
         const CryptoBytes& receiveMasterSalt)
 {
     initOpenSSL();
 
-    if (receiveMasterKey.empty()) {
+    if (sendMasterKey.empty() || receiveMasterKey.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master key is empty"}};
     }
-    if (receiveMasterSalt.empty()) {
+    if (sendMasterSalt.empty() || receiveMasterSalt.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master salt is empty"}};
     }
 
@@ -56,31 +58,50 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
             return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id"}};
     }
 
-    CryptoBytes receiveRtcpKey, receiveRtcpAuth, receiveRtcpSalt;
+    // Send RTP
+    CryptoVectors sendRtp;
+    if (!KeyDerivation::generate(sendMasterKey, sendMasterSalt,
+                                 KeyDerivation::kLabelRtpKey,
+                                 sendRtp.key,
+                                 sendMasterKey.size())
+        ||
+        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
+                                  KeyDerivation::kLabelRtpAuth,
+                                  sendRtp.auth,
+                                  20)
+        ||
+        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
+                                  KeyDerivation::kLabelRtpSalt,
+                                  sendRtp.salt,
+                                  sendMasterSalt.size())
+            ) {
+        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
+    }
 
+    // Receive RTCP
+    CryptoVectors receiveRtcp;
     if (!KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
                                  KeyDerivation::kLabelRtcpKey,
-                                 receiveRtcpKey,
+                                 receiveRtcp.key,
                                  receiveMasterKey.size())
             ||
         ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
                                   KeyDerivation::kLabelRtcpAuth,
-                                  receiveRtcpAuth,
+                                  receiveRtcp.auth,
                                   20)
             ||
         ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
                                   KeyDerivation::kLabelRtcpSalt,
-                                  receiveRtcpSalt,
+                                  receiveRtcp.salt,
                                   receiveMasterSalt.size())
     ) {
         return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
     }
 
     return {
-            std::make_shared<SrtpCrypto>(profileId, receiveRtcpKey, receiveRtcpAuth, receiveRtcpSalt),
+            std::make_shared<SrtpCrypto>(profileId, sendRtp, receiveRtcp),
             Error::OK
     };
-
 }
 
 bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
@@ -106,9 +127,9 @@ void SrtpCrypto::computeReceiveRtcpIV(CryptoBytes& iv,
                                       uint32_t seq)
 {
     // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
-    CryptoBytesWriter ivw(iv);
+    CryptoWriter ivw(iv);
 
-    if (mReceiveRtcpSalt.size() == 14) {
+    if (mReceiveRtcp.salt.size() == 14) {
         ivw.writeU8(0);
         ivw.writeU8(0);
     }
@@ -119,7 +140,7 @@ void SrtpCrypto::computeReceiveRtcpIV(CryptoBytes& iv,
     ivw.writeU8(0);
     ivw.writeU8(0);
     ivw.writeU32(seq);
-    iv ^= mReceiveRtcpSalt;
+    iv ^= mReceiveRtcp.salt;
 }
 
 bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
@@ -163,7 +184,7 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
     int final_ret = 0;
 
     // Set key and iv
-    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcpKey.data(), iv.data())) {
+    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcp.key.data(), iv.data())) {
         goto fail;
     }
 
@@ -248,8 +269,8 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     unsigned int digest_len = 0;
 
     if (!HMAC(EVP_sha1(),
-              mReceiveRtcpAuth.data(),
-              static_cast<int>(mReceiveRtcpAuth.size()),
+              mReceiveRtcp.auth.data(),
+              static_cast<int>(mReceiveRtcp.auth.size()),
               encrypedData, digestPtr - encrypedData, digest, &digest_len)) {
         return false;
     }
@@ -284,7 +305,7 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     // The main body
     if (isEncrypted) {
         // Set key and iv
-        if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcpKey.data(), iv.data())) {
+        if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcp.key.data(), iv.data())) {
             goto fail;
         }
 
@@ -307,7 +328,7 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
         final_ret = 1;
     }
 
-    fail:
+fail:
     if (final_ret > 0) {
         assert(plain_len == plainSize);
         plain.resize(plainSize);
@@ -317,43 +338,51 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
 }
 
 SrtpCrypto::SrtpCrypto(uint16_t profileId,
-                       const CryptoBytes& receiveRtcpKey,
-                       const CryptoBytes& receiveRtcpAuth,
-                       const CryptoBytes& receiveRtcpSalt)
+                       const CryptoVectors& sendRtp,
+                       const CryptoVectors& receiveRtcp)
     : mProfileId(profileId)
-    , mReceiveRtcpKey(receiveRtcpKey)
-    , mReceiveRtcpAuth(receiveRtcpAuth)
-    , mReceiveRtcpSalt(receiveRtcpSalt)
+    , mSendRtp(sendRtp)
+    , mReceiveRtcp(receiveRtcp)
+    , mSendCipherCtx(nullptr)
+    , mReceiveCipherCtx(nullptr)
 {
-    mReceiveCipherCtx = EVP_CIPHER_CTX_new();
-
-    const EVP_CIPHER* cipher;
-    switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-            cipher = EVP_aes_256_gcm();
-            break;
-        case SRTP_AEAD_AES_128_GCM:
-            cipher = EVP_aes_128_gcm();
-            break;
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            cipher = EVP_aes_128_ctr();
-            break;
-        default:
-            cipher = nullptr;
-            break;
+    const auto sendCipher = createCipher();
+    if (sendCipher) {
+        mSendCipherCtx = EVP_CIPHER_CTX_new();
+        EVP_EncryptInit_ex(mSendCipherCtx, sendCipher, nullptr, nullptr, nullptr);
     }
 
-    if (cipher) {
-        EVP_DecryptInit_ex(mReceiveCipherCtx, cipher, nullptr, nullptr, nullptr);
+    const auto receiveCipher = createCipher();
+    if (receiveCipher) {
+        mReceiveCipherCtx = EVP_CIPHER_CTX_new();
+        EVP_DecryptInit_ex(mReceiveCipherCtx, receiveCipher, nullptr, nullptr, nullptr);
     }
 }
 
 SrtpCrypto::~SrtpCrypto()
 {
+    if (mSendCipherCtx) {
+        EVP_CIPHER_CTX_free(mSendCipherCtx);
+    }
     if (mReceiveCipherCtx) {
         EVP_CIPHER_CTX_free(mReceiveCipherCtx);
     }
+}
+
+const EVP_CIPHER* SrtpCrypto::createCipher() const
+{
+    switch (mProfileId) {
+        case SRTP_AEAD_AES_256_GCM:
+            return EVP_aes_256_gcm();
+        case SRTP_AEAD_AES_128_GCM:
+            return EVP_aes_128_gcm();
+        case SRTP_AES128_CM_SHA1_80:
+        case SRTP_AES128_CM_SHA1_32:
+            return EVP_aes_128_ctr();
+        default:
+            return nullptr;
+    }
+
 }
 
 }

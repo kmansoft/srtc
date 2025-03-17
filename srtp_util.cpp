@@ -70,15 +70,15 @@ CryptoBytes& CryptoBytes::operator^=(const CryptoBytes& other)
     return *this;
 }
 
-// ----- CryptoBytesWriter
+// ----- CryptoWriter
 
-CryptoBytesWriter::CryptoBytesWriter(CryptoBytes& bytes)
+CryptoWriter::CryptoWriter(CryptoBytes& bytes)
     : mBytes(bytes)
 {
     mBytes.clear();
 }
 
-void CryptoBytesWriter::writeU8(uint8_t value)
+void CryptoWriter::writeU8(uint8_t value)
 {
     assert(mBytes.mSize <= sizeof(mBytes.v8) - 1);
     if (mBytes.mSize <= sizeof(mBytes.v8) - 1) {
@@ -86,7 +86,7 @@ void CryptoBytesWriter::writeU8(uint8_t value)
     }
 }
 
-void CryptoBytesWriter::writeU16(uint16_t value)
+void CryptoWriter::writeU16(uint16_t value)
 {
     assert(mBytes.mSize <= sizeof(mBytes.v8) - 2);
     if (mBytes.mSize <= sizeof(mBytes.v8) - 2) {
@@ -95,7 +95,7 @@ void CryptoBytesWriter::writeU16(uint16_t value)
     }
 }
 
-void CryptoBytesWriter::writeU32(uint32_t value)
+void CryptoWriter::writeU32(uint32_t value)
 {
     assert(mBytes.mSize <= sizeof(mBytes.v8) - 4);
     if (mBytes.mSize <= sizeof(mBytes.v8) - 4) {
@@ -106,7 +106,7 @@ void CryptoBytesWriter::writeU32(uint32_t value)
     }
 }
 
-void CryptoBytesWriter::append(const uint8_t* data, size_t size)
+void CryptoWriter::append(const uint8_t* data, size_t size)
 {
     assert(mBytes.mSize <= sizeof(mBytes.v8) - size);
     if (mBytes.mSize <= sizeof(mBytes.v8) - size) {
@@ -144,7 +144,7 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
     const auto blockCount = (desiredOutputSize + 15) / 16;
     bool res = false;
 
-    srtc::CryptoBytesWriter outputWriter(output);
+    srtc::CryptoWriter outputWriter(output);
 
     const auto ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {

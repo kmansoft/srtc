@@ -81,24 +81,35 @@ TEST(SrtpCrypto, RtcpReceive)
 
         std::cout << "Testing " << srtpProfileName << std::endl;
 
-        // Generate the key and the salt
-        uint8_t bufMasterKey[32], bufMasterSalt[32];
-        RAND_bytes(bufMasterKey, sizeof(bufMasterKey));
-        RAND_bytes(bufMasterSalt, sizeof(bufMasterSalt));
+        // Generate random keys and salts
+        uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
+        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+
+        uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
+        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+
+        // Convert to our objects
+        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
+        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
+        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
+
+        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
+        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
+        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
 
         // Create our own crypto
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufMasterSalt, srtpSaltSize);
-
-        const auto [crypto, error] = srtc::SrtpCrypto::create(openSSlProfile, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(openSSlProfile,
+                                                              sendMasterKey, sendMasterSalt,
+                                                              receiveMasterKey, receiveMasterSalt);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
         // Create libSRTP crypto
         srtc::ByteBuffer bufMasterCombined;
-        bufMasterCombined.append(bufMasterKey, srtpKeySize);
-        bufMasterCombined.append(bufMasterSalt, srtpSaltSize);
+        bufMasterCombined.append(bufReceiveMasterKey, srtpKeySize);
+        bufMasterCombined.append(bufReceiveMasterSalt, srtpSaltSize);
 
         srtp_policy_t srtpPolicy;
 

@@ -25,7 +25,7 @@ void initLibSRTP()
 
 void setFromHex(srtc::CryptoBytes& bytes, const char* hex)
 {
-    srtc::CryptoBytesWriter w(bytes);
+    srtc::CryptoWriter w(bytes);
 
     uint8_t value = 0;
     uint8_t count = 0;

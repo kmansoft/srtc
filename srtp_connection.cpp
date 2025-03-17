@@ -92,17 +92,25 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
     const auto srtpClientSalt = srtpServerKey + srtpKeySize;
     const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
 
+    CryptoBytes sendMasterKey, sendMasterSalt;
     CryptoBytes receiveMasterKey, receiveMasterSalt;
 
     if (isSetupActive) {
+        sendMasterKey.assign(srtpServerKey, srtpKeySize);
+        sendMasterSalt.assign(srtpServerSalt, srtpSaltSize);
+
         receiveMasterKey.assign(srtpClientKey, srtpKeySize);
         receiveMasterSalt.assign(srtpClientSalt, srtpSaltSize);
     } else {
+        sendMasterKey.assign(srtpClientKey, srtpKeySize);
+        sendMasterSalt.assign(srtpClientSalt, srtpSaltSize);
+
         receiveMasterKey.assign(srtpServerKey, srtpKeySize);
         receiveMasterSalt.assign(srtpServerSalt, srtpSaltSize);
     }
 
     const auto [crypto, error] = SrtpCrypto::create(srtpProfileName->id,
+                                                    sendMasterKey, sendMasterSalt,
                                                     receiveMasterKey, receiveMasterSalt);
     if (error.isError()) {
         return { nullptr, error };
@@ -155,6 +163,8 @@ size_t SrtpConnection::protectOutgoing(ByteBuffer& packetData)
     key.payloadId = packetData.data()[1] & 0x7F;
 
     const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, &mSrtpSendPolicy, 0);
+
+    const auto seq = ntohs(*reinterpret_cast<const uint16_t*>(packetData.data() + 2));
 
     auto size_1 = packetData.size();
 
