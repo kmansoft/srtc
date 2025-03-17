@@ -6,8 +6,6 @@
 #include "srtc/replay_protection.h"
 #include "srtc/srtp_util.h"
 
-#include <srtp.h>
-
 #include <memory>
 #include <unordered_map>
 
@@ -25,29 +23,23 @@ public:
     ~SrtpConnection();
 
     // Returns 0 on error
-    size_t protectOutgoing(ByteBuffer& packetData);
+    bool protectOutgoing(uint32_t rollover,
+                         const ByteBuffer& packetData,
+                         ByteBuffer& output);
 
     // Returns false on error
     bool unprotectIncomingControl(const ByteBuffer& packetData,
                                   ByteBuffer& output);
 
     // Implementation
-    SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
-                   ByteBuffer&& srtpServerKeyBuf,
-                   const std::shared_ptr<SrtpCrypto>& crypto,
+    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto,
                    bool isSetupActive,
-                   uint16_t profileS,
-                   srtp_profile_t profileT);
+                   uint16_t profileId);
 
 private:
-    const ByteBuffer mSrtpClientKeyBuf;
-    const ByteBuffer mSrtpServerKeyBuf;
     const std::shared_ptr<SrtpCrypto> mCrypto;
     const bool mIsSetupActive;
-    const uint16_t mProfileS;
-    const srtp_profile_t mProfileT;
-
-    srtp_policy_t mSrtpSendPolicy;
+    const uint16_t mProfileId;
 
     struct ChannelKey {
         uint32_t ssrc;
@@ -70,7 +62,6 @@ private:
     };
 
     struct ChannelValue {
-        srtp_t srtp;
         std::unique_ptr<ReplayProtection> replayProtection;
     };
 
@@ -81,7 +72,6 @@ private:
 
     ChannelValue& ensureSrtpChannel(ChannelMap& map,
                                     const ChannelKey& key,
-                                    const srtp_policy_t* policy,
                                     uint32_t maxPossibleValueForReplayProtection);
 
     bool getRtcpSequenceNumber(const ByteBuffer& packet,

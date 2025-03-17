@@ -105,8 +105,8 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
     };
 }
 
-bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
-                                uint32_t rolloverCount,
+bool SrtpCrypto::protectSendRtp(uint32_t rolloverCount,
+                                const ByteBuffer& packet,
                                 ByteBuffer& encrypted)
 {
     encrypted.resize(0);
@@ -114,18 +114,18 @@ bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
     switch (mProfileId) {
         case SRTP_AEAD_AES_256_GCM:
         case SRTP_AEAD_AES_128_GCM:
-            return protectSendRtpGCM(packet, rolloverCount, encrypted);
+            return protectSendRtpGCM(rolloverCount, packet, encrypted);
         case SRTP_AES128_CM_SHA1_80:
         case SRTP_AES128_CM_SHA1_32:
-            return protectSendRtpCM(packet, rolloverCount, encrypted);
+            return protectSendRtpCM(rolloverCount, packet, encrypted);
         default:
             assert(false);
             return false;
     }
 }
 
-bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet,
-                                   uint32_t rolloverCount,
+bool SrtpCrypto::protectSendRtpGCM(uint32_t rolloverCount,
+                                   const ByteBuffer& packet,
                                    ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
@@ -205,8 +205,8 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,
-                                  uint32_t rolloverCount,
+bool SrtpCrypto::protectSendRtpCM(uint32_t rolloverCount,
+                                  const ByteBuffer& packet,
                                   ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;

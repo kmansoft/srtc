@@ -23,9 +23,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared
         payload.resize(RtpPacket::kMaxPayloadSize);
     }
 
+    const auto [rollover, sequence] = packetSource->getNextSequence();
     result.push_back(
             std::make_shared<RtpPacket>(
-                    track, false, packetSource->getNextSequence(), frameTimestamp, std::move(payload)));
+                    track, false, rollover, sequence, frameTimestamp, std::move(payload)));
 
     return result;
 }

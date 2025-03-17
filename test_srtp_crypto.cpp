@@ -277,7 +277,7 @@ TEST(SrtpCrypto, RtpSend)
         // Verify that the result of encryption is the same for both.
         uint32_t ssrc = 0x12345678;
         uint16_t sequence = 65000;
-        uint32_t rolloverCount = 0;
+        uint32_t rolloverCounter = 0;
         uint32_t timestamp = 10000;
 
         std::optional<uint16_t> prevSequence;
@@ -294,27 +294,27 @@ TEST(SrtpCrypto, RtpSend)
             RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
-            const auto packet = std::make_shared<srtc::RtpPacket>(track, false, sequence, timestamp,
+            // Rollover counter
+            if (prevSequence.has_value() && prevSequence > sequence) {
+                rolloverCounter += 1;
+            }
+            prevSequence = sequence;
+
+            const auto packet = std::make_shared<srtc::RtpPacket>(track, false, rolloverCounter, sequence, timestamp,
                                                                   std::move(payload));
             // This is our packet's unencrypted data
             const auto source = packet->generate();
 
             // Encrypt using libSRTP
-            srtc::ByteBuffer protectedLibSrtp(source.size() + SRTP_MAX_TRAILER_LEN);
+            srtc::ByteBuffer protectedLibSrtp(source.buf.size() + SRTP_MAX_TRAILER_LEN);
             size_t protectedSize = protectedLibSrtp.capacity();
-            ASSERT_EQ(srtp_protect(srtp, source.data(), source.size(),
+            ASSERT_EQ(srtp_protect(srtp, source.buf.data(), source.buf.size(),
                          protectedLibSrtp.data(), &protectedSize, 0), srtp_err_status_ok);
             protectedLibSrtp.resize(protectedSize);
 
-            // Rollover counter
-            if (prevSequence.has_value() && prevSequence > sequence) {
-                rolloverCount += 1;
-            }
-            prevSequence = sequence;
-
             // Encrypt using our own crypto
             srtc::ByteBuffer protectedSrtcCrypto;
-            ASSERT_TRUE(crypto->protectSendRtp(source, rolloverCount, protectedSrtcCrypto));
+            ASSERT_TRUE(crypto->protectSendRtp(source.rollover, source.buf, protectedSrtcCrypto));
 
             // Validate
             ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());

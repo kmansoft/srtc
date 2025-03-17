@@ -9,6 +9,7 @@ namespace srtc {
 
 RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      bool marker,
+                     uint32_t rollover,
                      uint16_t sequence,
                      uint32_t timestamp,
                      srtc::ByteBuffer&& payload)
@@ -16,6 +17,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
     , mSSRC(track->getSSRC())
     , mPayloadId(track->getPayloadId())
     , mMarker(marker)
+    , mRollover(rollover)
     , mSequence(sequence)
     , mTimestamp(timestamp)
     , mPayload(std::move(payload))
@@ -39,12 +41,7 @@ uint16_t RtpPacket::getSequence() const
     return mSequence;
 }
 
-uint32_t RtpPacket::getSSRC() const
-{
-    return mSSRC;
-}
-
-ByteBuffer RtpPacket::generate() const
+RtpPacket::Output RtpPacket::generate() const
 {
     // https://blog.webex.com/engineering/introducing-rtp-the-packet-format/
 
@@ -62,10 +59,15 @@ ByteBuffer RtpPacket::generate() const
     // Payload
     writer.write(mPayload);
 
-    return buf;
+    return { mRollover, std::move(buf) };
 }
 
-ByteBuffer RtpPacket::generateRtx() const
+uint32_t RtpPacket::getSSRC() const
+{
+    return mSSRC;
+}
+
+RtpPacket::Output RtpPacket::generateRtx() const
 {
     const auto rtxPayloadId = mTrack->getRtxPayloadId();
     assert(rtxPayloadId > 0);
@@ -80,7 +82,7 @@ ByteBuffer RtpPacket::generateRtx() const
     writer.writeU16(header);
 
     const auto packetSource = mTrack->getRtxPacketSource();
-    const auto rtxSequence = packetSource->getNextSequence();
+    const auto [ rtxRollover, rtxSequence ] = packetSource->getNextSequence();
     writer.writeU16(rtxSequence);
     writer.writeU32(mTimestamp);
     writer.writeU32(mTrack->getRtxSSRC());
@@ -89,7 +91,7 @@ ByteBuffer RtpPacket::generateRtx() const
     writer.writeU16(mSequence);
     writer.write(mPayload);
 
-    return buf;
+    return { rtxRollover, std::move(buf) };
 }
 
 }

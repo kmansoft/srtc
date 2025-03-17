@@ -24,8 +24,8 @@ public:
 
     ~SrtpCrypto();
 
-    [[nodiscard]] bool protectSendRtp(const ByteBuffer& packet,
-                                      uint32_t rolloverCount,
+    [[nodiscard]] bool protectSendRtp(uint32_t rolloverCount,
+                                      const ByteBuffer& packet,
                                       ByteBuffer& encrypted);
 
     [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet,
@@ -45,11 +45,11 @@ public:
                const CryptoVectors& receiveRtcp);
 
 private:
-    [[nodiscard]] bool protectSendRtpGCM(const ByteBuffer& packet,
-                                         uint32_t rolloverCount,
+    [[nodiscard]] bool protectSendRtpGCM(uint32_t rolloverCount,
+                                         const ByteBuffer& packet,
                                          ByteBuffer& encrypted);
-    [[nodiscard]] bool protectSendRtpCM(const ByteBuffer& packet,
-                                        uint32_t rolloverCount,
+    [[nodiscard]] bool protectSendRtpCM(uint32_t rolloverCount,
+                                        const ByteBuffer& packet,
                                         ByteBuffer& encrypted);
 
     [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet,

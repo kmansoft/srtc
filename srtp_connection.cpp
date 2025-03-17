@@ -10,24 +10,17 @@
 #include "srtc/srtp_crypto.h"
 #include "srtc/logging.h"
 
-#include "srtp.h"
-
 #include <mutex>
 
 #include <arpa/inet.h>
 
 #include <openssl/ssl.h>
+#include <openssl/srtp.h>
 
 #include <cassert>
 #include <cstring>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
-
-namespace {
-
-std::once_flag gSrtpInitFlag;
-
-}
 
 namespace srtc {
 
@@ -36,11 +29,6 @@ const char* const SrtpConnection::kSrtpCipherList =
 
 std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dtls_ssl, bool isSetupActive)
 {
-    // Init the SRTP library
-    std::call_once(gSrtpInitFlag, []{
-        srtp_init();
-    });
-
     // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
 
     const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
@@ -50,29 +38,24 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
     LOG(SRTC_LOG_V, "Connected with %s cipher", srtpProfileName->name);
 
-    srtp_profile_t srtpProfile;
-    size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
+    size_t srtpKeySize, srtpSaltSize;
 
     switch (srtpProfileName->id) {
         case SRTP_AEAD_AES_256_GCM:
-            srtpProfile = srtp_profile_aead_aes_256_gcm;
-            srtpKeySize = SRTP_AES_256_KEY_LEN;
-            srtpSaltSize = SRTP_AEAD_SALT_LEN;
+            srtpKeySize = 32;
+            srtpSaltSize = 12;
             break;
         case SRTP_AEAD_AES_128_GCM:
-            srtpProfile = srtp_profile_aead_aes_128_gcm;
-            srtpKeySize = SRTP_AES_128_KEY_LEN;
-            srtpSaltSize = SRTP_AEAD_SALT_LEN;
+            srtpKeySize = 16;
+            srtpSaltSize = 12;
             break;
         case SRTP_AES128_CM_SHA1_80:
-            srtpProfile = srtp_profile_aes128_cm_sha1_80;
-            srtpKeySize = SRTP_AES_128_KEY_LEN;
-            srtpSaltSize = SRTP_SALT_LEN;
+            srtpKeySize = 16;
+            srtpSaltSize = 14;
             break;
         case SRTP_AES128_CM_SHA1_32:
-            srtpProfile = srtp_profile_aes128_cm_sha1_32;
-            srtpKeySize = SRTP_AES_128_KEY_LEN;
-            srtpSaltSize = SRTP_SALT_LEN;
+            srtpKeySize = 16;
+            srtpSaltSize = 14;
             break;
         default:
             return {nullptr, { Error::Code::InvalidData, "Unsupported SRTP profile" }};
@@ -116,74 +99,32 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
         return { nullptr, error };
     }
 
-    ByteBuffer srtpClientKeyBuf;
-    srtpClientKeyBuf.append(srtpClientKey, srtpKeySize);
-    srtpClientKeyBuf.append(srtpClientSalt, srtpSaltSize);
-
-    ByteBuffer srtpServerKeyBuf;
-    srtpServerKeyBuf.append(srtpServerKey, srtpKeySize);
-    srtpServerKeyBuf.append(srtpServerSalt, srtpSaltSize);
-
     const auto conn = std::make_shared<SrtpConnection>(
-            std::move(srtpClientKeyBuf), std::move(srtpServerKeyBuf),
             crypto,
             isSetupActive,
-            srtpProfileName->id,
-            srtpProfile);
+            srtpProfileName->id);
     return { conn, Error::OK };
 }
 
-SrtpConnection::~SrtpConnection()
-{
-    for (auto& iter : mSrtpInMap) {
-        const auto srtp = iter.second.srtp;
-        if (srtp) {
-            srtp_dealloc(srtp);
-        }
-    }
+SrtpConnection::~SrtpConnection() = default;
 
-    for (auto& iter : mSrtpOutMap) {
-        const auto srtp = iter.second.srtp;
-        if (srtp) {
-            srtp_dealloc(srtp);
-        }
-    }
-}
-
-size_t SrtpConnection::protectOutgoing(ByteBuffer& packetData)
+bool SrtpConnection::protectOutgoing(uint32_t rollover,
+                                     const ByteBuffer& packetData,
+                                     ByteBuffer& output)
 {
     if (packetData.size() < 4 + 4 + 4) {
         LOG(SRTC_LOG_E, "Outgoing RTP packet is too small");
-        return 0;
+        return false;
     }
 
+    const ChannelKey key = {
+        ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8)),
+        static_cast<uint8_t>(packetData.data()[1] & 0x7F)
+    };
 
-    ChannelKey key = { };
-    key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8));
-    key.payloadId = packetData.data()[1] & 0x7F;
+    const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, 0);
 
-    const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, &mSrtpSendPolicy, 0);
-
-    const auto seq = ntohs(*reinterpret_cast<const uint16_t*>(packetData.data() + 2));
-
-    auto size_1 = packetData.size();
-
-    packetData.padding(SRTP_MAX_TRAILER_LEN);
-
-    auto data = packetData.data();
-    auto size_2 = packetData.size();
-
-    const auto result = srtp_protect(channelValue.srtp,
-                                     data, size_1,
-                                     data, &size_2,
-                                     0);
-    if (result != srtp_err_status_ok) {
-        LOG(SRTC_LOG_E, "srtp_protect() failed: %d", result);
-        return 0;
-    }
-
-    assert(size_2 > size_1);
-    return size_2;
+    return mCrypto->protectSendRtp(rollover, packetData, output);
 }
 
 bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData,
@@ -197,11 +138,11 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData,
         return false;
     }
 
-    ChannelKey key = { };
-    key.ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4));
-    key.payloadId = 0;
-
-    auto& channelValue = ensureSrtpChannel(mSrtpInMap, key, nullptr,
+    const ChannelKey key = {
+            ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4)),
+            0
+    };
+    auto& channelValue = ensureSrtpChannel(mSrtpInMap, key,
                                                  std::numeric_limits<uint32_t>::max());
 
 
@@ -224,32 +165,17 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData,
     return false;
 }
 
-SrtpConnection::SrtpConnection(ByteBuffer&& srtpClientKeyBuf,
-                               ByteBuffer&& srtpServerKeyBuf,
-                               const std::shared_ptr<SrtpCrypto>& crypto,
+SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto,
                                bool isSetupActive,
-                               uint16_t profileS,
-                               srtp_profile_t profileT)
-    : mSrtpClientKeyBuf(std::move(srtpClientKeyBuf))
-    , mSrtpServerKeyBuf(std::move(srtpServerKeyBuf))
-    , mCrypto(crypto)
+                               uint16_t profileId)
+    : mCrypto(crypto)
     , mIsSetupActive(isSetupActive)
-    , mProfileS(profileS)
-    , mProfileT(profileT)
+    , mProfileId(profileId)
 {
-    // Send policy
-    std::memset(&mSrtpSendPolicy, 0, sizeof(mSrtpSendPolicy));
-    mSrtpSendPolicy.ssrc.type = ssrc_any_outbound;
-    mSrtpSendPolicy.key = mIsSetupActive ? mSrtpServerKeyBuf.data() : mSrtpClientKeyBuf.data();
-    mSrtpSendPolicy.allow_repeat_tx = true;
-
-    srtp_crypto_policy_set_from_profile_for_rtp(&mSrtpSendPolicy.rtp, mProfileT);
-    srtp_crypto_policy_set_from_profile_for_rtcp(&mSrtpSendPolicy.rtcp, mProfileT);
 }
 
 SrtpConnection::ChannelValue& SrtpConnection::ensureSrtpChannel(ChannelMap& map,
                                                                 const ChannelKey& key,
-                                                                const srtp_policy_t* policy,
                                                                 uint32_t maxPossibleValueForReplayProtection)
 {
     const auto iter = map.find(key);
@@ -257,16 +183,11 @@ SrtpConnection::ChannelValue& SrtpConnection::ensureSrtpChannel(ChannelMap& map,
         return iter->second;
     }
 
-    srtp_t srtp = nullptr;
-    if (policy) {
-        srtp_create(&srtp, policy);
-    }
-
     auto replayProtection = maxPossibleValueForReplayProtection != 0
             ? std::make_unique<ReplayProtection>(maxPossibleValueForReplayProtection, 2048)
                     : nullptr;
     const auto result = map.insert({ key,
-                                    ChannelValue{ srtp, std::move(replayProtection) } });
+                                    ChannelValue{ std::move(replayProtection) } });
     return result.first->second;
 }
 
@@ -274,7 +195,7 @@ bool SrtpConnection::getRtcpSequenceNumber(const ByteBuffer& packet,
                                            uint32_t& outSequenceNumber) const
 {
     size_t offetFromEnd;
-    switch (mProfileS) {
+    switch (mProfileId) {
         case SRTP_AEAD_AES_256_GCM:
         case SRTP_AEAD_AES_128_GCM:
             // 4 byte RTCP header
