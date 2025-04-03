@@ -61,7 +61,7 @@ For the interface between Android code and the srtc library, please see `jni_pee
 
 ### Disclamier
 
-I work for [Amazon IVS (Interactive Video Service)](https://ivs.rocks/) which is part of [Twitch](https://www.twitch.tv/).
+I work for [Amazon IVS (Interactive Video Service)](https://ivs.rocks/).
 
 This library, srtc, is my side project.
 
