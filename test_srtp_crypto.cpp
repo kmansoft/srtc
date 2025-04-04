@@ -86,7 +86,7 @@ TEST(SrtpCrypto, RtcpReceive)
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
         RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
         RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
@@ -233,7 +233,7 @@ TEST(SrtpCrypto, RtpSend)
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
         RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
         RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
@@ -273,7 +273,7 @@ TEST(SrtpCrypto, RtpSend)
         srtp_t srtp = nullptr;
         ASSERT_EQ(srtp_create(&srtp, &srtpPolicy), srtp_err_status_ok);
 
-        // Randomly generate RTCP packets, encrypt them using libSRTP and our crypto.
+        // Randomly generate RTP packets, encrypt them using libSRTP and our crypto.
         // Verify that the result of encryption is the same for both.
         uint32_t ssrc = 0x12345678;
         uint16_t sequence = 65000;
