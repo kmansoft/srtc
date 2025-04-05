@@ -130,7 +130,7 @@ TEST(SrtpCrypto, RtcpReceive)
         // Verify that the result of decryption matches the original
         uint32_t ssrc = 0x12345678;
 
-        for (auto repeatIndex = 0; repeatIndex < 1000; repeatIndex += 1) {
+        for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             srtc::ByteBuffer sourcePacket;
             srtc::ByteWriter sourceWriter(sourcePacket);
 
@@ -288,7 +288,7 @@ TEST(SrtpCrypto, RtpSend)
                                                          srtc::Codec::H264,
                                                          false, false);
 
-        for (auto repeatIndex = 0; repeatIndex < 1000; repeatIndex += 1) {
+        for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + lrand48() % 1000;
             srtc::ByteBuffer payload(payloadSize);
             RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));

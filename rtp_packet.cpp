@@ -12,7 +12,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      uint32_t rollover,
                      uint16_t sequence,
                      uint32_t timestamp,
-                     srtc::ByteBuffer&& payload)
+                     ByteBuffer&& payload)
     : mTrack(track)
     , mSSRC(track->getSSRC())
     , mPayloadId(track->getPayloadId())
@@ -20,7 +20,29 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
     , mRollover(rollover)
     , mSequence(sequence)
     , mTimestamp(timestamp)
+    , mExtensionId(0)
     , mPayload(std::move(payload))
+{
+}
+
+RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
+                     bool marker,
+                     uint32_t rollover,
+                     uint16_t sequence,
+                     uint32_t timestamp,
+                     uint16_t extensionId,
+                     ByteBuffer&& extensionData,
+                     ByteBuffer&& payload)
+        : mTrack(track)
+        , mSSRC(track->getSSRC())
+        , mPayloadId(track->getPayloadId())
+        , mMarker(marker)
+        , mRollover(rollover)
+        , mSequence(sequence)
+        , mTimestamp(timestamp)
+        , mExtensionId(extensionId)
+        , mExtensionData(std::move(extensionData))
+        , mPayload(std::move(payload))
 {
 }
 
@@ -36,6 +58,11 @@ uint8_t RtpPacket::getPayloadId() const
     return mPayloadId;
 }
 
+uint32_t RtpPacket::getRollover() const
+{
+    return mRollover;
+}
+
 uint16_t RtpPacket::getSequence() const
 {
     return mSequence;
@@ -48,16 +75,23 @@ RtpPacket::Output RtpPacket::generate() const
     ByteBuffer buf;
     ByteWriter writer(buf);
 
-    // V=1 | P | X | CC | M | PT
-    const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
+    // V=2 | P | X | CC | M | PT
+    const auto extension = !mExtensionData.empty();
+    const uint16_t header = (1 << 15)
+            | (extension ? (1 << 12) : 0)
+            | (mMarker ? (1 << 7) : 0)
+            | (mPayloadId & 0x7F);
     writer.writeU16(header);
 
     writer.writeU16(mSequence);
     writer.writeU32(mTimestamp);
     writer.writeU32(mSSRC);
 
+    // Extension
+    writeExtension(writer);
+
     // Payload
-    writer.write(mPayload);
+    writePayload(writer);
 
     return { mRollover, std::move(buf) };
 }
@@ -77,8 +111,12 @@ RtpPacket::Output RtpPacket::generateRtx() const
     ByteBuffer buf;
     ByteWriter writer(buf);
 
-    // V=1 | P | X | CC | M | PT
-    const uint16_t header = (1 << 15) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7F);
+    // V=2 | P | X | CC | M | PT
+    const auto extension = !mExtensionData.empty();
+    const uint16_t header = (1 << 15)
+            | (extension ? (1 << 12) : 0)
+            | (mMarker ? (1 << 7) : 0)
+            | (rtxPayloadId & 0x7F);
     writer.writeU16(header);
 
     const auto packetSource = mTrack->getRtxPacketSource();
@@ -87,11 +125,37 @@ RtpPacket::Output RtpPacket::generateRtx() const
     writer.writeU32(mTimestamp);
     writer.writeU32(mTrack->getRtxSSRC());
 
-    // Payload
+    // The original sequence
     writer.writeU16(mSequence);
-    writer.write(mPayload);
+
+    // Extension
+    writeExtension(writer);
+
+    // Payload
+    writePayload(writer);
 
     return { rtxRollover, std::move(buf) };
+}
+
+void RtpPacket::writeExtension(ByteWriter& writer) const
+{
+    const auto extensionSize = mExtensionData.size();
+    if (extensionSize == 0) {
+        return;
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
+    writer.writeU16(mExtensionId);
+    writer.writeU16((extensionSize + 3) / 4);
+
+    for (size_t padding = extensionSize; padding % 4 != 0; padding += 1) {
+        writer.writeU8(0);
+    }
+}
+
+void RtpPacket::writePayload(ByteWriter& writer) const
+{
+    writer.write(mPayload);
 }
 
 }

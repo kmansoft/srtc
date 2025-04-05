@@ -23,10 +23,20 @@ public:
               uint32_t timestamp,
               ByteBuffer&& payload);
 
+    RtpPacket(const std::shared_ptr<Track>& track,
+              bool marker,
+              uint32_t rollover,
+              uint16_t sequence,
+              uint32_t timestamp,
+              uint16_t extensionId,
+              ByteBuffer&& extensionData,
+              ByteBuffer&& payload);
+
     ~RtpPacket();
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
     [[nodiscard]] uint8_t getPayloadId() const;
+    [[nodiscard]] uint32_t getRollover() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
 
@@ -46,7 +56,12 @@ private:
     const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
+    const uint16_t mExtensionId;
+    const ByteBuffer mExtensionData;
     const ByteBuffer mPayload;
+
+    void writeExtension(ByteWriter& writer) const;
+    void writePayload(ByteWriter& writer) const;
 };
 
 }
