@@ -193,8 +193,8 @@ TEST(SrtpCrypto, RtpSend)
     srtc::initOpenSSL();
 
     static const uint16_t kOpenSslProfileList[] = {
-//           SRTP_AEAD_AES_256_GCM,
-//           SRTP_AEAD_AES_128_GCM,
+           SRTP_AEAD_AES_256_GCM,
+           SRTP_AEAD_AES_128_GCM,
             SRTP_AES128_CM_SHA1_80,
             SRTP_AES128_CM_SHA1_32
     };

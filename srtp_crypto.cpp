@@ -140,6 +140,7 @@ bool SrtpCrypto::protectSendRtpGCM(uint32_t rolloverCount,
     const auto packetData = packet.data();
     const auto packetSize = packet.size();
 
+    const uint16_t header = htons(*reinterpret_cast<const uint16_t*>(packetData));
     const uint16_t sequence = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 2));
     const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData + 8));
 
@@ -159,7 +160,17 @@ bool SrtpCrypto::protectSendRtpGCM(uint32_t rolloverCount,
     const auto encryptedData = encrypted.data();
 
     // The header is not encrypted
-    const auto headerSize = 4 + 4 + 4;  // TODO extension
+    auto headerSize = 4 + 4 + 4;
+    if ((header & kRTP_ExtensionBit) != 0) {
+        const auto extensionSize = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 14));
+        headerSize += 4;
+        headerSize += extensionSize * 4;
+
+        if (headerSize >= packetSize) {
+            // The header reaches the end of payload (empty payload) or extends past its end
+            return false;
+        }
+    }
     std::memcpy(encryptedData, packetData, headerSize);
 
     // Encryption
