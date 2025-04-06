@@ -25,6 +25,8 @@ namespace {
 
 constexpr size_t kAESGCM_TagSize = 16;
 
+constexpr uint16_t kRTP_ExtensionBit = 0x1000;
+
 constexpr uint32_t kRTCP_EncryptedBit = 0x80000000u;
 constexpr size_t kRTCP_HeaderSize = 8u;
 constexpr size_t kRTCP_TrailerSize = 4u;
@@ -230,6 +232,7 @@ bool SrtpCrypto::protectSendRtpCM(uint32_t rolloverCount,
     const auto packetData = packet.data();
     const auto packetSize = packet.size();
 
+    const uint16_t header = htons(*reinterpret_cast<const uint16_t*>(packetData));
     const uint16_t sequence = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 2));
     const uint32_t ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData + 8));
 
@@ -250,7 +253,13 @@ bool SrtpCrypto::protectSendRtpCM(uint32_t rolloverCount,
     const auto encryptedData = encrypted.data();
 
     // The header is not encrypted
-    const auto headerSize = 4 + 4 + 4;  // TODO extension
+    auto headerSize = 4 + 4 + 4;
+    if ((header & kRTP_ExtensionBit) != 0) {
+        const auto extensionSize = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 14));
+        headerSize += 4;
+        headerSize += extensionSize * 4;
+    }
+
     std::memcpy(encryptedData, packetData, headerSize);
 
     // We will need the trailer for the authentication tag

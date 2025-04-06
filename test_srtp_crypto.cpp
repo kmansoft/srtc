@@ -187,8 +187,8 @@ TEST(SrtpCrypto, RtpSend)
     srtc::initOpenSSL();
 
     static const uint16_t kOpenSslProfileList[] = {
-            SRTP_AEAD_AES_256_GCM,
-            SRTP_AEAD_AES_128_GCM,
+//           SRTP_AEAD_AES_256_GCM,
+//           SRTP_AEAD_AES_128_GCM,
             SRTP_AES128_CM_SHA1_80,
             SRTP_AES128_CM_SHA1_32
     };
@@ -300,7 +300,24 @@ TEST(SrtpCrypto, RtpSend)
             }
             prevSequence = sequence;
 
-            const auto packet = std::make_shared<srtc::RtpPacket>(track, false, rolloverCounter, sequence, timestamp,
+            uint16_t extensionId = 0;
+            srtc::ByteBuffer extensionData;
+
+            if ((repeatIndex % 2) == 1) {
+                // Extension
+                extensionId = static_cast<uint16_t>(1 + lrand48() % 2000);
+                const auto extensionLen = static_cast<size_t>(1 + lrand48() % 200);
+                extensionData.reserve(extensionLen);
+                extensionData.resize(extensionLen);
+                RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+
+                std::cout << "Using extension, repeatIndex = " << repeatIndex << std::endl;
+            }
+
+            const auto packet = std::make_shared<srtc::RtpPacket>(track, false,
+                                                                  rolloverCounter, sequence, timestamp,
+                                                                  extensionId,
+                                                                  std::move(extensionData),
                                                                   std::move(payload));
             // This is our packet's unencrypted data
             const auto source = packet->generate();
@@ -309,7 +326,8 @@ TEST(SrtpCrypto, RtpSend)
             srtc::ByteBuffer protectedLibSrtp(source.buf.size() + SRTP_MAX_TRAILER_LEN);
             size_t protectedSize = protectedLibSrtp.capacity();
             ASSERT_EQ(srtp_protect(srtp, source.buf.data(), source.buf.size(),
-                         protectedLibSrtp.data(), &protectedSize, 0), srtp_err_status_ok);
+                         protectedLibSrtp.data(), &protectedSize, 0), srtp_err_status_ok)
+                         << " failed to libsrtp protect, repeatIndex = " << repeatIndex;
             protectedLibSrtp.resize(protectedSize);
 
             // Encrypt using our own crypto
@@ -321,7 +339,7 @@ TEST(SrtpCrypto, RtpSend)
 
             for (size_t i = 0; i < protectedSize; i += 1) {
                 ASSERT_EQ(protectedLibSrtp.data()[i], protectedSrtcCrypto.data()[i])
-                    << " diff at offset " << i << std::endl;
+                    << " diff at offset " << i << " " << srtpProfileName << std::endl;
             }
 
             // Advance

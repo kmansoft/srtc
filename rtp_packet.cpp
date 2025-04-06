@@ -76,8 +76,8 @@ RtpPacket::Output RtpPacket::generate() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = !mExtensionData.empty();
-    const uint16_t header = (1 << 15)
+    const auto extension = mExtensionId != 0;
+    const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
             | (mPayloadId & 0x7F);
@@ -112,8 +112,8 @@ RtpPacket::Output RtpPacket::generateRtx() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = !mExtensionData.empty();
-    const uint16_t header = (1 << 15)
+    const auto extension = mExtensionId != 0;
+    const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
             | (rtxPayloadId & 0x7F);
@@ -139,14 +139,17 @@ RtpPacket::Output RtpPacket::generateRtx() const
 
 void RtpPacket::writeExtension(ByteWriter& writer) const
 {
-    const auto extensionSize = mExtensionData.size();
-    if (extensionSize == 0) {
+    if (mExtensionId == 0) {
         return;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
     writer.writeU16(mExtensionId);
+
+    const auto extensionSize = mExtensionData.size();
     writer.writeU16((extensionSize + 3) / 4);
+
+    writer.write(mExtensionData);
 
     for (size_t padding = extensionSize; padding % 4 != 0; padding += 1) {
         writer.writeU8(0);
