@@ -289,6 +289,45 @@ TEST(SrtpCrypto, RtpSend)
                                                          srtc::Codec::H264,
                                                          false, false);
 
+        {
+            // Edge case 1: empty payload with an extension, not valid in our library
+            uint8_t extensionData[15];
+            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData)}};
+
+            srtc::ByteBuffer payload; // empty
+
+            const auto packet = std::make_shared<srtc::RtpPacket>(track, false,
+                                                                  0, 100, 1000,
+                                                                  std::move(extension),
+                                                                  std::move(payload));
+            const auto output = packet->generate();
+
+            srtc::ByteBuffer protectedSrtcCrypto;
+            ASSERT_FALSE(crypto->protectSendRtp(output.rollover, output.buf, protectedSrtcCrypto));
+        }
+
+        {
+            // Edge case 2: 1 byte payload with an extension, valid in our library
+            uint8_t extensionData[15];
+            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData)}};
+
+            uint8_t payloadData[1];
+            RAND_bytes(payloadData, sizeof(payloadData));
+
+            srtc::ByteBuffer payload = { payloadData, sizeof(payloadData) };
+
+            const auto packet = std::make_shared<srtc::RtpPacket>(track, false,
+                                                                  0, 100, 1000,
+                                                                  std::move(extension),
+                                                                  std::move(payload));
+            const auto output = packet->generate();
+
+            srtc::ByteBuffer protectedSrtcCrypto;
+            ASSERT_TRUE(crypto->protectSendRtp(output.rollover, output.buf, protectedSrtcCrypto));
+        }
+
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + lrand48() % 1000;
             srtc::ByteBuffer payload(payloadSize);
@@ -325,8 +364,7 @@ TEST(SrtpCrypto, RtpSend)
             srtc::ByteBuffer protectedLibSrtp(source.buf.size() + SRTP_MAX_TRAILER_LEN);
             size_t protectedSize = protectedLibSrtp.capacity();
             ASSERT_EQ(srtp_protect(srtp, source.buf.data(), source.buf.size(),
-                         protectedLibSrtp.data(), &protectedSize, 0), srtp_err_status_ok)
-                         << " failed to libsrtp protect, repeatIndex = " << repeatIndex;
+                         protectedLibSrtp.data(), &protectedSize, 0), srtp_err_status_ok);
             protectedLibSrtp.resize(protectedSize);
 
             // Encrypt using our own crypto

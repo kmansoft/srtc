@@ -258,6 +258,11 @@ bool SrtpCrypto::protectSendRtpCM(uint32_t rolloverCount,
         const auto extensionSize = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 14));
         headerSize += 4;
         headerSize += extensionSize * 4;
+
+        if (headerSize >= packetSize) {
+            // The header reaches the end of payload (empty payload) or extends past its end
+            return false;
+        }
     }
 
     std::memcpy(encryptedData, packetData, headerSize);

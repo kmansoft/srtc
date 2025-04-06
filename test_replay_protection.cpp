@@ -10,8 +10,6 @@ namespace {
 
 TEST(ReplayProtection, TestEmpty) {
 
-    std::cout << "ReplayProtection TestEmpty" << std::endl;
-
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
         uint16_t value = 0;
