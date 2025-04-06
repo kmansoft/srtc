@@ -29,6 +29,7 @@ add_library(srtc
         include/srtc/peer_connection.h
         include/srtc/random_generator.h
         include/srtc/replay_protection.h
+        include/srtc/rtp_extension.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
         include/srtc/scheduler.h
@@ -60,6 +61,7 @@ add_library(srtc
         random_generator.cpp
         replay_protection.cpp
         replay_protection.cpp
+        rtp_extension.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
         sdp_answer.cpp

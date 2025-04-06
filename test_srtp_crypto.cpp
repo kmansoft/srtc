@@ -5,6 +5,7 @@
 #include "srtc/srtp_crypto.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
+#include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
 
 #include <mutex>
@@ -300,24 +301,22 @@ TEST(SrtpCrypto, RtpSend)
             }
             prevSequence = sequence;
 
-            uint16_t extensionId = 0;
-            srtc::ByteBuffer extensionData;
+            srtc::RtpExtension extension;
 
             if ((repeatIndex % 2) == 1) {
                 // Extension
-                extensionId = static_cast<uint16_t>(1 + lrand48() % 2000);
+                const auto extensionId = static_cast<uint16_t>(1 + lrand48() % 2000);
                 const auto extensionLen = static_cast<size_t>(1 + lrand48() % 200);
-                extensionData.reserve(extensionLen);
+                srtc::ByteBuffer extensionData(extensionLen);
                 extensionData.resize(extensionLen);
                 RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
 
-                std::cout << "Using extension, repeatIndex = " << repeatIndex << std::endl;
+                extension = { extensionId, std::move(extensionData) };
             }
 
             const auto packet = std::make_shared<srtc::RtpPacket>(track, false,
                                                                   rolloverCounter, sequence, timestamp,
-                                                                  extensionId,
-                                                                  std::move(extensionData),
+                                                                  std::move(extension),
                                                                   std::move(payload));
             // This is our packet's unencrypted data
             const auto source = packet->generate();

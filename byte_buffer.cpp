@@ -39,7 +39,7 @@ ByteBuffer::~ByteBuffer()
     mBuf = nullptr;
 }
 
-ByteBuffer::ByteBuffer(ByteBuffer&& other)
+ByteBuffer::ByteBuffer(ByteBuffer&& other) noexcept
     : mBuf(other.mBuf)
     , mLen(other.mLen)
     , mCap(other.mCap)
@@ -49,7 +49,7 @@ ByteBuffer::ByteBuffer(ByteBuffer&& other)
     other.mCap = 0;
 }
 
-ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other)
+ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other) noexcept
 {
     delete[] mBuf;
 

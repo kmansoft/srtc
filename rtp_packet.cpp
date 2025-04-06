@@ -20,7 +20,6 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
     , mRollover(rollover)
     , mSequence(sequence)
     , mTimestamp(timestamp)
-    , mExtensionId(0)
     , mPayload(std::move(payload))
 {
 }
@@ -30,8 +29,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      uint32_t rollover,
                      uint16_t sequence,
                      uint32_t timestamp,
-                     uint16_t extensionId,
-                     ByteBuffer&& extensionData,
+                     RtpExtension&& extension,
                      ByteBuffer&& payload)
         : mTrack(track)
         , mSSRC(track->getSSRC())
@@ -40,8 +38,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
         , mRollover(rollover)
         , mSequence(sequence)
         , mTimestamp(timestamp)
-        , mExtensionId(extensionId)
-        , mExtensionData(std::move(extensionData))
+        , mExtension(std::move(extension))
         , mPayload(std::move(payload))
 {
 }
@@ -76,7 +73,7 @@ RtpPacket::Output RtpPacket::generate() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = mExtensionId != 0;
+    const auto extension = mExtension.getId() != 0;
     const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
@@ -112,7 +109,7 @@ RtpPacket::Output RtpPacket::generateRtx() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = mExtensionId != 0;
+    const auto extension = mExtension.getId() != 0;
     const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
@@ -139,17 +136,19 @@ RtpPacket::Output RtpPacket::generateRtx() const
 
 void RtpPacket::writeExtension(ByteWriter& writer) const
 {
-    if (mExtensionId == 0) {
+    const auto extensionId = mExtension.getId();
+    if (extensionId == 0) {
         return;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
-    writer.writeU16(mExtensionId);
+    writer.writeU16(extensionId);
 
-    const auto extensionSize = mExtensionData.size();
+    const auto& extensionData = mExtension.getData();
+    const auto extensionSize = extensionData.size();
     writer.writeU16((extensionSize + 3) / 4);
 
-    writer.write(mExtensionData);
+    writer.write(extensionData);
 
     for (size_t padding = extensionSize; padding % 4 != 0; padding += 1) {
         writer.writeU8(0);

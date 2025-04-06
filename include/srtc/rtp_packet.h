@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/byte_buffer.h"
+#include "srtc/rtp_extension.h"
 
 #include <memory>
 #include <cstddef>
@@ -28,8 +29,7 @@ public:
               uint32_t rollover,
               uint16_t sequence,
               uint32_t timestamp,
-              uint16_t extensionId,
-              ByteBuffer&& extensionData,
+              RtpExtension&& extension,
               ByteBuffer&& payload);
 
     ~RtpPacket();
@@ -56,8 +56,7 @@ private:
     const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
-    const uint16_t mExtensionId;
-    const ByteBuffer mExtensionData;
+    const RtpExtension mExtension;
     const ByteBuffer mPayload;
 
     void writeExtension(ByteWriter& writer) const;
