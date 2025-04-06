@@ -15,6 +15,7 @@
 #include "stunmessage.h"
 
 #include <cassert>
+#include <ctime>
 #include <chrono>
 #include <unistd.h>
 
@@ -23,9 +24,22 @@
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
+namespace {
+
+std::once_flag gInitFlag;
+
+}
+
 namespace srtc {
 
-PeerConnection::PeerConnection() = default;
+PeerConnection::PeerConnection()
+{
+    std::call_once(gInitFlag, [] {
+        struct timespec t = {};
+        clock_gettime(CLOCK_REALTIME, &t);
+        srand48(t.tv_nsec);
+    });
+}
 
 PeerConnection::~PeerConnection()
 {

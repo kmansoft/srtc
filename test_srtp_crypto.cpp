@@ -10,6 +10,7 @@
 
 #include <mutex>
 #include <cstring>
+#include <ctime>
 
 #include <srtp.h>
 #include <openssl/srtp.h>
@@ -19,12 +20,16 @@
 
 namespace {
 
-std::once_flag gSrtpInitFlag;
+std::once_flag gInitFlag;
 
 void initLibSRTP()
 {
-    std::call_once(gSrtpInitFlag, [] {
+    std::call_once(gInitFlag, [] {
                        srtp_init();
+
+                       struct timespec t = {};
+                       clock_gettime(CLOCK_REALTIME, &t);
+                       srand48(t.tv_nsec);
                    }
     );
 }
