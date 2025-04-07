@@ -73,7 +73,7 @@ RtpPacket::Output RtpPacket::generate() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = mExtension.getId() != 0;
+    const auto extension = !mExtension.empty();
     const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
@@ -109,7 +109,7 @@ RtpPacket::Output RtpPacket::generateRtx() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = mExtension.getId() != 0;
+    const auto extension = !mExtension.empty();
     const uint16_t header = (2 << 14)
             | (extension ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
@@ -136,13 +136,12 @@ RtpPacket::Output RtpPacket::generateRtx() const
 
 void RtpPacket::writeExtension(ByteWriter& writer) const
 {
-    const auto extensionId = mExtension.getId();
-    if (extensionId == 0) {
+    if (mExtension.empty()) {
         return;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
-    writer.writeU16(extensionId);
+    writer.writeU16(mExtension.getId());
 
     const auto& extensionData = mExtension.getData();
     const auto extensionSize = extensionData.size();

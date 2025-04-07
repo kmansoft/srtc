@@ -14,6 +14,10 @@ public:
     RtpExtension(RtpExtension&& source) noexcept;
     RtpExtension& operator=(RtpExtension&& source) noexcept;
 
+    void clear();
+
+    [[nodiscard]] bool empty() const;
+
     [[nodiscard]] uint16_t getId() const;
     [[nodiscard]] const ByteBuffer& getData() const;
 
