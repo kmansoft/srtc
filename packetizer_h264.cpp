@@ -83,6 +83,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 ByteBuffer payload;
                 ByteWriter writer(payload);
 
+                // nri is already shifted left
                 writer.writeU8(nri | STAP_A);
 
                 for (const auto& csd: mCSD) {
@@ -131,6 +132,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     ByteBuffer payload;
                     ByteWriter writer(payload);
 
+                    // nri is already shifted left
                     const uint8_t fuIndicator = nri | FU_A;
                     writer.writeU8(fuIndicator);
 
