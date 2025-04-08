@@ -5,21 +5,25 @@ namespace srtc {
 
 Track::Track(int trackId,
              MediaType mediaType,
+             const std::string& mediaId,
              uint32_t ssrtc,
              int payloadId,
              uint32_t rtxSsrc,
              int rtxPayloadId,
              Codec codec,
+             const srtc::optional<SimulcastLayer>& simulcastLayer,
              bool hasNack,
              bool hasPli,
              int profileLevelId)
     : mTrackId(trackId)
     , mMediaType(mediaType)
+    , mMediaId(mediaId)
     , mSSRC(ssrtc)
     , mPayloadId(payloadId)
     , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
     , mCodec(codec)
+    , mSimulcastLayer(simulcastLayer)
     , mHasNack(hasNack)
     , mHasPli(hasPli)
     , mProfileLevelId(profileLevelId)
@@ -36,6 +40,11 @@ int Track::getTrackId() const
 MediaType Track::getMediaType() const
 {
     return mMediaType;
+}
+
+std::string Track::getMediaId() const
+{
+    return mMediaId;
 }
 
 int Track::getPayloadId() const

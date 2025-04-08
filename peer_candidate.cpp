@@ -178,6 +178,10 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
+#ifdef NDEBUG
+#else
+    , mNoSendRandomGenerator(0, 99)
+#endif
     , mUniqueId(++gNextUniqueId)
     , mScheduler(scheduler)
 {
@@ -264,7 +268,7 @@ void PeerCandidate::process()
                         (void) mSocket->send(protectedData.data(), protectedData.size());
 #else
                         // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
-                        const auto randomValue = mrand48() % 100;
+                        const auto randomValue = mNoSendRandomGenerator.next();
                         if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {

@@ -33,7 +33,8 @@ public:
     std::shared_ptr<SdpOffer> getSdpOffer() const;
     std::shared_ptr<SdpAnswer> getSdpAnswer() const;
 
-    std::shared_ptr<Track> getVideoTrack() const;
+    std::shared_ptr<Track> getVideoSingleTrack() const;
+    std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
     std::shared_ptr<Track> getAudioTrack() const;
 
     enum class ConnectionState {
@@ -56,7 +57,8 @@ private:
     std::shared_ptr<SdpOffer> mSdpOffer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<SdpAnswer> mSdpAnswer SRTC_GUARDED_BY(mMutex);
 
-    std::shared_ptr<Track> mVideoTrack SRTC_GUARDED_BY(mMutex);
+    std::shared_ptr<Track> mVideoSingleTrack SRTC_GUARDED_BY(mMutex);
+    std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
 
     void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer,
@@ -96,7 +98,7 @@ private:
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
-    std::shared_ptr<Packetizer> mVideoPacketizer SRTC_GUARDED_BY(mMutex);
+    std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
 
     // These are only used on the worker thread so don't need mutexes

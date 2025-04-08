@@ -36,7 +36,8 @@ public:
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::vector<Host> getHostList() const;
-    [[nodiscard]] std::shared_ptr<Track> getVideoTrack() const;
+    [[nodiscard]] std::shared_ptr<Track> getVideoSingleTrack() const;
+    [[nodiscard]] std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
     [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;
     [[nodiscard]] const ExtensionMap& getVideoExtensionMap() const;
     [[nodiscard]] const ExtensionMap& getAudioExtensionMap() const;
@@ -47,7 +48,8 @@ private:
     const std::string mIceUFrag;
     const std::string mIcePassword;
     const std::vector<Host> mHostList;
-    const std::shared_ptr<Track> mVideoTrack;
+    const std::shared_ptr<Track> mVideoSingleTrack;
+    const std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList;
     const std::shared_ptr<Track> mAudioTrack;
     const ExtensionMap mVideoExtensionMap;
     const ExtensionMap mAudioExtensionMap;
@@ -57,7 +59,8 @@ private:
     SdpAnswer(const std::string& iceUFrag,
               const std::string& icePassword,
               const std::vector<Host>& hostList,
-              const std::shared_ptr<Track>& videoTrack,
+              const std::shared_ptr<Track>& videoSingleTrack,
+              const std::vector<std::shared_ptr<Track>>& videoSimulcastTrackList,
               const std::shared_ptr<Track>& audioTrack,
               const ExtensionMap& videoExtensionMap,
               const ExtensionMap& audioExtensionMap,

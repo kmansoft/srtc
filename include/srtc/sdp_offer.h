@@ -20,22 +20,30 @@ struct OfferConfig {
     std::string cname;
 };
 
-struct PubVideoCodecConfig {
+struct PubVideoCodec {
     Codec codec;
     uint32_t profileLevelId;    // for h264
 };
 
-struct PubVideoConfig {
-    std::vector<PubVideoCodecConfig> list;
+struct PubVideoSimulcastLayer {
+    std::string name;
+    uint16_t width;
+    uint16_t height;
+    uint32_t kilobitPerSecond;
 };
 
-struct PubAudioCodecConfig {
+struct PubVideoConfig {
+    std::vector<PubVideoCodec> codecList;
+    std::vector<PubVideoSimulcastLayer> simulcastLayerList;
+};
+
+struct PubAudioCodec {
     Codec codec;
     uint32_t minPacketTimeMs;     // for Opus
 };
 
 struct PubAudioConfig {
-    std::vector<PubAudioCodecConfig> list;
+    std::vector<PubAudioCodec> codecList;
 };
 
 class SdpOffer {
@@ -47,6 +55,7 @@ public:
 
     [[nodiscard]] std::pair<std::string, Error> generate();
 
+    [[nodiscard]] srtc::optional<std::vector<PubVideoSimulcastLayer>> getVideoSimulcastLayerList() const;
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;

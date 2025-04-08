@@ -32,6 +32,7 @@ add_library(srtc
         include/srtc/rtp_extension.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
+        include/srtc/rtp_std_extensions.h
         include/srtc/scheduler.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
@@ -64,6 +65,7 @@ add_library(srtc
         rtp_extension.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
+        rtp_std_extensions.cpp
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp

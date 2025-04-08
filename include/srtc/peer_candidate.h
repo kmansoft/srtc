@@ -5,6 +5,7 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/scheduler.h"
+#include "srtc/random_generator.h"
 
 #include <list>
 #include <memory>
@@ -86,6 +87,11 @@ private:
     std::list<FrameToSend> mFrameSendQueue;
 
     bool mSentUseCandidate = { false };
+
+#ifdef NDEBUG
+#else
+    RandomGenerator<uint32_t> mNoSendRandomGenerator;
+#endif
 
     // DTLS
     enum class DtlsState {

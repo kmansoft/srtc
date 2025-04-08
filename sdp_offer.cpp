@@ -5,6 +5,7 @@
 
 #include "srtc/sdp_offer.h"
 #include "srtc/x509_certificate.h"
+#include "srtc/rtp_std_extensions.h"
 
 namespace {
 
@@ -80,11 +81,11 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-#define ENABLE_RTX
+// #define ENABLE_RTX
 
     // Video
     if (mVideoConfig.has_value()) {
-        const auto& list = mVideoConfig->list;
+        const auto& list = mVideoConfig->codecList;
         if (list.empty()) {
             return { "", { Error::Code::InvalidData, "The video config list is present but empty"} };
         }
@@ -102,9 +103,7 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=setup:actpass" << std::endl;
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
-        ss
-           << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-           << std::endl;
+
         ss << "a=sendonly" << std::endl;
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
@@ -138,18 +137,42 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
 #endif
 
-        ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
-        ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+        const auto& layerList = mVideoConfig->simulcastLayerList;
+        if (layerList.empty()) {
+            // No simulcast
+            ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
+            ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
 #ifdef ENABLE_RTX
-        ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
-        ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+            ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
+            ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 #endif
+        } else {
+            // Simulcast
+            ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
+            ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
+            ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
+
+            for (const auto& layer : layerList) {
+                ss << "a=rid:" << layer.name << " send" << std::endl;
+            }
+
+            ss << "a=simulcast:send";
+            for (size_t i = 0; i < layerList.size(); i += 1) {
+                if (i == 0) {
+                    ss << " ";
+                } else {
+                    ss << ";";
+                }
+                ss << layerList[i].name;
+            }
+            ss << std::endl;
+        }
     }
 
     // Audio
     if (mAudioConfig.has_value()) {
-        const auto &list = mAudioConfig->list;
+        const auto& list = mAudioConfig->codecList;
         if (list.empty()) {
             return {"", {Error::Code::InvalidData, "The audio config list is present but empty"}};
         }
@@ -168,9 +191,7 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=setup:actpass" << std::endl;
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
-        ss
-           << "a=extmap:4 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-           << std::endl;
+
         ss << "a=sendonly" << std::endl;
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
@@ -208,6 +229,15 @@ std::pair<std::string, Error> SdpOffer::generate()
     }
 
     return { ss.str(), Error::OK };
+}
+
+srtc::optional<std::vector<PubVideoSimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
+{
+    if (mVideoConfig.has_value()) {
+        return mVideoConfig->simulcastLayerList;
+    }
+
+    return srtc::nullopt;
 }
 
 std::string SdpOffer::getIceUFrag() const
