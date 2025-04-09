@@ -64,13 +64,11 @@ private:
     std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
 
     struct LayerInfo {
-        LayerInfo(uint16_t ridIndex,
-                  const std::string& ridName,
+        LayerInfo(const std::string& ridName,
                   const std::shared_ptr<Track>& track,
                   const std::shared_ptr<Packetizer>& packetizer)
-                  : ridIndex(ridIndex), ridName(ridName), track(track), packetizer(packetizer) {}
+                  : ridName(ridName), track(track), packetizer(packetizer) {}
 
-        uint16_t ridIndex;
         std::string ridName;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;

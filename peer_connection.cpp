@@ -118,7 +118,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
                     return error;
                 }
 
-                mVideoSimulcastLayerList.emplace_back(simulcastLayer.ridIndex, simulcastLayer.ridName, track, packetizer);
+                mVideoSimulcastLayerList.emplace_back(simulcastLayer.ridName, track, packetizer);
             }
         }
 
