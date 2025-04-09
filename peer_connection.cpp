@@ -109,7 +109,19 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
                 return error;
             }
             mVideoSinglePacketizer = packetizer;
+        } else if (!mVideoSimulcastTrackList.empty()) {
+            for (const auto& track : mVideoSimulcastTrackList) {
+                const auto& simulcastLayer = track->getSimulcastLayer();
+
+                const auto [packetizer, error] = Packetizer::makePacketizer(track->getCodec());
+                if (error.isError()) {
+                    return error;
+                }
+
+                mVideoSimulcastLayerList.emplace_back(simulcastLayer.ridIndex, simulcastLayer.ridName, track, packetizer);
+            }
         }
+
         if (mAudioTrack) {
             const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack->getCodec());
             if (error.isError()) {
@@ -166,7 +178,7 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-Error PeerConnection::setVideoCodecSpecificData(std::vector<ByteBuffer>& list)
+Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>& list)
 {
     std::lock_guard lock(mMutex);
 
@@ -188,7 +200,7 @@ Error PeerConnection::setVideoCodecSpecificData(std::vector<ByteBuffer>& list)
     return Error::OK;
 }
 
-Error PeerConnection::publishVideoFrame(ByteBuffer&& buf)
+Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 {
     std::lock_guard lock(mMutex);
 
@@ -270,7 +282,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
                                      sizeof(epollEvent) / sizeof(epollEvent[0]),
                                      mLoopScheduler->getTimeoutMillis(1000));
 
-        std::list<PeerCandidate::FrameToSend> frameSendQueue;
+        std::list<FrameToSend> frameSendQueue;
 
         {
             std::lock_guard lock(mMutex);

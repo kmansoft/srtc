@@ -62,6 +62,11 @@ Codec Track::getCodec() const
     return mCodec;
 }
 
+const Track::SimulcastLayer& Track::getSimulcastLayer() const
+{
+    return mSimulcastLayer.value();
+}
+
 bool Track::hasNack() const
 {
     return mHasNack;

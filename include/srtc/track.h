@@ -39,6 +39,7 @@ public:
     [[nodiscard]] int getPayloadId() const;
     [[nodiscard]] int getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
+    [[nodiscard]] const SimulcastLayer& getSimulcastLayer() const;
     [[nodiscard]] bool hasNack() const;
     [[nodiscard]] bool hasPli() const;
     [[nodiscard]] int getProfileLevelId() const;
