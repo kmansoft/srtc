@@ -149,6 +149,9 @@ std::pair<std::string, Error> SdpOffer::generate()
 #endif
         } else {
             // Simulcast
+            ss << "a=cname:" << mConfig.cname << std::endl;
+            ss << "a=msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+
             ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
             ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
             ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
