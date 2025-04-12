@@ -76,6 +76,8 @@ private:
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
     const std::shared_ptr<SendHistory> mSendHistory;
     const uint32_t mUniqueId;
+    const uint8_t mVideoExtMediaId;
+    const uint8_t mVideoExtStreamId;
 
     std::shared_ptr<SrtpConnection> mSrtp;
 

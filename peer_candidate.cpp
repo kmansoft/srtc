@@ -160,6 +160,12 @@ bool is_rtcp_message(const srtc::ByteBuffer &buf)
     return false;
 }
 
+uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer,
+                           const std::string& name)
+{
+    return answer->getVideoExtensionMap().findByName(name);
+}
+
 }
 
 namespace srtc {
@@ -185,6 +191,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mNoSendRandomGenerator(0, 99)
 #endif
     , mUniqueId(++gNextUniqueId)
+    , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
+    , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
     , mScheduler(scheduler)
 {
     assert(mListener);
@@ -258,16 +266,16 @@ void PeerCandidate::process()
 
             if (item.track->isSimulcast()) {
                 addExtensionToAllPackets = item.track->getSentPacketCount() < 100;
+
                 if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
-                    const auto &layer = item.track->getSimulcastLayer();
+                    const auto& layer = item.track->getSimulcastLayer();
 
                     RtpExtensionBuilder builder;
 
-                    const auto extensionMap = mAnswer->getVideoExtensionMap();
-                    if (const auto id = extensionMap.findByName(RtpStandardExtensions::kExtSdesMid); id != 0) {
+                    if (const auto id = mVideoExtMediaId; id != 0) {
                         builder.addStringValue(id, item.track->getMediaId());
                     }
-                    if (const auto id = extensionMap.findByName(RtpStandardExtensions::kExtSdesRtpStreamId); id != 0) {
+                    if (const auto id = mVideoExtStreamId; id != 0) {
                         builder.addStringValue(id, layer.ridName);
                     }
 
