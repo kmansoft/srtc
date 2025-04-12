@@ -18,6 +18,7 @@ public:
         uint16_t ridIndex;  // [0..3]
         uint16_t width;
         uint16_t height;
+        uint16_t framesPerSecond;
         uint32_t kilobitPerSecond;
     };
 

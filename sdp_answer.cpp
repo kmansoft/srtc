@@ -171,7 +171,8 @@ void ParseMediaState::addSimulcastLayer(const std::vector<srtc::PubVideoSimulcas
             layerList.push_back(srtc::Track::SimulcastLayer{
                 ridName,
                 static_cast<uint16_t>(i),
-                layer.width, layer.height, layer.kilobitPerSecond
+                layer.width, layer.height,
+                layer.framesPerSecond, layer.kilobitPerSecond
             });
             break;
         }
