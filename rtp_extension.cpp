@@ -53,5 +53,11 @@ const ByteBuffer& RtpExtension::getData() const
     return mData;
 }
 
+RtpExtension RtpExtension::copy() const
+{
+    return {
+        mId, mData.copy()
+    };
+}
 
 }

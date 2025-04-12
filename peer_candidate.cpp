@@ -11,6 +11,8 @@
 #include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 #include "srtc/srtp_openssl.h"
+#include "srtc/rtp_std_extensions.h"
+#include "srtc/rtp_extension_builder.h"
 
 #include <cstring>
 #include <cassert>
@@ -158,6 +160,12 @@ bool is_rtcp_message(const srtc::ByteBuffer &buf)
     return false;
 }
 
+uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer,
+                           const std::string& name)
+{
+    return answer->getVideoExtensionMap().findByName(name);
+}
+
 }
 
 namespace srtc {
@@ -178,7 +186,14 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendHistory(std::make_shared<SendHistory>())
+#ifdef NDEBUG
+#else
+    , mNoSendRandomGenerator(0, 99)
+#endif
     , mUniqueId(++gNextUniqueId)
+    , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
+    , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
+    , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
     , mScheduler(scheduler)
 {
     assert(mListener);
@@ -247,7 +262,41 @@ void PeerCandidate::process()
             item.packetizer->setCodecSpecificData(item.csd);
         } else if (!item.buf.empty()) {
             // Frame data
-            const auto packetList = item.packetizer->generate(item.track, item.buf);
+            RtpExtension extension;
+            bool addExtensionToAllPackets = false;
+
+            if (item.track->isSimulcast()) {
+                addExtensionToAllPackets = item.track->getSentPacketCount() < 100;
+
+                if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
+                    const auto& layer = item.track->getSimulcastLayer();
+
+                    RtpExtensionBuilder builder;
+
+                    if (const auto id = mVideoExtMediaId; id != 0) {
+                        builder.addStringValue(id, item.track->getMediaId());
+                    }
+                    if (const auto id = mVideoExtStreamId; id != 0) {
+                        builder.addStringValue(id, layer.name);
+                    }
+                    if (const auto id = mVideoExtGoogleVLA; id != 0) {
+                        std::vector<SimulcastLayer> layerList;
+                        for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
+                            layerList.push_back(trackItem->getSimulcastLayer());
+                        }
+                        builder.addGoogleVLA(id, layer.index, layerList);
+                    }
+
+                    extension = builder.build();
+                }
+            }
+
+            const auto packetList = item.packetizer->generate(item.track,
+                                                              extension, addExtensionToAllPackets,
+                                                              item.buf);
+
+            item.track->incrementSentPacketCount(packetList.size());
+
             for (const auto& packet : packetList) {
                 // Save
                 if (item.track->hasNack() || item.track->getRtxPayloadId() > 0) {
@@ -264,7 +313,7 @@ void PeerCandidate::process()
                         (void) mSocket->send(protectedData.data(), protectedData.size());
 #else
                         // In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing works
-                        const auto randomValue = mrand48() % 100;
+                        const auto randomValue = mNoSendRandomGenerator.next();
                         if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
@@ -303,7 +352,9 @@ void PeerCandidate::process()
         LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
 
         const auto cert = mOffer->getCertificate();
-        mDtlsCtx = SSL_CTX_new(DTLS_client_method());
+        mDtlsCtx = SSL_CTX_new(
+                mAnswer->isSetupActive() ?
+                DTLS_server_method() : DTLS_client_method());
 
         SSL_CTX_use_certificate(mDtlsCtx, cert->getCertificate());
         SSL_CTX_use_PrivateKey(mDtlsCtx, cert->getPrivateKey());
@@ -581,8 +632,9 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                 if (mSrtp->protectOutgoing(packetData.rollover, packetData.buf, protectedData)) {
                                     // And send
                                     const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
-                                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu",
-                                        packet->getSSRC(), packet->getSequence(), sentSize);
+                                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
+                                        packet->getSSRC(), packet->getSequence(), sentSize,
+                                        packet->getTrack()->getRtxPayloadId() > 0);
                                 }
                             } else {
                                 LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);

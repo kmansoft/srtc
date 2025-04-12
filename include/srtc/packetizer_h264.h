@@ -13,6 +13,8 @@ public:
     void setCodecSpecificData(const std::vector<ByteBuffer>& csd) override;
     bool isKeyFrame(const ByteBuffer& frame) const override;
     std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
+                                                   const RtpExtension& extension,
+                                                   bool addExtensionToAllPackets,
                                                    const ByteBuffer& frame) override;
 
 private:

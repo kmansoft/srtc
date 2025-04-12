@@ -288,10 +288,11 @@ TEST(SrtpCrypto, RtpSend)
 
         std::optional<uint16_t> prevSequence;
 
-        const auto track = std::make_shared<srtc::Track>(0, srtc::MediaType::Video,
+        const auto track = std::make_shared<srtc::Track>(0, srtc::MediaType::Video, "0",
                                                          ssrc, 96,
                                                          0, 0,
                                                          srtc::Codec::H264,
+                                                         srtc::nullopt,
                                                          false, false);
 
         {

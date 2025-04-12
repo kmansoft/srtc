@@ -30,12 +30,15 @@ add_library(srtc
         include/srtc/random_generator.h
         include/srtc/replay_protection.h
         include/srtc/rtp_extension.h
+        include/srtc/rtp_extension_builder.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
+        include/srtc/rtp_std_extensions.h
         include/srtc/scheduler.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
         include/srtc/send_history.h
+        include/srtc/simulcast_layer.h
         include/srtc/socket.h
         include/srtc/srtc.h
         include/srtc/srtp_connection.h
@@ -62,8 +65,10 @@ add_library(srtc
         replay_protection.cpp
         replay_protection.cpp
         rtp_extension.cpp
+        rtp_extension_builder.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
+        rtp_std_extensions.cpp
         sdp_answer.cpp
         sdp_offer.cpp
         scheduler.cpp
@@ -174,6 +179,7 @@ set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 add_executable(
         srtc_test
         EXCLUDE_FROM_ALL
+        test_google_vla.cpp
         test_replay_protection.cpp
         test_srtp_key_derivation.cpp
         test_srtp_crypto.cpp

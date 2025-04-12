@@ -5,26 +5,31 @@ namespace srtc {
 
 Track::Track(int trackId,
              MediaType mediaType,
+             const std::string& mediaId,
              uint32_t ssrtc,
              int payloadId,
              uint32_t rtxSsrc,
              int rtxPayloadId,
              Codec codec,
+             const srtc::optional<SimulcastLayer>& simulcastLayer,
              bool hasNack,
              bool hasPli,
              int profileLevelId)
     : mTrackId(trackId)
     , mMediaType(mediaType)
+    , mMediaId(mediaId)
     , mSSRC(ssrtc)
     , mPayloadId(payloadId)
     , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
     , mCodec(codec)
+    , mSimulcastLayer(simulcastLayer)
     , mHasNack(hasNack)
     , mHasPli(hasPli)
     , mProfileLevelId(profileLevelId)
     , mPacketSource(std::make_shared<RtpPacketSource>(mSSRC, mPayloadId))
     , mRtxPacketSource(std::make_shared<RtpPacketSource>(mRtxSSRC, mRtxPayloadId))
+    , mSentPacketCount(0)
 {
 }
 
@@ -36,6 +41,11 @@ int Track::getTrackId() const
 MediaType Track::getMediaType() const
 {
     return mMediaType;
+}
+
+std::string Track::getMediaId() const
+{
+    return mMediaId;
 }
 
 int Track::getPayloadId() const
@@ -51,6 +61,16 @@ int Track::getRtxPayloadId() const
 Codec Track::getCodec() const
 {
     return mCodec;
+}
+
+bool Track::isSimulcast() const
+{
+    return mSimulcastLayer.has_value();
+}
+
+const Track::SimulcastLayer& Track::getSimulcastLayer() const
+{
+    return mSimulcastLayer.value();
 }
 
 bool Track::hasNack() const
@@ -86,6 +106,16 @@ std::shared_ptr<RtpPacketSource> Track::getPacketSource() const
 std::shared_ptr<RtpPacketSource> Track::getRtxPacketSource() const
 {
     return mRtxPacketSource;
+}
+
+size_t Track::getSentPacketCount() const
+{
+    return mSentPacketCount;
+}
+
+void Track::incrementSentPacketCount(size_t increment)
+{
+    mSentPacketCount += increment;
 }
 
 }

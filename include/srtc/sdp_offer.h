@@ -11,6 +11,7 @@
 #include "srtc/error.h"
 #include "srtc/random_generator.h"
 #include "srtc/optional.h"
+#include "srtc/simulcast_layer.h"
 
 namespace srtc {
 
@@ -20,22 +21,23 @@ struct OfferConfig {
     std::string cname;
 };
 
-struct PubVideoCodecConfig {
+struct PubVideoCodec {
     Codec codec;
     uint32_t profileLevelId;    // for h264
 };
 
 struct PubVideoConfig {
-    std::vector<PubVideoCodecConfig> list;
+    std::vector<PubVideoCodec> codecList;
+    std::vector<SimulcastLayer> simulcastLayerList;
 };
 
-struct PubAudioCodecConfig {
+struct PubAudioCodec {
     Codec codec;
     uint32_t minPacketTimeMs;     // for Opus
 };
 
 struct PubAudioConfig {
-    std::vector<PubAudioCodecConfig> list;
+    std::vector<PubAudioCodec> codecList;
 };
 
 class SdpOffer {
@@ -47,6 +49,7 @@ public:
 
     [[nodiscard]] std::pair<std::string, Error> generate();
 
+    [[nodiscard]] srtc::optional<std::vector<SimulcastLayer>> getVideoSimulcastLayerList() const;
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;

@@ -21,6 +21,8 @@ public:
     [[nodiscard]] uint16_t getId() const;
     [[nodiscard]] const ByteBuffer& getData() const;
 
+    [[nodiscard]] RtpExtension copy() const;
+
 
 private:
     uint16_t mId;

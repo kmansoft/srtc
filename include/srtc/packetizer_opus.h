@@ -11,6 +11,8 @@ public:
     ~PacketizerOpus() override;
 
     std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
+                                                   const RtpExtension& extension,
+                                                   bool addExtensionToAllPackets,
                                                    const ByteBuffer& frame) override;
 };
 

@@ -1,7 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 namespace srtc {
 
@@ -10,11 +11,21 @@ public:
     ExtensionMap() = default;
     ~ExtensionMap() = default;
 
-    void add(int id, const std::string& name);
+    void add(uint8_t id, const std::string& name);
+
+    [[nodiscard]] uint8_t findByName(const std::string& name) const;
+    [[nodiscard]] std::string findById(uint8_t id) const;
 
 private:
-    std::unordered_map<int, std::string> mMapIdToName;
-    std::unordered_map<std::string, int> mMapNameToId;
+    struct Entry {
+        Entry(uint8_t id, const std::string& name)
+            : id(id), name(name) {}
+
+        const uint8_t id;
+        const std::string name;
+    };
+
+    std::vector<Entry> mEntryList;
 };
 
 }
