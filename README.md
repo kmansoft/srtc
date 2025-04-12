@@ -9,10 +9,11 @@ Features:
 - Conservative means it uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI.
 - Only one worker thread per PeerConnection.
 - Supports H264 (arbitrary profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
+- Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension.
 - SDP offer generation and SDP response parsing.
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
-- Supports Linux including Android but might work on MacOS too (not tested).
+- Supports Linux including Android (MacOS needs an event loop based on kevent).
 - Android demo has been tested with Pion and Amazon IVS (Interactive Video Service).
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 
@@ -37,13 +38,19 @@ via the state callback.
 
 Once connected, you can start sending audio and video samples using these methods:
 
-- setVideoCodecSpecificData
-- publishVideoFrame
+- setVideoSingleCodecSpecificData
+- publishSingleVideoFrame
 - publishAudioFrame
 
 The peer connection will maintain connectivity using STUN probe requests if no media is flowing and will attempt to
 re-establish connectivity if there is no data received from the server. If the re-connection fails,
 so will the connection's state.
+
+For simulcast, the methods are similar but different:
+
+- Configure your layers when generating the offer
+- setVideoSimulcastCodecSpecificData
+- publishVideoSimulcastFrame
 
 ### A detailed sample
 
@@ -51,8 +58,7 @@ There is an Android demo:
 
 https://github.com/kmansoft/srtc-android-demo
 
-Note that the code in this library is not Android specific, it cleanly builds  against Linux headers and I expect
-it should compile and work on MacOS too but that's not been tested as I don't own a Mac.
+Note that the code in this library is not Android specific, it cleanly builds  against Linux headers.
 
 Android was chosen for the demo because it's an easy way to capture video and audio and encode them to
 H264 and Opus. Sorry I'm not familiar with how to capture and encode media on desktop Linux.
@@ -63,19 +69,15 @@ For the interface between Android code and the srtc library, please see `jni_pee
 
 I work for [Amazon IVS (Interactive Video Service)](https://ivs.rocks/).
 
-This library, srtc, is my side project.
+This library is my side project.
 
 ### Future plans
 
 First, I'd like to replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly. This is done.
 
-Second, I'd lke to implement support for Simulcast (multiple video qualities on the same peer connection). There is a
-problem with this though - since I work for IVS, I know how IVS handles Simulcast but this information is not public,
-so I can't use this knowledge or publish public code based on that. If you know of a WebRTC server which  I can use
-instead, please let me know.
+Second, I'd lke to implement support for Simulcast (multiple video layers on the same peer connection). This is done.
 
-Third, Google's congestion control / bandwidth measurement extensions may be useful. Extensions in general are currently
-parsed from the SDP but are not implemented at the RTP level (not that it's difficult).
+Third, Google's congestion control / bandwidth measurement extensions may be useful.
 
 Fourth, support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
