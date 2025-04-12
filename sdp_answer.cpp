@@ -152,7 +152,7 @@ struct ParseMediaState {
     size_t payloadStateSize = { 0u };
     std::unique_ptr<ParsePayloadState[]> payloadStateList;
 
-    void addSimulcastLayer(const std::vector<srtc::PubVideoSimulcastLayer>& offerLayerList,
+    void addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList,
                            const std::string& ridName);
     void setPayloadList(const std::vector<uint8_t>& list);
     [[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
@@ -162,7 +162,7 @@ struct ParseMediaState {
     [[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(const std::shared_ptr<srtc::Track>& singleTrack) const;
 };
 
-void ParseMediaState::addSimulcastLayer(const std::vector<srtc::PubVideoSimulcastLayer>& offerLayerList,
+void ParseMediaState::addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList,
                                         const std::string& ridName)
 {
     for (size_t i = 0; i < offerLayerList.size(); i += 1) {
@@ -170,9 +170,9 @@ void ParseMediaState::addSimulcastLayer(const std::vector<srtc::PubVideoSimulcas
         if (layer.name == ridName) {
             layerList.push_back(srtc::Track::SimulcastLayer{
                 ridName,
-                static_cast<uint16_t>(i),
                 layer.width, layer.height,
-                layer.framesPerSecond, layer.kilobitPerSecond
+                layer.framesPerSecond, layer.kilobitPerSecond,
+                static_cast<uint16_t>(i),
             });
             break;
         }

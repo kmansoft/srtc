@@ -2,6 +2,7 @@
 
 #include "srtc/srtc.h"
 #include "srtc/optional.h"
+#include "srtc/simulcast_layer.h"
 
 #include <memory>
 #include <string>
@@ -13,13 +14,8 @@ class RtpPacketSource;
 
 class Track {
 public:
-    struct SimulcastLayer {
-        std::string ridName;
-        uint16_t ridIndex;  // [0..3]
-        uint16_t width;
-        uint16_t height;
-        uint16_t framesPerSecond;
-        uint32_t kilobitPerSecond;
+    struct SimulcastLayer : public srtc::SimulcastLayer {
+        uint16_t index;  // [0..3]
     };
 
     Track(int trackId,

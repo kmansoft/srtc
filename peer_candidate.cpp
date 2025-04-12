@@ -193,6 +193,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mUniqueId(++gNextUniqueId)
     , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
     , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
+    , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
     , mScheduler(scheduler)
 {
     assert(mListener);
@@ -276,7 +277,14 @@ void PeerCandidate::process()
                         builder.addStringValue(id, item.track->getMediaId());
                     }
                     if (const auto id = mVideoExtStreamId; id != 0) {
-                        builder.addStringValue(id, layer.ridName);
+                        builder.addStringValue(id, layer.name);
+                    }
+                    if (const auto id = mVideoExtGoogleVLA; id != 0) {
+                        std::vector<SimulcastLayer> layerList;
+                        for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
+                            layerList.push_back(trackItem->getSimulcastLayer());
+                        }
+                        builder.addGoogleVLA(id, layer.index, layerList);
                     }
 
                     extension = builder.build();

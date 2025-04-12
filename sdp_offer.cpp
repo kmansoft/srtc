@@ -234,7 +234,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     return { ss.str(), Error::OK };
 }
 
-srtc::optional<std::vector<PubVideoSimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
+srtc::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
 {
     if (mVideoConfig.has_value()) {
         return mVideoConfig->simulcastLayerList;

@@ -78,6 +78,7 @@ private:
     const uint32_t mUniqueId;
     const uint8_t mVideoExtMediaId;
     const uint8_t mVideoExtStreamId;
+    const uint8_t mVideoExtGoogleVLA;
 
     std::shared_ptr<SrtpConnection> mSrtp;
 
