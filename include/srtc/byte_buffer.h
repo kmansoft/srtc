@@ -64,6 +64,7 @@ public:
     void writeU32(uint32_t value);
     void writeU48(uint64_t value);
     void writeU64(uint64_t value);
+    void writeLEB128(uint32_t value);
 
 private:
     ByteBuffer& mBuf;

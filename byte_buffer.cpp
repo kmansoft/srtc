@@ -243,6 +243,22 @@ void ByteWriter::writeU64(uint64_t value)
     mBuf.append(buf, sizeof(buf));
 }
 
+void ByteWriter::writeLEB128(uint32_t value)
+{
+    auto remaining = value;
+    while (true) {
+        const auto sevenBits = remaining & 0x7F;
+        remaining >>= 7;
+
+        if (remaining == 0) {
+            writeU8(sevenBits);
+            break;
+        } else {
+            writeU8(0x80 | sevenBits);
+        }
+    }
+}
+
 // ByteReader
 
 ByteReader::ByteReader(const ByteBuffer& buf)

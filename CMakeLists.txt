@@ -178,6 +178,7 @@ set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 add_executable(
         srtc_test
         EXCLUDE_FROM_ALL
+        test_google_vla.cpp
         test_replay_protection.cpp
         test_srtp_key_derivation.cpp
         test_srtp_crypto.cpp

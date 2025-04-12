@@ -14,10 +14,11 @@
 
 #include "stunmessage.h"
 
+#include <unistd.h>
 #include <cassert>
 #include <ctime>
 #include <chrono>
-#include <unistd.h>
+#include <algorithm>
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
