@@ -344,7 +344,9 @@ void PeerCandidate::process()
         LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
 
         const auto cert = mOffer->getCertificate();
-        mDtlsCtx = SSL_CTX_new(DTLS_client_method());
+        mDtlsCtx = SSL_CTX_new(
+                mAnswer->isSetupActive() ?
+                DTLS_server_method() : DTLS_client_method());
 
         SSL_CTX_use_certificate(mDtlsCtx, cert->getCertificate());
         SSL_CTX_use_PrivateKey(mDtlsCtx, cert->getPrivateKey());
