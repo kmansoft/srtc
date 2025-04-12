@@ -29,6 +29,7 @@ Track::Track(int trackId,
     , mProfileLevelId(profileLevelId)
     , mPacketSource(std::make_shared<RtpPacketSource>(mSSRC, mPayloadId))
     , mRtxPacketSource(std::make_shared<RtpPacketSource>(mRtxSSRC, mRtxPayloadId))
+    , mSentPacketCount(0)
 {
 }
 
@@ -105,6 +106,16 @@ std::shared_ptr<RtpPacketSource> Track::getPacketSource() const
 std::shared_ptr<RtpPacketSource> Track::getRtxPacketSource() const
 {
     return mRtxPacketSource;
+}
+
+size_t Track::getSentPacketCount() const
+{
+    return mSentPacketCount;
+}
+
+void Track::incrementSentPacketCount(size_t increment)
+{
+    mSentPacketCount += increment;
 }
 
 }

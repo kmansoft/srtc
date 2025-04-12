@@ -9,6 +9,8 @@ PacketizerOpus::PacketizerOpus() = default;
 PacketizerOpus::~PacketizerOpus() = default;
 
 std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared_ptr<Track>& track,
+                                                               [[maybe_unused]] const RtpExtension& extension,
+                                                               [[maybe_unused]] bool addExtensionToAllPackets,
                                                                const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;

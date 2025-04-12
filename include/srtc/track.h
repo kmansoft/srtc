@@ -51,6 +51,9 @@ public:
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getPacketSource() const;
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtxPacketSource() const;
 
+    [[nodiscard]] size_t getSentPacketCount() const;
+    void incrementSentPacketCount(size_t increment);
+
 private:
     const int mTrackId;
     const MediaType mMediaType;
@@ -66,6 +69,7 @@ private:
     const int mProfileLevelId;
     const std::shared_ptr<RtpPacketSource> mPacketSource;
     const std::shared_ptr<RtpPacketSource> mRtxPacketSource;
+    std::atomic<size_t> mSentPacketCount;
 };
 
 }

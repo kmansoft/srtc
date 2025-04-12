@@ -11,6 +11,8 @@
 #include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 #include "srtc/srtp_openssl.h"
+#include "srtc/rtp_std_extensions.h"
+#include "srtc/rtp_extension_builder.h"
 
 #include <cstring>
 #include <cassert>
@@ -251,7 +253,34 @@ void PeerCandidate::process()
             item.packetizer->setCodecSpecificData(item.csd);
         } else if (!item.buf.empty()) {
             // Frame data
-            const auto packetList = item.packetizer->generate(item.track, item.buf);
+            RtpExtension extension;
+            bool addExtensionToAllPackets = false;
+
+            if (item.track->isSimulcast()) {
+                addExtensionToAllPackets = item.track->getSentPacketCount() < 100;
+                if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
+                    const auto &layer = item.track->getSimulcastLayer();
+
+                    RtpExtensionBuilder builder;
+
+                    const auto extensionMap = mAnswer->getVideoExtensionMap();
+                    if (const auto id = extensionMap.findByName(RtpStandardExtensions::kExtSdesMid); id != 0) {
+                        builder.addStringValue(id, item.track->getMediaId());
+                    }
+                    if (const auto id = extensionMap.findByName(RtpStandardExtensions::kExtSdesRtpStreamId); id != 0) {
+                        builder.addStringValue(id, layer.ridName);
+                    }
+
+                    extension = builder.build();
+                }
+            }
+
+            const auto packetList = item.packetizer->generate(item.track,
+                                                              extension, addExtensionToAllPackets,
+                                                              item.buf);
+
+            item.track->incrementSentPacketCount(packetList.size());
+
             for (const auto& packet : packetList) {
                 // Save
                 if (item.track->hasNack() || item.track->getRtxPayloadId() > 0) {
