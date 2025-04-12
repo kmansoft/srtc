@@ -51,6 +51,11 @@ public:
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
 
+    Error setVideoSimulcastCodecSpecificData(const std::string& layerName,
+                                             std::vector<ByteBuffer>& list);
+    Error publishVideoSimulcastFrame(const std::string& layerName,
+                                     ByteBuffer&& buf);
+
     Error publishAudioFrame(ByteBuffer&& buf);
 
 private:

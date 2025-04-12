@@ -225,6 +225,74 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
     return Error::OK;
 }
 
+Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName,
+                                                         std::vector<ByteBuffer>& list)
+{
+    std::lock_guard lock(mMutex);
+
+    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(),
+                                   [&layerName](const auto& layer) {
+       return layer.ridName == layerName;
+    });
+    if (iter == mVideoSimulcastLayerList.end()) {
+        return { Error::Code::InvalidData, "There is no video layer named " + layerName };
+    }
+
+    const auto& layer = *iter;
+    if (layer.track == nullptr) {
+        return { Error::Code::InvalidData, "There is no video track" };
+    }
+    if (layer.packetizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no video packetizer" };
+    }
+
+    mFrameSendQueue.push_back({
+                                      layer.track,
+                                      layer.packetizer,
+                                      { },
+                                      std::move(list)
+                              });
+    eventfd_write(mEventHandle, 1);
+
+    return Error::OK;
+
+}
+
+Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName,
+                                                 ByteBuffer&& buf)
+{
+    std::lock_guard lock(mMutex);
+
+    if (mConnectionState != ConnectionState::Connected) {
+        return Error::OK;
+    }
+
+    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(),
+                                   [&layerName](const auto& layer) {
+                                       return layer.ridName == layerName;
+                                   });
+    if (iter == mVideoSimulcastLayerList.end()) {
+        return { Error::Code::InvalidData, "There is no video layer named " + layerName };
+    }
+
+    const auto& layer = *iter;
+    if (layer.track == nullptr) {
+        return { Error::Code::InvalidData, "There is no video track" };
+    }
+    if (layer.packetizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no video packetizer" };
+    }
+
+    mFrameSendQueue.push_back({
+                                      layer.track,
+                                      layer.packetizer,
+                                      std::move(buf)
+                              });
+    eventfd_write(mEventHandle, 1);
+
+    return Error::OK;
+}
+
 Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 {
     std::lock_guard lock(mMutex);

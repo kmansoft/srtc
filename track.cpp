@@ -62,6 +62,11 @@ Codec Track::getCodec() const
     return mCodec;
 }
 
+bool Track::isSimulcast() const
+{
+    return mSimulcastLayer.has_value();
+}
+
 const Track::SimulcastLayer& Track::getSimulcastLayer() const
 {
     return mSimulcastLayer.value();
