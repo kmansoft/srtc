@@ -35,6 +35,7 @@ public:
     ~RtpPacket();
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
+    [[nodiscard]] RtpExtension getExtension() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint32_t getRollover() const;
     [[nodiscard]] uint16_t getSequence() const;
@@ -46,7 +47,7 @@ public:
     };
 
     [[nodiscard]] Output generate() const;
-    [[nodiscard]] Output generateRtx() const;
+    [[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
 private:
     const std::shared_ptr<Track> mTrack;
@@ -59,7 +60,8 @@ private:
     const RtpExtension mExtension;
     const ByteBuffer mPayload;
 
-    void writeExtension(ByteWriter& writer) const;
+    void writeExtension(ByteWriter& writer,
+                        const RtpExtension& extension) const;
     void writePayload(ByteWriter& writer) const;
 };
 

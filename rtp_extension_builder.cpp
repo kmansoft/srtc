@@ -57,4 +57,34 @@ RtpExtension RtpExtensionBuilder::build()
     return { 0x1000, std::move(mBuf) };
 }
 
+RtpExtensionBuilder RtpExtensionBuilder::from(const RtpExtension& extension)
+{
+    if (extension.empty()) {
+        return {};
+    }
+
+    return RtpExtensionBuilder{ extension.getData() };
+}
+
+bool RtpExtensionBuilder::contains(uint8_t id) const
+{
+    ByteReader reader(mBuf);
+    while (reader.remaining() > 2) {
+        const auto extensionId = reader.readU8();
+        if (extensionId == id) {
+            return true;
+        }
+        const auto extensionLen = reader.readU8();
+        reader.skip(extensionLen);
+    }
+
+    return false;
+}
+
+RtpExtensionBuilder::RtpExtensionBuilder(const ByteBuffer& buf)
+    : mBuf(buf.copy())
+    , mWriter(mBuf)
+{
+}
+
 }

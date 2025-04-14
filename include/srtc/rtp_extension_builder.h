@@ -21,9 +21,15 @@ public:
 
     [[nodiscard]] RtpExtension build();
 
+    [[nodiscard]] static RtpExtensionBuilder from(const RtpExtension& extension);
+
+    [[nodiscard]] bool contains(uint8_t id) const;
+
 private:
     ByteBuffer mBuf;
     ByteWriter mWriter;
+
+    explicit RtpExtensionBuilder(const ByteBuffer& buf);
 };
 
 }

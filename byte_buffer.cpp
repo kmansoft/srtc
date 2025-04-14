@@ -321,4 +321,9 @@ uint32_t ByteReader::readU32()
     return res;
 }
 
+void ByteReader::skip(size_t size)
+{
+    mPos += size;
+}
+
 }

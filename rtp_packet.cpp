@@ -50,6 +50,11 @@ std::shared_ptr<Track> RtpPacket::getTrack() const
     return mTrack;
 }
 
+RtpExtension RtpPacket::getExtension() const
+{
+    return mExtension.copy();
+}
+
 uint8_t RtpPacket::getPayloadId() const
 {
     return mPayloadId;
@@ -73,9 +78,9 @@ RtpPacket::Output RtpPacket::generate() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = !mExtension.empty();
+    const auto ext = !mExtension.empty();
     const uint16_t header = (2 << 14)
-            | (extension ? (1 << 12) : 0)
+            | (ext ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
             | (mPayloadId & 0x7F);
     writer.writeU16(header);
@@ -85,7 +90,7 @@ RtpPacket::Output RtpPacket::generate() const
     writer.writeU32(mSSRC);
 
     // Extension
-    writeExtension(writer);
+    writeExtension(writer, mExtension);
 
     // Payload
     writePayload(writer);
@@ -98,7 +103,7 @@ uint32_t RtpPacket::getSSRC() const
     return mSSRC;
 }
 
-RtpPacket::Output RtpPacket::generateRtx() const
+RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 {
     const auto rtxPayloadId = mTrack->getRtxPayloadId();
     assert(rtxPayloadId > 0);
@@ -109,9 +114,9 @@ RtpPacket::Output RtpPacket::generateRtx() const
     ByteWriter writer(buf);
 
     // V=2 | P | X | CC | M | PT
-    const auto extension = !mExtension.empty();
+    const auto ext = !extension.empty();
     const uint16_t header = (2 << 14)
-            | (extension ? (1 << 12) : 0)
+            | (ext ? (1 << 12) : 0)
             | (mMarker ? (1 << 7) : 0)
             | (rtxPayloadId & 0x7F);
     writer.writeU16(header);
@@ -126,7 +131,7 @@ RtpPacket::Output RtpPacket::generateRtx() const
     writer.writeU16(mSequence);
 
     // Extension
-    writeExtension(writer);
+    writeExtension(writer, extension);
 
     // Payload
     writePayload(writer);
@@ -134,16 +139,16 @@ RtpPacket::Output RtpPacket::generateRtx() const
     return { rtxRollover, std::move(buf) };
 }
 
-void RtpPacket::writeExtension(ByteWriter& writer) const
+void RtpPacket::writeExtension(ByteWriter& writer, const RtpExtension& extension) const
 {
-    if (mExtension.empty()) {
+    if (extension.empty()) {
         return;
     }
 
     // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
-    writer.writeU16(mExtension.getId());
+    writer.writeU16(extension.getId());
 
-    const auto& extensionData = mExtension.getData();
+    const auto& extensionData = extension.getData();
     const auto extensionSize = extensionData.size();
     writer.writeU16((extensionSize + 3) / 4);
 

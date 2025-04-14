@@ -193,6 +193,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mUniqueId(++gNextUniqueId)
     , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
     , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
+    , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
     , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
     , mScheduler(scheduler)
 {
@@ -621,9 +622,29 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                             const auto packet = mSendHistory->find(rtcpSSRC_1, seq);
                             if (packet && mSrtp) {
                                 // Generate
+                                const auto track = packet->getTrack();
+
                                 RtpPacket::Output packetData;
-                                if (packet->getTrack()->getRtxPayloadId() > 0) {
-                                    packetData = packet->generateRtx();
+                                if (track->getRtxPayloadId() > 0) {
+                                    auto extension = packet->getExtension();
+
+                                    if (track->isSimulcast()) {
+                                        auto builder = RtpExtensionBuilder::from(extension);
+
+                                        if (const auto id = mVideoExtMediaId; id != 0) {
+                                            if (!builder.contains(id)) {
+                                                builder.addStringValue(id, track->getMediaId());
+                                            }
+                                        }
+                                        if (const auto id = mVideoExtRepairedStreamId; id != 0) {
+                                            const auto& layer = track->getSimulcastLayer();
+                                            builder.addStringValue(id, layer.name);
+                                        }
+
+                                        extension = builder.build();
+                                    }
+
+                                    packetData = packet->generateRtx(extension);
                                 } else {
                                     packetData = packet->generate();
                                 }

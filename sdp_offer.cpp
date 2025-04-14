@@ -81,7 +81,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-// #define ENABLE_RTX
+#define ENABLE_RTX
 
     // Video
     if (mVideoConfig.has_value()) {
@@ -154,6 +154,9 @@ std::pair<std::string, Error> SdpOffer::generate()
 
             ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
             ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
+#ifdef ENABLE_RTX
+            ss << "a=extmap:3 " << RtpStandardExtensions::kExtSdesRtpRepairedStreamId << std::endl;
+#endif
             ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
 
             for (const auto& layer : layerList) {

@@ -84,6 +84,8 @@ public:
     [[nodiscard]] uint16_t readU16();
     [[nodiscard]] uint32_t readU32();
 
+    void skip(size_t size);
+
 private:
     const uint8_t* mBuf;
     size_t mLen;
