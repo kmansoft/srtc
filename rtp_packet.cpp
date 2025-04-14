@@ -5,6 +5,35 @@
 #include <cassert>
 #include <utility>
 
+namespace {
+
+void writeExtension(srtc::ByteWriter& writer, const srtc::RtpExtension& extension)
+{
+    if (extension.empty()) {
+        return;
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
+    writer.writeU16(extension.getId());
+
+    const auto& extensionData = extension.getData();
+    const auto extensionSize = extensionData.size();
+    writer.writeU16((extensionSize + 3) / 4);
+
+    writer.write(extensionData);
+
+    for (size_t padding = extensionSize; padding % 4 != 0; padding += 1) {
+        writer.writeU8(0);
+    }
+}
+
+void writePayload(srtc::ByteWriter& writer, const srtc::ByteBuffer& payload)
+{
+    writer.write(payload);
+}
+
+}
+
 namespace srtc {
 
 RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
@@ -93,7 +122,7 @@ RtpPacket::Output RtpPacket::generate() const
     writeExtension(writer, mExtension);
 
     // Payload
-    writePayload(writer);
+    writePayload(writer, mPayload);
 
     return { mRollover, std::move(buf) };
 }
@@ -134,34 +163,10 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
     writer.writeU16(mSequence);
 
     // Payload
-    writePayload(writer);
+    writePayload(writer, mPayload);
 
     return { rtxRollover, std::move(buf) };
 }
 
-void RtpPacket::writeExtension(ByteWriter& writer, const RtpExtension& extension) const
-{
-    if (extension.empty()) {
-        return;
-    }
-
-    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.3.1
-    writer.writeU16(extension.getId());
-
-    const auto& extensionData = extension.getData();
-    const auto extensionSize = extensionData.size();
-    writer.writeU16((extensionSize + 3) / 4);
-
-    writer.write(extensionData);
-
-    for (size_t padding = extensionSize; padding % 4 != 0; padding += 1) {
-        writer.writeU8(0);
-    }
-}
-
-void RtpPacket::writePayload(ByteWriter& writer) const
-{
-    writer.write(mPayload);
-}
 
 }

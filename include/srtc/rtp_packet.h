@@ -59,10 +59,6 @@ private:
     const uint32_t mTimestamp;
     const RtpExtension mExtension;
     const ByteBuffer mPayload;
-
-    void writeExtension(ByteWriter& writer,
-                        const RtpExtension& extension) const;
-    void writePayload(ByteWriter& writer) const;
 };
 
 }
