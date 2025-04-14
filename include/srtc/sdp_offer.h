@@ -59,6 +59,8 @@ public:
     [[nodiscard]] uint32_t getAudioSSRC() const;
     [[nodiscard]] uint32_t getRtxAudioSSRC() const;
 
+    [[nodiscard]] std::pair<uint32_t, uint32_t> getVideoSimulastSSRC(const std::string& name) const;
+
 private:
     std::string generateRandomUUID();
     std::string generateRandomString(size_t len);
@@ -83,6 +85,13 @@ private:
     const std::string mIcePassword;
 
     const std::shared_ptr<X509Certificate> mCert;
+
+    struct LayerSSRC {
+        std::string name;
+        uint32_t ssrc;
+        uint32_t rtx;
+    };
+    std::vector<LayerSSRC> mLayerSSRC;
 };
 
 }

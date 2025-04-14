@@ -81,7 +81,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-#define ENABLE_RTX
+// #define ENABLE_RTX
 
     // Video
     if (mVideoConfig.has_value()) {
@@ -132,11 +132,6 @@ std::pair<std::string, Error> SdpOffer::generate()
 #endif
         }
 
-#ifdef ENABLE_RTX
-        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-        ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
-#endif
-
         const auto& layerList = mVideoConfig->simulcastLayerList;
         if (layerList.empty()) {
             // No simulcast
@@ -146,12 +141,12 @@ std::pair<std::string, Error> SdpOffer::generate()
 #ifdef ENABLE_RTX
             ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+
+            // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+            ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
 #endif
         } else {
             // Simulcast
-            ss << "a=cname:" << mConfig.cname << std::endl;
-            ss << "a=msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
-
             ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
             ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
 #ifdef ENABLE_RTX
@@ -173,6 +168,24 @@ std::pair<std::string, Error> SdpOffer::generate()
                 ss << layerList[i].name;
             }
             ss << std::endl;
+
+            for (const auto& layer : layerList) {
+                const auto videoSSRC = 1 + mRandomGenerator.next();
+                const auto videoRtxSSRC = 1 + mRandomGenerator.next();
+
+                mLayerSSRC.push_back({layer.name, videoSSRC, videoRtxSSRC});
+
+                ss << "a=ssrc:" << videoSSRC << " cname:" << mConfig.cname << std::endl;
+                ss << "a=ssrc:" << videoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+
+#ifdef ENABLE_RTX
+
+                ss << "a=ssrc:" << videoRtxSSRC << " cname:" << mConfig.cname << std::endl;
+                ss << "a=ssrc:" << videoRtxSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+
+                ss << "a=ssrc-group:FID " << videoSSRC << " " << videoRtxSSRC << std::endl;
+#endif
+            }
         }
     }
 
@@ -279,6 +292,17 @@ uint32_t SdpOffer::getAudioSSRC() const
 uint32_t SdpOffer::getRtxAudioSSRC() const
 {
     return mRtxAudioSSRC;
+}
+
+std::pair<uint32_t, uint32_t> SdpOffer::getVideoSimulastSSRC(const std::string& name) const
+{
+    for (const auto& item : mLayerSSRC) {
+        if (item.name == name) {
+            return std::make_pair(item.ssrc, item.rtx);
+        }
+    }
+
+    return {};
 }
 
 std::string SdpOffer::generateRandomUUID()

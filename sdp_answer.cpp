@@ -159,7 +159,8 @@ struct ParseMediaState {
     [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(uint32_t ssrc,
                                                            uint32_t rtxSsrc,
                                                            const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const;
-    [[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(const std::shared_ptr<srtc::Track>& singleTrack) const;
+    [[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(const std::shared_ptr<srtc::SdpOffer>& offer,
+                                                                                   const std::shared_ptr<srtc::Track>& singleTrack) const;
 };
 
 void ParseMediaState::addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList,
@@ -234,19 +235,19 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
     return selected;
 }
 
-std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackList(const std::shared_ptr<srtc::Track>& singleTrack) const
+std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackList(const std::shared_ptr<srtc::SdpOffer>& offer,
+                                                                                  const std::shared_ptr<srtc::Track>& singleTrack) const
 {
-    srtc::RandomGenerator<uint32_t> random(0, 0x7ffffffe);
-
     std::vector<std::shared_ptr<srtc::Track>> result;
 
     for (const auto& layer : layerList) {
+        const auto ssrc = offer->getVideoSimulastSSRC(layer.name);
         const auto track = std::make_shared<srtc::Track>(id,
                                                          mediaType,
                                                          mediaId,
-                                                         random.next(),
+                                                         ssrc.first,
                                                          singleTrack->getPayloadId(),
-                                                         random.next(),
+                                                         ssrc.second,
                                                          singleTrack->getRtxPayloadId(),
                                                          singleTrack->getCodec(),
                                                          layer,
@@ -502,7 +503,7 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
 
     std::vector<std::shared_ptr<Track>> videoSimulcastTrackList;
     if (!mediaStateVideo.layerList.empty()) {
-        videoSimulcastTrackList = mediaStateVideo.makeSimulcastTrackList(videoSingleTrack);
+        videoSimulcastTrackList = mediaStateVideo.makeSimulcastTrackList(offer, videoSingleTrack);
         videoSingleTrack.reset();
     }
 
