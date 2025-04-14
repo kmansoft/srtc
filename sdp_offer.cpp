@@ -233,17 +233,15 @@ std::pair<std::string, Error> SdpOffer::generate()
 #endif
         }
 
-#ifdef ENABLE_RTX
-        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-        ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
-#endif
-
         ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
 
 #ifdef ENABLE_RTX
         ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
+
+        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+        ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
 #endif
     }
 

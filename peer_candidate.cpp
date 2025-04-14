@@ -629,6 +629,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                     auto extension = packet->getExtension();
 
                                     if (track->isSimulcast()) {
+                                        const auto& layer = track->getSimulcastLayer();
                                         auto builder = RtpExtensionBuilder::from(extension);
 
                                         if (const auto id = mVideoExtMediaId; id != 0) {
@@ -637,7 +638,6 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                             }
                                         }
                                         if (const auto id = mVideoExtRepairedStreamId; id != 0) {
-                                            const auto& layer = track->getSimulcastLayer();
                                             builder.addStringValue(id, layer.name);
                                         }
 
