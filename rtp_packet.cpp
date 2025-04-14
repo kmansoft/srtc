@@ -127,11 +127,11 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
     writer.writeU32(mTimestamp);
     writer.writeU32(mTrack->getRtxSSRC());
 
-    // The original sequence
-    writer.writeU16(mSequence);
-
     // Extension
     writeExtension(writer, extension);
+
+    // The original sequence
+    writer.writeU16(mSequence);
 
     // Payload
     writePayload(writer);

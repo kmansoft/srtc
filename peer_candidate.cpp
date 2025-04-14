@@ -656,6 +656,8 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                     LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
                                         packet->getSSRC(), packet->getSequence(), sentSize,
                                         packet->getTrack()->getRtxPayloadId() > 0);
+                                } else {
+                                    LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
                                 }
                             } else {
                                 LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);

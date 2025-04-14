@@ -81,7 +81,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-// #define ENABLE_RTX
+#define ENABLE_RTX
 
     // Video
     if (mVideoConfig.has_value()) {
