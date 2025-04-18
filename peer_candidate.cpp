@@ -381,6 +381,7 @@ void PeerCandidate::process()
 
             if (mAnswer->isSetupActive()) {
                 SSL_set_accept_state(mDtlsSsl);
+                SSL_accept(mDtlsSsl);
             } else {
                 SSL_set_connect_state(mDtlsSsl);
                 SSL_do_handshake(mDtlsSsl);
