@@ -202,7 +202,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
                                                           uint32_t rtxSsrc,
                                                           const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const
 {
-    if (id <= 0) {
+    if (id < 0) {
         return nullptr;
     }
 
@@ -263,10 +263,9 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 
 namespace srtc {
 
-Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
-                       const std::string& answer,
-                       const std::shared_ptr<TrackSelector>& selector,
-                       std::shared_ptr<SdpAnswer> &outAnswer)
+std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
+                                                              const std::string& answer,
+                                                              const std::shared_ptr<TrackSelector>& selector)
 {
     std::stringstream ss(answer);
 
@@ -450,7 +449,7 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
             } else if (tag == "m") {
                 // "m=video 9 UDP/TLS/RTP/SAVPF 96 97 98"
                 if (props.size() < 2 || props[1] != "UDP/TLS/RTP/SAVPF") {
-                    return Error { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" };
+                    return { {}, { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" }};
                 }
 
                 if (key == "video") {
@@ -462,7 +461,7 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
                 }
 
                 if (mediaStateCurr) {
-                    if (const auto id = parse_int(props[0]); id > 0) {
+                    if (const auto id = parse_int(props[0]); id >= 0) {
                         mediaStateCurr->id = id;
                     }
 
@@ -480,14 +479,14 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
     }
 
     if (!isRtcpMux) {
-        return { Error::Code::InvalidData, "The rtcp-mux extension is required" };
+        return {{}, { Error::Code::InvalidData, "The rtcp-mux extension is required" }};
     }
     if (hostList.empty()) {
-        return { Error::Code::InvalidData, "No hosts to connect to" };
+        return { {}, { Error::Code::InvalidData, "No hosts to connect to" }};
     }
 
-    if (mediaStateVideo.id <= 0 && mediaStateAudio.id <= 0) {
-        return { Error::Code::InvalidData, "No media tracks" };
+    if (mediaStateVideo.id < 0 && mediaStateAudio.id < 0) {
+        return { {}, { Error::Code::InvalidData, "No media tracks" }};
     }
 
     auto videoSingleTrack = mediaStateVideo.selectTrack(offer->getVideoSSRC(),
@@ -498,7 +497,7 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
                                                         selector);
 
     if (!videoSingleTrack && !audioTrack) {
-        return { Error::Code::InvalidData, "No media tracks" };
+        return { nullptr, { Error::Code::InvalidData, "No media tracks" }};
     }
 
     std::vector<std::shared_ptr<Track>> videoSimulcastTrackList;
@@ -507,14 +506,14 @@ Error SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
         videoSingleTrack.reset();
     }
 
-    outAnswer.reset(new SdpAnswer(
+    std::shared_ptr<SdpAnswer> sdpAnswer (new SdpAnswer(
             iceUFrag, icePassword, hostList,
             videoSingleTrack, videoSimulcastTrackList, audioTrack,
             mediaStateVideo.extensionMap, mediaStateAudio.extensionMap,
             mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive,
             { certHashAlg, certHashBin, certHashHex }));
 
-    return Error::OK;
+    return { sdpAnswer, Error::OK };
 }
 
 SdpAnswer::SdpAnswer(const std::string& iceUFrag,

@@ -26,10 +26,9 @@ public:
                                                                  const std::vector<std::shared_ptr<Track>>& list) const = 0;
     };
 
-    static Error parse(const std::shared_ptr<SdpOffer>& offer,
-                       const std::string& answer,
-                       const std::shared_ptr<TrackSelector>& selector,
-                       std::shared_ptr<SdpAnswer>& outAnswer);
+    static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::shared_ptr<SdpOffer>& offer,
+                                                              const std::string& answer,
+                                                              const std::shared_ptr<TrackSelector>& selector);
 
     ~SdpAnswer();
 

@@ -174,7 +174,7 @@ ExternalProject_Add(
 set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
 set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
 
-# Test executable
+# Google test executable
 
 add_executable(
         srtc_test
@@ -212,4 +212,29 @@ target_link_libraries(
 if(NOT CMAKE_CROSSCOMPILING)
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
+endif()
+
+if(UNIX AND NOT ANDROID)
+    # Command line demo
+
+    add_executable(cmdline_demo
+            EXCLUDE_FROM_ALL
+            cmdline_demo.cpp
+            )
+
+    add_dependencies(cmdline_demo srtc)
+
+    find_package(CURL REQUIRED)
+
+    target_include_directories(cmdline_demo
+            PRIVATE
+            ${CURL_INCLUDE_DIRS}
+            )
+
+    target_link_libraries(
+            cmdline_demo
+            PRIVATE
+            srtc
+            CURL::libcurl
+    )
 endif()

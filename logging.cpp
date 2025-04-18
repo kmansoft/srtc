@@ -6,7 +6,6 @@
 #include <android/log.h>
 #include <cstdarg>
 #else
-#include <string>
 #include <iostream>
 #endif
 
@@ -64,9 +63,8 @@ void log_v(int level,
 
         __android_log_vprint(androidLogLevel, tag, format, ap);
 #else
-        std::string buf;
-        buf.reserve(4096);
-        std::snprintf(buf.data(), buf.capacity(), format, ap);
+        char buf[2048];
+        std::vsnprintf(buf, sizeof(buf), format, ap);
         std::cout << tag << ": " << buf << std::endl;
 #endif
     }

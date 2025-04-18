@@ -424,11 +424,7 @@ ScopedScheduler::~ScopedScheduler()
 {
     std::lock_guard lock(mMutex);
 
-    srtc::log(SRTC_LOG_V, "ScopedScheduler",
-              "Submitted contains %zd items", mSubmitted.size());
-
     for (const auto& iter : mSubmitted) {
-
         if (const auto task = iter->mTask.lock()) {
             task->cancel();
         }
