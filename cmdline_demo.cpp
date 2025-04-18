@@ -1,12 +1,17 @@
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
+#include "srtc/h264.h"
 
 #include <curl/curl.h>
 #include <curl/easy.h>
 
 #include <iostream>
 #include <memory>
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out) {
     const auto total_size = size * nmemb;
@@ -54,6 +59,7 @@ std::string perform_whip(const std::string& offer,
     const auto res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         std::cerr << "Error: curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        exit(1);
     } else {
         long response_code;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
@@ -88,6 +94,93 @@ const char* connectionStateToString(const srtc::PeerConnection::ConnectionState&
     }
 }
 
+srtc::ByteBuffer readInputFile(const std::string& fileName)
+{
+    struct stat statbuf;
+    if (stat(fileName.c_str(), &statbuf) != 0) {
+        std::cout << "*** Cannot stat input file " << fileName << std::endl;
+        exit(1);
+    }
+
+    const auto h = open(fileName.c_str(), O_RDONLY);
+    if (h < 0) {
+        std::cout << "*** Cannot open input file " << fileName << std::endl;
+        exit(1);
+    }
+
+    const auto sz = static_cast<size_t>(statbuf.st_size);
+
+    srtc::ByteBuffer buf(sz);
+    buf.resize(sz);
+
+    if (read(h, buf.data(), sz) != sz) {
+        std::cout << "*** Cannot read input file " << fileName << std::endl;
+        exit(1);
+    }
+
+    close(h);
+
+    return std::move(buf);
+}
+
+void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
+                   const srtc::ByteBuffer& data)
+{
+    std::vector<srtc::ByteBuffer> codecSpecificData;
+
+    bool haveSPS = false, havePPS = false;
+
+    for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
+        const auto naluType = parser.currType();
+        switch (naluType) {
+            case srtc::h264::NaluType::SPS:
+                if (!haveSPS) {
+                    codecSpecificData.emplace_back(parser.currNalu(), parser.currNaluSize());
+                    haveSPS = true;
+                }
+                break;
+            case srtc::h264::NaluType::PPS:
+                if (!havePPS) {
+                    codecSpecificData.emplace_back(parser.currNalu(), parser.currNaluSize());
+                    havePPS = true;
+                }
+                break;
+            default:
+                break;
+        }
+
+        if (haveSPS && havePPS) {
+            std::cout << "*** Found SPS and PPS in the input file" << std::endl;
+            break;
+        }
+    }
+
+    if (!haveSPS || !havePPS) {
+        std::cout << "*** Count not find SPS and PPS in the input file" << std::endl;
+        exit(1);
+    }
+
+    // Set them in the peer connection
+
+    peerConnection->setVideoSingleCodecSpecificData(codecSpecificData);
+
+    // Now iterate other frames
+
+    for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
+        const auto naluType = parser.currType();
+        switch (naluType) {
+            case srtc::h264::NaluType::KeyFrame:
+            case srtc::h264::NaluType::NonKeyFrame:
+                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                usleep(1000 * 40);  // 25 fps
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+static std::string gInputFile = "sintel1m720p.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
 
@@ -96,6 +189,14 @@ int main() {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     using namespace srtc;
+
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    std::cout << "*** Current working directory: " << cwd << std::endl;
+
+    // Read the file
+    const auto inputFileData = readInputFile(gInputFile);
+    std::cout << "*** Read " << inputFileData.size() << " bytes from input video file" << std::endl;
 
     // Offer
 
@@ -150,6 +251,7 @@ int main() {
     peerConnection->setSdpAnswer(answer);
 
     // Wait for connection to either be connected or fail
+
     {
         std::unique_lock lock(connectionStateMutex);
         connectionStateCond.wait_for(lock, std::chrono::seconds(15), [&connectionState]() {
@@ -164,7 +266,13 @@ int main() {
         }
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    // Play the video
+
+    playVideoFile(peerConnection, inputFileData);
+
+    // Wait a little and exit
+
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     return 0;
 }

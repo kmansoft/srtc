@@ -36,6 +36,7 @@ private:
     const size_t mSize;
     size_t mPos;
     size_t mNext;
+    size_t mSkip;
 };
 
 }}
