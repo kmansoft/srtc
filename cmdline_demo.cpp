@@ -120,6 +120,24 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 
     close(h);
 
+    size_t frame_n = 0;
+    for (srtc::h264::NaluParser parser(buf); parser; parser.next()) {
+        const auto naluType = parser.currType();
+        switch (naluType) {
+            case srtc::h264::NaluType::SPS:
+                std::cout << "--- " << frame_n << " SPS" << std::endl;
+                break;
+            case srtc::h264::NaluType::PPS:
+                std::cout << "--- " << frame_n << " PPS" << std::endl;
+                break;
+            case srtc::h264::NaluType::KeyFrame:
+                std::cout << "--- " << frame_n << " KeyFrame" << std::endl;
+            default:
+                break;
+        }
+        frame_n += 1;
+    }
+
     return std::move(buf);
 }
 
@@ -128,47 +146,17 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
 {
     std::vector<srtc::ByteBuffer> codecSpecificData;
 
-    bool haveSPS = false, havePPS = false;
+    // Iterate other frames
 
     for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
         const auto naluType = parser.currType();
         switch (naluType) {
             case srtc::h264::NaluType::SPS:
-                if (!haveSPS) {
-                    codecSpecificData.emplace_back(parser.currNalu(), parser.currNaluSize());
-                    haveSPS = true;
-                }
+                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
                 break;
             case srtc::h264::NaluType::PPS:
-                if (!havePPS) {
-                    codecSpecificData.emplace_back(parser.currNalu(), parser.currNaluSize());
-                    havePPS = true;
-                }
+                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
                 break;
-            default:
-                break;
-        }
-
-        if (haveSPS && havePPS) {
-            std::cout << "*** Found SPS and PPS in the input file" << std::endl;
-            break;
-        }
-    }
-
-    if (!haveSPS || !havePPS) {
-        std::cout << "*** Count not find SPS and PPS in the input file" << std::endl;
-        exit(1);
-    }
-
-    // Set them in the peer connection
-
-    peerConnection->setVideoSingleCodecSpecificData(codecSpecificData);
-
-    // Now iterate other frames
-
-    for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
-        const auto naluType = parser.currType();
-        switch (naluType) {
             case srtc::h264::NaluType::KeyFrame:
             case srtc::h264::NaluType::NonKeyFrame:
                 peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });

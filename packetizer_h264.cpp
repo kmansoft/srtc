@@ -67,7 +67,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
         if (naluType == NaluType::SPS || naluType == NaluType::PPS) {
             // Update codec specific data
-            if (parser.isAtStart()) {
+            if (naluType == NaluType::SPS) {
                 mCSD.clear();
             }
 

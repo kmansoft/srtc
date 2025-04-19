@@ -48,11 +48,11 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
-    Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>& list);
+    Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
 
     Error setVideoSimulcastCodecSpecificData(const std::string& layerName,
-                                             std::vector<ByteBuffer>& list);
+                                             std::vector<ByteBuffer>&& list);
     Error publishVideoSimulcastFrame(const std::string& layerName,
                                      ByteBuffer&& buf);
 

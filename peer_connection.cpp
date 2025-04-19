@@ -179,7 +179,7 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>& list)
+Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
 {
     std::lock_guard lock(mMutex);
 
@@ -191,10 +191,10 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>& l
     }
 
     mFrameSendQueue.push_back({
-                                      mVideoSingleTrack,
-      mVideoSinglePacketizer,
-      { },
-      std::move(list)
+        mVideoSingleTrack,
+        mVideoSinglePacketizer,
+        { },
+        std::move(list)
     });
     eventfd_write(mEventHandle, 1);
 
@@ -227,7 +227,7 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 }
 
 Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName,
-                                                         std::vector<ByteBuffer>& list)
+                                                         std::vector<ByteBuffer>&& list)
 {
     std::lock_guard lock(mMutex);
 
@@ -248,11 +248,11 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
     }
 
     mFrameSendQueue.push_back({
-                                      layer.track,
-                                      layer.packetizer,
-                                      { },
-                                      std::move(list)
-                              });
+        layer.track,
+        layer.packetizer,
+        { },
+        std::move(list)
+    });
     eventfd_write(mEventHandle, 1);
 
     return Error::OK;
