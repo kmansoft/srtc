@@ -56,16 +56,16 @@ For simulcast, the methods are similar but different:
 
 Build the project using CMake.
 
-Open a new terminal window, change directory to `pion-webrtc-examples-whip-whep` and execute `run.sh` - this will run the Pion
-WebRTC server with WHIP on `http://localhost:8080/whip`.
+Open a new terminal window, change directory to `pion-webrtc-examples-whip-whep` and execute `run.sh`. This will run the Pion
+WebRTC server.
 
 Open a new web browser window to `http://localhost:8080`, you will see a web page with controls for publishing and subscribing.
 Don't click anything there just yet.
 
-Now back to the terminal window where you built `srtc` - run `<your-cmake-dir>/cmdline_demo`, making sure the current directory
-is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
+Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/cmdline_demo`, making sure the
+current directory is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
 
-Switch back to the browser and click `Subscribe` - after a second or two (keyframe delay) you should see the video being sent
+Switch back to the browser and click `Subscribe`, after a second or two (keyframe delay) you should see the video being sent
 by `srtc`.
 
 Note: my video sample is garbage, VLC shows it corrupted, and for some reason it's not playing well in Brave Browser. It does play just fine in Firefox.
