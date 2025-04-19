@@ -218,7 +218,6 @@ if(UNIX AND NOT ANDROID)
     # Command line demo
 
     add_executable(cmdline_demo
-            EXCLUDE_FROM_ALL
             cmdline_demo.cpp
             )
 
