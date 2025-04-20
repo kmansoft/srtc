@@ -60,14 +60,13 @@ Open a new terminal window, change directory to `pion-webrtc-examples-whip-whep`
 WebRTC server.
 
 Open a new web browser window to `http://localhost:8080`, you will see a web page with controls for publishing and subscribing.
-Click "Subscribe".
+Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
+over the video area.
 
 Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/cmdline_demo`, making sure the
 current directory is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
 
 Switch back to the browser and click, after a second or two (keyframe delay) you should see the video being sent by `srtc`.
-
-Note: my video sample is garbage, VLC shows it corrupted, and for some reason it's not playing well in Brave Browser. It does play just fine in Firefox. The Android demo plays fine in Brave.
 
 ### An Android demo / sample
 

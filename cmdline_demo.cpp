@@ -168,7 +168,7 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
     }
 }
 
-static std::string gInputFile = "big_buck_bunny.h264";
+static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
 
