@@ -371,8 +371,6 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
         return false;
     }
 
-    const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
-
     const auto packetData = packet.data();
     const auto packetSize = packet.size();
 
@@ -380,10 +378,9 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
     const uint32_t trailer = htonl(seq | kRTCP_EncryptedBit);
 
     // Compute the IV
+    // https://datatracker.ietf.org/doc/html/rfc7714#section-9.1
     CryptoBytes iv;
     CryptoWriter ivw(iv);
-
-    ivw.writeU16(0);
     ivw.writeU16(0);
     ivw.writeU32(ssrc);
     ivw.writeU8(0);
@@ -393,7 +390,7 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
 
     // https://datatracker.ietf.org/doc/html/rfc3711#section-3.1
     const auto trailerSize = kRTCP_TrailerSize;
-    const auto encryptedSize = packetSize + trailerSize + digestSize;
+    const auto encryptedSize = packetSize + kAESGCM_TagSize + trailerSize;
 
     encrypted.reserve(encryptedSize);
     const auto encryptedData = encrypted.data();
@@ -413,6 +410,15 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
         goto fail;
     }
 
+    // AAD
+    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, headerSize)) {
+        goto fail;
+    }
+
+    if (!EVP_EncryptUpdate(ctx, nullptr, &len, reinterpret_cast<const uint8_t*>(&trailer), static_cast<int>(trailerSize))) {
+        goto fail;
+    }
+
     // Encrypt the body
     if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
                            static_cast<int>(packetSize - headerSize))) {
@@ -425,22 +431,21 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
         total_len += len;
     }
 
-    // Trailer
-    std::memcpy(encryptedData + encryptedSize - trailerSize - digestSize, &trailer, trailerSize);
-
-    // Authentication tag, https://datatracker.ietf.org/doc/html/rfc3711#section-4.2
-    if (!mHmacSha1->reset(mSendRtcp.auth.data(), mSendRtcp.auth.size())) {
+    // Get tag
+    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kAESGCM_TagSize, digest)) {
         final_ret = 0;
         goto fail;
     }
-    mHmacSha1->update(encryptedData, packetSize + trailerSize);
-    mHmacSha1->final(digest);
 
-    std::memcpy(encryptedData + encryptedSize - digestSize, digest, digestSize);
+    // Copy it to after the data
+    std::memcpy(encryptedData + encryptedSize - kAESGCM_TagSize - trailerSize, digest, kAESGCM_TagSize);
 
-    fail:
+    // Trailer
+    std::memcpy(encryptedData + encryptedSize - trailerSize, &trailer, trailerSize);
+
+fail:
     if (final_ret > 0) {
-        assert(total_len + headerSize + trailerSize + digestSize == encryptedSize);
+        assert(total_len + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
         encrypted.resize(encryptedSize);
         return true;
     }
