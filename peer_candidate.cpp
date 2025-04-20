@@ -308,7 +308,7 @@ void PeerCandidate::process()
                 const auto packetData = packet->generate();
                 if (mSrtp) {
                     ByteBuffer protectedData;
-                    if (mSrtp->protectOutgoing(packetData.rollover, packetData.buf, protectedData)) {
+                    if (mSrtp->protectOutgoing(packetData.buf, packetData.rollover, protectedData)) {
 #ifdef NDEBUG
                         // And send
                         (void) mSocket->send(protectedData.data(), protectedData.size());
@@ -651,7 +651,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                 }
 
                                 ByteBuffer protectedData;
-                                if (mSrtp->protectOutgoing(packetData.rollover, packetData.buf, protectedData)) {
+                                if (mSrtp->protectOutgoing(packetData.buf, packetData.rollover, protectedData)) {
                                     // And send
                                     const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
                                     LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",

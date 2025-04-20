@@ -124,7 +124,7 @@ RtpPacket::Output RtpPacket::generate() const
     // Payload
     writePayload(writer, mPayload);
 
-    return { mRollover, std::move(buf) };
+    return { std::move(buf), mRollover };
 }
 
 uint32_t RtpPacket::getSSRC() const
@@ -165,7 +165,7 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
     // Payload
     writePayload(writer, mPayload);
 
-    return { rtxRollover, std::move(buf) };
+    return { std::move(buf), rtxRollover };
 }
 
 

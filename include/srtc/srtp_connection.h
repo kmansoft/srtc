@@ -23,8 +23,8 @@ public:
     ~SrtpConnection();
 
     // Returns 0 on error
-    bool protectOutgoing(uint32_t rollover,
-                         const ByteBuffer& packetData,
+    bool protectOutgoing(const ByteBuffer& packetData,
+                         uint32_t rollover,
                          ByteBuffer& output);
 
     // Returns false on error

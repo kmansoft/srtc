@@ -24,10 +24,13 @@ public:
 
     ~SrtpCrypto();
 
-    [[nodiscard]] bool protectSendRtp(uint32_t rolloverCount,
-                                      const ByteBuffer& packet,
+    [[nodiscard]] bool protectSendRtp(const ByteBuffer& packet,
+                                      uint32_t rolloverCount,
                                       ByteBuffer& encrypted);
 
+    [[nodiscard]] bool protectSendRtcp(const ByteBuffer& packet,
+                                       uint32_t seq,
+                                       ByteBuffer& encrypted);
     [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet,
                                             ByteBuffer& plain);
 
@@ -41,16 +44,25 @@ public:
     SrtpCrypto(uint16_t profileId,
                // Send RTP
                const CryptoVectors& sendRtp,
+               // Send RTCP
+               const CryptoVectors& sendRtcp,
                // Receive RTCP
                const CryptoVectors& receiveRtcp);
 
 private:
-    [[nodiscard]] bool protectSendRtpGCM(uint32_t rolloverCount,
-                                         const ByteBuffer& packet,
+    [[nodiscard]] bool protectSendRtpGCM(const ByteBuffer& packet,
+                                         uint32_t rolloverCount,
                                          ByteBuffer& encrypted);
-    [[nodiscard]] bool protectSendRtpCM(uint32_t rolloverCount,
-                                        const ByteBuffer& packet,
+    [[nodiscard]] bool protectSendRtpCM(const ByteBuffer& packet,
+                                        uint32_t rolloverCount,
                                         ByteBuffer& encrypted);
+
+    [[nodiscard]] bool protectSendRtcpGCM(const ByteBuffer& packet,
+                                          uint32_t seq,
+                                          ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendRtcpCM(const ByteBuffer& packet,
+                                         uint32_t seq,
+                                         ByteBuffer& encrypted);
 
     [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet,
                                                ByteBuffer& plain);
@@ -61,6 +73,7 @@ private:
 
     const uint16_t mProfileId;
     const CryptoVectors mSendRtp;
+    const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
 
     struct evp_cipher_ctx_st* mSendCipherCtx;

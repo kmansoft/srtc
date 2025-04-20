@@ -42,8 +42,8 @@ public:
     [[nodiscard]] uint32_t getSSRC() const;
 
     struct Output {
-        uint32_t rollover;
         ByteBuffer buf;
+        uint32_t rollover;
     };
 
     [[nodiscard]] Output generate() const;

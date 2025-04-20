@@ -108,8 +108,8 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection() = default;
 
-bool SrtpConnection::protectOutgoing(uint32_t rollover,
-                                     const ByteBuffer& packetData,
+bool SrtpConnection::protectOutgoing(const ByteBuffer& packetData,
+                                     uint32_t rollover,
                                      ByteBuffer& output)
 {
     if (packetData.size() < 4 + 4 + 4) {
@@ -124,7 +124,7 @@ bool SrtpConnection::protectOutgoing(uint32_t rollover,
 
     const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, 0);
 
-    return mCrypto->protectSendRtp(rollover, packetData, output);
+    return mCrypto->protectSendRtp(packetData, rollover, output);
 }
 
 bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData,
