@@ -3,7 +3,7 @@
 
 namespace {
 
-constexpr auto kMaxHistory = 100;
+constexpr auto kMaxHistory = 512;
 
 }
 
