@@ -478,7 +478,7 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     mHmacSha1->update(encrypedData, digestPtr - encrypedData);
     mHmacSha1->final(digest);
 
-    if (std::memcmp(digest, digestPtr, digestSize) != 0) {
+    if (CRYPTO_memcmp(digest, digestPtr, digestSize) != 0) {
         // Digest validation failed
         return false;
     }
