@@ -21,7 +21,7 @@ class RtpExtension;
 
 class Packetizer {
 public:
-    Packetizer(const std::shared_ptr<Track>& track);
+    explicit Packetizer(const std::shared_ptr<Track>& track);
     virtual ~Packetizer();
 
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
@@ -33,17 +33,9 @@ public:
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const std::shared_ptr<Track>& track);
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
-    [[nodiscard]] uint32_t getNextTimestamp(int clockRateKHz);
 
 private:
     const std::shared_ptr<Track> mTrack;
-
-    RandomGenerator<uint32_t> mRandom;
-    const std::chrono::steady_clock::time_point mClockBaseTime;
-    const uint32_t mClockBaseValue;
-
-    srtc::optional<long long> mLastMillis;
-    uint32_t mLastTimestamp;
 };
 
 }

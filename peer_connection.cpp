@@ -36,9 +36,7 @@ namespace srtc {
 PeerConnection::PeerConnection()
 {
     std::call_once(gInitFlag, [] {
-        struct timespec t = {};
-        clock_gettime(CLOCK_REALTIME, &t);
-        srand48(t.tv_nsec);
+        // Just in case we need something
     });
 }
 

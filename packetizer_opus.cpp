@@ -1,6 +1,7 @@
 #include "srtc/packetizer_opus.h"
 #include "srtc/track.h"
 #include "srtc/rtp_packet_source.h"
+#include "srtc/rtp_time_source.h"
 
 namespace srtc {
 
@@ -20,8 +21,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] 
     // https://datatracker.ietf.org/doc/rfc7587
 
     const auto track = getTrack();
+
+    const auto timeSource = track->getRtpTimeSource();
     const auto packetSource = track->getRtpPacketSource();
-    const auto frameTimestamp = getNextTimestamp(48);
+
+    const auto frameTimestamp = timeSource->getCurrTimestamp();
 
     auto payload = frame.copy();
     if (payload.size() > RtpPacket::kMaxPayloadSize) {

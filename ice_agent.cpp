@@ -19,7 +19,8 @@ const auto kSoftware = "srtc";
 namespace srtc {
 
 IceAgent::IceAgent()
-    : mTie(((uint64_t)lrand48()) << 32 | lrand48())
+    : mRandom(0, std::numeric_limits<int32_t>::max())
+    , mTie(((uint64_t)mRandom.next()) << 32 | mRandom.next())
 {
 }
 

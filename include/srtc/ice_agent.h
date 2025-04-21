@@ -9,6 +9,7 @@
 #include "stunmessage.h"
 
 #include "srtc/optional.h"
+#include "srtc/random_generator.h"
 
 namespace srtc {
 
@@ -51,6 +52,8 @@ private:
         std::chrono::steady_clock::time_point when;
         StunTransactionId id;
     };
+
+    RandomGenerator<uint32_t> mRandom;
 
     const uint64_t mTie;
     std::list<SavedTransaction> mTransactionList;

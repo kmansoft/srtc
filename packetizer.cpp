@@ -7,10 +7,6 @@ namespace srtc {
 
 Packetizer::Packetizer(const std::shared_ptr<Track>& track)
     : mTrack(track)
-    , mRandom(0, 10000)
-    , mClockBaseTime(std::chrono::steady_clock::now())
-    , mClockBaseValue(mRandom.next() % 10000)
-    , mLastTimestamp(0L)
 {
 }
 
@@ -41,20 +37,6 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const s
 std::shared_ptr<Track> Packetizer::getTrack() const
 {
     return mTrack;
-}
-
-uint32_t Packetizer::getNextTimestamp(int clockRateKHz)
-{
-    const auto now = std::chrono::steady_clock::now();
-    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now - mClockBaseTime).count();
-
-    if (mLastMillis.has_value() && mLastMillis.value() == millis) {
-        return ++mLastTimestamp;
-    }
-
-    mLastMillis = millis;
-    mLastTimestamp = static_cast<uint32_t>(millis * clockRateKHz + mClockBaseValue + mRandom.next() % 10);
-    return mLastTimestamp;
 }
 
 }

@@ -4,6 +4,7 @@
 #include "srtc/rtp_packet.h"
 #include "srtc/rtp_packet_source.h"
 #include "srtc/rtp_extension.h"
+#include "srtc/rtp_time_source.h"
 #include "srtc/track.h"
 
 #include <list>
@@ -62,8 +63,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
     // https://datatracker.ietf.org/doc/html/rfc6184
 
     const auto track = getTrack();
+
+    const auto timeSource = track->getRtpTimeSource();
     const auto packetSource = track->getRtpPacketSource();
-    const auto frameTimestamp = getNextTimestamp(90);
+
+    const auto frameTimestamp = timeSource->getCurrTimestamp();
 
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naluType = parser.currType();

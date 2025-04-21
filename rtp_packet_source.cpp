@@ -1,7 +1,6 @@
 #include "srtc/rtp_packet_source.h"
 
 #include <atomic>
-#include <cstdlib>
 
 namespace srtc {
 
@@ -9,9 +8,10 @@ RtpPacketSource::RtpPacketSource(uint32_t ssrc,
                                  uint8_t payloadId)
     : mSSRC(ssrc)
     , mPayloadId(payloadId)
+    , mRandom(0, 30000)
     , mGeneratedCount(0)
     , mRollover(0)
-    , mNextSequence(10000 + static_cast<uint16_t>(lrand48() % 20000))
+    , mNextSequence(mRandom.next())
 {
 }
 

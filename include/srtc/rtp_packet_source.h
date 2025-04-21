@@ -3,6 +3,8 @@
 #include <memory>
 #include <cstdint>
 
+#include "srtc/random_generator.h"
+
 namespace srtc {
 
 class RtpPacketSource {
@@ -19,6 +21,7 @@ public:
 private:
     const uint32_t mSSRC;
     const uint8_t mPayloadId;
+    RandomGenerator<uint32_t> mRandom;
     uint32_t mGeneratedCount;
     uint32_t mRollover;
     uint16_t mNextSequence;
