@@ -345,7 +345,11 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                             if (posSlash != std::string::npos) {
                                 const auto codecString = props[0].substr(0, posSlash);
                                 if (const auto codec = parse_codec(codecString); codec != Codec::None) {
-                                    const auto clockRateString = props[0].substr(posSlash + 1);
+                                    auto clockRateString = props[0].substr(posSlash + 1);
+                                    const auto posSlash2 = clockRateString.find('/');
+                                    if (posSlash2 != std::string::npos) {
+                                        clockRateString.resize(posSlash2);
+                                    }
                                     if (const auto clockRate = parse_int(clockRateString); clockRate >= 10000) {
                                         const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
                                         if (payloadState) {
