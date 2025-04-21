@@ -7,13 +7,12 @@ namespace srtc {
 
 class PacketizerH264 final : public Packetizer {
 public:
-    PacketizerH264();
+    PacketizerH264(const std::shared_ptr<Track>& track);
     ~PacketizerH264() override;
 
     void setCodecSpecificData(const std::vector<ByteBuffer>& csd) override;
     bool isKeyFrame(const ByteBuffer& frame) const override;
-    std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
-                                                   const RtpExtension& extension,
+    std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
                                                    bool addExtensionToAllPackets,
                                                    const ByteBuffer& frame) override;
 

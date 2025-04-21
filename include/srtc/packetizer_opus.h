@@ -7,11 +7,10 @@ namespace srtc {
 
 class PacketizerOpus final : public Packetizer {
 public:
-    PacketizerOpus();
+    PacketizerOpus(const std::shared_ptr<Track>& track);
     ~PacketizerOpus() override;
 
-    std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<Track>& track,
-                                                   const RtpExtension& extension,
+    std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
                                                    bool addExtensionToAllPackets,
                                                    const ByteBuffer& frame) override;
 };

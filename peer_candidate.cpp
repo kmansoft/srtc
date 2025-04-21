@@ -292,8 +292,7 @@ void PeerCandidate::process()
                 }
             }
 
-            const auto packetList = item.packetizer->generate(item.track,
-                                                              extension, addExtensionToAllPackets,
+            const auto packetList = item.packetizer->generate(extension, addExtensionToAllPackets,
                                                               item.buf);
 
             item.track->incrementSentPacketCount(packetList.size());

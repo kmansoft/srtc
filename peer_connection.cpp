@@ -105,7 +105,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
     if (mSdpOffer && mSdpAnswer) {
         // Packetizers
         if (mVideoSingleTrack) {
-            const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack->getCodec());
+            const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);
             if (error.isError()) {
                 return error;
             }
@@ -114,7 +114,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
             for (const auto& track : mVideoSimulcastTrackList) {
                 const auto& simulcastLayer = track->getSimulcastLayer();
 
-                const auto [packetizer, error] = Packetizer::makePacketizer(track->getCodec());
+                const auto [packetizer, error] = Packetizer::makePacketizer(track);
                 if (error.isError()) {
                     return error;
                 }
@@ -124,7 +124,7 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
         }
 
         if (mAudioTrack) {
-            const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack->getCodec());
+            const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack);
             if (error.isError()) {
                 return error;
             }

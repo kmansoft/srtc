@@ -23,7 +23,10 @@ namespace srtc {
 
 using namespace h264;
 
-PacketizerH264::PacketizerH264() = default;
+PacketizerH264::PacketizerH264(const std::shared_ptr<Track>& track)
+    : Packetizer(track)
+{
+}
 
 PacketizerH264::~PacketizerH264() = default;
 
@@ -50,8 +53,7 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<Track>& track,
-                                                               const RtpExtension& extension,
+std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtension& extension,
                                                                bool addExtensionToAllPackets,
                                                                const srtc::ByteBuffer& frame)
 {
@@ -59,7 +61,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
-    const auto packetSource = track->getPacketSource();
+    const auto track = getTrack();
+    const auto packetSource = track->getRtpPacketSource();
     const auto frameTimestamp = getNextTimestamp(90);
 
     for (NaluParser parser(frame); parser; parser.next()) {

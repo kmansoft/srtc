@@ -10,6 +10,7 @@
 
 namespace srtc {
 
+class RtcpPacketSource;
 class RtpPacketSource;
 
 class Track {
@@ -26,6 +27,7 @@ public:
           uint32_t rtxSsrc,
           int rtxPayloadId,
           Codec codec,
+          uint32_t clockRate,
           const srtc::optional<SimulcastLayer>& simulcastLayer,
           bool hasNack,
           bool hasPli,
@@ -37,6 +39,7 @@ public:
     [[nodiscard]] int getPayloadId() const;
     [[nodiscard]] int getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
+    [[nodiscard]] uint32_t getClockRate() const;
     [[nodiscard]] bool isSimulcast() const;
     [[nodiscard]] const SimulcastLayer& getSimulcastLayer() const;
     [[nodiscard]] bool hasNack() const;
@@ -46,7 +49,8 @@ public:
     [[nodiscard]] uint32_t getSSRC() const;
     [[nodiscard]] uint32_t getRtxSSRC() const;
 
-    [[nodiscard]] std::shared_ptr<RtpPacketSource> getPacketSource() const;
+    [[nodiscard]] std::shared_ptr<RtcpPacketSource> getRtcpPacketSource() const;
+    [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtpPacketSource() const;
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtxPacketSource() const;
 
     [[nodiscard]] size_t getSentPacketCount() const;
@@ -61,11 +65,13 @@ private:
     const uint32_t mRtxSSRC;
     const int mRtxPayloadId;
     const Codec mCodec;
+    const uint32_t mClockRate;
     const srtc::optional<SimulcastLayer> mSimulcastLayer;
     const bool mHasNack;
     const bool mHasPli;
     const int mProfileLevelId;
-    const std::shared_ptr<RtpPacketSource> mPacketSource;
+    const std::shared_ptr<RtcpPacketSource> mRtcpPacketSource;
+    const std::shared_ptr<RtpPacketSource> mRtpPacketSource;
     const std::shared_ptr<RtpPacketSource> mRtxPacketSource;
     std::atomic<size_t> mSentPacketCount;
 };

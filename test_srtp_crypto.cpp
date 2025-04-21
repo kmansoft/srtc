@@ -146,6 +146,7 @@ TEST(SrtpCrypto, RtpSend)
                                                          ssrc, 96,
                                                          0, 0,
                                                          srtc::Codec::H264,
+                                                         90000,
                                                          srtc::nullopt,
                                                          false, false);
 
@@ -352,6 +353,7 @@ TEST(SrtpCrypto, RtcpSend)
                                                          ssrc, 96,
                                                          0, 0,
                                                          srtc::Codec::H264,
+                                                         90000,
                                                          srtc::nullopt,
                                                          false, false);
 

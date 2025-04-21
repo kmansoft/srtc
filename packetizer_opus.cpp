@@ -4,12 +4,14 @@
 
 namespace srtc {
 
-PacketizerOpus::PacketizerOpus() = default;
+PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
+    : Packetizer(track)
+{
+}
 
 PacketizerOpus::~PacketizerOpus() = default;
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared_ptr<Track>& track,
-                                                               [[maybe_unused]] const RtpExtension& extension,
+std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] const RtpExtension& extension,
                                                                [[maybe_unused]] bool addExtensionToAllPackets,
                                                                const srtc::ByteBuffer& frame)
 {
@@ -17,7 +19,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/rfc7587
 
-    const auto packetSource = track->getPacketSource();
+    const auto track = getTrack();
+    const auto packetSource = track->getRtpPacketSource();
     const auto frameTimestamp = getNextTimestamp(48);
 
     auto payload = frame.copy();

@@ -9,7 +9,7 @@ class RtpPacketSource {
 public:
     RtpPacketSource(uint32_t ssrc,
                     uint8_t payloadId);
-    ~RtpPacketSource() = default;
+    ~RtpPacketSource();
 
     [[nodiscard]] uint32_t getSSRC() const;
     [[nodiscard]] uint8_t getPayloadId() const;

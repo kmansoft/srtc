@@ -15,6 +15,7 @@ RtpPacketSource::RtpPacketSource(uint32_t ssrc,
 {
 }
 
+RtpPacketSource::~RtpPacketSource() = default;
 
 uint32_t RtpPacketSource::getSSRC() const
 {

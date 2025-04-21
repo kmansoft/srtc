@@ -134,6 +134,7 @@ std::vector<std::string> split_list(const std::string& line) {
 struct ParsePayloadState {
     int payloadId = { -1 };
     srtc::Codec codec = { srtc::Codec::None };
+    uint32_t clockRate = { 0 };
     uint32_t profileLevelId = { 0 };
     uint8_t rtxPayloadId = { 0 };
     bool hasNack = { false };
@@ -218,6 +219,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
                                                              layerList.empty() ? rtxSsrc : 0,
                                                              payloadState.rtxPayloadId,
                                                              payloadState.codec,
+                                                             payloadState.clockRate,
                                                              srtc::nullopt,
                                                              payloadState.hasNack, payloadState.hasPli,
                                                              payloadState.profileLevelId);
@@ -250,6 +252,7 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
                                                          ssrc.second,
                                                          singleTrack->getRtxPayloadId(),
                                                          singleTrack->getCodec(),
+                                                         singleTrack->getClockRate(),
                                                          layer,
                                                          singleTrack->hasNack(), singleTrack->hasPli(),
                                                          singleTrack->getProfileLevelId());
@@ -342,10 +345,14 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                             if (posSlash != std::string::npos) {
                                 const auto codecString = props[0].substr(0, posSlash);
                                 if (const auto codec = parse_codec(codecString); codec != Codec::None) {
-                                    const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
-                                    if (payloadState) {
-                                        payloadState->codec = codec;
-                                        payloadState->payloadId = payloadId;
+                                    const auto clockRateString = props[0].substr(posSlash + 1);
+                                    if (const auto clockRate = parse_int(clockRateString); clockRate >= 10000) {
+                                        const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+                                        if (payloadState) {
+                                            payloadState->codec = codec;
+                                            payloadState->clockRate = clockRate;
+                                            payloadState->payloadId = payloadId;
+                                        }
                                     }
                                 }
                             }
