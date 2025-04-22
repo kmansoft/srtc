@@ -94,6 +94,11 @@ uint32_t RtpPacket::getRollover() const
     return mRollover;
 }
 
+size_t RtpPacket::getPayloadSize() const
+{
+    return mPayload.size();
+}
+
 uint16_t RtpPacket::getSequence() const
 {
     return mSequence;

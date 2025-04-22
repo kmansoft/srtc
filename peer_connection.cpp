@@ -3,6 +3,8 @@
 #include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/track.h"
+#include "srtc/track_stats.h"
+#include "srtc/rtp_time_source.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/logging.h"
 #include "srtc/x509_certificate.h"
@@ -11,6 +13,9 @@
 #include "srtc/ice_agent.h"
 #include "srtc/send_history.h"
 #include "srtc/srtp_connection.h"
+#include "srtc/util.h"
+#include "srtc/rtcp_packet.h"
+#include "srtc/rtcp_packet_source.h"
 
 #include "stunmessage.h"
 
@@ -28,6 +33,8 @@
 namespace {
 
 std::once_flag gInitFlag;
+
+const auto kSenderReportsInterval = std::chrono::seconds(1);
 
 }
 
@@ -501,6 +508,27 @@ void PeerConnection::startConnecting()
     }
 }
 
+std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksIfConnected() const
+{
+    std::vector<std::shared_ptr<Track>> list;
+
+    std::lock_guard lock(mMutex);
+
+    if (mConnectionState == ConnectionState::Connected) {
+        if (const auto track = mVideoSingleTrack) {
+            list.push_back(track);
+        }
+        for (const auto &item: mVideoSimulcastTrackList) {
+            list.push_back(item);
+        }
+        if (const auto track = mAudioTrack) {
+            list.push_back(track);
+        }
+    }
+
+    return list;
+}
+
 void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
 {
     std::lock_guard lock(mMutex);
@@ -529,6 +557,20 @@ void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connected);
+
+    const auto trackList = collectTracksIfConnected();
+    for (const auto& trackItem : trackList) {
+        trackItem->getStats()->clear();
+
+        trackItem->getRtcpPacketSource()->clear();
+    }
+
+    Task::cancelHelper(mTaskSenderReports);
+    mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
+                                                __FILE__, __LINE__,
+                                                [this] {
+                                                    sendSenderReports();
+                                                });
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
@@ -557,6 +599,44 @@ void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate *candidate, c
     // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
     mSelectedCandidate.reset();
     startConnecting();
+}
+
+void PeerConnection::sendSenderReports()
+{
+    Task::cancelHelper(mTaskSenderReports);
+    mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
+                                                __FILE__, __LINE__,
+                                                [this] {
+        sendSenderReports();
+    });
+
+    const auto trackList = collectTracksIfConnected();
+    for (const auto &trackItem: trackList) {
+        ByteBuffer payload;
+        ByteWriter w(payload);
+
+        // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+
+        NtpTime ntp = {};
+        getNtpTime(ntp);
+
+        const auto timeSource = trackItem->getRtpTimeSource();
+        const auto rtpTime = timeSource->getCurrTimestamp();
+
+        w.writeU32(ntp.seconds);
+        w.writeU32(ntp.fraction);
+        w.writeU32(rtpTime);
+
+        const auto stats = trackItem->getStats();
+        w.writeU32(stats->getSentPackets());
+        w.writeU32(stats->getSentBytes());
+
+        const auto packet = std::make_shared<RtcpPacket>(trackItem, 0, RtcpPacket::kSenderReport,
+                                                         std::move(payload));
+        if (mSelectedCandidate) {
+            mSelectedCandidate->sendRtcpPacket(packet);
+        }
+    }
 }
 
 }

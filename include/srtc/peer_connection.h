@@ -87,6 +87,8 @@ private:
 
     void startConnecting();
 
+    std::vector<std::shared_ptr<Track>> collectTracksIfConnected() const;
+
     bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
@@ -119,6 +121,10 @@ private:
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
+
+    // Sender reports
+    void sendSenderReports();
+    std::weak_ptr<Task> mTaskSenderReports;
 
     // These are only used on the worker thread so don't need mutexes
     std::shared_ptr<LoopScheduler> mLoopScheduler;

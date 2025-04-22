@@ -1,6 +1,7 @@
 #include "srtc/peer_candidate.h"
 
 #include "srtc/track.h"
+#include "srtc/track_stats.h"
 #include "srtc/packetizer.h"
 #include "srtc/logging.h"
 #include "srtc/ice_agent.h"
@@ -13,6 +14,8 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtcp_packet.h"
+#include "srtc/rtcp_packet_source.h"
 
 #include <cstring>
 #include <cassert>
@@ -242,6 +245,22 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
     mFrameSendQueue.push_back(std::move(frame));
 }
 
+void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
+{
+    if (mSrtp) {
+        const auto track = packet->getTrack();
+        const auto rtcpSource = track->getRtcpPacketSource();
+
+        const auto packetData = packet->generate();
+
+        ByteBuffer protectedData;
+        if (mSrtp->protectOutgoingControl(packetData, rtcpSource->getNextSequence(), protectedData)) {
+            (void) mSocket->send(protectedData.data(), protectedData.size());
+            LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", protectedData.size());
+        }
+    }
+}
+
 void PeerCandidate::process()
 {
     // Raw data
@@ -263,11 +282,13 @@ void PeerCandidate::process()
             item.packetizer->setCodecSpecificData(item.csd);
         } else if (!item.buf.empty()) {
             // Frame data
+            const auto stats = item.track->getStats();
+
             RtpExtension extension;
             bool addExtensionToAllPackets = false;
 
             if (item.track->isSimulcast()) {
-                addExtensionToAllPackets = item.track->getSentPacketCount() < 100;
+                addExtensionToAllPackets = stats->getSentPackets() < 100;
 
                 if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
                     const auto& layer = item.track->getSimulcastLayer();
@@ -295,7 +316,7 @@ void PeerCandidate::process()
             const auto packetList = item.packetizer->generate(extension, addExtensionToAllPackets,
                                                               item.buf);
 
-            item.track->incrementSentPacketCount(packetList.size());
+            stats->incrementSentPackets(packetList.size());
 
             for (const auto& packet : packetList) {
                 // Save
@@ -303,11 +324,14 @@ void PeerCandidate::process()
                     mSendHistory->save(packet);
                 }
 
+                // Keep stats
+                stats->incrementSentBytes(packet->getPayloadSize());
+
                 // Generate
                 const auto packetData = packet->generate();
                 if (mSrtp) {
                     ByteBuffer protectedData;
-                    if (mSrtp->protectOutgoing(packetData.buf, packetData.rollover, protectedData)) {
+                    if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
 #ifdef NDEBUG
                         // And send
                         (void) mSocket->send(protectedData.data(), protectedData.size());
@@ -650,7 +674,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                 }
 
                                 ByteBuffer protectedData;
-                                if (mSrtp->protectOutgoing(packetData.buf, packetData.rollover, protectedData)) {
+                                if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
                                     // And send
                                     const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
                                     LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",

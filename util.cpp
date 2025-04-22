@@ -1,6 +1,7 @@
 #include "srtc/util.h"
 
 #include <cstring>
+#include <ctime>
 
 namespace srtc {
 
@@ -82,6 +83,27 @@ bool operator==(
                     addr1.ss.ss_family == AF_INET && addr1.sin_ipv4 == addr2.sin_ipv4 ||
                     addr1.ss.ss_family == AF_INET6 && addr1.sin_ipv6 == addr2.sin_ipv6
             );
+}
+
+void getNtpTime(NtpTime& ntp)
+{
+    struct timespec current_time = {};
+
+    // Get current time
+    clock_gettime(CLOCK_REALTIME, &current_time);
+
+    // Convert Unix time to NTP time
+    // NTP epoch starts at Jan 1, 1900
+    // Unix epoch starts at Jan 1, 1970
+    // Difference is 70 years plus 17 leap days = 2208988800 seconds
+    constexpr uint32_t NTP_UNIX_OFFSET = 2208988800UL;
+
+    // Set seconds field
+    ntp.seconds = current_time.tv_sec + NTP_UNIX_OFFSET;
+
+    // Convert nanoseconds to NTP fraction format (2^-32 seconds)
+    // 2^32 / 10^9 = 4.294967296
+    ntp.fraction = static_cast<uint32_t>(static_cast<double>(current_time.tv_nsec) * 4.294967296);
 }
 
 }

@@ -108,9 +108,27 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection() = default;
 
-bool SrtpConnection::protectOutgoing(const ByteBuffer& packetData,
-                                     uint32_t rollover,
-                                     ByteBuffer& output)
+bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData,
+                                            uint32_t sequence,
+                                            ByteBuffer& output)
+{
+    if (packetData.size() < 4 + 4) {
+        // 4 byte header
+        // 4 byte SSRC
+        LOG(SRTC_LOG_E, "Outgoing RTCP packet is too small");
+        return false;
+    }
+
+    if (!mCrypto->protectSendRtcp(packetData, sequence, output)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool SrtpConnection::protectOutgoingMedia(const ByteBuffer& packetData,
+                                          uint32_t rollover,
+                                          ByteBuffer& output)
 {
     if (packetData.size() < 4 + 4 + 4) {
         LOG(SRTC_LOG_E, "Outgoing RTP packet is too small");
@@ -169,7 +187,6 @@ SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto,
                                bool isSetupActive,
                                uint16_t profileId)
     : mCrypto(crypto)
-    , mIsSetupActive(isSetupActive)
     , mProfileId(profileId)
 {
 }

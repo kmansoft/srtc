@@ -28,6 +28,7 @@ class SdpAnswer;
 class IceAgent;
 class SendHistory;
 class SrtpConnection;
+class RtcpPacket;
 
 class PeerCandidate final {
 public:
@@ -51,8 +52,9 @@ public:
         std::vector<ByteBuffer> csd;    // possibly empty
     };
     void addSendFrame(FrameToSend&& frame);
-
     void process();
+
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
 
 private:
     void startConnecting();

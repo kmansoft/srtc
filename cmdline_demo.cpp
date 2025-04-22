@@ -152,8 +152,6 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
         const auto naluType = parser.currType();
         switch (naluType) {
             case srtc::h264::NaluType::SPS:
-                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                break;
             case srtc::h264::NaluType::PPS:
                 peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
                 break;

@@ -21,4 +21,9 @@ uint32_t RtcpPacketSource::getNextSequence()
     return mNextSequence;
 }
 
+void RtcpPacketSource::clear()
+{
+    mNextSequence = 0;
+}
+
 }

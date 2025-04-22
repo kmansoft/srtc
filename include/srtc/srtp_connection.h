@@ -22,10 +22,15 @@ public:
     static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
     ~SrtpConnection();
 
-    // Returns 0 on error
-    bool protectOutgoing(const ByteBuffer& packetData,
-                         uint32_t rollover,
-                         ByteBuffer& output);
+    // Returns false on error
+    bool protectOutgoingControl(const ByteBuffer& packetData,
+                                uint32_t sequence,
+                                ByteBuffer& output);
+
+    // Returns false on error
+    bool protectOutgoingMedia(const ByteBuffer& packetData,
+                              uint32_t rollover,
+                              ByteBuffer& output);
 
     // Returns false on error
     bool unprotectIncomingControl(const ByteBuffer& packetData,
@@ -38,7 +43,6 @@ public:
 
 private:
     const std::shared_ptr<SrtpCrypto> mCrypto;
-    const bool mIsSetupActive;
     const uint16_t mProfileId;
 
     struct ChannelKey {

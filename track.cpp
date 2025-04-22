@@ -1,4 +1,5 @@
 #include "srtc/track.h"
+#include "srtc/track_stats.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/rtp_packet_source.h"
 #include "srtc/rtcp_packet_source.h"
@@ -35,7 +36,7 @@ Track::Track(int trackId,
     , mRtpTimeSource(std::make_shared<RtpTimeSource>(clockRate))
     , mRtpPacketSource(std::make_shared<RtpPacketSource>(mSSRC, mPayloadId))
     , mRtxPacketSource(std::make_shared<RtpPacketSource>(mRtxSSRC, mRtxPayloadId))
-    , mSentPacketCount(0)
+    , mStats(std::make_shared<TrackStats>())
 {
 }
 
@@ -129,14 +130,9 @@ std::shared_ptr<RtpPacketSource> Track::getRtxPacketSource() const
     return mRtxPacketSource;
 }
 
-size_t Track::getSentPacketCount() const
+std::shared_ptr<TrackStats> Track::getStats() const
 {
-    return mSentPacketCount;
-}
-
-void Track::incrementSentPacketCount(size_t increment)
-{
-    mSentPacketCount += increment;
+    return mStats;
 }
 
 }

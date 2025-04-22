@@ -38,6 +38,7 @@ public:
     [[nodiscard]] RtpExtension getExtension() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint32_t getRollover() const;
+    [[nodiscard]] size_t getPayloadSize() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
 

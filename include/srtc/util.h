@@ -23,4 +23,11 @@ bool operator==(
         const anyaddr& addr1,
         const anyaddr& addr2);
 
+struct NtpTime {
+    uint32_t seconds;    // Seconds since Jan 1, 1900
+    uint32_t fraction;   // Fraction of second (in 2^-32 seconds)
+};
+
+void getNtpTime(NtpTime& ntp);
+
 }

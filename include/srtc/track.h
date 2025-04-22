@@ -13,6 +13,7 @@ namespace srtc {
 class RtcpPacketSource;
 class RtpTimeSource;
 class RtpPacketSource;
+class TrackStats;
 
 class Track {
 public:
@@ -55,8 +56,7 @@ public:
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtpPacketSource() const;
     [[nodiscard]] std::shared_ptr<RtpPacketSource> getRtxPacketSource() const;
 
-    [[nodiscard]] size_t getSentPacketCount() const;
-    void incrementSentPacketCount(size_t increment);
+    [[nodiscard]] std::shared_ptr<TrackStats> getStats() const;
 
 private:
     const int mTrackId;
@@ -76,7 +76,7 @@ private:
     const std::shared_ptr<RtpTimeSource> mRtpTimeSource;
     const std::shared_ptr<RtpPacketSource> mRtpPacketSource;
     const std::shared_ptr<RtpPacketSource> mRtxPacketSource;
-    std::atomic<size_t> mSentPacketCount;
+    const std::shared_ptr<TrackStats> mStats;
 };
 
 }
