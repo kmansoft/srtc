@@ -2,8 +2,6 @@
 
 #include "srtc/event_loop.h"
 
-#include <mach/port.h>
-
 namespace srtc {
 
 class EventLoop_MacOS : public EventLoop {
@@ -21,7 +19,8 @@ public:
 
 private:
     int mKQueue;
-    mach_port_name_t mEventPort;
+    int mPipeRead;
+    int mPipeWrite;
 };
 
 }

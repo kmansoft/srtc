@@ -147,6 +147,7 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
     std::vector<srtc::ByteBuffer> codecSpecificData;
 
     // Iterate other frames
+    uint32_t frameCount = 0;
 
     for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
         const auto naluType = parser.currType();
@@ -163,7 +164,11 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
             default:
                 break;
         }
+
+        frameCount += 1;
     }
+
+    std::cout << "Played " << frameCount << " frames" << std::endl;
 }
 
 static std::string gInputFile = "sintel.h264";
@@ -216,11 +221,11 @@ int main() {
 
     // Peer connection
 
-    const auto peerConnection = std::make_shared<PeerConnection>();
-
     std::mutex connectionStateMutex;
     PeerConnection::ConnectionState connectionState = PeerConnection::ConnectionState::Inactive;
     std::condition_variable connectionStateCond;
+
+    const auto peerConnection = std::make_shared<PeerConnection>();
 
     peerConnection->setConnectionStateListener(
             [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
@@ -258,7 +263,7 @@ int main() {
 
     // Wait a little and exit
 
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     return 0;
 }

@@ -3,11 +3,8 @@
 #include "srtc/logging.h"
 
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/event.h>
-#include <sys/time.h>
-#include <mach/mach.h>
-#include <mach/port.h>
+#include <sys/types.h>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_MacOS", __VA_ARGS__)
 
@@ -20,36 +17,30 @@ std::shared_ptr<EventLoop> EventLoop::factory()
     
 EventLoop_MacOS::EventLoop_MacOS()
     : mKQueue(kqueue())
-    , mEventPort(0)
+    , mPipeRead(-1)
+    , mPipeWrite(-1)
 {
-    if (mach_port_allocate(mach_task_self(), 
-            MACH_PORT_RIGHT_RECEIVE, 
-            &mEventPort) != KERN_SUCCESS) {
-        LOG(SRTC_LOG_E, "Cannot create a mach port");
-    }
-    if (mach_port_insert_right(mach_task_self(), 
-            mEventPort, mEventPort, 
-        MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS) {
-        LOG(SRTC_LOG_E, "Cannot grant rights to mach port");
+    int fd[2];
+    if (pipe(fd) == -1) {
+        LOG(SRTC_LOG_E, "Cannot create a pipe");
+    } else {
+        mPipeRead = fd[0];
+        mPipeWrite = fd[1];
     }
 
     struct kevent change;
-    EV_SET(&change, mEventPort, EVFILT_MACHPORT, EV_ADD, 0, 0, nullptr);
+    EV_SET(&change, mPipeRead, EVFILT_READ, EV_ADD, 0, 0, nullptr);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
-        LOG(SRTC_LOG_E, "Cannot add mach port to kqueue");
+        LOG(SRTC_LOG_E, "Cannot add pipe to kqueue");
     }
 }
 
 EventLoop_MacOS::~EventLoop_MacOS()
 {
     close(mKQueue);
-    if (mach_port_destruct(mach_task_self(), mEventPort, -1, 0) != KERN_SUCCESS) {
-        LOG(SRTC_LOG_E, "Cannot destruct a mach port");
-    }
-    if (mach_port_deallocate(mach_task_self(), mEventPort) != KERN_SUCCESS) {
-        LOG(SRTC_LOG_E, "Cannot deallocate a mach port");
-    }
+    close(mPipeRead);
+    close(mPipeWrite);
 }
 
 void EventLoop_MacOS::registerSocket(int socket, void* udata)
@@ -92,18 +83,9 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList,
         for (int i = 0; i < n; i += 1) {
             const auto& ev = event[i];
             if (ev.udata == nullptr) {
-                // Our mach event
-                mach_msg_header_t msg;
-                if (mach_msg(
-                    &msg,
-                    MACH_RCV_MSG,
-                    0,
-                    sizeof(msg),
-                    mEventPort,
-                    MACH_MSG_TIMEOUT_NONE,
-                    MACH_PORT_NULL) != MACH_MSG_SUCCESS) {
-                        LOG(SRTC_LOG_E, "Cannot read mach port message");
-                    }
+                // Our interrupt event
+                uint8_t value;
+                read(mPipeRead, &value, sizeof(value));
             } else {
                 udataList.push_back(ev.udata);
             }
@@ -113,24 +95,10 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList,
 
 void EventLoop_MacOS::interrupt()
 {
-    mach_msg_header_t header = {};
-
-    header.msgh_bits = MACH_MSGH_BITS_REMOTE(MACH_MSG_TYPE_COPY_SEND);
-    header.msgh_size = sizeof(header);
-    header.msgh_remote_port = mEventPort;
-    header.msgh_local_port = MACH_PORT_NULL;
-    header.msgh_id = 1234;
-
-    if (mach_msg(
-        &header,
-        MACH_SEND_MSG,
-        header.msgh_size,
-        0,
-        MACH_PORT_NULL,
-        MACH_MSG_TIMEOUT_NONE,
-        MACH_PORT_NULL) != MACH_MSG_SUCCESS) {
-            LOG(SRTC_LOG_E, "Cannot send mach port message");
-        }
+    uint8_t value = 0;
+    if (write(mPipeWrite, &value, sizeof(value)) != 1) {
+        LOG(SRTC_LOG_E, "Cannot write to pipe");
+    }
 }
 
 }
