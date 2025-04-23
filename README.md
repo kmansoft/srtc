@@ -14,6 +14,7 @@ Features:
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
 - Android demo has been tested with Pion and Amazon IVS (Interactive Video Service).
+- Command line demo has been tested with Pion.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Works on Linux, Android, MacOS, and should work on iOS too.
 
@@ -42,19 +43,19 @@ Once connected, you can start sending audio and video samples using these method
 - publishSingleVideoFrame
 - publishAudioFrame
 
-The peer connection will maintain connectivity using STUN probe requests if no media is flowing and will attempt to
-re-establish connectivity if there is no data received from the server. If the re-connection fails, so will the
-overall connection state.
-
 For simulcast, the methods are similar but different:
 
 - Configure your layers when generating the offer
 - setVideoSimulcastCodecSpecificData
 - publishVideoSimulcastFrame
 
+The peer connection will maintain connectivity using STUN probe requests if no media is flowing and will attempt to
+re-establish connectivity if there is no data received from the server. If the re-connection fails, so will the
+overall connection state.
+
 ### A command line demo / sample
 
-Tested on Linux and MacOS.
+Tested on Linux and MacOS with Pion.
 
 Build the project using CMake.
 

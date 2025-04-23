@@ -136,20 +136,21 @@ private:
     void sendStunBindingResponse();
 
     // Timeouts
-    void updateReceiveTimeout();
-    void onReceiveTimeout();
+    void updateConnectionLostTimeout();
+    void onConnectionLostTimeout();
     void updateKeepAliveTimeout();
     void onKeepAliveTimeout();
-    void sendKeepAlive();
+
+    std::chrono::steady_clock::time_point mLastSendTime;
+    std::chrono::steady_clock::time_point mLastReceiveTime;
 
     // Scheduler and tasks
     std::weak_ptr<Task> mTaskConnectTimeout;
     std::weak_ptr<Task> mTaskSendStunConnectRequest;
     std::weak_ptr<Task> mTaskSendStunConnectResponse;
-    std::weak_ptr<Task> mTaskReceiveTimeout;
+    std::weak_ptr<Task> mTaskConnectionLostTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskKeepAliveTimeout;
-    std::weak_ptr<Task> mTaskSendKeepAlive;
 
     ScopedScheduler mScheduler;
 };
