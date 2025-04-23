@@ -438,6 +438,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                                             return host.addr == it.addr;
                                         }) == hostList.end()) {
                                             host.addr.ss.ss_family = AF_INET;
+                                            host.addr.ss.ss_len = sizeof(host.addr.sin_ipv4);
                                             host.addr.sin_ipv4.sin_port = htons(port);
                                             hostList.push_back(host);
                                         }
@@ -448,6 +449,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                                             return host.addr == it.addr;
                                         }) == hostList.end()) {
                                             host.addr.ss.ss_family = AF_INET6;
+                                            host.addr.ss.ss_len = sizeof(host.addr.sin_ipv6);
                                             host.addr.sin_ipv6.sin6_port = htons(port);
                                             hostList.push_back(host);
                                         }

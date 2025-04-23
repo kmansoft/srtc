@@ -1,8 +1,6 @@
 #include "srtc/event_loop_linux.h"
 #include "srtc/logging.h"
 
-#include <chrono>
-
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
 #include <unistd.h>

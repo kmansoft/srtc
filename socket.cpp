@@ -1,10 +1,13 @@
 #include "srtc/socket.h"
 #include "srtc/util.h"
+#include "srtc/logging.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <cstring>
+
+#define LOG(level, ...) srtc::log(level, "Socket", __VA_ARGS__)
 
 namespace {
 
@@ -76,7 +79,15 @@ ssize_t Socket::send(const ByteBuffer& buf)
 
 ssize_t Socket::send(const void* ptr, size_t len)
 {
-    return ::sendto(mFd, ptr, len, 0, (struct sockaddr *) &mAddr, sizeof(mAddr));
+    const auto r = ::sendto(mFd, ptr, len, 0, (struct sockaddr *) &mAddr,
+        mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
+
+    if (r == -1) {
+        const auto errorMessage = strerror(errno);
+        LOG(SRTC_LOG_E, "Cannot send on a socket: %s", errorMessage);
+    }
+
+    return r;
 }
 
 }
