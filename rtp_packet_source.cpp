@@ -39,4 +39,11 @@ std::pair<uint32_t, uint16_t> RtpPacketSource::getNextSequence()
     return { mRollover, mNextSequence };
 }
 
+void RtpPacketSource::clear()
+{
+    mGeneratedCount = 0;
+    mRollover = 0;
+    mNextSequence = mRandom.next();
+}
+
 }

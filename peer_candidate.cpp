@@ -1,5 +1,5 @@
 #include "srtc/peer_candidate.h"
-
+#include "srtc/event_loop.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/packetizer.h"
@@ -19,8 +19,6 @@
 
 #include <cstring>
 #include <cassert>
-
-#include <sys/epoll.h>
 
 #include <openssl/ssl.h>
 
@@ -178,13 +176,13 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::shared_ptr<SdpAnswer>& answer,
                              const std::shared_ptr<RealScheduler>& scheduler,
                              const Host& host,
-                             int epollHandle,
+                             const std::shared_ptr<EventLoop>& eventLoop,
                              const Scheduler::Delay& startDelay)
     : mListener(listener)
     , mOffer(offer)
     , mAnswer(answer)
     , mHost(host)
-    , mEpollHandle(epollHandle)
+    , mEventLoop(eventLoop)
     , mSocket(std::make_shared<Socket>(host.addr))
     , mIceAgent(std::make_shared<IceAgent>())
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
@@ -201,16 +199,12 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mScheduler(scheduler)
 {
     assert(mListener);
-    assert(mEpollHandle);
 
     LOG(SRTC_LOG_V, "Constructor for %p %d", static_cast<void*>(this), mUniqueId);
 
     initOpenSSL();
 
-    struct epoll_event ev = { };
-    ev.events = EPOLLIN;
-    ev.data.ptr = this;
-    epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, mSocket->fd(), &ev);
+    mEventLoop->registerSocket(mSocket->fd(), this);
 
     mScheduler.submit(startDelay, __FILE__, __LINE__, [this] {
         startConnecting();
@@ -221,14 +215,9 @@ PeerCandidate::~PeerCandidate()
 {
     LOG(SRTC_LOG_V, "Destructor for %p %d", static_cast<void*>(this), mUniqueId);
 
-    epoll_ctl(mEpollHandle, EPOLL_CTL_DEL, mSocket->fd(), nullptr);
+    mEventLoop->unregisterSocket(mSocket->fd());
 
     freeDTLS();
-}
-
-int PeerCandidate::getSocketFd() const
-{
-    return mSocket->fd();
 }
 
 void PeerCandidate::receiveFromSocket()

@@ -16,6 +16,7 @@ include(FetchContent)
 add_library(srtc
         include/srtc/byte_buffer.h
         include/srtc/error.h
+        include/srtc/event_loop.h
         include/srtc/extension_map.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
@@ -92,6 +93,16 @@ add_library(srtc
         util.cpp
         x509_certificate.cpp
         x509_hash.cpp)
+
+if(APPLE)
+elseif(UNIX)
+    target_sources(srtc
+            PRIVATE
+            include/srtc/event_loop.h
+            event_loop_linux.cpp
+    )
+
+endif()
 
 target_include_directories(srtc PUBLIC "./include")
 

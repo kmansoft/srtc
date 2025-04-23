@@ -18,6 +18,8 @@ public:
 
     [[nodiscard]] std::pair<uint32_t, uint16_t> getNextSequence();
 
+    void clear();
+
 private:
     const uint32_t mSSRC;
     const uint8_t mPayloadId;

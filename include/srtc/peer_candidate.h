@@ -29,6 +29,7 @@ class IceAgent;
 class SendHistory;
 class SrtpConnection;
 class RtcpPacket;
+class EventLoop;
 
 class PeerCandidate final {
 public:
@@ -37,11 +38,9 @@ public:
                   const std::shared_ptr<SdpAnswer>& answer,
                   const std::shared_ptr<RealScheduler>& scheduler,
                   const Host& host,
-                  int epollHandle,
+                  const std::shared_ptr<EventLoop>& eventLoop,
                   const Scheduler::Delay& startDelay);
     ~PeerCandidate();
-
-    [[nodiscard]] int getSocketFd() const;
 
     void receiveFromSocket();
 
@@ -72,7 +71,7 @@ private:
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
     const Host mHost;
-    const int mEpollHandle;
+    const std::shared_ptr<EventLoop> mEventLoop;
     const std::shared_ptr<Socket> mSocket;
     const std::shared_ptr<IceAgent> mIceAgent;
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;

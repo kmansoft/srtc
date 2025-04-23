@@ -21,6 +21,7 @@ class Track;
 class Packetizer;
 class Scheduler;
 class PeerCandidate;
+class EventLoop;
 
 class PeerConnection final :
         public PeerCandidateListener {
@@ -93,7 +94,8 @@ private:
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
-    int mEventHandle SRTC_GUARDED_BY(mMutex) = { -1 };
+    // Event loop
+    const std::shared_ptr<EventLoop> mEventLoop SRTC_GUARDED_BY(mMutex);
 
     struct FrameToSend {
         std::shared_ptr<Track> track;
@@ -126,11 +128,11 @@ private:
     void sendSenderReports();
     std::weak_ptr<Task> mTaskSenderReports;
 
+
     // These are only used on the worker thread so don't need mutexes
     std::shared_ptr<LoopScheduler> mLoopScheduler;
     std::shared_ptr<PeerCandidate> mSelectedCandidate;
     std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
-    int mEpollHandle SRTC_GUARDED_BY(mMutex) = { 0 };
 };
 
 }
