@@ -6,7 +6,8 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/cmake-vs-build-Debug/cmdline_demo",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "MIMode": "lldb",
         }
     ]
 }

@@ -128,7 +128,6 @@ private:
     void sendSenderReports();
     std::weak_ptr<Task> mTaskSenderReports;
 
-
     // These are only used on the worker thread so don't need mutexes
     std::shared_ptr<LoopScheduler> mLoopScheduler;
     std::shared_ptr<PeerCandidate> mSelectedCandidate;

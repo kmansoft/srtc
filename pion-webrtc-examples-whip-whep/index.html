@@ -6,17 +6,31 @@
 	-->
   <head>
     <title>whip-whep</title>
+    <link rel="stylesheet" href="reset.css">
+    <style>
+        .container {
+          padding: 16px;
+        }
+        button {
+          min-width: 120px;
+          min-height: 32px;
+        }
+        h3 {
+          margin-top: 12px;
+        }
+    </style>
   </head>
 
   <body>
-    <button onclick="window.doWHIP()">Publish</button>
-    <button onclick="window.doWHEP()">Subscribe</button>
-    <h3> Video </h3>
-    <video id="videoPlayer" autoplay muted controls style="width: 500"> </video>
+    <div class="container">
+      <button onclick="window.doWHIP()">Publish</button>
+      <button onclick="window.doWHEP()">Subscribe</button>
+      <h3>Video</h3>
+      <video id="videoPlayer" autoplay muted controls style="width: 800"> </video>
 
-
-    <h3> ICE Connection States </h3>
-    <div id="iceConnectionStates"></div> <br />
+      <h3>ICE Connection States</h3>
+      <div id="iceConnectionStates"></div>
+    </div>
   </body>
 
   <script>

@@ -95,13 +95,17 @@ add_library(srtc
         x509_hash.cpp)
 
 if(APPLE)
+	target_sources(srtc
+        	PRIVATE
+        	include/srtc/event_loop_linux.h
+        	event_loop_macos.cpp
+)
 elseif(UNIX)
     target_sources(srtc
             PRIVATE
-            include/srtc/event_loop.h
+            include/srtc/event_loop_linux.h
             event_loop_linux.cpp
     )
-
 endif()
 
 target_include_directories(srtc PUBLIC "./include")
@@ -151,7 +155,7 @@ target_include_directories(srtc PRIVATE
         "stun")
 
 target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/srtc/stun")
+        "${CMAKE_BINARY_DIR}/stun")
 
 # Google Test
 
