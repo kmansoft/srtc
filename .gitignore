@@ -1,5 +1,6 @@
 cmake-build-*
 cmake-vs-build-*
 .idea
+.vscode
 CMakePresets.json
 *.mp4
