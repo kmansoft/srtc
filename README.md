@@ -57,7 +57,47 @@ overall connection state.
 
 Tested on Linux and MacOS with Pion.
 
+If not using the default `.h264` file, you can convert an `.mp4` to raw H.264 with FFMPEG. Make sure to use the `baseline` profile.
+
+```bash
+ffmpeg -i /path/to/a.mp4 -c:v libx264 -profile:v baseline -level 3.0 -preset medium -an -f h264 out.h264
+```
+
 Build the project using CMake.
+
+```bash
+cmake . -B build
+```
+
+Change into the build directory and run:
+
+```bash
+make
+```
+
+Change back to the root (`cd ../`) and run the command line demo. Use `--help` to see arguments.
+
+```bash
+./build/cmdline_demo --help
+```
+Should output:
+
+```bash
+Usage: ./build/cmdline_demo [options]
+Options:
+  -f, --file <path>    Path to H.264 file (default: sintel.h264)
+  -u, --url <url>      WHIP server URL (default: https://localhost:8080)
+  -t, --token <token>  WHIP authorization token
+  -h, --help           Show this help message
+```
+
+To broadcast to Amazon IVS:
+
+```bash
+./build/cmdline_demo -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
+```
+
+### Running with Pion
 
 Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh`. This will run the Pion
 WebRTC server.
