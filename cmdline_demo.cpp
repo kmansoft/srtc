@@ -40,6 +40,10 @@ std::string perform_whip(const std::string& offer,
     // Set the POST data
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, offer.c_str());
 
+    // follow redirects
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
+    
     // Set the content type header to application/json
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/sdp");
@@ -178,7 +182,53 @@ static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
 
-int main() {
+void printUsage(const char* programName) {
+    std::cout << "Usage: " << programName << " [options]" << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "  -f, --file <path>    Path to H.264 file (default: " << gInputFile << ")" << std::endl;
+    std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
+    std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
+    std::cout << "  -h, --help           Show this help message" << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        
+        if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        } else if (arg == "-f" || arg == "--file") {
+            if (i + 1 < argc) {
+                gInputFile = argv[++i];
+            } else {
+                std::cerr << "Error: -f/--file requires a file path" << std::endl;
+                return 1;
+            }
+        } else if (arg == "-u" || arg == "--url") {
+            if (i + 1 < argc) {
+                gWhipUrl = argv[++i];
+            } else {
+                std::cerr << "Error: -u/--url requires a URL" << std::endl;
+                return 1;
+            }
+        } else if (arg == "-t" || arg == "--token") {
+            if (i + 1 < argc) {
+                gWhipToken = argv[++i];
+            } else {
+                std::cerr << "Error: -t/--token requires a token value" << std::endl;
+                return 1;
+            }
+        } else {
+            std::cerr << "Unknown option: " << arg << std::endl;
+            printUsage(argv[0]);
+            return 1;
+        }
+    }
+    
+    std::cout << "Using H.264 file: " << gInputFile << std::endl;
+    std::cout << "Using WHIP URL: " << gWhipUrl << std::endl;
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
