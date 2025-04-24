@@ -47,8 +47,11 @@ std::string perform_whip(const std::string& offer,
     // Authorization header
     const auto authHeader = "Authorization: Bearer " + token;
     headers = curl_slist_append(headers, authHeader.c_str());
-
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // Redirect in case someone hacks the code to publish to IVS
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
 
     // Set up reading the response
     std::string answer;
