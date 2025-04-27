@@ -105,14 +105,14 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
             mVideoSinglePacketizer = packetizer;
         } else if (!mVideoSimulcastTrackList.empty()) {
             for (const auto& track : mVideoSimulcastTrackList) {
-                const auto& simulcastLayer = track->getSimulcastLayer();
+                const auto simulcastLayer = track->getSimulcastLayer();
 
                 const auto [packetizer, error] = Packetizer::makePacketizer(track);
                 if (error.isError()) {
                     return error;
                 }
 
-                mVideoSimulcastLayerList.emplace_back(simulcastLayer.name, track, packetizer);
+                mVideoSimulcastLayerList.emplace_back(simulcastLayer->name, track, packetizer);
             }
         }
 

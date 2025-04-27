@@ -18,6 +18,10 @@
         h3 {
           margin-top: 12px;
         }
+        video {
+          width: 800;
+          max-height: 600;
+        }
     </style>
   </head>
 
@@ -26,7 +30,7 @@
       <button onclick="window.doWHIP()">Publish</button>
       <button onclick="window.doWHEP()">Subscribe</button>
       <h3>Video</h3>
-      <video id="videoPlayer" autoplay muted controls style="width: 800"> </video>
+      <video id="videoPlayer" autoplay muted controls> </video>
 
       <h3>ICE Connection States</h3>
       <div id="iceConnectionStates"></div>

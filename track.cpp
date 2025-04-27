@@ -14,11 +14,11 @@ Track::Track(int trackId,
              uint32_t rtxSsrc,
              int rtxPayloadId,
              Codec codec,
+             const std::shared_ptr<Track::CodecOptions>& codecOptions,
+             const std::shared_ptr<SimulcastLayer>& simulcastLayer,
              uint32_t clockRate,
-             const srtc::optional<SimulcastLayer>& simulcastLayer,
              bool hasNack,
-             bool hasPli,
-             int profileLevelId)
+             bool hasPli)
     : mTrackId(trackId)
     , mMediaType(mediaType)
     , mMediaId(mediaId)
@@ -27,11 +27,11 @@ Track::Track(int trackId,
     , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
     , mCodec(codec)
-    , mClockRate(clockRate)
+    , mCodecOptions(codecOptions)
     , mSimulcastLayer(simulcastLayer)
+    , mClockRate(clockRate)
     , mHasNack(hasNack)
     , mHasPli(hasPli)
-    , mProfileLevelId(profileLevelId)
     , mRtcpPacketSource(std::make_shared<RtcpPacketSource>(mSSRC))
     , mRtpTimeSource(std::make_shared<RtpTimeSource>(clockRate))
     , mRtpPacketSource(std::make_shared<RtpPacketSource>(mSSRC, mPayloadId))
@@ -75,14 +75,19 @@ uint32_t Track::getClockRate() const
     return mClockRate;
 }
 
-bool Track::isSimulcast() const
+std::shared_ptr<Track::CodecOptions> Track::getCodecOptions() const
 {
-    return mSimulcastLayer.has_value();
+    return mCodecOptions;
 }
 
-const Track::SimulcastLayer& Track::getSimulcastLayer() const
+bool Track::isSimulcast() const
 {
-    return mSimulcastLayer.value();
+    return mSimulcastLayer != nullptr;
+}
+
+std::shared_ptr<Track::SimulcastLayer> Track::getSimulcastLayer() const
+{
+    return mSimulcastLayer;
 }
 
 bool Track::hasNack() const
@@ -93,11 +98,6 @@ bool Track::hasNack() const
 bool Track::hasPli() const
 {
     return mHasPli;
-}
-
-int Track::getProfileLevelId() const
-{
-    return mProfileLevelId;
 }
 
 uint32_t Track::getSSRC() const

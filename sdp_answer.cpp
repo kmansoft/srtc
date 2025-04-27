@@ -134,8 +134,8 @@ std::vector<std::string> split_list(const std::string& line) {
 struct ParsePayloadState {
     int payloadId = { -1 };
     srtc::Codec codec = { srtc::Codec::None };
+    std::shared_ptr<srtc::Track::CodecOptions> codecOptions;
     uint32_t clockRate = { 0 };
-    uint32_t profileLevelId = { 0 };
     uint8_t rtxPayloadId = { 0 };
     bool hasNack = { false };
     bool hasPli = { false };
@@ -219,10 +219,10 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
                                                              layerList.empty() ? rtxSsrc : 0,
                                                              payloadState.rtxPayloadId,
                                                              payloadState.codec,
+                                                             payloadState.codecOptions,
+                                                             nullptr,
                                                              payloadState.clockRate,
-                                                             srtc::nullopt,
-                                                             payloadState.hasNack, payloadState.hasPli,
-                                                             payloadState.profileLevelId);
+                                                             payloadState.hasNack, payloadState.hasPli);
             list.push_back(track);
         }
     }
@@ -252,10 +252,10 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
                                                          ssrc.second,
                                                          singleTrack->getRtxPayloadId(),
                                                          singleTrack->getCodec(),
+                                                         singleTrack->getCodecOptions(),
+                                                         std::make_shared<srtc::Track::SimulcastLayer>(layer),
                                                          singleTrack->getClockRate(),
-                                                         layer,
-                                                         singleTrack->hasNack(), singleTrack->hasPli(),
-                                                         singleTrack->getProfileLevelId());
+                                                         singleTrack->hasNack(), singleTrack->hasPli());
         result.push_back(track);
     }
 
@@ -369,15 +369,10 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                             std::unordered_map<std::string, std::string> map;
                             parse_map(props[0], map);
 
-                            if (const auto iter1 = map.find("profile-level-id"); iter1 != map.end()) {
-                                const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
-                                if (payloadState) {
-                                    payloadState->profileLevelId = parse_int(iter1->second, 16);
-                                }
-                            } else if (const auto iter2 = map.find("apt"); iter2 != map.end()) {
+                            if (const auto iter1 = map.find("apt"); iter1 != map.end()) {
                                 const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
                                 if (payloadState && payloadState->codec == Codec::Rtx) {
-                                    const auto referencedPayloadId = parse_int(iter2->second);
+                                    const auto referencedPayloadId = parse_int(iter1->second);
                                     if (is_valid_payload_id(referencedPayloadId)) {
                                         const auto referencedPayloadState = mediaStateCurr->getPayloadState(referencedPayloadId);
                                         if (referencedPayloadState) {
@@ -385,6 +380,26 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                                         }
                                     }
                                 }
+                            }
+
+                            const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+                            if (payloadState) {
+                                const auto codecOptions = std::make_shared<Track::CodecOptions>();
+
+                                if (mediaStateCurr == &mediaStateVideo) {
+                                    if (const auto iter2 = map.find("profile-level-id"); iter2 != map.end()) {
+                                        codecOptions->profileLevelId = parse_int(iter2->second, 16);
+                                    }
+                                } else if (mediaStateCurr == &mediaStateAudio) {
+                                    if (const auto iter2 = map.find("stereo"); iter2 != map.end()) {
+                                        codecOptions->stereo = parse_int(iter2->second) != 0;
+                                    }
+                                    if (const auto iter3 = map.find("minptime"); iter3 != map.end()) {
+                                        codecOptions->minptime = parse_int(iter3->second);
+                                    }
+                                }
+
+                                payloadState->codecOptions = codecOptions;
                             }
                         }
                     }

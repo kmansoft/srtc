@@ -41,10 +41,10 @@ TEST(GoogleVLA, VLA)
 
     const std::vector<srtc::SimulcastLayer> kLayerList = {
             {
-                "low",
-                320, 180,
-                15,
-                500
+                    "low",
+                    320, 180,
+                    15,
+                    500
             },
             {
                     "mid",
@@ -66,9 +66,14 @@ TEST(GoogleVLA, VLA)
             "a1:00:f4:03:dc:0b:c4:13:01:3f:00:b3:0f:02:7f:01:67:0f:04:ff:02:cf:0f"
     };
 
+    std::vector<std::shared_ptr<srtc::SimulcastLayer>> layerList;
+    for (const auto& layer : kLayerList) {
+        layerList.push_back(std::make_shared<srtc::SimulcastLayer>(layer));
+    }
+
     for (auto i = 0; i < 3; i += 1) {
         srtc::RtpExtensionBuilder builder;
-        builder.addGoogleVLA(100, i, kLayerList);
+        builder.addGoogleVLA(100, i, layerList);
 
         const auto extension = builder.build();
 

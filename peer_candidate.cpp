@@ -284,7 +284,7 @@ void PeerCandidate::process()
                 addExtensionToAllPackets = stats->getSentPackets() < 100;
 
                 if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
-                    const auto& layer = item.track->getSimulcastLayer();
+                    const auto layer = item.track->getSimulcastLayer();
 
                     RtpExtensionBuilder builder;
 
@@ -292,14 +292,14 @@ void PeerCandidate::process()
                         builder.addStringValue(id, item.track->getMediaId());
                     }
                     if (const auto id = mVideoExtStreamId; id != 0) {
-                        builder.addStringValue(id, layer.name);
+                        builder.addStringValue(id, layer->name);
                     }
                     if (const auto id = mVideoExtGoogleVLA; id != 0) {
-                        std::vector<SimulcastLayer> layerList;
+                        std::vector<std::shared_ptr<SimulcastLayer>> layerList;
                         for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
                             layerList.push_back(trackItem->getSimulcastLayer());
                         }
-                        builder.addGoogleVLA(id, layer.index, layerList);
+                        builder.addGoogleVLA(id, layer->index, layerList);
                     }
 
                     extension = builder.build();
@@ -654,7 +654,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                     auto extension = packet->getExtension();
 
                                     if (track->isSimulcast()) {
-                                        const auto& layer = track->getSimulcastLayer();
+                                        const auto layer = track->getSimulcastLayer();
                                         auto builder = RtpExtensionBuilder::from(extension);
 
                                         if (const auto id = mVideoExtMediaId; id != 0) {
@@ -663,7 +663,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                             }
                                         }
                                         if (const auto id = mVideoExtRepairedStreamId; id != 0) {
-                                            builder.addStringValue(id, layer.name);
+                                            builder.addStringValue(id, layer->name);
                                         }
 
                                         extension = builder.build();

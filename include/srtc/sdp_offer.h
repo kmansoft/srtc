@@ -33,7 +33,8 @@ struct PubVideoConfig {
 
 struct PubAudioCodec {
     Codec codec;
-    uint32_t minPacketTimeMs;     // for Opus
+    uint32_t minptime;
+    bool stereo;
 };
 
 struct PubAudioConfig {

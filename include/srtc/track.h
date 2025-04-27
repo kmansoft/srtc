@@ -21,6 +21,14 @@ public:
         uint16_t index;  // [0..3]
     };
 
+    struct CodecOptions {
+        // Video
+        int profileLevelId = 0;
+        // Audio
+        int minptime = 0;
+        bool stereo = false;
+    };
+
     Track(int trackId,
           MediaType mediaType,
           const std::string& mediaId,
@@ -29,11 +37,11 @@ public:
           uint32_t rtxSsrc,
           int rtxPayloadId,
           Codec codec,
+          const std::shared_ptr<CodecOptions>& codecOptions,
+          const std::shared_ptr<SimulcastLayer>& simulcastLayer,
           uint32_t clockRate,
-          const srtc::optional<SimulcastLayer>& simulcastLayer,
           bool hasNack,
-          bool hasPli,
-          int profileLevelId = 0);
+          bool hasPli);
 
     [[nodiscard]] int getTrackId() const;
     [[nodiscard]] MediaType getMediaType() const;
@@ -41,12 +49,12 @@ public:
     [[nodiscard]] int getPayloadId() const;
     [[nodiscard]] int getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
-    [[nodiscard]] uint32_t getClockRate() const;
+    [[nodiscard]] std::shared_ptr<CodecOptions> getCodecOptions() const;
     [[nodiscard]] bool isSimulcast() const;
-    [[nodiscard]] const SimulcastLayer& getSimulcastLayer() const;
+    [[nodiscard]] std::shared_ptr<SimulcastLayer> getSimulcastLayer() const;
+    [[nodiscard]] uint32_t getClockRate() const;
     [[nodiscard]] bool hasNack() const;
     [[nodiscard]] bool hasPli() const;
-    [[nodiscard]] int getProfileLevelId() const;
 
     [[nodiscard]] uint32_t getSSRC() const;
     [[nodiscard]] uint32_t getRtxSSRC() const;
@@ -67,11 +75,11 @@ private:
     const uint32_t mRtxSSRC;
     const int mRtxPayloadId;
     const Codec mCodec;
+    const std::shared_ptr<CodecOptions> mCodecOptions;
+    const std::shared_ptr<SimulcastLayer> mSimulcastLayer;
     const uint32_t mClockRate;
-    const srtc::optional<SimulcastLayer> mSimulcastLayer;
     const bool mHasNack;
     const bool mHasPli;
-    const int mProfileLevelId;
     const std::shared_ptr<RtcpPacketSource> mRtcpPacketSource;
     const std::shared_ptr<RtpTimeSource> mRtpTimeSource;
     const std::shared_ptr<RtpPacketSource> mRtpPacketSource;

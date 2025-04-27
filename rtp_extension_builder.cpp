@@ -22,7 +22,7 @@ void RtpExtensionBuilder::addStringValue(uint8_t id, const std::string& value)
 
 void RtpExtensionBuilder::addGoogleVLA(uint8_t id,
                                        uint8_t ridId,
-                                       const std::vector<SimulcastLayer>& list)
+                                       const std::vector<std::shared_ptr<SimulcastLayer>>& list)
 {
     ByteBuffer buf;
     ByteWriter w(buf);
@@ -33,13 +33,13 @@ void RtpExtensionBuilder::addGoogleVLA(uint8_t id,
     w.writeU8(0);
 
     for (const auto& layer : list) {
-        w.writeLEB128(layer.kilobitPerSecond);
+        w.writeLEB128(layer->kilobitPerSecond);
     }
 
     for (const auto& layer : list) {
-        w.writeU16(layer.width - 1);
-        w.writeU16(layer.height - 1);
-        w.writeU8(layer.framesPerSecond);
+        w.writeU16(layer->width - 1);
+        w.writeU16(layer->height - 1);
+        w.writeU8(layer->framesPerSecond);
     }
 
     const auto len = buf.size();

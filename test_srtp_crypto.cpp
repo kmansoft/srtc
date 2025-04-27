@@ -146,8 +146,9 @@ TEST(SrtpCrypto, RtpSend)
                                                          ssrc, 96,
                                                          0, 0,
                                                          srtc::Codec::H264,
+                                                         nullptr,
+                                                         nullptr,
                                                          90000,
-                                                         srtc::nullopt,
                                                          false, false);
 
         {
@@ -353,8 +354,9 @@ TEST(SrtpCrypto, RtcpSend)
                                                          ssrc, 96,
                                                          0, 0,
                                                          srtc::Codec::H264,
+                                                         nullptr,
+                                                         nullptr,
                                                          90000,
-                                                         srtc::nullopt,
                                                          false, false);
 
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {

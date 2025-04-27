@@ -219,7 +219,9 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::Opus) {
                 ss << "a=fmtp:" << payloadId
-                   << " minptime=" << item.minPacketTimeMs << ";useinbandfec=1" << std::endl;
+                   << " minptime=" << item.minptime
+                   << ";stereo=" << (item.stereo ? 1 : 0)
+                   << ";useinbandfec=1" << std::endl;
             }
 
 #ifdef ENABLE_RTX

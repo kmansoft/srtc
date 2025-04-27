@@ -17,7 +17,7 @@ public:
     void addStringValue(uint8_t id, const std::string& value);
     void addGoogleVLA(uint8_t id,
                       uint8_t ridId,
-                      const std::vector<SimulcastLayer>& list);
+                      const std::vector<std::shared_ptr<SimulcastLayer>>& list);
 
     [[nodiscard]] RtpExtension build();
 
