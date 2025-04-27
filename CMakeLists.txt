@@ -96,19 +96,24 @@ add_library(srtc
 
 if(APPLE)
 	target_sources(srtc
-        	PRIVATE
-        	include/srtc/event_loop_linux.h
-        	event_loop_macos.cpp
-)
+        PRIVATE
+        include/srtc/event_loop_linux.h
+        event_loop_macos.cpp
+	)
 elseif(UNIX)
     target_sources(srtc
-            PRIVATE
-            include/srtc/event_loop_linux.h
-            event_loop_linux.cpp
+        PRIVATE
+        include/srtc/event_loop_linux.h
+        event_loop_linux.cpp
     )
 endif()
 
 target_include_directories(srtc PUBLIC "./include")
+
+target_compile_options(srtc
+    PRIVATE
+    "-Wno-deprecated-declarations"
+)
 
 target_link_libraries(
         srtc
