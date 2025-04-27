@@ -545,7 +545,8 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
 {
-    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s", error.mCode, error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s",
+        static_cast<int>(error.mCode), error.mMessage.c_str());
 
     // We are connecting
     for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {
@@ -564,7 +565,8 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 
 void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate *candidate, const srtc::Error &error)
 {
-    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s", error.mCode, error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s",
+        static_cast<int>(error.mCode), error.mMessage.c_str());
 
     // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
     mSelectedCandidate.reset();

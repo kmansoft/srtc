@@ -562,7 +562,8 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                         updateKeepAliveTimeout();
                     } else {
                         // Error, failed to initialize SRTP
-                        LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", srtpError.mCode, srtpError.mMessage.c_str());
+                        LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s",
+                            static_cast<int>(srtpError.mCode), srtpError.mMessage.c_str());
                         mDtlsState = DtlsState::Failed;
                         emitOnFailedToConnect(srtpError);
                     }
