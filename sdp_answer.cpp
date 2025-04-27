@@ -384,22 +384,26 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
 
                             const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
                             if (payloadState) {
-                                const auto codecOptions = std::make_shared<Track::CodecOptions>();
+                                int profileLevelId = 0;
+                                int minptime = 0;
+                                bool stereo = false;
 
                                 if (mediaStateCurr == &mediaStateVideo) {
                                     if (const auto iter2 = map.find("profile-level-id"); iter2 != map.end()) {
-                                        codecOptions->profileLevelId = parse_int(iter2->second, 16);
+                                        profileLevelId = parse_int(iter2->second, 16);
                                     }
                                 } else if (mediaStateCurr == &mediaStateAudio) {
-                                    if (const auto iter2 = map.find("stereo"); iter2 != map.end()) {
-                                        codecOptions->stereo = parse_int(iter2->second) != 0;
+                                    if (const auto iter2 = map.find("minptime"); iter2 != map.end()) {
+                                        minptime = parse_int(iter2->second);
                                     }
-                                    if (const auto iter3 = map.find("minptime"); iter3 != map.end()) {
-                                        codecOptions->minptime = parse_int(iter3->second);
+                                    if (const auto iter3 = map.find("stereo"); iter3 != map.end()) {
+                                        stereo = parse_int(iter3->second) != 0;
                                     }
                                 }
 
-                                payloadState->codecOptions = codecOptions;
+                                if (profileLevelId != 0 || minptime != 0 || stereo) {
+                                    payloadState->codecOptions = std::make_shared<srtc::Track::CodecOptions>(profileLevelId, minptime, stereo);
+                                }
                             }
                         }
                     }

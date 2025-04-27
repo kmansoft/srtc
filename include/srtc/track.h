@@ -23,10 +23,13 @@ public:
 
     struct CodecOptions {
         // Video
-        int profileLevelId = 0;
+        const int profileLevelId;
         // Audio
-        int minptime = 0;
-        bool stereo = false;
+        const int minptime;
+        const bool stereo;
+
+        CodecOptions(int profileLevelId, int minptime, bool stereo)
+            : profileLevelId(profileLevelId), minptime(minptime), stereo(stereo) {}
     };
 
     Track(int trackId,
