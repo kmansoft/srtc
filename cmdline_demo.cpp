@@ -235,7 +235,11 @@ int main(int argc, char* argv[]) {
     using namespace srtc;
 
     char cwd[1024];
-    getcwd(cwd, sizeof(cwd));
+    if (!getcwd(cwd, sizeof(cwd))) {
+        std::cout << "*** Cannot get current working directory" << std::endl;
+        exit(1);
+    }
+
     std::cout << "*** Current working directory: " << cwd << std::endl;
 
     // Read the file
