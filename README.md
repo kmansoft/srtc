@@ -117,12 +117,22 @@ There is an Android demo:
 
 https://github.com/kmansoft/srtc-android-demo
 
-Note that the code in this library is not Android specific, it cleanly builds on Linux or MacOS.
+Note that the code in this library is not Android specific, it cleanly builds on Linux.
 
 Android was chosen for the demo because it's an easy way to capture video and audio and encode them to
 H264 and Opus. Sorry I'm not familiar with how to capture and encode media on desktop Linux.
 
 For the interface between Android code and the srtc library, please see `jni_peer_connection.h / .cpp` in that project.
+
+### A MacOS demo / sample
+
+There is a MacOS demo:
+
+https://github.com/kmansoft/srtc-macos-demo
+
+Note that the code in this library is not Android specific, it cleanly builds on MacOS.
+
+This demo also captures the camera and microphone and publishes them as H264 and Opus to Pion or Amazon IVS.
 
 ### Disclamier
 
