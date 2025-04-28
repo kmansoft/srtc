@@ -21,14 +21,25 @@ X509Certificate::X509Certificate()
 {
     // https://stackoverflow.com/questions/256405/programmatically-create-x509-certificate-using-openssl
 
-    mImpl->pkey = EVP_PKEY_new();
-
     BIGNUM* e = BN_new();
     BN_set_word(e, RSA_F4);
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    mImpl->pkey = nullptr;
+
+    const auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+    EVP_PKEY_keygen_init(ctx);
+
+    EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+    EVP_PKEY_CTX_set1_rsa_keygen_pubexp(ctx, e);
+    
+    EVP_PKEY_keygen(ctx, &mImpl->pkey);
+#else
+    mImpl->pkey = EVP_PKEY_new();
     auto rsa = RSA_new();
     RSA_generate_key_ex(rsa, 2048, e, nullptr);
     EVP_PKEY_assign_RSA(mImpl->pkey, rsa);
+#endif
 
     BN_free(e);
 
