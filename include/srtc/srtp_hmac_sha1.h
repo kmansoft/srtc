@@ -19,7 +19,12 @@ public:
     void final(uint8_t* out);
 
 private:
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_MAC* mMac;
+    EVP_MAC_CTX* mCtx;
+#else
     HMAC_CTX* mCtx;
+#endif
 };
 
 }
