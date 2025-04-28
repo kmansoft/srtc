@@ -142,6 +142,40 @@ void stun_sha1 (const uint8_t *msg, size_t len, size_t msg_len, uint8_t *sha,
   assert (ret == 1);
 #endif
 
+#if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
+  // OpenSSL 3.0+, use EVP functions
+  EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+  EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
+
+  char sha1[12];
+  strcpy(sha1, "SHA1");
+
+  OSSL_PARAM params[2];
+  params[0] = OSSL_PARAM_construct_utf8_string("digest", sha1, 0);
+  params[1] = OSSL_PARAM_construct_end();
+
+  TRY (EVP_MAC_init(ctx, key, keylen, params));
+  TRY (EVP_MAC_update (ctx, msg, 2));
+  TRY (EVP_MAC_update (ctx, (const unsigned char *)&fakelen, 2));
+  TRY (EVP_MAC_update (ctx, msg + 4, len - 28));
+
+  /* RFC 3489 specifies that the message's size should be 64 bytes,
+     and \x00 padding should be done */
+  if (padding && ((len - 24) % 64) > 0) {
+    uint16_t pad_size = 64 - ((len - 24) % 64);
+    TRY (EVP_MAC_update (ctx, pad_char, pad_size));
+  }
+
+  size_t out_len = 0;
+  TRY(EVP_MAC_final(ctx, sha, &out_len, 20));
+
+  assert(out_len == 20);
+
+  EVP_MAC_CTX_free(ctx);
+  EVP_MAC_free(mac);
+#else
+  // OpenSSL < 3.0 or BoringSSL or LibreSSL
+
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
     (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2070000fL)
   HMAC_CTX stackctx;
@@ -175,6 +209,7 @@ void stun_sha1 (const uint8_t *msg, size_t len, size_t msg_len, uint8_t *sha,
 #else
   HMAC_CTX_free (ctx);
 #endif /* OPENSSL_VERSION_NUMBER */
+#endif /* OPENSSL_VERSION_MAJOR */
 }
 #else
 {

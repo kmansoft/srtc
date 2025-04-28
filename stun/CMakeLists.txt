@@ -27,11 +27,6 @@ target_compile_definitions(stun
     HAVE_OPENSSL=1
 )
 
-target_compile_options(stun
-    PRIVATE
-    "-Wno-deprecated-declarations"
-)
-
 find_package(OpenSSL REQUIRED)
 
 target_include_directories(stun

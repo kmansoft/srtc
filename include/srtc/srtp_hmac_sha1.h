@@ -19,7 +19,7 @@ public:
     void final(uint8_t* out);
 
 private:
-#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     EVP_MAC* mMac;
     EVP_MAC_CTX* mCtx;
 #else
