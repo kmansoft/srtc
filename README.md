@@ -1,6 +1,6 @@
-### srtc - a simple WebRTC library
+### srtc - a "simple" WebRTC library
 
-This is srtc, a simple WebRTC library (publish side only so far).
+This is srtc, a "simple" WebRTC library (publish side only so far).
 
 Features:
 
@@ -133,6 +133,8 @@ https://github.com/kmansoft/srtc-macos-demo
 Note that the code in this library is not MacOS specific, only the demo app is.
 
 This demo also captures the camera and microphone and publishes them as H264 and Opus to Pion or Amazon IVS.
+
+The interface between Swift code of the app and C++ code in srtc is in the `srtc-mac` subdirectory.
 
 ### Disclamier
 
