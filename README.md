@@ -13,7 +13,7 @@ Features:
 - SDP offer generation and SDP response parsing.
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
-- Android demo has been tested with Pion and Amazon IVS (Interactive Video Service).
+- Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
 - Command line demo has been tested with Pion.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Works on Linux, Android, MacOS, and should work on iOS too.
@@ -146,8 +146,9 @@ This library is my side project.
 
 - I'd lke to implement support for Simulcast (multiple video layers on the same peer connection). This is done.
 
-- Google's congestion control / bandwidth measurement extensions may be useful.
+- Google's Transport Wide Congestion Control.
 
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
-supports those.  
+supports those.
+
