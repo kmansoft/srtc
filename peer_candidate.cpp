@@ -340,7 +340,9 @@ void PeerCandidate::process()
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
                             const auto w = mSocket->send(protectedData.data(), protectedData.size());
-                            LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
+                            // This is too much
+                            // LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
+                            (void) w;
                         }
 #endif
                     }
