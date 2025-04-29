@@ -43,6 +43,15 @@ bool RtpExtension::empty() const
     return mId == 0 || mData.empty();
 }
 
+size_t RtpExtension::size() const
+{
+    if (empty()) {
+        return 0;
+    }
+
+    return 2 /* extension id */ + 2 /* extension length */ + 4 * ((mData.size() + 3) / 4);
+}
+
 uint16_t RtpExtension::getId() const
 {
     return mId;

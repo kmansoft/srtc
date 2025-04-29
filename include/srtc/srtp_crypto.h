@@ -24,6 +24,8 @@ public:
 
     ~SrtpCrypto();
 
+    [[nodiscard]] size_t getMediaProtectionOverhead() const;
+
     [[nodiscard]] bool protectSendRtp(const ByteBuffer& packet,
                                       uint32_t rolloverCount,
                                       ByteBuffer& encrypted);

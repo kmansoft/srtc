@@ -108,6 +108,11 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection() = default;
 
+size_t SrtpConnection::getMediaProtectionOverhead() const
+{
+    return mCrypto->getMediaProtectionOverhead();
+}
+
 bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData,
                                             uint32_t sequence,
                                             ByteBuffer& output)

@@ -17,6 +17,7 @@ public:
     void clear();
 
     [[nodiscard]] bool empty() const;
+    [[nodiscard]] size_t size() const;
 
     [[nodiscard]] uint16_t getId() const;
     [[nodiscard]] const ByteBuffer& getData() const;

@@ -127,6 +127,22 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
     };
 }
 
+size_t SrtpCrypto::getMediaProtectionOverhead() const
+{
+    switch (mProfileId) {
+        case SRTP_AEAD_AES_256_GCM:
+        case SRTP_AEAD_AES_128_GCM:
+            return kAESGCM_TagSize;
+        case SRTP_AES128_CM_SHA1_80:
+            return 10;
+        case SRTP_AES128_CM_SHA1_32:
+            return 4;
+        default:
+            assert(false);
+            return 0;
+    }
+}
+
 bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
                                 uint32_t rolloverCount,
                                 ByteBuffer& encrypted)

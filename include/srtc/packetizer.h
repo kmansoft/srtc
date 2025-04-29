@@ -28,6 +28,7 @@ public:
     virtual bool isKeyFrame(const ByteBuffer& frame) const;
     virtual std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
                                                            bool addExtensionToAllPackets,
+                                                           size_t mediaProtectionOverhead,
                                                            const ByteBuffer& frame) = 0;
 
     static std::pair<std::shared_ptr<Packetizer>, Error> makePacketizer(const std::shared_ptr<Track>& track);

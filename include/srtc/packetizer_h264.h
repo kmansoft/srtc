@@ -14,6 +14,7 @@ public:
     bool isKeyFrame(const ByteBuffer& frame) const override;
     std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
                                                    bool addExtensionToAllPackets,
+                                                   size_t mediaProtectionOverhead,
                                                    const ByteBuffer& frame) override;
 
 private:

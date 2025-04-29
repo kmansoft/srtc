@@ -306,7 +306,9 @@ void PeerCandidate::process()
                 }
             }
 
-            const auto packetList = item.packetizer->generate(extension, addExtensionToAllPackets,
+            const auto packetList = item.packetizer->generate(extension,
+                                                              addExtensionToAllPackets,
+                                                              mSrtp->getMediaProtectionOverhead(),
                                                               item.buf);
 
             stats->incrementSentPackets(packetList.size());
@@ -337,7 +339,8 @@ void PeerCandidate::process()
                         if (randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
-                            (void) mSocket->send(protectedData.data(), protectedData.size());
+                            const auto w = mSocket->send(protectedData.data(), protectedData.size());
+                            LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
                         }
 #endif
                     }

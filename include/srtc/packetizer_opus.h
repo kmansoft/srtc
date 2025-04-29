@@ -12,6 +12,7 @@ public:
 
     std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
                                                    bool addExtensionToAllPackets,
+                                                   size_t mediaProtectionOverhead,
                                                    const ByteBuffer& frame) override;
 };
 

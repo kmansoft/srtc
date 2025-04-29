@@ -17,6 +17,26 @@ namespace {
 
 constexpr uint8_t STAP_A = 24;
 constexpr uint8_t FU_A = 28;
+constexpr size_t kMinPayloadSize = 120;
+
+size_t adjustPacketSize(size_t basicPacketSize, bool addExtensionToThisPacket, const srtc::RtpExtension& extension)
+{
+    if (!addExtensionToThisPacket) {
+        return basicPacketSize;
+    }
+
+    const auto extensionSize = extension.size();
+    if (extensionSize == 0) {
+        return basicPacketSize;
+    }
+
+    // We need to be careful with unsigned math
+    if (extensionSize + kMinPayloadSize > basicPacketSize) {
+        return basicPacketSize;
+    }
+
+    return basicPacketSize - extensionSize;
+}
 
 }
 
@@ -56,6 +76,7 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
 
 std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtension& extension,
                                                                bool addExtensionToAllPackets,
+                                                               size_t mediaProtectionOverhead,
                                                                const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
@@ -115,14 +136,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            auto packetSize = RtpPacket::kMaxPayloadSize;
+            auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
+
+            auto addExtensionToThisPacket = addExtensionToAllPackets || naluType == NaluType::KeyFrame;
+            auto packetSize = adjustPacketSize(basicPacketSize, addExtensionToThisPacket, extension);
 
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer { naluDataPtr, naluDataSize };
                 result.push_back(
-                        (addExtensionToAllPackets || naluType == NaluType::KeyFrame)
+                        addExtensionToThisPacket
                         ? std::make_shared<RtpPacket>(
                             track, true, rollover, sequence, frameTimestamp,
                             extension.copy(),
@@ -139,14 +163,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
                 auto dataPtr = naluDataPtr + 1;
                 auto dataSize = naluDataSize - 1;
 
-                // The frame now fits in one packet, but a FU-A cannot have both start and end
-                if (packetSize == dataSize) {
-                    packetSize -= 10;
-                }
-
                 auto packetNumber = 0;
                 while (dataSize > 0) {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
+
+                    addExtensionToThisPacket = addExtensionToAllPackets || naluType == NaluType::KeyFrame;
+                    packetSize = adjustPacketSize(basicPacketSize, addExtensionToThisPacket, extension);
+                    if (packetNumber == 0 && packetSize >= dataSize) {
+                        // The frame now fits in one packet, but a FU-A cannot have both start and end
+                        packetSize = dataSize - 10;
+                    }
+                    packetSize -= 2;    // FU_A header
 
                     ByteBuffer payload;
                     ByteWriter writer(payload);
@@ -167,7 +194,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
                     writer.write(dataPtr, writeNow);
 
                     result.push_back(
-                            (addExtensionToAllPackets || naluType == NaluType::KeyFrame && packetNumber == 0)
+                            addExtensionToThisPacket
                             ? std::make_shared<RtpPacket>(
                                     track, isEnd, rollover, sequence,
                                     frameTimestamp,
