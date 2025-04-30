@@ -596,6 +596,11 @@ std::vector<Host> SdpAnswer::getHostList() const
     return mHostList;
 }
 
+bool SdpAnswer::isVideoSimulcast() const
+{
+    return !mVideoSingleTrack && !mVideoSimulcastTrackList.empty();
+}
+
 std::shared_ptr<Track> SdpAnswer::getVideoSingleTrack() const
 {
     return mVideoSingleTrack;

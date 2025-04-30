@@ -4,6 +4,8 @@
 #include "srtc/rtp_packet.h"
 #include "srtc/rtp_packet_source.h"
 #include "srtc/rtp_extension.h"
+#include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/track.h"
 
@@ -17,14 +19,10 @@ namespace {
 
 constexpr uint8_t STAP_A = 24;
 constexpr uint8_t FU_A = 28;
-constexpr size_t kMinPayloadSize = 120;
+constexpr size_t kMinPayloadSize = 600;
 
-size_t adjustPacketSize(size_t basicPacketSize, bool addExtensionToThisPacket, const srtc::RtpExtension& extension)
+size_t adjustPacketSize(size_t basicPacketSize, const srtc::RtpExtension& extension)
 {
-    if (!addExtensionToThisPacket) {
-        return basicPacketSize;
-    }
-
     const auto extensionSize = extension.size();
     if (extensionSize == 0) {
         return basicPacketSize;
@@ -74,10 +72,10 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtension& extension,
-                                                               bool addExtensionToAllPackets,
-                                                               size_t mediaProtectionOverhead,
-                                                               const srtc::ByteBuffer& frame)
+std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
+    const std::shared_ptr<RtpExtensionSource>& simulcast,
+    size_t mediaProtectionOverhead,
+    const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
 
@@ -122,11 +120,19 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
                     writer.write(csd.data(), csd.size());
                 }
 
+                RtpExtension extension;
+                if (simulcast && simulcast->wants(track, true, 0)) {
+                    RtpExtensionBuilder builder;
+                    simulcast->add(builder, track, true, 0);
+                    extension = builder.build();
+                }
+
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(
                         std::make_shared<RtpPacket>(
-                            track, false, rollover, sequence, frameTimestamp,
-                            extension.copy(),
+                            track, false, rollover, sequence,
+                            frameTimestamp,
+                            std::move(extension),
                             std::move(payload)));
             }
         }
@@ -136,23 +142,30 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
+            RtpExtension extension;
+            if (simulcast && simulcast->wants(track, true, 0)) {
+                RtpExtensionBuilder builder;
+                simulcast->add(builder, track, naluType == NaluType::KeyFrame, 0);
+                extension = builder.build();
+            }
 
-            auto addExtensionToThisPacket = addExtensionToAllPackets || naluType == NaluType::KeyFrame;
-            auto packetSize = adjustPacketSize(basicPacketSize, addExtensionToThisPacket, extension);
+            auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
+            auto packetSize = adjustPacketSize(basicPacketSize, extension);
 
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer { naluDataPtr, naluDataSize };
                 result.push_back(
-                        addExtensionToThisPacket
+                        extension.empty()
                         ? std::make_shared<RtpPacket>(
-                            track, true, rollover, sequence, frameTimestamp,
-                            extension.copy(),
+                            track, true, rollover, sequence,
+                            frameTimestamp,
                             std::move(payload))
                         : std::make_shared<RtpPacket>(
-                                track, true, rollover, sequence, frameTimestamp,
+                                track, true, rollover, sequence,
+                                frameTimestamp,
+                                std::move(extension),
                                 std::move(payload))
                                 );
             } else {
@@ -167,8 +180,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
                 while (dataSize > 0) {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
-                    addExtensionToThisPacket = addExtensionToAllPackets || naluType == NaluType::KeyFrame;
-                    packetSize = adjustPacketSize(basicPacketSize, addExtensionToThisPacket, extension);
+                    if (packetNumber > 0) {
+                        extension.clear();
+
+                        if (simulcast && simulcast->wants(track, true, packetNumber)) {
+                            RtpExtensionBuilder builder;
+                            simulcast->add(builder, track, naluType == NaluType::KeyFrame, packetNumber);
+                            extension = builder.build();
+                        }            
+                    }
+
+                    packetSize = adjustPacketSize(basicPacketSize, extension);
                     if (packetNumber == 0 && packetSize >= dataSize) {
                         // The frame now fits in one packet, but a FU-A cannot have both start and end
                         packetSize = dataSize - 10;
@@ -194,15 +216,15 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const RtpExtensio
                     writer.write(dataPtr, writeNow);
 
                     result.push_back(
-                            addExtensionToThisPacket
+                            extension.empty()
                             ? std::make_shared<RtpPacket>(
                                     track, isEnd, rollover, sequence,
                                     frameTimestamp,
-                                    extension.copy(),
                                     std::move(payload))
                             : std::make_shared<RtpPacket>(
                                     track, isEnd, rollover, sequence,
                                     frameTimestamp,
+                                    std::move(extension),
                                     std::move(payload)));
 
                     dataPtr += writeNow;

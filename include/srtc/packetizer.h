@@ -18,6 +18,7 @@ class ByteBuffer;
 class RtpPacket;
 class RtpPacketSource;
 class RtpExtension;
+class RtpExtensionSource;
 
 class Packetizer {
 public:
@@ -26,8 +27,7 @@ public:
 
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
     virtual bool isKeyFrame(const ByteBuffer& frame) const;
-    virtual std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
-                                                           bool addExtensionToAllPackets,
+    virtual std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
                                                            size_t mediaProtectionOverhead,
                                                            const ByteBuffer& frame) = 0;
 

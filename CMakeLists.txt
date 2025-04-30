@@ -34,6 +34,8 @@ add_library(srtc
         include/srtc/rtcp_packet_source.h
         include/srtc/rtp_extension.h
         include/srtc/rtp_extension_builder.h
+        include/srtc/rtp_extension_source_simulcast.h
+        include/srtc/rtp_extension_source.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
         include/srtc/rtp_std_extensions.h
@@ -73,6 +75,8 @@ add_library(srtc
         rtcp_packet_source.cpp
         rtp_extension.cpp
         rtp_extension_builder.cpp
+        rtp_extension_source_simulcast.cpp
+        rtp_extension_source.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp
         rtp_std_extensions.cpp
@@ -81,6 +85,7 @@ add_library(srtc
         sdp_offer.cpp
         scheduler.cpp
         send_history.cpp
+        simulcast_layer.cpp
         socket.cpp
         srtc.cpp
         srtp_connection.cpp

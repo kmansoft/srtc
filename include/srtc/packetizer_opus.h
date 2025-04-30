@@ -10,10 +10,10 @@ public:
     PacketizerOpus(const std::shared_ptr<Track>& track);
     ~PacketizerOpus() override;
 
-    std::list<std::shared_ptr<RtpPacket>> generate(const RtpExtension& extension,
-                                                   bool addExtensionToAllPackets,
-                                                   size_t mediaProtectionOverhead,
-                                                   const ByteBuffer& frame) override;
+    std::list<std::shared_ptr<RtpPacket>> generate(
+        const std::shared_ptr<RtpExtensionSource>& simulcast,
+        size_t mediaProtectionOverhead,
+        const ByteBuffer& frame) override;
 };
 
 }

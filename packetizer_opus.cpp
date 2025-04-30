@@ -12,8 +12,7 @@ PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
 
 PacketizerOpus::~PacketizerOpus() = default;
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] const RtpExtension& extension,
-                                                               [[maybe_unused]] bool addExtensionToAllPackets,
+std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
                                                                [[maybe_unused]] size_t mediaProtectionOverhead,
                                                                const srtc::ByteBuffer& frame)
 {

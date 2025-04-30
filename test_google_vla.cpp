@@ -72,15 +72,11 @@ TEST(GoogleVLA, VLA)
     }
 
     for (auto i = 0; i < 3; i += 1) {
-        srtc::RtpExtensionBuilder builder;
-        builder.addGoogleVLA(100, i, layerList);
+        srtc::ByteBuffer data;
+        srtc::buildGoogleVLA(data, i, layerList);
+        ASSERT_FALSE(data.empty());
 
-        const auto extension = builder.build();
-
-        ASSERT_FALSE(extension.empty());
-
-        const auto& data = extension.getData();
-        const auto encoded = srtc::bin_to_hex(data.data() + 2, data.size() - 2);
+        const auto encoded = srtc::bin_to_hex(data.data(), data.size());
         const auto expected = kLayerEncoded[i];
 
         ASSERT_EQ(encoded, expected);

@@ -30,6 +30,7 @@ class SendHistory;
 class SrtpConnection;
 class RtcpPacket;
 class EventLoop;
+class RtpExtensionSourceSimulcast;
 
 class PeerCandidate final {
 public:
@@ -81,6 +82,7 @@ private:
     const uint8_t mVideoExtStreamId;
     const uint8_t mVideoExtRepairedStreamId;
     const uint8_t mVideoExtGoogleVLA;
+    const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
 
     std::shared_ptr<SrtpConnection> mSrtp;
 

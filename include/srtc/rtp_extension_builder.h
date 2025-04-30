@@ -2,7 +2,6 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_extension.h"
-#include "srtc/simulcast_layer.h"
 
 #include <string>
 #include <vector>
@@ -16,9 +15,7 @@ public:
     ~RtpExtensionBuilder();
 
     void addStringValue(uint8_t id, const std::string& value);
-    void addGoogleVLA(uint8_t id,
-                      uint8_t ridId,
-                      const std::vector<std::shared_ptr<SimulcastLayer>>& list);
+    void addBinaryValue(uint8_t id, const ByteBuffer& buf);
 
     [[nodiscard]] RtpExtension build();
 

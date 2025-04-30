@@ -35,6 +35,7 @@ public:
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::vector<Host> getHostList() const;
+    [[nodiscard]] bool isVideoSimulcast() const;
     [[nodiscard]] std::shared_ptr<Track> getVideoSingleTrack() const;
     [[nodiscard]] std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
     [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;

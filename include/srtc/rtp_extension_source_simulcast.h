@@ -1,0 +1,65 @@
+#pragma once
+
+#include "srtc/rtp_extension_source.h"
+#include "srtc/byte_buffer.h"
+#include "srtc/simulcast_layer.h"
+
+#include <vector>
+#include <cstdint>
+
+namespace srtc {
+
+class Track;
+class ByteBuffer;
+class Packetizer;
+class RtpExtensionBuilder;
+
+class RtpExtensionSourceSimulcast : public RtpExtensionSource {
+public:
+    RtpExtensionSourceSimulcast(
+        uint8_t nVideoExtMediaId,
+        uint8_t nVideoExtStreamId,
+        uint8_t nVideoExtRepairedStreamId,
+        uint8_t nVideoExtGoogleVLA
+    );
+    ~RtpExtensionSourceSimulcast() override;
+
+    [[nodiscard]] bool shouldAdd(
+            const std::shared_ptr<Track>& track,
+            const std::shared_ptr<Packetizer>& packetizer,
+            const ByteBuffer& frame);
+
+    void prepare(
+        const std::shared_ptr<Track>& track,
+        const std::vector<std::shared_ptr<SimulcastLayer>>& layerList
+    );
+    void clear();
+
+    [[nodiscard]] bool wants(
+        const std::shared_ptr<Track>& track,
+        bool isKeyFrame,
+        int packetNumber) override;
+
+    void add(
+        RtpExtensionBuilder& builder,
+        const std::shared_ptr<Track>& track,
+        bool isKeyFrame,
+        int packetNumber) override;
+
+    void updateForRtx(
+            RtpExtensionBuilder& builder,
+            const std::shared_ptr<Track>& track) const;
+
+private:
+    const uint8_t mVideoExtMediaId;
+    const uint8_t mVideoExtStreamId;
+    const uint8_t mVideoExtRepairedStreamId;
+    const uint8_t mVideoExtGoogleVLA;
+    const bool mIsExtensionsValid;
+
+    std::string mCurMediaId;
+    std::string mCurLayerName;
+    ByteBuffer mCurGoogleVLA;
+};
+
+}

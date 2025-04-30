@@ -14,6 +14,7 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
 
@@ -196,6 +197,11 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
     , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
     , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
+    , mExtensionSourceSimulcast(
+        answer->isVideoSimulcast()
+        ? std::make_shared<RtpExtensionSourceSimulcast>(
+            mVideoExtMediaId, mVideoExtStreamId, mVideoExtRepairedStreamId, mVideoExtGoogleVLA)
+        : nullptr)
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
     , mScheduler(scheduler)
@@ -275,42 +281,24 @@ void PeerCandidate::process()
             item.packetizer->setCodecSpecificData(item.csd);
         } else if (!item.buf.empty()) {
             // Frame data
-            const auto stats = item.track->getStats();
-
-            RtpExtension extension;
-            bool addExtensionToAllPackets = false;
-
-            if (item.track->isSimulcast()) {
-                addExtensionToAllPackets = stats->getSentPackets() < 100;
-
-                if (addExtensionToAllPackets || item.packetizer->isKeyFrame(item.buf)) {
-                    const auto layer = item.track->getSimulcastLayer();
-
-                    RtpExtensionBuilder builder;
-
-                    if (const auto id = mVideoExtMediaId; id != 0) {
-                        builder.addStringValue(id, item.track->getMediaId());
+            if (mExtensionSourceSimulcast) {
+                if (item.track->isSimulcast() && mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
+                    std::vector<std::shared_ptr<SimulcastLayer>> layerList;
+                    for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
+                        layerList.push_back(trackItem->getSimulcastLayer());
                     }
-                    if (const auto id = mVideoExtStreamId; id != 0) {
-                        builder.addStringValue(id, layer->name);
-                    }
-                    if (const auto id = mVideoExtGoogleVLA; id != 0) {
-                        std::vector<std::shared_ptr<SimulcastLayer>> layerList;
-                        for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
-                            layerList.push_back(trackItem->getSimulcastLayer());
-                        }
-                        builder.addGoogleVLA(id, layer->index, layerList);
-                    }
-
-                    extension = builder.build();
+                    mExtensionSourceSimulcast->prepare(item.track, layerList);
+                } else {
+                    mExtensionSourceSimulcast->clear();
                 }
             }
 
-            const auto packetList = item.packetizer->generate(extension,
-                                                              addExtensionToAllPackets,
+            // Packetize
+            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
                                                               mSrtp->getMediaProtectionOverhead(),
                                                               item.buf);
 
+            const auto stats = item.track->getStats();
             stats->incrementSentPackets(packetList.size());
 
             for (const auto& packet : packetList) {
@@ -658,19 +646,9 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                                 if (track->getRtxPayloadId() > 0) {
                                     auto extension = packet->getExtension();
 
-                                    if (track->isSimulcast()) {
-                                        const auto layer = track->getSimulcastLayer();
+                                    if (track->isSimulcast() && mExtensionSourceSimulcast) {
                                         auto builder = RtpExtensionBuilder::from(extension);
-
-                                        if (const auto id = mVideoExtMediaId; id != 0) {
-                                            if (!builder.contains(id)) {
-                                                builder.addStringValue(id, track->getMediaId());
-                                            }
-                                        }
-                                        if (const auto id = mVideoExtRepairedStreamId; id != 0) {
-                                            builder.addStringValue(id, layer->name);
-                                        }
-
+                                        mExtensionSourceSimulcast->updateForRtx(builder, track);
                                         extension = builder.build();
                                     }
 
