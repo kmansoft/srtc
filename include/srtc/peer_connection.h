@@ -88,7 +88,7 @@ private:
 
     void startConnecting();
 
-    std::vector<std::shared_ptr<Track>> collectTracksIfConnected() const;
+    std::vector<std::shared_ptr<Track>> collectTracksLocked() const SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
     bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };

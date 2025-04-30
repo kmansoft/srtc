@@ -416,6 +416,22 @@ void PeerConnection::setConnectionState(ConnectionState state)
         if (mConnectionState == ConnectionState::Failed) {
             mIsQuit = true;
             mEventLoop->interrupt();
+        } else if (mConnectionState == ConnectionState::Connected) {
+            const auto trackList = collectTracksLocked();
+            for (const auto& trackItem : trackList) {
+                trackItem->getStats()->clear();
+
+                trackItem->getRtpPacketSource()->clear();
+                trackItem->getRtxPacketSource()->clear();
+                trackItem->getRtcpPacketSource()->clear();
+            }
+
+            Task::cancelHelper(mTaskSenderReports);
+            mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
+                                                        __FILE__, __LINE__,
+                                                        [this] {
+                                                            sendSenderReports();
+                                                        });
         }
     }
 
@@ -476,17 +492,15 @@ void PeerConnection::startConnecting()
     }
 }
 
-std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksIfConnected() const
+std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksLocked() const
 {
     std::vector<std::shared_ptr<Track>> list;
-
-    std::lock_guard lock(mMutex);
 
     if (mConnectionState == ConnectionState::Connected) {
         if (const auto track = mVideoSingleTrack) {
             list.push_back(track);
         }
-        for (const auto &item: mVideoSimulcastTrackList) {
+        for (const auto& item: mVideoSimulcastTrackList) {
             list.push_back(item);
         }
         if (const auto track = mAudioTrack) {
@@ -525,22 +539,6 @@ void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connected);
-
-    const auto trackList = collectTracksIfConnected();
-    for (const auto& trackItem : trackList) {
-        trackItem->getStats()->clear();
-
-        trackItem->getRtpPacketSource()->clear();
-        trackItem->getRtxPacketSource()->clear();
-        trackItem->getRtcpPacketSource()->clear();
-    }
-
-    Task::cancelHelper(mTaskSenderReports);
-    mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
-                                                __FILE__, __LINE__,
-                                                [this] {
-                                                    sendSenderReports();
-                                                });
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
@@ -582,31 +580,36 @@ void PeerConnection::sendSenderReports()
         sendSenderReports();
     });
 
-    const auto trackList = collectTracksIfConnected();
-    for (const auto &trackItem: trackList) {
-        ByteBuffer payload;
-        ByteWriter w(payload);
+    std::lock_guard lock(mMutex);
 
-        // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+    if (mConnectionState == ConnectionState::Connected) {
+        const auto trackList = collectTracksLocked();
+        for (const auto& trackItem: trackList) {
+            ByteBuffer payload;
+            ByteWriter w(payload);
 
-        NtpTime ntp = {};
-        getNtpTime(ntp);
+            // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
 
-        const auto timeSource = trackItem->getRtpTimeSource();
-        const auto rtpTime = timeSource->getCurrTimestamp();
+            NtpTime ntp = {};
+            getNtpTime(ntp);
 
-        w.writeU32(ntp.seconds);
-        w.writeU32(ntp.fraction);
-        w.writeU32(rtpTime);
+            const auto timeSource = trackItem->getRtpTimeSource();
+            const auto rtpTime = timeSource->getCurrTimestamp();
 
-        const auto stats = trackItem->getStats();
-        w.writeU32(stats->getSentPackets());
-        w.writeU32(stats->getSentBytes());
+            w.writeU32(ntp.seconds);
+            w.writeU32(ntp.fraction);
+            w.writeU32(rtpTime);
 
-        const auto packet = std::make_shared<RtcpPacket>(trackItem, 0, RtcpPacket::kSenderReport,
-                                                         std::move(payload));
-        if (mSelectedCandidate) {
-            mSelectedCandidate->sendRtcpPacket(packet);
+            const auto stats = trackItem->getStats();
+            w.writeU32(stats->getSentPackets());
+            w.writeU32(stats->getSentBytes());
+
+            const auto packet = std::make_shared<RtcpPacket>(trackItem, 0,
+                                                             RtcpPacket::kSenderReport,
+                                                             std::move(payload));
+            if (mSelectedCandidate) {
+                mSelectedCandidate->sendRtcpPacket(packet);
+            }
         }
     }
 }
