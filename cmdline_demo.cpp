@@ -13,6 +13,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+// Program options
+
+static std::string gInputFile = "sintel.h264";
+static std::string gWhipUrl = "http://localhost:8080/whip";
+static std::string gWhipToken = "none";
+static bool gLoopVideo = false;
+
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out) {
     const auto total_size = size * nmemb;
     if (total_size) {
@@ -151,36 +158,40 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
                    const srtc::ByteBuffer& data)
 {
-    std::vector<srtc::ByteBuffer> codecSpecificData;
+    while (true) {
+        std::vector<srtc::ByteBuffer> codecSpecificData;
 
-    // Iterate other frames
-    uint32_t frameCount = 0;
+        // Iterate other frames
+        uint32_t frameCount = 0;
 
-    for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
-        const auto naluType = parser.currType();
-        switch (naluType) {
-            case srtc::h264::NaluType::SPS:
-            case srtc::h264::NaluType::PPS:
-                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                break;
-            case srtc::h264::NaluType::KeyFrame:
-            case srtc::h264::NaluType::NonKeyFrame:
-                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                usleep(1000 * 40);  // 25 fps
-                break;
-            default:
-                break;
+        for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
+            const auto naluType = parser.currType();
+            switch (naluType) {
+                case srtc::h264::NaluType::SPS:
+                case srtc::h264::NaluType::PPS:
+                    peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                    break;
+                case srtc::h264::NaluType::KeyFrame:
+                case srtc::h264::NaluType::NonKeyFrame:
+                    peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                    usleep(1000 * 40);  // 25 fps
+                    break;
+                default:
+                    break;
+            }
+
+            frameCount += 1;
         }
 
-        frameCount += 1;
+        std::cout << "Played " << frameCount << " frames" << std::endl;
+
+        if (gLoopVideo) {
+            std::cout << "Looping back to the beginning" << std::endl;
+        } else {
+            break;
+        }
     }
-
-    std::cout << "Played " << frameCount << " frames" << std::endl;
 }
-
-static std::string gInputFile = "sintel.h264";
-static std::string gWhipUrl = "http://localhost:8080/whip";
-static std::string gWhipToken = "none";
 
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
@@ -188,6 +199,7 @@ void printUsage(const char* programName) {
     std::cout << "  -f, --file <path>    Path to H.264 file (default: " << gInputFile << ")" << std::endl;
     std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
     std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
+    std::cout << "  -l, --loop           Loop the file" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -220,6 +232,8 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: -t/--token requires a token value" << std::endl;
                 return 1;
             }
+        } else if (arg == "-l" || arg == "--loop") {
+            gLoopVideo = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
