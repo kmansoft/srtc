@@ -88,6 +88,7 @@ Options:
   -f, --file <path>    Path to H.264 file (default: sintel.h264)
   -u, --url <url>      WHIP server URL (default: https://localhost:8080)
   -t, --token <token>  WHIP authorization token
+  -l, --loop           Loop the file
   -h, --help           Show this help message
 ```
 
@@ -99,7 +100,7 @@ To broadcast to Amazon IVS:
 
 ### Running with Pion
 
-Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh`. This will run the Pion
+Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh`. This will start the Pion
 WebRTC server.
 
 Open a new web browser window to `http://localhost:8080`, you will see a web page with controls for publishing and subscribing.
