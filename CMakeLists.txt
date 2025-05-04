@@ -170,7 +170,7 @@ target_link_directories(srtc PUBLIC
 
 FetchContent_Declare(
         googletest
-        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        URL https://github.com/google/googletest/archive/04ee1b4f2aefdffb0135d7cf2a2c519fe50dabe4.zip
 )
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
