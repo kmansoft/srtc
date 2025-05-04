@@ -27,17 +27,40 @@ jobs:
       run: |
         sudo apt-get update && sudo apt-get install -y libcurl4t64 libcurl4-openssl-dev ninja-build
 
-    - name: Configure CMake
+    - name: Configure CMake for gcc
       run: |
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -GNinja
+        cmake -B ${{github.workspace}}/build-gcc \
+          -DCMAKE_C_COMPILER=/usr/bin/gcc \
+          -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -GNinja
 
     - name: Build
       run: |
-        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} \
+        cmake --build ${{github.workspace}}/build-gcc --config ${{env.BUILD_TYPE}} \
           --target srtc \
           --target srtc_test \
           --target cmdline_demo
 
     - name: Test
       run: |
-        ${{github.workspace}}/build/srtc_test
+        ${{github.workspace}}/build-gcc/srtc_test
+
+    - name: Configure CMake for clang
+      run: |
+        cmake -B ${{github.workspace}}/build-clang \
+          -DCMAKE_C_COMPILER=/usr/bin/clang \
+          -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -GNinja
+
+    - name: Build
+      run: |
+        cmake --build ${{github.workspace}}/build-clang --config ${{env.BUILD_TYPE}} \
+          --target srtc \
+          --target srtc_test \
+          --target cmdline_demo
+
+    - name: Test
+      run: |
+        ${{github.workspace}}/build-clang/srtc_test
