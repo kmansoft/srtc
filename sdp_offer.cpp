@@ -81,8 +81,6 @@ std::pair<std::string, Error> SdpOffer::generate()
     uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-#define ENABLE_RTX
-
     // Video
     if (mVideoConfig.has_value()) {
         const auto& list = mVideoConfig->codecList;
@@ -90,11 +88,12 @@ std::pair<std::string, Error> SdpOffer::generate()
             return { "", { Error::Code::InvalidData, "The video config list is present but empty"} };
         }
 
-#ifdef ENABLE_RTX
-        ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
-#else
-        ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
-#endif
+        if (mConfig.enableRTX) {
+            ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
+        } else {
+            ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
+        }
+
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
         ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
@@ -121,15 +120,15 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
             ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
 
-#ifdef ENABLE_RTX
-            const auto payloadIdRtx = payloadId + 1;
-            ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
-            ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
+            if (mConfig.enableRTX) {
+                const auto payloadIdRtx = payloadId + 1;
+                ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
+                ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
 
-            payloadId += 2;
-#else
-            payloadId += 1;
-#endif
+                payloadId += 2;
+            } else {
+                payloadId += 1;
+            }
         }
 
         const auto& layerList = mVideoConfig->simulcastLayerList;
@@ -138,20 +137,20 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-#ifdef ENABLE_RTX
-            ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
-            ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+            if (mConfig.enableRTX) {
+                ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
+                ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-            // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-            ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
-#endif
+                // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+                ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
+            }
         } else {
             // Simulcast
             ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
             ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
-#ifdef ENABLE_RTX
-            ss << "a=extmap:3 " << RtpStandardExtensions::kExtSdesRtpRepairedStreamId << std::endl;
-#endif
+            if (mConfig.enableRTX) {
+                ss << "a=extmap:3 " << RtpStandardExtensions::kExtSdesRtpRepairedStreamId << std::endl;
+            }
             ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
 
             for (const auto& layer : layerList) {
@@ -178,13 +177,12 @@ std::pair<std::string, Error> SdpOffer::generate()
                 ss << "a=ssrc:" << videoSSRC << " cname:" << mConfig.cname << std::endl;
                 ss << "a=ssrc:" << videoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-#ifdef ENABLE_RTX
+                if (mConfig.enableRTX) {
+                    ss << "a=ssrc:" << videoRtxSSRC << " cname:" << mConfig.cname << std::endl;
+                    ss << "a=ssrc:" << videoRtxSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-                ss << "a=ssrc:" << videoRtxSSRC << " cname:" << mConfig.cname << std::endl;
-                ss << "a=ssrc:" << videoRtxSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
-
-                ss << "a=ssrc-group:FID " << videoSSRC << " " << videoRtxSSRC << std::endl;
-#endif
+                    ss << "a=ssrc-group:FID " << videoSSRC << " " << videoRtxSSRC << std::endl;
+                }
             }
         }
     }
@@ -196,11 +194,11 @@ std::pair<std::string, Error> SdpOffer::generate()
             return {"", {Error::Code::InvalidData, "The audio config list is present but empty"}};
         }
 
-#ifdef ENABLE_RTX
-        ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
-#else
-        ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
-#endif
+        if (mConfig.enableRTX) {
+            ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
+        } else {
+            ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
+        }
 
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
@@ -224,27 +222,27 @@ std::pair<std::string, Error> SdpOffer::generate()
                    << ";useinbandfec=1" << std::endl;
             }
 
-#ifdef ENABLE_RTX
-            const auto payloadIdRtx = payloadId + 1;
-            ss << "a=rtpmap:" << payloadIdRtx << " rtx/48000" << std::endl;
-            ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
+            if (mConfig.enableRTX) {
+                const auto payloadIdRtx = payloadId + 1;
+                ss << "a=rtpmap:" << payloadIdRtx << " rtx/48000" << std::endl;
+                ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
 
-            payloadId += 2;
-#else
-            payloadId += 1;
-#endif
+                payloadId += 2;
+            } else {
+                payloadId += 1;
+            }
         }
 
         ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
 
-#ifdef ENABLE_RTX
-        ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
-        ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
+        if (mConfig.enableRTX) {
+            ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
+            ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
 
-        // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-        ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
-#endif
+            // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
+            ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
+        }
     }
 
     return { ss.str(), Error::OK };

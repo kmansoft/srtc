@@ -2,11 +2,13 @@
 #include "srtc/sdp_offer.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/h264.h"
+#include "srtc/logging.h"
 
 #include <curl/curl.h>
 #include <curl/easy.h>
 
 #include <iostream>
+#include <iomanip>
 #include <memory>
 
 #include <sys/stat.h>
@@ -134,24 +136,6 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 
     close(h);
 
-    size_t frame_n = 0;
-    for (srtc::h264::NaluParser parser(buf); parser; parser.next()) {
-        const auto naluType = parser.currType();
-        switch (naluType) {
-            case srtc::h264::NaluType::SPS:
-                std::cout << "--- " << frame_n << " SPS" << std::endl;
-                break;
-            case srtc::h264::NaluType::PPS:
-                std::cout << "--- " << frame_n << " PPS" << std::endl;
-                break;
-            case srtc::h264::NaluType::KeyFrame:
-                std::cout << "--- " << frame_n << " KeyFrame" << std::endl;
-            default:
-                break;
-        }
-        frame_n += 1;
-    }
-
     return std::move(buf);
 }
 
@@ -181,9 +165,11 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
             }
 
             frameCount += 1;
-        }
 
-        std::cout << "Played " << frameCount << " frames" << std::endl;
+            if ((frameCount % 25) == 0) {
+                std::cout << "Played " << std::setw(4) << frameCount << " video frames" << std::endl;
+            }   
+        }
 
         if (gLoopVideo) {
             std::cout << "Looping back to the beginning" << std::endl;
@@ -241,8 +227,8 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    std::cout << "Using H.264 file: " << gInputFile << std::endl;
-    std::cout << "Using WHIP URL: " << gWhipUrl << std::endl;
+    std::cout << "*** Using H.264 file: " << gInputFile << std::endl;
+    std::cout << "*** Using WHIP URL: " << gWhipUrl << std::endl;
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -258,12 +244,15 @@ int main(int argc, char* argv[]) {
 
     // Read the file
     const auto inputFileData = readInputFile(gInputFile);
-    std::cout << "*** Read " << inputFileData.size() << " bytes from input video file" << std::endl;
+    std::cout << "*** Read " << inputFileData.size() << " bytes from input video file " << gInputFile << std::endl;
+
+    // Set logging to errors
+    srtc::setLogLevel(SRTC_LOG_E);
 
     // Offer
-
     const OfferConfig offerConfig = {
-            .cname = "foo"
+            .cname = "foo",
+            .enableRTX = true
     };
     const PubVideoConfig videoConfig = {
             .codecList = {
@@ -279,11 +268,9 @@ int main(int argc, char* argv[]) {
     }
 
     // WHIP
-
     const auto answerString = perform_whip(offerString, gWhipUrl, gWhipToken);
 
     // Answer
-
     const auto [ answer, answerError ] = SdpAnswer::parse(offer, answerString, nullptr);
     if (answerError.isError()) {
         std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
@@ -291,7 +278,6 @@ int main(int argc, char* argv[]) {
     }
 
     // Peer connection
-
     std::mutex connectionStateMutex;
     PeerConnection::ConnectionState connectionState = PeerConnection::ConnectionState::Inactive;
     std::condition_variable connectionStateCond;
@@ -313,7 +299,6 @@ int main(int argc, char* argv[]) {
     peerConnection->setSdpAnswer(answer);
 
     // Wait for connection to either be connected or fail
-
     {
         std::unique_lock lock(connectionStateMutex);
         connectionStateCond.wait_for(lock, std::chrono::seconds(15), [&connectionState]() {
@@ -329,11 +314,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Play the video
-
     playVideoFile(peerConnection, inputFileData);
 
     // Wait a little and exit
-
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     return 0;

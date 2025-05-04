@@ -19,6 +19,7 @@ class X509Certificate;
 
 struct OfferConfig {
     std::string cname;
+    bool enableRTX = true;
 };
 
 struct PubVideoCodec {

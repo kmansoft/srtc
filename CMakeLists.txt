@@ -166,88 +166,92 @@ target_include_directories(srtc PRIVATE
 target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/stun")
 
-# Google Test
-
-FetchContent_Declare(
-        googletest
-        URL https://github.com/google/googletest/archive/04ee1b4f2aefdffb0135d7cf2a2c519fe50dabe4.zip
-)
-
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-# LibSRTP - only for tests
-
-list(APPEND LIBSRTP_CMAKE_ARGS
-        "-DLIBSRTP_TEST_APPS=OFF"
-        "-DENABLE_OPENSSL=ON"
-        "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-        )
-
-if(ANDROID)
-    list(APPEND LIBSRTP_CMAKE_ARGS
-            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-            -DANDROID_ABI=${ANDROID_ABI}
-            -DANDROID_PLATFORM=android-29
-            -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
-            )
-endif()
-
-ExternalProject_Add(
-        srtp
-        GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
-        GIT_TAG "76f23aa78124381a9681b7b1a14c52c6cd40ea21"
-        SOURCE_DIR "external/libsrtp"
-        INSTALL_COMMAND ""
-        UPDATE_DISCONNECTED ON
-        CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
-)
-
-set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
-set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
-
-# Google test executable
-
-add_executable(
-        srtc_test
-        EXCLUDE_FROM_ALL
-        test_google_vla.cpp
-        test_replay_protection.cpp
-        test_srtp_key_derivation.cpp
-        test_srtp_crypto.cpp
-)
-
-target_include_directories(
-        srtc_test
-        PRIVATE
-        "${SRTP_INCLUDE_DIR}"
-        "${OPENSSL_INCLUDE_DIR}"
-)
-
-target_link_directories(
-        srtc_test
-        PRIVATE
-        "${SRTP_LIBRARY_DIR}"
-)
-
-add_dependencies(srtc_test srtc srtp)
-
-target_link_libraries(
-        srtc_test
-        GTest::gtest_main
-        srtc
-        srtp3
-        OpenSSL::Crypto
-        OpenSSL::SSL
-)
+# Tests - only when not cross-compiling e.g. Android
 
 if(NOT CMAKE_CROSSCOMPILING)
+
+    # Google Test
+
+    FetchContent_Declare(
+            googletest
+            URL https://github.com/google/googletest/archive/04ee1b4f2aefdffb0135d7cf2a2c519fe50dabe4.zip
+    )
+
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    # LibSRTP - only for tests
+
+    list(APPEND LIBSRTP_CMAKE_ARGS
+            "-DLIBSRTP_TEST_APPS=OFF"
+            "-DENABLE_OPENSSL=ON"
+            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+            )
+
+    if(ANDROID)
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+                -DANDROID_ABI=${ANDROID_ABI}
+                -DANDROID_PLATFORM=android-29
+                -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
+                )
+    endif()
+
+    ExternalProject_Add(
+            srtp
+            GIT_REPOSITORY "https://github.com/cisco/libsrtp.git"
+            GIT_TAG "76f23aa78124381a9681b7b1a14c52c6cd40ea21"
+            SOURCE_DIR "external/libsrtp"
+            INSTALL_COMMAND ""
+            UPDATE_DISCONNECTED ON
+            CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
+    )
+
+    set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
+    set(SRTP_LIBRARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/srtp-prefix/src/srtp-build")
+
+    # Google test executable
+
+    add_executable(
+            srtc_test
+            EXCLUDE_FROM_ALL
+            test_google_vla.cpp
+            test_replay_protection.cpp
+            test_srtp_key_derivation.cpp
+            test_srtp_crypto.cpp
+    )
+
+    target_include_directories(
+            srtc_test
+            PRIVATE
+            "${SRTP_INCLUDE_DIR}"
+            "${OPENSSL_INCLUDE_DIR}"
+    )
+
+    target_link_directories(
+            srtc_test
+            PRIVATE
+            "${SRTP_LIBRARY_DIR}"
+    )
+
+    add_dependencies(srtc_test srtc srtp)
+
+    target_link_libraries(
+            srtc_test
+            GTest::gtest_main
+            srtc
+            srtp3
+            OpenSSL::Crypto
+            OpenSSL::SSL
+    )
+
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
 endif()
 
+# Command line demo
+
 if(UNIX AND NOT ANDROID)
-    # Command line demo
 
     add_executable(cmdline_demo
             cmdline_demo.cpp
