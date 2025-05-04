@@ -14,7 +14,7 @@ Features:
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
 - Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
-- Command line demo has been tested with Pion.
+- Command line demo has been tested with Pion and Amazon IVS.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Works on Linux, Android, MacOS, and should work on iOS too.
 
