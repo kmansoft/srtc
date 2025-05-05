@@ -1,0 +1,10 @@
+BasedOnStyle: Microsoft
+IndentWidth: 4
+NamespaceIndentation: None
+PointerAlignment: Left
+BreakBeforeBraces: Linux
+BinPackParameters: OnePerLine
+FixNamespaceComments: true
+ColumnLimit: 120
+PackConstructorInitializers: Never
+BreakConstructorInitializers: BeforeComma

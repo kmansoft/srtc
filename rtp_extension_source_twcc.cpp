@@ -1,29 +1,28 @@
-#include "srtc/sdp_answer.h"
-#include "srtc/track.h"
-#include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_extension_source_twcc.h"
-#include "srtc/sdp_offer.h"
-#include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
-#include "srtc/rtp_std_extensions.h"
 #include "srtc/logging.h"
+#include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_std_extensions.h"
+#include "srtc/sdp_answer.h"
+#include "srtc/sdp_offer.h"
+#include "srtc/track.h"
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
-namespace {
+namespace
+{
 
 uint8_t findTWCCExtension(const srtc::ExtensionMap& map)
 {
     return map.findByName(srtc::RtpStandardExtensions::kExtGoogleTWCC);
 }
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
-RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(
-    uint8_t nVideoExtTWCC,
-    uint8_t nAudioExtTWCC)
+RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC, uint8_t nAudioExtTWCC)
     : mVideoExtTWCC(nVideoExtTWCC)
     , mAudioExtTWCC(nAudioExtTWCC)
     , mNextPacketSEQ(1)
@@ -31,10 +30,9 @@ RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(
 }
 
 RtpExtensionSourceTWCC::~RtpExtensionSourceTWCC() = default;
-    
-std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(
-    const std::shared_ptr<SdpOffer>& offer,
-    const std::shared_ptr<SdpAnswer>& answer)
+
+std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const std::shared_ptr<SdpOffer>& offer,
+                                                                        const std::shared_ptr<SdpAnswer>& answer)
 {
     const auto& config = offer->getConfig();
     if (!config.enableTWCC) {
@@ -60,28 +58,24 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(
     return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC);
 }
 
-bool RtpExtensionSourceTWCC::wants(
-    const std::shared_ptr<Track>& track,
-    [[maybe_unused]] bool isKeyFrame,
-    [[maybe_unused]] int packetNumber)
+bool RtpExtensionSourceTWCC::wants(const std::shared_ptr<Track>& track,
+                                   [[maybe_unused]] bool isKeyFrame,
+                                   [[maybe_unused]] int packetNumber)
 {
     const auto media = track->getMediaType();
-    return
-        media == MediaType::Video && mVideoExtTWCC != 0 ||
-        media == MediaType::Audio && mAudioExtTWCC != 0;
+    return media == MediaType::Video && mVideoExtTWCC != 0 || media == MediaType::Audio && mAudioExtTWCC != 0;
 }
 
-void RtpExtensionSourceTWCC::add(
-    RtpExtensionBuilder& builder,
-    const std::shared_ptr<Track>& track,
-    [[maybe_unused]] bool isKeyFrame,
-    [[maybe_unused]] int packetNumber)
+void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
+                                 const std::shared_ptr<Track>& track,
+                                 [[maybe_unused]] bool isKeyFrame,
+                                 [[maybe_unused]] int packetNumber)
 {
     const auto seq = mNextPacketSEQ;
     mNextPacketSEQ += 1;
 
     const auto media = track->getMediaType();
-    if (const auto id = mVideoExtTWCC; media == MediaType::Video && id != 0) { 
+    if (const auto id = mVideoExtTWCC; media == MediaType::Video && id != 0) {
         // Video media
         LOG(SRTC_LOG_V, "Adding SEQ=%u to video", seq);
         builder.addU16Value(id, seq);
@@ -92,15 +86,13 @@ void RtpExtensionSourceTWCC::add(
     }
 }
 
-void RtpExtensionSourceTWCC::updateForRtx(
-    RtpExtensionBuilder& builder,
-    const std::shared_ptr<Track>& track)
+void RtpExtensionSourceTWCC::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track)
 {
     const auto seq = mNextPacketSEQ;
     mNextPacketSEQ += 1;
 
     const auto media = track->getMediaType();
-    if (const auto id = mVideoExtTWCC; media == MediaType::Video && id != 0) { 
+    if (const auto id = mVideoExtTWCC; media == MediaType::Video && id != 0) {
         // Video media
         LOG(SRTC_LOG_V, "Adding SEQ=%u to resend video", seq);
         builder.addOrReplaceU16Value(id, seq);
@@ -111,4 +103,4 @@ void RtpExtensionSourceTWCC::updateForRtx(
     }
 }
 
-}
+} // namespace srtc
