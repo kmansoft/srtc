@@ -2,7 +2,8 @@
 
 #include <memory>
 
-namespace srtc {
+namespace srtc
+{
 
 RtpExtension::RtpExtension()
     : mId(0)
@@ -64,9 +65,7 @@ const ByteBuffer& RtpExtension::getData() const
 
 RtpExtension RtpExtension::copy() const
 {
-    return {
-        mId, mData.copy()
-    };
+    return { mId, mData.copy() };
 }
 
-}
+} // namespace srtc

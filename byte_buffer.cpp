@@ -4,7 +4,8 @@
 #include <cassert>
 #include <cstring>
 
-namespace srtc {
+namespace srtc
+{
 
 // ----- ByteBuffer
 
@@ -22,8 +23,7 @@ ByteBuffer::ByteBuffer(size_t size)
 {
 }
 
-ByteBuffer::ByteBuffer(const uint8_t* src,
-                       size_t size)
+ByteBuffer::ByteBuffer(const uint8_t* src, size_t size)
     : mBuf(size == 0 ? nullptr : new uint8_t[size])
     , mLen(size)
     , mCap(size)
@@ -87,7 +87,7 @@ void ByteBuffer::assign(const uint8_t* src, size_t size)
         mBuf = nullptr;
     }
     mLen = size;
-    mCap =  size;
+    mCap = size;
 }
 
 void ByteBuffer::resize(size_t size)
@@ -178,8 +178,7 @@ void ByteWriter::write(const ByteBuffer& value)
     mBuf.append(value.data(), value.size());
 }
 
-void ByteWriter::write(const uint8_t* value,
-                       size_t size)
+void ByteWriter::write(const uint8_t* value, size_t size)
 {
     mBuf.append(value, size);
 }
@@ -192,54 +191,41 @@ void ByteWriter::writeU8(uint8_t value)
 
 void ByteWriter::writeU16(uint16_t value)
 {
-    const uint8_t buf[] = {
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value) };
+    const uint8_t buf[] = { static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
 void ByteWriter::writeU24(uint32_t value)
 {
-    const uint8_t buf[] = {
-            static_cast<uint8_t>(value >> 16),
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value) };
+    const uint8_t buf[] = { static_cast<uint8_t>(value >> 16),
+                            static_cast<uint8_t>(value >> 8),
+                            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
 void ByteWriter::writeU32(uint32_t value)
 {
-    const uint8_t buf[] = {
-            static_cast<uint8_t>(value >> 24),
-            static_cast<uint8_t>(value >> 16),
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value) };
+    const uint8_t buf[] = { static_cast<uint8_t>(value >> 24),
+                            static_cast<uint8_t>(value >> 16),
+                            static_cast<uint8_t>(value >> 8),
+                            static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
 void ByteWriter::writeU48(uint64_t value)
 {
-    const uint8_t buf[] = {
-            static_cast<uint8_t>(value >> 40),
-            static_cast<uint8_t>(value >> 32),
-            static_cast<uint8_t>(value >> 24),
-            static_cast<uint8_t>(value >> 16),
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value) };
+    const uint8_t buf[] = { static_cast<uint8_t>(value >> 40), static_cast<uint8_t>(value >> 32),
+                            static_cast<uint8_t>(value >> 24), static_cast<uint8_t>(value >> 16),
+                            static_cast<uint8_t>(value >> 8),  static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
 void ByteWriter::writeU64(uint64_t value)
 {
-    const uint8_t buf[] = {
-            static_cast<uint8_t>(value >> 56),
-            static_cast<uint8_t>(value >> 48),
-            static_cast<uint8_t>(value >> 40),
-            static_cast<uint8_t>(value >> 32),
-            static_cast<uint8_t>(value >> 24),
-            static_cast<uint8_t>(value >> 16),
-            static_cast<uint8_t>(value >> 8),
-            static_cast<uint8_t>(value) };
+    const uint8_t buf[] = { static_cast<uint8_t>(value >> 56), static_cast<uint8_t>(value >> 48),
+                            static_cast<uint8_t>(value >> 40), static_cast<uint8_t>(value >> 32),
+                            static_cast<uint8_t>(value >> 24), static_cast<uint8_t>(value >> 16),
+                            static_cast<uint8_t>(value >> 8),  static_cast<uint8_t>(value) };
     mBuf.append(buf, sizeof(buf));
 }
 
@@ -307,9 +293,7 @@ uint8_t ByteReader::readU8()
 uint16_t ByteReader::readU16()
 {
     assert(mPos <= mLen - 2);
-    const uint16_t res =
-            (static_cast<uint16_t>(mBuf[mPos]) << 8) |
-                static_cast<uint16_t>(mBuf[mPos + 1]);
+    const uint16_t res = (static_cast<uint16_t>(mBuf[mPos]) << 8) | static_cast<uint16_t>(mBuf[mPos + 1]);
     mPos += 2;
     return res;
 }
@@ -317,11 +301,8 @@ uint16_t ByteReader::readU16()
 uint32_t ByteReader::readU32()
 {
     assert(mPos <= mLen - 4);
-    const uint32_t res =
-            (static_cast<uint32_t>(mBuf[mPos]) << 24) |
-            (static_cast<uint32_t>(mBuf[mPos + 1]) << 16) |
-            (static_cast<uint32_t>(mBuf[mPos + 2]) << 8) |
-                static_cast<uint32_t>(mBuf[mPos + 3]);
+    const uint32_t res = (static_cast<uint32_t>(mBuf[mPos]) << 24) | (static_cast<uint32_t>(mBuf[mPos + 1]) << 16) |
+                         (static_cast<uint32_t>(mBuf[mPos + 2]) << 8) | static_cast<uint32_t>(mBuf[mPos + 3]);
     mPos += 4;
     return res;
 }
@@ -331,4 +312,4 @@ void ByteReader::skip(size_t size)
     mPos += size;
 }
 
-}
+} // namespace srtc

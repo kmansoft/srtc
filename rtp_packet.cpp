@@ -5,7 +5,8 @@
 #include <cassert>
 #include <utility>
 
-namespace {
+namespace
+{
 
 void writeExtension(srtc::ByteWriter& writer, const srtc::RtpExtension& extension)
 {
@@ -32,9 +33,10 @@ void writePayload(srtc::ByteWriter& writer, const srtc::ByteBuffer& payload)
     writer.write(payload);
 }
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
 RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      bool marker,
@@ -60,15 +62,15 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
                      uint32_t timestamp,
                      RtpExtension&& extension,
                      ByteBuffer&& payload)
-        : mTrack(track)
-        , mSSRC(track->getSSRC())
-        , mPayloadId(track->getPayloadId())
-        , mMarker(marker)
-        , mRollover(rollover)
-        , mSequence(sequence)
-        , mTimestamp(timestamp)
-        , mExtension(std::move(extension))
-        , mPayload(std::move(payload))
+    : mTrack(track)
+    , mSSRC(track->getSSRC())
+    , mPayloadId(track->getPayloadId())
+    , mMarker(marker)
+    , mRollover(rollover)
+    , mSequence(sequence)
+    , mTimestamp(timestamp)
+    , mExtension(std::move(extension))
+    , mPayload(std::move(payload))
 {
 }
 
@@ -113,10 +115,7 @@ RtpPacket::Output RtpPacket::generate() const
 
     // V=2 | P | X | CC | M | PT
     const auto ext = !mExtension.empty();
-    const uint16_t header = (2 << 14)
-            | (ext ? (1 << 12) : 0)
-            | (mMarker ? (1 << 7) : 0)
-            | (mPayloadId & 0x7F);
+    const uint16_t header = (2 << 14) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
     writer.writeU16(header);
 
     writer.writeU16(mSequence);
@@ -141,10 +140,7 @@ RtpPacket::Output RtpPacket::generateExt(const RtpExtension& extension) const
 
     // V=2 | P | X | CC | M | PT
     const auto ext = !extension.empty();
-    const uint16_t header = (2 << 14)
-            | (ext ? (1 << 12) : 0)
-            | (mMarker ? (1 << 7) : 0)
-            | (mPayloadId & 0x7F);
+    const uint16_t header = (2 << 14) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
     writer.writeU16(header);
 
     writer.writeU16(mSequence);
@@ -177,14 +173,11 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 
     // V=2 | P | X | CC | M | PT
     const auto ext = !extension.empty();
-    const uint16_t header = (2 << 14)
-            | (ext ? (1 << 12) : 0)
-            | (mMarker ? (1 << 7) : 0)
-            | (rtxPayloadId & 0x7F);
+    const uint16_t header = (2 << 14) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7F);
     writer.writeU16(header);
 
     const auto packetSource = mTrack->getRtxPacketSource();
-    const auto [ rtxRollover, rtxSequence ] = packetSource->getNextSequence();
+    const auto [rtxRollover, rtxSequence] = packetSource->getNextSequence();
     writer.writeU16(rtxSequence);
     writer.writeU32(mTimestamp);
     writer.writeU32(mTrack->getRtxSSRC());
@@ -201,5 +194,4 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
     return { std::move(buf), rtxRollover };
 }
 
-
-}
+} // namespace srtc

@@ -1,15 +1,16 @@
 #pragma once
 
-#include <cstdint>
 #include "srtc/byte_buffer.h"
+#include <cstdint>
 
-namespace srtc {
+namespace srtc
+{
 
-class RtpExtension {
+class RtpExtension
+{
 public:
     RtpExtension();
-    RtpExtension(uint16_t id,
-                 ByteBuffer&& data);
+    RtpExtension(uint16_t id, ByteBuffer&& data);
 
     RtpExtension(RtpExtension&& source) noexcept;
     RtpExtension& operator=(RtpExtension&& source) noexcept;
@@ -24,10 +25,9 @@ public:
 
     [[nodiscard]] RtpExtension copy() const;
 
-
 private:
     uint16_t mId;
     ByteBuffer mData;
 };
 
-}
+} // namespace srtc

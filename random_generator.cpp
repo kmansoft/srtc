@@ -1,6 +1,7 @@
 #include "srtc/random_generator.h"
 
-namespace srtc {
+namespace srtc
+{
 
 template <class Value>
 RandomGenerator<Value>::RandomGenerator(Value min, Value max)
@@ -9,12 +10,11 @@ RandomGenerator<Value>::RandomGenerator(Value min, Value max)
 {
 }
 
-template <class Value>
-Value RandomGenerator<Value>::next()
+template <class Value> Value RandomGenerator<Value>::next()
 {
     return mRandomDist(mRandomTwister);
 }
 
 template class RandomGenerator<uint32_t>;
 
-}
+} // namespace srtc

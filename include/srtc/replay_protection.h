@@ -2,12 +2,13 @@
 
 #include <cstdint>
 
-namespace srtc {
+namespace srtc
+{
 
-class ReplayProtection final {
+class ReplayProtection final
+{
 public:
-    ReplayProtection(uint32_t maxPossibleValue,
-                     uint32_t size);
+    ReplayProtection(uint32_t maxPossibleValue, uint32_t size);
     ~ReplayProtection();
 
     [[nodiscard]] bool canProceed(uint32_t value);
@@ -25,4 +26,4 @@ private:
     void setForward(uint32_t value);
 };
 
-}
+} // namespace srtc

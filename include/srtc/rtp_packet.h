@@ -3,15 +3,17 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_extension.h"
 
-#include <memory>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
-namespace srtc {
+namespace srtc
+{
 
 class Track;
 
-class RtpPacket {
+class RtpPacket
+{
 public:
     // https://stackoverflow.com/questions/47635545/why-webrtc-chose-rtp-max-packet-size-to-1200-bytes
     // https://webrtc.googlesource.com/src/+/refs/heads/main/media/base/media_constants.cc#17
@@ -63,4 +65,4 @@ private:
     const ByteBuffer mPayload;
 };
 
-}
+} // namespace srtc

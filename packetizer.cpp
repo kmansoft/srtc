@@ -1,9 +1,10 @@
-#include "srtc/track.h"
 #include "srtc/packetizer.h"
 #include "srtc/packetizer_h264.h"
 #include "srtc/packetizer_opus.h"
+#include "srtc/track.h"
 
-namespace srtc {
+namespace srtc
+{
 
 Packetizer::Packetizer(const std::shared_ptr<Track>& track)
     : mTrack(track)
@@ -25,12 +26,12 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const s
 {
     const auto codec = track->getCodec();
     switch (codec) {
-        case Codec::H264:
-            return { std::make_shared<PacketizerH264>(track), Error::OK };
-        case Codec::Opus:
-            return { std::make_shared<PacketizerOpus>(track), Error::OK };
-        default:
-            return { nullptr, { Error::Code::InvalidData, "Unsupported codec type" }};
+    case Codec::H264:
+        return { std::make_shared<PacketizerH264>(track), Error::OK };
+    case Codec::Opus:
+        return { std::make_shared<PacketizerOpus>(track), Error::OK };
+    default:
+        return { nullptr, { Error::Code::InvalidData, "Unsupported codec type" } };
     }
 }
 
@@ -39,4 +40,4 @@ std::shared_ptr<Track> Packetizer::getTrack() const
     return mTrack;
 }
 
-}
+} // namespace srtc

@@ -3,7 +3,8 @@
 #include <arpa/inet.h>
 #include <thread>
 
-namespace srtc {
+namespace srtc
+{
 
 enum class Codec {
     None = 0,
@@ -54,4 +55,4 @@ std::string to_string(const anyaddr& addr);
 #define SRTC_SHARED_LOCKS_REQUIRED(...)
 #endif
 
-}
+} // namespace srtc

@@ -4,9 +4,11 @@
 #include <string>
 #include <vector>
 
-namespace srtc {
+namespace srtc
+{
 
-class ExtensionMap {
+class ExtensionMap
+{
 public:
     ExtensionMap() = default;
     ~ExtensionMap() = default;
@@ -19,7 +21,10 @@ public:
 private:
     struct Entry {
         Entry(uint8_t id, const std::string& name)
-            : id(id), name(name) {}
+            : id(id)
+            , name(name)
+        {
+        }
 
         const uint8_t id;
         const std::string name;
@@ -28,4 +33,4 @@ private:
     std::vector<Entry> mEntryList;
 };
 
-}
+} // namespace srtc

@@ -1,22 +1,24 @@
 #include <cstdlib>
 #include <memory>
 
-#include "stunmessage.h"
 #include "stun5389.h"
 #include "stunhmac.h"
+#include "stunmessage.h"
 
 #include "srtc/ice_agent.h"
 #include "srtc/logging.h"
 
 #define LOG(level, ...) srtc::log(level, "IceAgent", __VA_ARGS__)
 
-namespace {
+namespace
+{
 
 const auto kSoftware = "srtc";
 
 }
 
-namespace srtc {
+namespace srtc
+{
 
 IceAgent::IceAgent()
     : mRandom(0, std::numeric_limits<int32_t>::max())
@@ -26,8 +28,7 @@ IceAgent::IceAgent()
 
 IceAgent::~IceAgent() = default;
 
-bool IceAgent::initRequest(StunMessage *msg,
-                           uint8_t *buffer, size_t buffer_len, StunMethod m)
+bool IceAgent::initRequest(StunMessage* msg, uint8_t* buffer, size_t buffer_len, StunMethod m)
 {
     std::memset(msg, 0, sizeof(*msg));
     msg->buffer = buffer;
@@ -36,25 +37,23 @@ bool IceAgent::initRequest(StunMessage *msg,
     StunTransactionId id;
     stun_make_transid(id);
 
-    if (!stun_message_init (msg, STUN_REQUEST, m, id)) {
+    if (!stun_message_init(msg, STUN_REQUEST, m, id)) {
         return false;
     }
 
-    uint32_t cookie = htonl (STUN_MAGIC_COOKIE);
-    memcpy (msg->buffer + STUN_MESSAGE_TRANS_ID_POS, &cookie, sizeof (cookie));
+    uint32_t cookie = htonl(STUN_MAGIC_COOKIE);
+    memcpy(msg->buffer + STUN_MESSAGE_TRANS_ID_POS, &cookie, sizeof(cookie));
 
     stun_message_append_software(msg, kSoftware);
 
-    stun_message_append64 (msg, STUN_ATTRIBUTE_ICE_CONTROLLING, mTie);
+    stun_message_append64(msg, STUN_ATTRIBUTE_ICE_CONTROLLING, mTie);
 
     return true;
 }
 
-bool IceAgent::initResponse(StunMessage *msg,
-                            uint8_t *buffer, size_t buffer_len,
-                            const StunMessage *request)
+bool IceAgent::initResponse(StunMessage* msg, uint8_t* buffer, size_t buffer_len, const StunMessage* request)
 {
-    if (stun_message_get_class (request) != STUN_REQUEST) {
+    if (stun_message_get_class(request) != STUN_REQUEST) {
         return false;
     }
 
@@ -63,9 +62,9 @@ bool IceAgent::initResponse(StunMessage *msg,
     msg->buffer_len = buffer_len;
 
     StunTransactionId id;
-    stun_message_id (request, id);
+    stun_message_id(request, id);
 
-    if (!stun_message_init (msg, STUN_RESPONSE, stun_message_get_method (request), id)) {
+    if (!stun_message_init(msg, STUN_RESPONSE, stun_message_get_method(request), id)) {
         return false;
     }
 
@@ -74,35 +73,36 @@ bool IceAgent::initResponse(StunMessage *msg,
     return true;
 }
 
-bool IceAgent::finishMessage(StunMessage *msg,
-                             const srtc::optional<std::string>& username,
-                             const std::string& password)
+bool IceAgent::finishMessage(StunMessage* msg, const srtc::optional<std::string>& username, const std::string& password)
 {
     if (username.has_value()) {
-        stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME,
-                                   username.value().c_str());
+        stun_message_append_string(msg, STUN_ATTRIBUTE_USERNAME, username.value().c_str());
     }
 
-    auto ptr = stun_message_append (msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, 20);
+    auto ptr = stun_message_append(msg, STUN_ATTRIBUTE_MESSAGE_INTEGRITY, 20);
     if (!ptr) {
         return false;
     }
 
-    stun_sha1 (msg->buffer, stun_message_length (msg),
-               stun_message_length (msg) - 20, reinterpret_cast<uint8_t *>(ptr),
-               reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
+    stun_sha1(msg->buffer,
+              stun_message_length(msg),
+              stun_message_length(msg) - 20,
+              reinterpret_cast<uint8_t*>(ptr),
+              reinterpret_cast<const uint8_t*>(password.data()),
+              password.size(),
+              false);
 
-    ptr = stun_message_append (msg, STUN_ATTRIBUTE_FINGERPRINT, 4);
+    ptr = stun_message_append(msg, STUN_ATTRIBUTE_FINGERPRINT, 4);
     if (!ptr) {
         return false;
     }
 
-    auto fpr = stun_fingerprint (msg->buffer, stun_message_length (msg), false);
-    std::memcpy (ptr, &fpr, sizeof (fpr));
+    auto fpr = stun_fingerprint(msg->buffer, stun_message_length(msg), false);
+    std::memcpy(ptr, &fpr, sizeof(fpr));
 
-    if (stun_message_get_class (msg) == STUN_REQUEST) {
+    if (stun_message_get_class(msg) == STUN_REQUEST) {
         StunTransactionId id;
-        stun_message_id (msg, id);
+        stun_message_id(msg, id);
         mTransactionList.emplace_back(std::chrono::steady_clock::now(), id);
     }
 
@@ -125,18 +125,16 @@ void IceAgent::forgetExpiredTransactions(const std::chrono::milliseconds& expira
 {
     const auto now = std::chrono::steady_clock::now();
 
-    for (auto it = mTransactionList.begin(); it != mTransactionList.end(); ) {
+    for (auto it = mTransactionList.begin(); it != mTransactionList.end();) {
         if (it->when < now - expiration) {
             it = mTransactionList.erase(it);
         } else {
-            ++ it;
+            ++it;
         }
     }
 }
 
-bool IceAgent::verifyRequestMessage(StunMessage* msg,
-                                    const std::string& username,
-                                    const std::string& password)
+bool IceAgent::verifyRequestMessage(StunMessage* msg, const std::string& username, const std::string& password)
 {
     // Fingerprint
     uint16_t attrFingerprintLen = { 0 };
@@ -150,9 +148,7 @@ bool IceAgent::verifyRequestMessage(StunMessage* msg,
     uint32_t fingerprintMessage;
     std::memcpy(&fingerprintMessage, attrFingerprintPtr, 4);
 
-    const auto fingerprintCalculated = stun_fingerprint(msg->buffer,
-                                                        stun_message_length(msg),
-                                                        false);
+    const auto fingerprintCalculated = stun_fingerprint(msg->buffer, stun_message_length(msg), false);
 
     if (fingerprintMessage != fingerprintCalculated) {
         LOG(SRTC_LOG_E, "Request verification failed: fingerprint does not match");
@@ -168,7 +164,7 @@ bool IceAgent::verifyRequestMessage(StunMessage* msg,
         return false;
     }
 
-    const std::string attrUserName { reinterpret_cast<const char*>(attrUserNamePtr), attrUserNameLen };
+    const std::string attrUserName{ reinterpret_cast<const char*>(attrUserNamePtr), attrUserNameLen };
     if (attrUserName != username) {
         LOG(SRTC_LOG_E, "Request verification failed: username does not match");
         return false;
@@ -186,9 +182,13 @@ bool IceAgent::verifyRequestMessage(StunMessage* msg,
     const auto sha1Message = reinterpret_cast<const uint8_t*>(attrIntegrityPtr);
     uint8_t sha1Calculated[20];
 
-    stun_sha1 (msg->buffer, sha1Message + 20 - msg->buffer,
-               sha1Message - msg->buffer, sha1Calculated,
-               reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
+    stun_sha1(msg->buffer,
+              sha1Message + 20 - msg->buffer,
+              sha1Message - msg->buffer,
+              sha1Calculated,
+              reinterpret_cast<const uint8_t*>(password.data()),
+              password.size(),
+              false);
 
     if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
         LOG(SRTC_LOG_E, "Request verification failed: signature does not match");
@@ -199,8 +199,7 @@ bool IceAgent::verifyRequestMessage(StunMessage* msg,
     return true;
 }
 
-bool IceAgent::verifyResponseMessage(StunMessage* msg,
-                                     const std::string& password)
+bool IceAgent::verifyResponseMessage(StunMessage* msg, const std::string& password)
 {
     // Fingerprint
     uint16_t attrFingerprintLen = { 0 };
@@ -214,9 +213,7 @@ bool IceAgent::verifyResponseMessage(StunMessage* msg,
     uint32_t fingerprintMessage;
     std::memcpy(&fingerprintMessage, attrFingerprintPtr, 4);
 
-    const auto fingerprintCalculated = stun_fingerprint(msg->buffer,
-                                                        stun_message_length(msg),
-                                                        false);
+    const auto fingerprintCalculated = stun_fingerprint(msg->buffer, stun_message_length(msg), false);
 
     if (fingerprintMessage != fingerprintCalculated) {
         LOG(SRTC_LOG_E, "Response verification failed: fingerprint does not match");
@@ -235,9 +232,13 @@ bool IceAgent::verifyResponseMessage(StunMessage* msg,
     const auto sha1Message = reinterpret_cast<const uint8_t*>(attrIntegrityPtr);
     uint8_t sha1Calculated[20];
 
-    stun_sha1 (msg->buffer, sha1Message + 20 - msg->buffer,
-               sha1Message - msg->buffer, sha1Calculated,
-               reinterpret_cast<const uint8_t*>(password.data()), password.size(), false);
+    stun_sha1(msg->buffer,
+              sha1Message + 20 - msg->buffer,
+              sha1Message - msg->buffer,
+              sha1Calculated,
+              reinterpret_cast<const uint8_t*>(password.data()),
+              password.size(),
+              false);
 
     if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
         LOG(SRTC_LOG_E, "Response verification failed: signature does not match");
@@ -248,4 +249,4 @@ bool IceAgent::verifyResponseMessage(StunMessage* msg,
     return true;
 }
 
-}
+} // namespace srtc

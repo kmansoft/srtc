@@ -2,13 +2,15 @@
 
 #include "srtc/replay_protection.h"
 
-namespace {
-    constexpr uint32_t kSize = 2048;
+namespace
+{
+constexpr uint32_t kSize = 2048;
 }
 
 // Replay protection
 
-TEST(ReplayProtection, TestEmpty) {
+TEST(ReplayProtection, TestEmpty)
+{
 
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
@@ -76,14 +78,12 @@ TEST(ReplayProtection, TestSimpleWithRollover)
     srtc::ReplayProtection replay_16(std::numeric_limits<uint16_t>::max(), kSize);
     {
         uint16_t value = 42926;
-        for (uint16_t i = 0; ; i += 1) {
+        for (uint16_t i = 0;; i += 1) {
             if (i >= 1) {
-                ASSERT_TRUE(replay_16.canProceed(
-                        static_cast<uint16_t>(value - 1))) << "-1, value = " << value;
+                ASSERT_TRUE(replay_16.canProceed(static_cast<uint16_t>(value - 1))) << "-1, value = " << value;
             }
             if (i >= 2) {
-                ASSERT_FALSE(replay_16.canProceed(
-                        static_cast<uint16_t>(value - 100))) << "-100, value = " << value;
+                ASSERT_FALSE(replay_16.canProceed(static_cast<uint16_t>(value - 100))) << "-100, value = " << value;
             }
             ASSERT_TRUE(replay_16.canProceed(value));
             ASSERT_TRUE(replay_16.set(value));
@@ -118,20 +118,14 @@ TEST(ReplayProtection, TestRollover16)
         const auto value = std::numeric_limits<uint16_t>::max() - 100;
         ASSERT_TRUE(replay_16.set(value));
 
-        ASSERT_FALSE(replay_16.canProceed(
-                static_cast<uint16_t>(value + kSize / 2)));
-        ASSERT_FALSE(replay_16.canProceed(
-                static_cast<uint16_t>(value - kSize)));
+        ASSERT_FALSE(replay_16.canProceed(static_cast<uint16_t>(value + kSize / 2)));
+        ASSERT_FALSE(replay_16.canProceed(static_cast<uint16_t>(value - kSize)));
 
-        ASSERT_TRUE(replay_16.canProceed(
-                static_cast<uint16_t>(value + kSize / 4)));
-        ASSERT_TRUE(replay_16.canProceed(
-                static_cast<uint16_t>(value - kSize + 1)));
+        ASSERT_TRUE(replay_16.canProceed(static_cast<uint16_t>(value + kSize / 4)));
+        ASSERT_TRUE(replay_16.canProceed(static_cast<uint16_t>(value - kSize + 1)));
 
-        ASSERT_TRUE(replay_16.set(
-                static_cast<uint16_t>(value + kSize / 4)));
-        ASSERT_FALSE(replay_16.canProceed(
-                static_cast<uint16_t>(value + kSize / 4)));
+        ASSERT_TRUE(replay_16.set(static_cast<uint16_t>(value + kSize / 4)));
+        ASSERT_FALSE(replay_16.canProceed(static_cast<uint16_t>(value + kSize / 4)));
     }
 }
 
@@ -142,19 +136,13 @@ TEST(ReplayProtection, TestRollover32)
         uint32_t value = std::numeric_limits<uint32_t>::max() - 100;
         ASSERT_TRUE(replay_32.set(value));
 
-        ASSERT_FALSE(replay_32.canProceed(
-                static_cast<uint32_t>(value + kSize / 2)));
-        ASSERT_FALSE(replay_32.canProceed(
-                static_cast<uint32_t>(value - kSize)));
+        ASSERT_FALSE(replay_32.canProceed(static_cast<uint32_t>(value + kSize / 2)));
+        ASSERT_FALSE(replay_32.canProceed(static_cast<uint32_t>(value - kSize)));
 
-        ASSERT_TRUE(replay_32.canProceed(
-                static_cast<uint32_t>(value + kSize / 4)));
-        ASSERT_TRUE(replay_32.canProceed(
-                static_cast<uint32_t>(value - kSize + 1)));
+        ASSERT_TRUE(replay_32.canProceed(static_cast<uint32_t>(value + kSize / 4)));
+        ASSERT_TRUE(replay_32.canProceed(static_cast<uint32_t>(value - kSize + 1)));
 
-        ASSERT_TRUE(replay_32.set(
-                static_cast<uint32_t>(value + kSize / 4)));
-        ASSERT_FALSE(replay_32.canProceed(
-                static_cast<uint32_t>(value + kSize / 4)));
+        ASSERT_TRUE(replay_32.set(static_cast<uint32_t>(value + kSize / 4)));
+        ASSERT_FALSE(replay_32.canProceed(static_cast<uint32_t>(value + kSize / 4)));
     }
 }

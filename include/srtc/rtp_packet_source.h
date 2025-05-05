@@ -1,16 +1,17 @@
 #pragma once
 
-#include <memory>
 #include <cstdint>
+#include <memory>
 
 #include "srtc/random_generator.h"
 
-namespace srtc {
+namespace srtc
+{
 
-class RtpPacketSource {
+class RtpPacketSource
+{
 public:
-    RtpPacketSource(uint32_t ssrc,
-                    uint8_t payloadId);
+    RtpPacketSource(uint32_t ssrc, uint8_t payloadId);
     ~RtpPacketSource();
 
     [[nodiscard]] uint32_t getSSRC() const;
@@ -29,4 +30,4 @@ private:
     uint16_t mNextSequence;
 };
 
-}
+} // namespace srtc

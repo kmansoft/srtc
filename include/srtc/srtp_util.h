@@ -1,18 +1,20 @@
 #pragma once
 
-#include <memory>
 #include <cstdint>
+#include <memory>
 
-namespace srtc {
+namespace srtc
+{
 
 class CryptoWriter;
 
 // ----- CryptoBytes
 
-class CryptoBytes {
+class CryptoBytes
+{
 public:
     // Enough for AES 128 to AES 256 key sizes
-    uint8_t v8[32] = { };
+    uint8_t v8[32] = {};
 
     CryptoBytes();
 
@@ -35,7 +37,8 @@ private:
 
 // ----- CryptoWriter
 
-class CryptoWriter {
+class CryptoWriter
+{
 public:
     explicit CryptoWriter(CryptoBytes& bytes);
 
@@ -51,7 +54,8 @@ private:
 
 // ----- KeyDerivation
 
-class KeyDerivation {
+class KeyDerivation
+{
 public:
     static constexpr uint8_t kLabelRtpKey = 0;
     static constexpr uint8_t kLabelRtpAuth = 1;
@@ -67,4 +71,4 @@ public:
                                        size_t desiredOutputSize);
 };
 
-}
+} // namespace srtc

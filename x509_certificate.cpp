@@ -1,17 +1,18 @@
-#include "srtc/util.h"
-#include "srtc/byte_buffer.h"
 #include "srtc/x509_certificate.h"
+#include "srtc/byte_buffer.h"
+#include "srtc/util.h"
 
-#include <openssl/x509.h>
-#include <openssl/rsa.h>
-#include <openssl/pem.h>
 #include <openssl/bio.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
 
-namespace srtc {
+namespace srtc
+{
 
 struct X509CertificateImpl {
     EVP_PKEY* pkey = { nullptr };
-    X509* x509 = {nullptr };
+    X509* x509 = { nullptr };
     ByteBuffer fp256bin;
     std::string fp256hex;
 };
@@ -32,7 +33,7 @@ X509Certificate::X509Certificate()
 
     EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
     EVP_PKEY_CTX_set1_rsa_keygen_pubexp(ctx, e);
-    
+
     EVP_PKEY_keygen(ctx, &mImpl->pkey);
 #else
     mImpl->pkey = EVP_PKEY_new();
@@ -53,20 +54,17 @@ X509Certificate::X509Certificate()
 
     const auto name = X509_get_subject_name(mImpl->x509);
 
-    X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC,
-                               (unsigned char *)"US", -1, -1, 0);
-    X509_NAME_add_entry_by_txt(name, "O",  MBSTRING_ASC,
-                               (unsigned char *)"MyCompany Inc.", -1, -1, 0);
-    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-                               (unsigned char *)"localhost", -1, -1, 0);
+    X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (unsigned char*)"US", -1, -1, 0);
+    X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC, (unsigned char*)"MyCompany Inc.", -1, -1, 0);
+    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char*)"localhost", -1, -1, 0);
 
     X509_set_issuer_name(mImpl->x509, name);
 
     X509_sign(mImpl->x509, mImpl->pkey, EVP_sha1());
 
     // Fingerprint
-    uint8_t fpBuf[32] = { };
-    unsigned int fpSize = { };
+    uint8_t fpBuf[32] = {};
+    unsigned int fpSize = {};
 
     const auto digest = EVP_get_digestbyname("sha256");
     X509_digest(mImpl->x509, digest, fpBuf, &fpSize);
@@ -107,4 +105,4 @@ X509Certificate::~X509Certificate()
     delete mImpl;
 }
 
-}
+} // namespace srtc

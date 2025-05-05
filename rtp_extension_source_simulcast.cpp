@@ -1,19 +1,19 @@
 #include "srtc/rtp_extension_source_simulcast.h"
+#include "srtc/logging.h"
+#include "srtc/packetizer.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/packetizer.h"
-#include "srtc/logging.h"
 
 #define LOG(level, ...) srtc::log(level, "Simulcast", __VA_ARGS__)
 
-namespace srtc {
+namespace srtc
+{
 
-RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast(
-        uint8_t nVideoExtMediaId,
-        uint8_t nVideoExtStreamId,
-        uint8_t nVideoExtRepairedStreamId,
-        uint8_t nVideoExtGoogleVLA)
+RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast(uint8_t nVideoExtMediaId,
+                                                         uint8_t nVideoExtStreamId,
+                                                         uint8_t nVideoExtRepairedStreamId,
+                                                         uint8_t nVideoExtGoogleVLA)
     : mVideoExtMediaId(nVideoExtMediaId)
     , mVideoExtStreamId(nVideoExtStreamId)
     , mVideoExtRepairedStreamId(nVideoExtRepairedStreamId)
@@ -24,39 +24,35 @@ RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast(
 
 RtpExtensionSourceSimulcast::~RtpExtensionSourceSimulcast() = default;
 
-std::shared_ptr<RtpExtensionSourceSimulcast> RtpExtensionSourceSimulcast::factory(
-    bool isVideoSimulcast,
-    uint8_t nVideoExtMediaId,
-    uint8_t nVideoExtStreamId,
-    uint8_t nVideoExtRepairedStreamId,
-    uint8_t nVideoExtGoogleVLA)
+std::shared_ptr<RtpExtensionSourceSimulcast> RtpExtensionSourceSimulcast::factory(bool isVideoSimulcast,
+                                                                                  uint8_t nVideoExtMediaId,
+                                                                                  uint8_t nVideoExtStreamId,
+                                                                                  uint8_t nVideoExtRepairedStreamId,
+                                                                                  uint8_t nVideoExtGoogleVLA)
 {
     if (isVideoSimulcast) {
         if (nVideoExtMediaId > 0 && nVideoExtStreamId > 0 && nVideoExtGoogleVLA > 0) {
             return std::make_shared<RtpExtensionSourceSimulcast>(
-                nVideoExtMediaId, nVideoExtStreamId,
-                nVideoExtRepairedStreamId, nVideoExtGoogleVLA);
+                nVideoExtMediaId, nVideoExtStreamId, nVideoExtRepairedStreamId, nVideoExtGoogleVLA);
         }
     }
 
     return {};
 }
 
-bool RtpExtensionSourceSimulcast::shouldAdd(
-        const std::shared_ptr<Track>& track,
-        const std::shared_ptr<Packetizer>& packetizer,
-        const ByteBuffer& frame)
+bool RtpExtensionSourceSimulcast::shouldAdd(const std::shared_ptr<Track>& track,
+                                            const std::shared_ptr<Packetizer>& packetizer,
+                                            const ByteBuffer& frame)
 {
-    if (mIsExtensionsValid  && track->isSimulcast()) {
+    if (mIsExtensionsValid && track->isSimulcast()) {
         const auto stats = track->getStats();
         return stats->getSentBytes() < 100 || packetizer->isKeyFrame(frame);
     }
     return false;
 }
 
-void RtpExtensionSourceSimulcast::prepare(
-    const std::shared_ptr<Track>& track,
-    const std::vector<std::shared_ptr<SimulcastLayer>>& layerList)
+void RtpExtensionSourceSimulcast::prepare(const std::shared_ptr<Track>& track,
+                                          const std::vector<std::shared_ptr<SimulcastLayer>>& layerList)
 {
     const auto layer = track->getSimulcastLayer();
 
@@ -72,19 +68,15 @@ void RtpExtensionSourceSimulcast::clear()
     mCurGoogleVLA.resize(0);
 }
 
-bool RtpExtensionSourceSimulcast::wants(
-    const std::shared_ptr<Track>& track,
-    bool isKeyFrame,
-    int packetNumber)
+bool RtpExtensionSourceSimulcast::wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber)
 {
     return !mCurGoogleVLA.empty();
 }
 
-void RtpExtensionSourceSimulcast::add(
-    RtpExtensionBuilder& builder,
-    const std::shared_ptr<Track>& track,
-    bool isKeyFrame,
-    int packetNumber)
+void RtpExtensionSourceSimulcast::add(RtpExtensionBuilder& builder,
+                                      const std::shared_ptr<Track>& track,
+                                      bool isKeyFrame,
+                                      int packetNumber)
 {
     // LOG(SRTC_LOG_V, "Adding extensions for layer %s", mCurLayerName.c_str());
 
@@ -93,9 +85,7 @@ void RtpExtensionSourceSimulcast::add(
     builder.addBinaryValue(mVideoExtGoogleVLA, mCurGoogleVLA);
 }
 
-void RtpExtensionSourceSimulcast::updateForRtx(
-    RtpExtensionBuilder& builder,
-    const std::shared_ptr<Track>& track)
+void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track)
 {
     const auto layer = track->getSimulcastLayer();
 
@@ -109,4 +99,4 @@ void RtpExtensionSourceSimulcast::updateForRtx(
     }
 }
 
-}
+} // namespace srtc

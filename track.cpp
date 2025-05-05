@@ -1,10 +1,11 @@
 #include "srtc/track.h"
-#include "srtc/track_stats.h"
-#include "srtc/rtp_time_source.h"
-#include "srtc/rtp_packet_source.h"
 #include "srtc/rtcp_packet_source.h"
+#include "srtc/rtp_packet_source.h"
+#include "srtc/rtp_time_source.h"
+#include "srtc/track_stats.h"
 
-namespace srtc {
+namespace srtc
+{
 
 Track::Track(int trackId,
              MediaType mediaType,
@@ -135,4 +136,4 @@ std::shared_ptr<TrackStats> Track::getStats() const
     return mStats;
 }
 
-}
+} // namespace srtc

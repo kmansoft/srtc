@@ -2,19 +2,20 @@
 
 #include "srtc/logging.h"
 
-#include <unistd.h>
 #include <sys/event.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_MacOS", __VA_ARGS__)
 
-namespace srtc {
+namespace srtc
+{
 
 std::shared_ptr<EventLoop> EventLoop::factory()
 {
     return std::make_shared<EventLoop_MacOS>();
 }
-    
+
 EventLoop_MacOS::EventLoop_MacOS()
     : mKQueue(kqueue())
     , mPipeRead(-1)
@@ -47,7 +48,7 @@ void EventLoop_MacOS::registerSocket(int socket, void* udata)
 {
     struct kevent change = {};
     EV_SET(&change, socket, EVFILT_READ, EV_ADD, 0, 0, udata);
-    
+
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
         LOG(SRTC_LOG_E, "Cannot add socket to kqueue");
     }
@@ -57,14 +58,13 @@ void EventLoop_MacOS::unregisterSocket(int socket)
 {
     struct kevent change = {};
     EV_SET(&change, socket, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    
+
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
         LOG(SRTC_LOG_E, "Cannot remove socket from kqueue");
     }
 }
 
-void EventLoop_MacOS::wait(std::vector<void*>& udataList,
-    int timeoutMillis)
+void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
 {
     udataList.clear();
 
@@ -101,4 +101,4 @@ void EventLoop_MacOS::interrupt()
     }
 }
 
-}
+} // namespace srtc

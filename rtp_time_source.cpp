@@ -1,6 +1,7 @@
 #include "srtc/rtp_time_source.h"
 
-namespace srtc {
+namespace srtc
+{
 
 RtpTimeSource::RtpTimeSource(uint32_t clockRate)
     : mClockRate(clockRate)
@@ -21,4 +22,4 @@ uint32_t RtpTimeSource::getCurrTimestamp()
     return timestamp;
 }
 
-}
+} // namespace srtc

@@ -1,6 +1,7 @@
 #include "srtc/rtp_extension_source.h"
 
-namespace srtc {
+namespace srtc
+{
 
 RtpExtensionSource::~RtpExtensionSource() = default;
 

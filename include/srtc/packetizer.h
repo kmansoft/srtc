@@ -1,17 +1,18 @@
 #pragma once
 
 #include "srtc/error.h"
-#include "srtc/srtc.h"
+#include "srtc/optional.h"
 #include "srtc/random_generator.h"
 #include "srtc/rtp_packet.h"
-#include "srtc/optional.h"
+#include "srtc/srtc.h"
 
+#include <chrono>
 #include <list>
 #include <memory>
 #include <utility>
-#include <chrono>
 
-namespace srtc {
+namespace srtc
+{
 
 class Track;
 class ByteBuffer;
@@ -20,7 +21,8 @@ class RtpPacketSource;
 class RtpExtension;
 class RtpExtensionSource;
 
-class Packetizer {
+class Packetizer
+{
 public:
     explicit Packetizer(const std::shared_ptr<Track>& track);
     virtual ~Packetizer();
@@ -40,4 +42,4 @@ private:
     const std::shared_ptr<Track> mTrack;
 };
 
-}
+} // namespace srtc

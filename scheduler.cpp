@@ -7,7 +7,8 @@
 
 #define LOG(level, tag, ...) srtc::log(level, tag, __VA_ARGS__)
 
-namespace srtc {
+namespace srtc
+{
 
 // ----- Task
 
@@ -30,11 +31,7 @@ Scheduler::~Scheduler() = default;
 // ----- ThreadScheduler
 
 ThreadScheduler::TaskImpl::TaskImpl(
-        const std::weak_ptr<ThreadScheduler>& owner,
-        const When& when,
-        const char* file,
-        int line,
-        const Func& func)
+    const std::weak_ptr<ThreadScheduler>& owner, const When& when, const char* file, int line, const Func& func)
     : mOwner(owner)
     , mWhen(when)
     , mFile(file)
@@ -86,26 +83,17 @@ ThreadScheduler::~ThreadScheduler()
     }
 }
 
-std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay,
-                                            const char* file,
-                                            int line,
-                                            const Func& func)
+std::weak_ptr<Task> ThreadScheduler::submit(const Delay& delay, const char* file, int line, const Func& func)
 {
     // Please instantiate using std::make_shared
     assert(weak_from_this().lock());
 
     const auto when = std::chrono::steady_clock::now() + delay;
-    const auto task = std::make_shared<TaskImpl>(
-            weak_from_this(),
-            when,
-            file,
-            line,
-            func);
+    const auto task = std::make_shared<TaskImpl>(weak_from_this(), when, file, line, func);
 
     {
         std::lock_guard lock(mMutex);
-        mTaskQueue.insert(std::upper_bound(
-                mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
+        mTaskQueue.insert(std::upper_bound(mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
     }
 
     mCondVar.notify_one();
@@ -127,8 +115,7 @@ void ThreadScheduler::dump()
 {
     std::unique_lock lock(mMutex);
 
-    srtc::log(SRTC_LOG_V, "ThreadScheduler",
-              "Queue contains %zd items", mTaskQueue.size());
+    srtc::log(SRTC_LOG_V, "ThreadScheduler", "Queue contains %zd items", mTaskQueue.size());
 }
 
 void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
@@ -140,9 +127,7 @@ void ThreadScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
         return;
     }
 
-    mCondVar.wait(lock,  [this, task]() SRTC_EXCLUSIVE_LOCKS_REQUIRED(mMutex)   {
-       return mIsQuit || task->mIsCompleted;
-    });
+    mCondVar.wait(lock, [this, task]() SRTC_EXCLUSIVE_LOCKS_REQUIRED(mMutex) { return mIsQuit || task->mIsCompleted; });
 }
 
 std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
@@ -155,15 +140,10 @@ std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>&
     }
 
     const auto when = std::chrono::steady_clock::now() + delay;
-    const auto newTask = std::make_shared<TaskImpl>(
-            weak_from_this(),
-            when,
-            oldTask->mFile,
-            oldTask->mLine,
-            oldTask->mFunc);
+    const auto newTask =
+        std::make_shared<TaskImpl>(weak_from_this(), when, oldTask->mFile, oldTask->mLine, oldTask->mFunc);
 
-    mTaskQueue.insert(std::upper_bound(
-            mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
+    mTaskQueue.insert(std::upper_bound(mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
 
     mCondVar.notify_one();
     return newTask;
@@ -189,7 +169,8 @@ void ThreadScheduler::threadFunc(const std::string name)
             }
 
             const auto head = mTaskQueue.empty() ? nullptr : mTaskQueue.front();
-            const auto delay = head == nullptr ? std::chrono::seconds(60) : head->mWhen - std::chrono::steady_clock::now();
+            const auto delay =
+                head == nullptr ? std::chrono::seconds(60) : head->mWhen - std::chrono::steady_clock::now();
 
             if (delay.count() <= 0) {
                 task = head;
@@ -230,16 +211,12 @@ void ThreadScheduler::threadFunc(const std::string name)
 // ----- LoopScheduler
 
 LoopScheduler::TaskImpl::TaskImpl(
-        const std::weak_ptr<LoopScheduler>& owner,
-        const When& when,
-        const char* file,
-        int line,
-        const Func& func)
-        : mOwner(owner)
-        , mWhen(when)
-        , mFile(file)
-        , mLine(line)
-        , mFunc(func)
+    const std::weak_ptr<LoopScheduler>& owner, const When& when, const char* file, int line, const Func& func)
+    : mOwner(owner)
+    , mWhen(when)
+    , mFile(file)
+    , mLine(line)
+    , mFunc(func)
 {
     assert(mOwner.lock());
 }
@@ -274,10 +251,7 @@ LoopScheduler::~LoopScheduler()
     assertCurrentThread();
 }
 
-std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
-                                          const char* file,
-                                          int line,
-                                          const Func& func)
+std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay, const char* file, int line, const Func& func)
 {
     // Please instantiate using std::make_shared
     assert(weak_from_this().lock());
@@ -289,15 +263,9 @@ std::weak_ptr<Task> LoopScheduler::submit(const Delay& delay,
     assertCurrentThread();
 
     const auto when = std::chrono::steady_clock::now() + delay;
-    const auto task = std::make_shared<TaskImpl>(
-            weak_from_this(),
-            when,
-            file,
-            line,
-            func);
+    const auto task = std::make_shared<TaskImpl>(weak_from_this(), when, file, line, func);
 
-    mTaskQueue.insert(std::upper_bound(
-            mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
+    mTaskQueue.insert(std::upper_bound(mTaskQueue.begin(), mTaskQueue.end(), task, TaskImplLess()), task);
 
     return task;
 }
@@ -315,8 +283,7 @@ std::shared_ptr<RealScheduler> LoopScheduler::getRealScheduler()
 
 void LoopScheduler::dump()
 {
-    srtc::log(SRTC_LOG_V, "LoopScheduler",
-        "Queue contains %zu items", mTaskQueue.size());
+    srtc::log(SRTC_LOG_V, "LoopScheduler", "Queue contains %zu items", mTaskQueue.size());
 }
 
 int LoopScheduler::getTimeoutMillis(int defaultValue) const
@@ -327,7 +294,8 @@ int LoopScheduler::getTimeoutMillis(int defaultValue) const
         return defaultValue;
     }
 
-    const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen - std::chrono::steady_clock::now());
+    const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(mTaskQueue.front()->mWhen -
+                                                                            std::chrono::steady_clock::now());
     if (diff <= std::chrono::milliseconds::zero()) {
         return 0;
     }
@@ -372,27 +340,18 @@ std::weak_ptr<Task> LoopScheduler::updateImpl(const std::shared_ptr<TaskImpl>& o
     }
 
     const auto when = std::chrono::steady_clock::now() + delay;
-    const auto newTask = std::make_shared<TaskImpl>(
-            weak_from_this(),
-            when,
-            oldTask->mFile,
-            oldTask->mLine,
-            oldTask->mFunc);
+    const auto newTask =
+        std::make_shared<TaskImpl>(weak_from_this(), when, oldTask->mFile, oldTask->mLine, oldTask->mFunc);
 
-    mTaskQueue.insert(std::upper_bound(
-            mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
+    mTaskQueue.insert(std::upper_bound(mTaskQueue.begin(), mTaskQueue.end(), newTask, TaskImplLess()), newTask);
 
     return newTask;
 }
 
-
 // ScopedScheduler
 
-ScopedScheduler::TaskImpl::TaskImpl(ScopedScheduler* owner,
-                                    const std::weak_ptr<Task>& task,
-                                    const char* file,
-                                    int line,
-                                    const Func& func)
+ScopedScheduler::TaskImpl::TaskImpl(
+    ScopedScheduler* owner, const std::weak_ptr<Task>& task, const char* file, int line, const Func& func)
     : mOwner(owner)
     , mTask(task)
     , mFile(file)
@@ -433,10 +392,7 @@ ScopedScheduler::~ScopedScheduler()
     mSubmitted.clear();
 }
 
-std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay,
-                                            const char* file,
-                                            int line,
-                                            const Func& func)
+std::weak_ptr<Task> ScopedScheduler::submit(const Delay& delay, const char* file, int line, const Func& func)
 {
     std::lock_guard lock(mMutex);
 
@@ -473,8 +429,7 @@ void ScopedScheduler::cancelImpl(const std::shared_ptr<TaskImpl>& task)
     }
 }
 
-std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
-                                                  const Delay& delay)
+std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>& oldTask, const Delay& delay)
 {
     std::lock_guard lock(mMutex);
 
@@ -485,7 +440,7 @@ std::weak_ptr<Task> ScopedScheduler::updateImpl(const std::shared_ptr<TaskImpl>&
     }
 
     if (const auto ptr = oldTask->mTask.lock()) {
-        const auto updated =  ptr->update(delay);
+        const auto updated = ptr->update(delay);
         const auto newTask = std::make_shared<TaskImpl>(this, updated, oldTask->mFile, oldTask->mLine, oldTask->mFunc);
         mSubmitted.push_back(newTask);
         return newTask;
@@ -500,9 +455,9 @@ void ScopedScheduler::removeExpiredLocked()
         if ((*iter)->mTask.expired()) {
             iter = mSubmitted.erase(iter);
         } else {
-            ++ iter;
+            ++iter;
         }
     }
 }
 
-}
+} // namespace srtc

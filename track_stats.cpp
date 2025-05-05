@@ -1,6 +1,7 @@
 #include "srtc/track_stats.h"
 
-namespace srtc {
+namespace srtc
+{
 
 TrackStats::TrackStats()
     : mSentPackets(0)
@@ -36,4 +37,4 @@ void TrackStats::incrementSentBytes(uint32_t increment)
     mSentBytes += increment;
 }
 
-}
+} // namespace srtc

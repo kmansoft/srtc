@@ -4,13 +4,13 @@
 
 #include <string>
 
-namespace srtc {
+namespace srtc
+{
 
-class X509Hash {
+class X509Hash
+{
 public:
-    X509Hash(const std::string& alg,
-             const ByteBuffer& bin,
-             const std::string& hex);
+    X509Hash(const std::string& alg, const ByteBuffer& bin, const std::string& hex);
     ~X509Hash() = default;
 
     X509Hash(const X509Hash& hash);
@@ -25,4 +25,4 @@ private:
     const std::string mHex;
 };
 
-}
+} // namespace srtc

@@ -4,7 +4,11 @@ NamespaceIndentation: None
 PointerAlignment: Left
 BreakBeforeBraces: Linux
 BinPackParameters: OnePerLine
+BinPackArguments: false
 FixNamespaceComments: true
 ColumnLimit: 120
 PackConstructorInitializers: Never
 BreakConstructorInitializers: BeforeComma
+IndentAccessModifiers: false
+AccessModifierOffset: -4
+Cpp11BracedListStyle: false

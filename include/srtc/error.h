@@ -2,20 +2,24 @@
 
 #include <string>
 
-namespace srtc {
+namespace srtc
+{
 
-class Error {
+class Error
+{
 public:
     enum class Code {
         OK,
         InvalidData
     };
 
-    [[nodiscard]] bool isOk() const {
+    [[nodiscard]] bool isOk() const
+    {
         return mCode == Code::OK;
     }
 
-    [[nodiscard]] bool isError() const {
+    [[nodiscard]] bool isError() const
+    {
         return mCode != Code::OK;
     }
 
@@ -27,4 +31,4 @@ public:
     const std::string mMessage;
 };
 
-}
+} // namespace srtc

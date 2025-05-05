@@ -3,16 +3,17 @@
 #include <cinttypes>
 #include <cstddef>
 
-namespace srtc {
+namespace srtc
+{
 
 // ByteBuffer
 
-class ByteBuffer {
+class ByteBuffer
+{
 public:
     ByteBuffer();
     explicit ByteBuffer(size_t size);
-    ByteBuffer(const uint8_t* src,
-                        size_t size);
+    ByteBuffer(const uint8_t* src, size_t size);
 
     ~ByteBuffer();
 
@@ -50,12 +51,12 @@ private:
 
 // ByteWriter
 
-class ByteWriter {
+class ByteWriter
+{
 public:
     explicit ByteWriter(ByteBuffer& buf);
 
-    void write(const uint8_t* value,
-               size_t size);
+    void write(const uint8_t* value, size_t size);
     void write(const ByteBuffer& value);
 
     void writeU8(uint8_t value);
@@ -72,7 +73,8 @@ private:
 
 // ByteReader
 
-class ByteReader {
+class ByteReader
+{
 public:
     explicit ByteReader(const ByteBuffer& buf);
     ByteReader(const ByteBuffer& buf, size_t size);
@@ -93,4 +95,4 @@ private:
     size_t mPos;
 };
 
-}
+} // namespace srtc

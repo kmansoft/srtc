@@ -6,22 +6,23 @@
 // contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 
-#include "srtc/byte_buffer.h"
 #include "srtc/srtp_crypto.h"
-#include "srtc/srtp_util.h"
+#include "srtc/byte_buffer.h"
 #include "srtc/srtp_hmac_sha1.h"
 #include "srtc/srtp_openssl.h"
+#include "srtc/srtp_util.h"
 
 #include <arpa/inet.h>
 
-#include <cstring>
 #include <cassert>
+#include <cstring>
 
-#include <openssl/srtp.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/srtp.h>
 
-namespace {
+namespace
+{
 
 constexpr size_t kAESGCM_TagSize = 16;
 
@@ -31,140 +32,110 @@ constexpr uint32_t kRTCP_EncryptedBit = 0x80000000u;
 constexpr size_t kRTCP_HeaderSize = 8u;
 constexpr size_t kRTCP_TrailerSize = 4u;
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
-std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(
-        uint16_t profileId,
-        const CryptoBytes& sendMasterKey,
-        const CryptoBytes& sendMasterSalt,
-        const CryptoBytes& receiveMasterKey,
-        const CryptoBytes& receiveMasterSalt)
+std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(uint16_t profileId,
+                                                                 const CryptoBytes& sendMasterKey,
+                                                                 const CryptoBytes& sendMasterSalt,
+                                                                 const CryptoBytes& receiveMasterKey,
+                                                                 const CryptoBytes& receiveMasterSalt)
 {
     initOpenSSL();
 
     if (sendMasterKey.empty() || receiveMasterKey.empty()) {
-        return { nullptr, { Error::Code::InvalidData, "Master key is empty"}};
+        return { nullptr, { Error::Code::InvalidData, "Master key is empty" } };
     }
     if (sendMasterSalt.empty() || receiveMasterSalt.empty()) {
-        return { nullptr, { Error::Code::InvalidData, "Master salt is empty"}};
+        return { nullptr, { Error::Code::InvalidData, "Master salt is empty" } };
     }
 
     switch (profileId) {
-        case SRTP_AEAD_AES_256_GCM:
-        case SRTP_AEAD_AES_128_GCM:
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            break;
-        default:
-            return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id"}};
+    case SRTP_AEAD_AES_256_GCM:
+    case SRTP_AEAD_AES_128_GCM:
+    case SRTP_AES128_CM_SHA1_80:
+    case SRTP_AES128_CM_SHA1_32:
+        break;
+    default:
+        return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id" } };
     }
 
     // Send RTP
     CryptoVectors sendRtp;
-    if (!KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                 KeyDerivation::kLabelRtpKey,
-                                 sendRtp.key,
-                                 sendMasterKey.size())
-        ||
-        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                  KeyDerivation::kLabelRtpAuth,
-                                  sendRtp.auth,
-                                  20)
-        ||
-        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                  KeyDerivation::kLabelRtpSalt,
-                                  sendRtp.salt,
-                                  sendMasterSalt.size())
-            ) {
-        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
+    if (!KeyDerivation::generate(
+            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpKey, sendRtp.key, sendMasterKey.size()) ||
+        !KeyDerivation::generate(sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpAuth, sendRtp.auth, 20) ||
+        !KeyDerivation::generate(
+            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpSalt, sendRtp.salt, sendMasterSalt.size())) {
+        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
     // Send RTCP
     CryptoVectors sendRtcp;
-    if (!KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                 KeyDerivation::kLabelRtcpKey,
-                                 sendRtcp.key,
-                                 sendMasterKey.size())
-        ||
-        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                  KeyDerivation::kLabelRtcpAuth,
-                                  sendRtcp.auth,
-                                  20)
-        ||
-        ! KeyDerivation::generate(sendMasterKey, sendMasterSalt,
-                                  KeyDerivation::kLabelRtcpSalt,
-                                  sendRtcp.salt,
-                                  sendMasterSalt.size())
-            ) {
-        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
+    if (!KeyDerivation::generate(
+            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpKey, sendRtcp.key, sendMasterKey.size()) ||
+        !KeyDerivation::generate(sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpAuth, sendRtcp.auth, 20) ||
+        !KeyDerivation::generate(
+            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpSalt, sendRtcp.salt, sendMasterSalt.size())) {
+        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
     // Receive RTCP
     CryptoVectors receiveRtcp;
-    if (!KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
+    if (!KeyDerivation::generate(receiveMasterKey,
+                                 receiveMasterSalt,
                                  KeyDerivation::kLabelRtcpKey,
                                  receiveRtcp.key,
-                                 receiveMasterKey.size())
-        ||
-        ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
-                                  KeyDerivation::kLabelRtcpAuth,
-                                  receiveRtcp.auth,
-                                  20)
-        ||
-        ! KeyDerivation::generate(receiveMasterKey, receiveMasterSalt,
-                                  KeyDerivation::kLabelRtcpSalt,
-                                  receiveRtcp.salt,
-                                  receiveMasterSalt.size())
-    ) {
-        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts"}};
+                                 receiveMasterKey.size()) ||
+        !KeyDerivation::generate(
+            receiveMasterKey, receiveMasterSalt, KeyDerivation::kLabelRtcpAuth, receiveRtcp.auth, 20) ||
+        !KeyDerivation::generate(receiveMasterKey,
+                                 receiveMasterSalt,
+                                 KeyDerivation::kLabelRtcpSalt,
+                                 receiveRtcp.salt,
+                                 receiveMasterSalt.size())) {
+        return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
-    return {
-            std::make_shared<SrtpCrypto>(profileId, sendRtp, sendRtcp, receiveRtcp),
-            Error::OK
-    };
+    return { std::make_shared<SrtpCrypto>(profileId, sendRtp, sendRtcp, receiveRtcp), Error::OK };
 }
 
 size_t SrtpCrypto::getMediaProtectionOverhead() const
 {
     switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-        case SRTP_AEAD_AES_128_GCM:
-            return kAESGCM_TagSize;
-        case SRTP_AES128_CM_SHA1_80:
-            return 10;
-        case SRTP_AES128_CM_SHA1_32:
-            return 4;
-        default:
-            assert(false);
-            return 0;
+    case SRTP_AEAD_AES_256_GCM:
+    case SRTP_AEAD_AES_128_GCM:
+        return kAESGCM_TagSize;
+    case SRTP_AES128_CM_SHA1_80:
+        return 10;
+    case SRTP_AES128_CM_SHA1_32:
+        return 4;
+    default:
+        assert(false);
+        return 0;
     }
 }
 
-bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet,
-                                uint32_t rolloverCount,
-                                ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     encrypted.resize(0);
 
     switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-        case SRTP_AEAD_AES_128_GCM:
-            return protectSendRtpGCM(packet, rolloverCount, encrypted);
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            return protectSendRtpCM(packet, rolloverCount, encrypted);
-        default:
-            assert(false);
-            return false;
+    case SRTP_AEAD_AES_256_GCM:
+    case SRTP_AEAD_AES_128_GCM:
+        return protectSendRtpGCM(packet, rolloverCount, encrypted);
+    case SRTP_AES128_CM_SHA1_80:
+    case SRTP_AES128_CM_SHA1_32:
+        return protectSendRtpCM(packet, rolloverCount, encrypted);
+    default:
+        assert(false);
+        return false;
     }
 }
 
-bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet,
-                                   uint32_t rolloverCount,
-                                   ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -225,7 +196,10 @@ bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet,
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+    if (!EVP_EncryptUpdate(ctx,
+                           encryptedData + headerSize,
+                           &len,
+                           packetData + headerSize,
                            static_cast<int>(packetSize - headerSize))) {
         goto fail;
     }
@@ -254,9 +228,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,
-                                  uint32_t rolloverCount,
-                                  ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -265,15 +237,15 @@ bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,
 
     size_t digestSize;
     switch (mProfileId) {
-        case SRTP_AES128_CM_SHA1_80:
-            digestSize = 10;
-            break;
-        case SRTP_AES128_CM_SHA1_32:
-            digestSize = 4;
-            break;
-        default:
-            assert(false);
-            return false;
+    case SRTP_AES128_CM_SHA1_80:
+        digestSize = 10;
+        break;
+    case SRTP_AES128_CM_SHA1_32:
+        digestSize = 4;
+        break;
+    default:
+        assert(false);
+        return false;
     }
 
     const auto packetData = packet.data();
@@ -328,7 +300,10 @@ bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet,
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+    if (!EVP_EncryptUpdate(ctx,
+                           encryptedData + headerSize,
+                           &len,
+                           packetData + headerSize,
                            static_cast<int>(packetSize - headerSize))) {
         goto fail;
     }
@@ -359,28 +334,24 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtcp(const ByteBuffer& packet,
-                                 uint32_t seq,
-                                 ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtcp(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     encrypted.resize(0);
 
     switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-        case SRTP_AEAD_AES_128_GCM:
-            return protectSendRtcpGCM(packet, seq, encrypted);
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            return protectSendRtcpCM(packet, seq, encrypted);
-        default:
-            assert(false);
-            return false;
+    case SRTP_AEAD_AES_256_GCM:
+    case SRTP_AEAD_AES_128_GCM:
+        return protectSendRtcpGCM(packet, seq, encrypted);
+    case SRTP_AES128_CM_SHA1_80:
+    case SRTP_AES128_CM_SHA1_32:
+        return protectSendRtcpCM(packet, seq, encrypted);
+    default:
+        assert(false);
+        return false;
     }
 }
 
-bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
-                                    uint32_t seq,
-                                    ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -431,12 +402,16 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet,
         goto fail;
     }
 
-    if (!EVP_EncryptUpdate(ctx, nullptr, &len, reinterpret_cast<const uint8_t*>(&trailer), static_cast<int>(trailerSize))) {
+    if (!EVP_EncryptUpdate(
+            ctx, nullptr, &len, reinterpret_cast<const uint8_t*>(&trailer), static_cast<int>(trailerSize))) {
         goto fail;
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+    if (!EVP_EncryptUpdate(ctx,
+                           encryptedData + headerSize,
+                           &len,
+                           packetData + headerSize,
                            static_cast<int>(packetSize - headerSize))) {
         goto fail;
     }
@@ -468,9 +443,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet,
-                                   uint32_t seq,
-                                   ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
@@ -520,7 +493,10 @@ bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet,
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx, encryptedData + headerSize, &len, packetData + headerSize,
+    if (!EVP_EncryptUpdate(ctx,
+                           encryptedData + headerSize,
+                           &len,
+                           packetData + headerSize,
                            static_cast<int>(packetSize - headerSize))) {
         goto fail;
     }
@@ -544,7 +520,7 @@ bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet,
 
     std::memcpy(encryptedData + encryptedSize - digestSize, digest, digestSize);
 
-    fail:
+fail:
     if (final_ret > 0) {
         assert(total_len + headerSize + trailerSize + digestSize == encryptedSize);
         encrypted.resize(encryptedSize);
@@ -553,26 +529,24 @@ bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet,
     return false;
 }
 
-bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet,
-                                      ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet, ByteBuffer& plain)
 {
     plain.resize(0);
 
     switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-        case SRTP_AEAD_AES_128_GCM:
-            return unprotectReceiveRtcpGCM(packet, plain);
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            return unprotectReceiveRtcpCM(packet, plain);
-        default:
-            assert(false);
-            return false;
+    case SRTP_AEAD_AES_256_GCM:
+    case SRTP_AEAD_AES_128_GCM:
+        return unprotectReceiveRtcpGCM(packet, plain);
+    case SRTP_AES128_CM_SHA1_80:
+    case SRTP_AES128_CM_SHA1_32:
+        return unprotectReceiveRtcpCM(packet, plain);
+    default:
+        assert(false);
+        return false;
     }
 }
 
-bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
-                                         ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet, ByteBuffer& plain)
 {
     const auto encryptedSize = packet.size();
     if (encryptedSize <= 4 + 4 + 16 + 4) {
@@ -624,7 +598,9 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
     }
 
     // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kAESGCM_TagSize,
+    if (!EVP_CIPHER_CTX_ctrl(ctx,
+                             EVP_CTRL_GCM_SET_TAG,
+                             kAESGCM_TagSize,
                              encrypedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize)) {
         goto fail;
     }
@@ -635,7 +611,10 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
             goto fail;
         }
     } else {
-        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encrypedData,
+        if (!EVP_DecryptUpdate(ctx,
+                               nullptr,
+                               &len,
+                               encrypedData,
                                static_cast<int>(encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
             goto fail;
         }
@@ -651,13 +630,18 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet,
 
     // Encrypted portion
     if (isEncrypted) {
-        if (!EVP_DecryptUpdate(ctx, plainData + kRTCP_HeaderSize, &len, encrypedData + kRTCP_HeaderSize,
-                               static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
+        if (!EVP_DecryptUpdate(
+                ctx,
+                plainData + kRTCP_HeaderSize,
+                &len,
+                encrypedData + kRTCP_HeaderSize,
+                static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
             goto fail;
         }
         plain_len += len;
     } else {
-        std::memcpy(plainData + kRTCP_HeaderSize, encrypedData + kRTCP_HeaderSize,
+        std::memcpy(plainData + kRTCP_HeaderSize,
+                    encrypedData + kRTCP_HeaderSize,
                     encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
         plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
     }
@@ -677,8 +661,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
-                                        ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet, ByteBuffer& plain)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
@@ -700,7 +683,7 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
     const auto encrypedData = packet.data();
     const auto digestPtr = encrypedData + encryptedSize - digestSize;
 
-    uint8_t digest[20] = {};   // 160 bits
+    uint8_t digest[20] = {}; // 160 bits
 
     if (!mHmacSha1->reset(mReceiveRtcp.auth.data(), mReceiveRtcp.auth.size())) {
         return false;
@@ -751,7 +734,10 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
         }
 
         // Decrypt
-        if (!EVP_DecryptUpdate(ctx, plainData + kRTCP_HeaderSize, &len, encrypedData + kRTCP_HeaderSize,
+        if (!EVP_DecryptUpdate(ctx,
+                               plainData + kRTCP_HeaderSize,
+                               &len,
+                               encrypedData + kRTCP_HeaderSize,
                                static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize))) {
             goto fail;
         }
@@ -763,7 +749,8 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet,
             plain_len += len;
         }
     } else {
-        std::memcpy(plainData + kRTCP_HeaderSize, encrypedData + kRTCP_HeaderSize,
+        std::memcpy(plainData + kRTCP_HeaderSize,
+                    encrypedData + kRTCP_HeaderSize,
                     encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
         plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
         final_ret = 1;
@@ -816,17 +803,16 @@ SrtpCrypto::~SrtpCrypto()
 const EVP_CIPHER* SrtpCrypto::createCipher() const
 {
     switch (mProfileId) {
-        case SRTP_AEAD_AES_256_GCM:
-            return EVP_aes_256_gcm();
-        case SRTP_AEAD_AES_128_GCM:
-            return EVP_aes_128_gcm();
-        case SRTP_AES128_CM_SHA1_80:
-        case SRTP_AES128_CM_SHA1_32:
-            return EVP_aes_128_ctr();
-        default:
-            return nullptr;
+    case SRTP_AEAD_AES_256_GCM:
+        return EVP_aes_256_gcm();
+    case SRTP_AEAD_AES_128_GCM:
+        return EVP_aes_128_gcm();
+    case SRTP_AES128_CM_SHA1_80:
+    case SRTP_AES128_CM_SHA1_32:
+        return EVP_aes_128_ctr();
+    default:
+        return nullptr;
     }
-
 }
 
-}
+} // namespace srtc

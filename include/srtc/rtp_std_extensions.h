@@ -2,9 +2,11 @@
 
 #include <string>
 
-namespace srtc {
+namespace srtc
+{
 
-class RtpStandardExtensions {
+class RtpStandardExtensions
+{
 public:
     static const std::string kExtSdesMid;
     static const std::string kExtSdesRtpStreamId;
@@ -13,4 +15,4 @@ public:
     static const std::string kExtGoogleTWCC;
 };
 
-}
+} // namespace srtc

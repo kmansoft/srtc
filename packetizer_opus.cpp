@@ -1,11 +1,12 @@
 #include "srtc/packetizer_opus.h"
-#include "srtc/track.h"
-#include "srtc/rtp_packet_source.h"
-#include "srtc/rtp_extension_source.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source.h"
+#include "srtc/rtp_packet_source.h"
 #include "srtc/rtp_time_source.h"
+#include "srtc/track.h"
 
-namespace srtc {
+namespace srtc
+{
 
 PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
     : Packetizer(track)
@@ -45,14 +46,12 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
 
     const auto [rollover, sequence] = packetSource->getNextSequence();
     result.push_back(
-            extension.empty()
-            ? std::make_shared<RtpPacket>(
-                    track, false, rollover, sequence, frameTimestamp, std::move(payload))
+        extension.empty()
+            ? std::make_shared<RtpPacket>(track, false, rollover, sequence, frameTimestamp, std::move(payload))
             : std::make_shared<RtpPacket>(
-                track, false, rollover, sequence, frameTimestamp, std::move(extension), std::move(payload))
-        );
+                  track, false, rollover, sequence, frameTimestamp, std::move(extension), std::move(payload)));
 
     return result;
 }
 
-}
+} // namespace srtc

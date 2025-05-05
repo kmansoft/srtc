@@ -2,22 +2,21 @@
 
 #include "srtc/byte_buffer.h"
 
-#include <memory>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
-namespace srtc {
+namespace srtc
+{
 
 class Track;
 
-class RtcpPacket {
+class RtcpPacket
+{
 public:
     static constexpr uint8_t kSenderReport = 200;
 
-    RtcpPacket(const std::shared_ptr<Track>& track,
-               uint8_t rc,
-               uint8_t payloadId,
-               ByteBuffer&& payload);
+    RtcpPacket(const std::shared_ptr<Track>& track, uint8_t rc, uint8_t payloadId, ByteBuffer&& payload);
 
     ~RtcpPacket();
 
@@ -36,4 +35,4 @@ private:
     const ByteBuffer mPayload;
 };
 
-}
+} // namespace srtc

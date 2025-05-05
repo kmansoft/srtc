@@ -3,12 +3,12 @@
 #include <cstring>
 #include <ctime>
 
-namespace srtc {
-
-std::string bin_to_hex(const uint8_t *buf,
-                       size_t size)
+namespace srtc
 {
-    static const char *const ALPHABET = "0123456789abcdef";
+
+std::string bin_to_hex(const uint8_t* buf, size_t size)
+{
+    static const char* const ALPHABET = "0123456789abcdef";
 
     std::string hex;
     for (size_t i = 0; i < size; i += 1) {
@@ -21,7 +21,8 @@ std::string bin_to_hex(const uint8_t *buf,
     return hex;
 }
 
-ByteBuffer hex_to_bin(const std::string& hex) {
+ByteBuffer hex_to_bin(const std::string& hex)
+{
     ByteBuffer buf;
     ByteWriter writer(buf);
 
@@ -55,34 +56,23 @@ ByteBuffer hex_to_bin(const std::string& hex) {
     return std::move(buf);
 }
 
-bool operator==(
-        const struct sockaddr_in& sin1,
-        const struct sockaddr_in& sin2)
+bool operator==(const struct sockaddr_in& sin1, const struct sockaddr_in& sin2)
 {
-    return sin1.sin_family == sin2.sin_family &&
-           sin1.sin_port == sin2.sin_port &&
+    return sin1.sin_family == sin2.sin_family && sin1.sin_port == sin2.sin_port &&
            sin1.sin_addr.s_addr == sin2.sin_addr.s_addr;
 }
 
-bool operator==(
-        const struct sockaddr_in6& sin1,
-        const struct sockaddr_in6& sin2)
+bool operator==(const struct sockaddr_in6& sin1, const struct sockaddr_in6& sin2)
 {
-    return sin1.sin6_family == sin2.sin6_family &&
-           sin1.sin6_port == sin2.sin6_port &&
+    return sin1.sin6_family == sin2.sin6_family && sin1.sin6_port == sin2.sin6_port &&
            std::memcmp(&sin1.sin6_addr, &sin2.sin6_addr, sizeof(sin1.sin6_addr)) == 0;
 }
 
-bool operator==(
-        const anyaddr& addr1,
-        const anyaddr& addr2)
+bool operator==(const anyaddr& addr1, const anyaddr& addr2)
 {
-    return
-            addr1.ss.ss_family == addr2.ss.ss_family &&
-            (
-                    addr1.ss.ss_family == AF_INET && addr1.sin_ipv4 == addr2.sin_ipv4 ||
-                    addr1.ss.ss_family == AF_INET6 && addr1.sin_ipv6 == addr2.sin_ipv6
-            );
+    return addr1.ss.ss_family == addr2.ss.ss_family &&
+           (addr1.ss.ss_family == AF_INET && addr1.sin_ipv4 == addr2.sin_ipv4 ||
+            addr1.ss.ss_family == AF_INET6 && addr1.sin_ipv6 == addr2.sin_ipv6);
 }
 
 void getNtpTime(NtpTime& ntp)
@@ -106,4 +96,4 @@ void getNtpTime(NtpTime& ntp)
     ntp.fraction = static_cast<uint32_t>(static_cast<double>(current_time.tv_nsec) * 4.294967296);
 }
 
-}
+} // namespace srtc

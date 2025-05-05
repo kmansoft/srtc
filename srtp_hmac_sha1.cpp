@@ -11,7 +11,8 @@
 #include <cassert>
 #include <cstring>
 
-namespace srtc {
+namespace srtc
+{
 
 HmacSha1::HmacSha1()
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
@@ -39,8 +40,7 @@ HmacSha1::~HmacSha1()
 #endif
 }
 
-bool HmacSha1::reset(const uint8_t* key,
-                     size_t keySize)
+bool HmacSha1::reset(const uint8_t* key, size_t keySize)
 {
     if (!mCtx) {
         return false;
@@ -61,8 +61,7 @@ bool HmacSha1::reset(const uint8_t* key,
     return true;
 }
 
-void HmacSha1::update(const uint8_t* data,
-                      size_t size)
+void HmacSha1::update(const uint8_t* data, size_t size)
 {
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     EVP_MAC_update(mCtx, data, size);
@@ -84,4 +83,4 @@ void HmacSha1::final(uint8_t* out)
     assert(out_len == 20);
 }
 
-}
+} // namespace srtc

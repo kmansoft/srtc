@@ -1,19 +1,20 @@
 #pragma once
 
-#include <string>
-#include <optional>
-#include <vector>
 #include <cstdint>
-#include <random>
 #include <memory>
+#include <optional>
+#include <random>
+#include <string>
+#include <vector>
 
-#include "srtc/srtc.h"
 #include "srtc/error.h"
-#include "srtc/random_generator.h"
 #include "srtc/optional.h"
+#include "srtc/random_generator.h"
 #include "srtc/simulcast_layer.h"
+#include "srtc/srtc.h"
 
-namespace srtc {
+namespace srtc
+{
 
 class X509Certificate;
 
@@ -25,7 +26,7 @@ struct OfferConfig {
 
 struct PubVideoCodec {
     Codec codec;
-    uint32_t profileLevelId;    // for h264
+    uint32_t profileLevelId; // for h264
 };
 
 struct PubVideoConfig {
@@ -43,7 +44,8 @@ struct PubAudioConfig {
     std::vector<PubAudioCodec> codecList;
 };
 
-class SdpOffer {
+class SdpOffer
+{
 public:
     SdpOffer(const OfferConfig& config,
              const srtc::optional<PubVideoConfig>& videoConfig,
@@ -99,4 +101,4 @@ private:
     std::vector<LayerSSRC> mLayerSSRC;
 };
 
-}
+} // namespace srtc

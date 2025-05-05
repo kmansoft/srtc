@@ -2,7 +2,8 @@
 
 #include <algorithm>
 
-namespace srtc {
+namespace srtc
+{
 
 RtpExtensionBuilder::RtpExtensionBuilder()
     : mWriter(mBuf)
@@ -48,8 +49,8 @@ void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
             const auto offset = reader.current();
             const auto data = mBuf.data();
 
-            data[offset+0] = (value >> 16) & 0xFF;
-            data[offset+1] = (value & 0xFF);
+            data[offset + 0] = (value >> 16) & 0xFF;
+            data[offset + 1] = (value & 0xFF);
 
             return;
         }
@@ -62,7 +63,7 @@ void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
 RtpExtension RtpExtensionBuilder::build()
 {
     if (mBuf.empty()) {
-        return { 0, {}};
+        return { 0, {} };
     }
 
     return { 0x1000, std::move(mBuf) };
@@ -98,4 +99,4 @@ RtpExtensionBuilder::RtpExtensionBuilder(const ByteBuffer& buf)
 {
 }
 
-}
+} // namespace srtc

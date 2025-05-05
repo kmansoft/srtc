@@ -1,24 +1,26 @@
 #pragma once
 
-#include "srtc/srtc.h"
 #include "srtc/optional.h"
 #include "srtc/simulcast_layer.h"
+#include "srtc/srtc.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
-#include <atomic>
 
-namespace srtc {
+namespace srtc
+{
 
 class RtcpPacketSource;
 class RtpTimeSource;
 class RtpPacketSource;
 class TrackStats;
 
-class Track {
+class Track
+{
 public:
     struct SimulcastLayer : public srtc::SimulcastLayer {
-        uint16_t index;  // [0..3]
+        uint16_t index; // [0..3]
     };
 
     struct CodecOptions {
@@ -29,7 +31,11 @@ public:
         const bool stereo;
 
         CodecOptions(int profileLevelId, int minptime, bool stereo)
-            : profileLevelId(profileLevelId), minptime(minptime), stereo(stereo) {}
+            : profileLevelId(profileLevelId)
+            , minptime(minptime)
+            , stereo(stereo)
+        {
+        }
     };
 
     Track(int trackId,
@@ -90,4 +96,4 @@ private:
     const std::shared_ptr<TrackStats> mStats;
 };
 
-}
+} // namespace srtc

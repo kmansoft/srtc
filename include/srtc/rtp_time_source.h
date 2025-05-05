@@ -1,13 +1,15 @@
 #pragma once
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 
 #include "srtc/random_generator.h"
 
-namespace srtc {
+namespace srtc
+{
 
-class RtpTimeSource {
+class RtpTimeSource
+{
 public:
     RtpTimeSource(uint32_t clockRate);
     ~RtpTimeSource();
@@ -21,4 +23,4 @@ private:
     const uint32_t mClockBaseValue;
 };
 
-}
+} // namespace srtc

@@ -4,18 +4,17 @@
 
 #include <string>
 
-namespace srtc {
+namespace srtc
+{
 
 std::string to_string(const anyaddr& addr)
 {
     char buf[INET6_ADDRSTRLEN + 16];
     const char* ptr;
     if (addr.ss.ss_family == AF_INET6) {
-        ptr = inet_ntop(addr.sin_ipv6.sin6_family,
-                        &addr.sin_ipv6.sin6_addr, buf, sizeof(buf));
+        ptr = inet_ntop(addr.sin_ipv6.sin6_family, &addr.sin_ipv6.sin6_addr, buf, sizeof(buf));
     } else {
-        ptr = inet_ntop(addr.sin_ipv4.sin_family,
-                  &addr.sin_ipv4.sin_addr, buf, sizeof(buf));
+        ptr = inet_ntop(addr.sin_ipv4.sin_family, &addr.sin_ipv4.sin_addr, buf, sizeof(buf));
     }
 
     if (ptr == nullptr) {
@@ -35,4 +34,4 @@ std::string to_string(const anyaddr& addr)
     return addrs;
 }
 
-}
+} // namespace srtc

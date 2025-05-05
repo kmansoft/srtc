@@ -3,13 +3,15 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_extension.h"
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
-namespace srtc {
+namespace srtc
+{
 
-class RtpExtensionBuilder {
+class RtpExtensionBuilder
+{
 public:
     RtpExtensionBuilder();
     ~RtpExtensionBuilder();
@@ -33,4 +35,4 @@ private:
     explicit RtpExtensionBuilder(const ByteBuffer& buf);
 };
 
-}
+} // namespace srtc

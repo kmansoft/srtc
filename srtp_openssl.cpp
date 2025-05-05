@@ -2,19 +2,22 @@
 
 #include <mutex>
 
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 
-namespace {
+namespace
+{
 
 std::once_flag gInitFlag;
 
 }
 
-namespace srtc {
+namespace srtc
+{
 
-void initOpenSSL() {
-    std::call_once(gInitFlag, []{
+void initOpenSSL()
+{
+    std::call_once(gInitFlag, [] {
         OpenSSL_add_all_algorithms();
         OpenSSL_add_all_ciphers();
         OpenSSL_add_all_digests();
@@ -22,5 +25,4 @@ void initOpenSSL() {
     });
 }
 
-}
-
+} // namespace srtc

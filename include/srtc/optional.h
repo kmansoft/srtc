@@ -8,14 +8,16 @@
 
 #include <cassert>
 
-namespace srtc {
+namespace srtc
+{
 
-struct nullopt_t { };
+struct nullopt_t {
+};
 
 static constexpr nullopt_t nullopt;
 
-template <class T>
-class optional {
+template <class T> class optional
+{
 public:
     optional();
     optional(const T& value);
@@ -37,12 +39,14 @@ private:
     bool mHasValue;
     union {
         T mValue;
-        char fill = { 0 };
+        char fill = {0};
     };
 };
 
 template <class T>
-optional<T>::optional() : mHasValue(false) {
+optional<T>::optional()
+    : mHasValue(false)
+{
 }
 
 template <class T>
@@ -67,16 +71,14 @@ optional<T>::optional(const optional<T>& other)
     }
 }
 
-template <class T>
-optional<T>::~optional()
+template <class T> optional<T>::~optional()
 {
     if (mHasValue) {
         mValue.~T();
     }
 }
 
-template <class T>
-optional<T>& optional<T>::operator=(const T& value)
+template <class T> optional<T>& optional<T>::operator=(const T& value)
 {
     if (mHasValue) {
         mValue = value;
@@ -88,8 +90,7 @@ optional<T>& optional<T>::operator=(const T& value)
     return *this;
 }
 
-template <class T>
-optional<T>& optional<T>::operator=([[maybe_unused]] const nullopt_t& null)
+template <class T> optional<T>& optional<T>::operator=([[maybe_unused]] const nullopt_t& null)
 {
     if (mHasValue) {
         mValue.~T();
@@ -97,8 +98,7 @@ optional<T>& optional<T>::operator=([[maybe_unused]] const nullopt_t& null)
     }
 }
 
-template <class T>
-optional<T>& optional<T>::operator=(const optional<T>& other)
+template <class T> optional<T>& optional<T>::operator=(const optional<T>& other)
 {
     if (other.mHasValue) {
         this->operator=(other.mValue);
@@ -111,31 +111,26 @@ optional<T>& optional<T>::operator=(const optional<T>& other)
     }
 }
 
-template <class T>
-optional<T>::operator bool() const
+template <class T> optional<T>::operator bool() const
 {
     return mHasValue;
 }
 
-template <class T>
-bool optional<T>::has_value() const
+template <class T> bool optional<T>::has_value() const
 {
     return mHasValue;
 }
 
-template <class T>
-const T& optional<T>::value() const
+template <class T> const T& optional<T>::value() const
 {
     assert(mHasValue);
     return mValue;
 }
 
-template <class T>
-const T* optional<T>::operator->() const
+template <class T> const T* optional<T>::operator->() const
 {
     assert(mHasValue);
     return &mValue;
 }
 
-
-}
+} // namespace srtc

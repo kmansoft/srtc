@@ -1,17 +1,15 @@
 #include "srtc/rtcp_packet.h"
 #include "srtc/track.h"
 
-namespace srtc {
+namespace srtc
+{
 
-RtcpPacket::RtcpPacket(const std::shared_ptr<Track>& track,
-                       uint8_t rc,
-                       uint8_t payloadId,
-                       ByteBuffer&& payload)
-   : mTrack(track)
-   , mSSRC(track->getSSRC())
-   , mRC(rc)
-   , mPayloadId(payloadId)
-   , mPayload(std::move(payload))
+RtcpPacket::RtcpPacket(const std::shared_ptr<Track>& track, uint8_t rc, uint8_t payloadId, ByteBuffer&& payload)
+    : mTrack(track)
+    , mSSRC(track->getSSRC())
+    , mRC(rc)
+    , mPayloadId(payloadId)
+    , mPayload(std::move(payload))
 {
 }
 
@@ -26,7 +24,6 @@ uint8_t RtcpPacket::getRC() const
 {
     return mRC;
 }
-
 
 uint8_t RtcpPacket::getPayloadId() const
 {
@@ -45,9 +42,7 @@ ByteBuffer RtcpPacket::generate() const
 
     // https://en.wikipedia.org/wiki/RTP_Control_Protocol
 
-    const uint16_t header = (2 << 14)
-                            | ((mRC & 0x1F) << 8)
-                            | (mPayloadId);
+    const uint16_t header = (2 << 14) | ((mRC & 0x1F) << 8) | (mPayloadId);
 
     const auto lenRaw = 2 + 2 + 4 + mPayload.size();
     const auto lenRTCP = (lenRaw + 3) / 4 - 1;
@@ -65,4 +60,4 @@ ByteBuffer RtcpPacket::generate() const
     return buf;
 }
 
-}
+} // namespace srtc

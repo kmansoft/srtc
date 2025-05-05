@@ -1,13 +1,12 @@
 #include "srtc/x509_hash.h"
 
-namespace srtc {
+namespace srtc
+{
 
-X509Hash::X509Hash(const std::string& alg,
-                   const ByteBuffer& bin,
-                   const std::string& hex)
-   : mAlg(alg)
-   , mBin(bin.copy())
-   , mHex(hex)
+X509Hash::X509Hash(const std::string& alg, const ByteBuffer& bin, const std::string& hex)
+    : mAlg(alg)
+    , mBin(bin.copy())
+    , mHex(hex)
 {
 }
 
@@ -33,4 +32,4 @@ std::string X509Hash::getHex() const
     return mHex;
 }
 
-}
+} // namespace srtc

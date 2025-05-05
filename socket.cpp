@@ -1,6 +1,6 @@
 #include "srtc/socket.h"
-#include "srtc/util.h"
 #include "srtc/logging.h"
+#include "srtc/util.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -9,9 +9,10 @@
 
 #define LOG(level, ...) srtc::log(level, "Socket", __VA_ARGS__)
 
-namespace {
+namespace
+{
 
-int createSocket(const srtc::anyaddr &addr)
+int createSocket(const srtc::anyaddr& addr)
 {
     if (addr.ss.ss_family == AF_INET6) {
         return socket(AF_INET6, SOCK_DGRAM, 0);
@@ -22,9 +23,10 @@ int createSocket(const srtc::anyaddr &addr)
 
 constexpr auto kReceiveBufferSize = 2048;
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
 Socket::Socket(const anyaddr& addr)
     : mAddr(addr)
@@ -56,9 +58,8 @@ int Socket::fd() const
         union anyaddr from = {};
         socklen_t fromLen = sizeof(from);
 
-        const auto r = recvfrom(mFd, mReceiveBuffer.get(), kReceiveBufferSize, 0,
-                                reinterpret_cast<struct sockaddr *>(&from),
-                                &fromLen);
+        const auto r = recvfrom(
+            mFd, mReceiveBuffer.get(), kReceiveBufferSize, 0, reinterpret_cast<struct sockaddr*>(&from), &fromLen);
         if (r > 0) {
             if (mAddr == from) {
                 ByteBuffer buf = { mReceiveBuffer.get(), static_cast<size_t>(r) };
@@ -79,8 +80,12 @@ ssize_t Socket::send(const ByteBuffer& buf)
 
 ssize_t Socket::send(const void* ptr, size_t len)
 {
-    const auto r = ::sendto(mFd, ptr, len, 0, (struct sockaddr *) &mAddr,
-        mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
+    const auto r = ::sendto(mFd,
+                            ptr,
+                            len,
+                            0,
+                            (struct sockaddr*)&mAddr,
+                            mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
 
     if (r == -1) {
         const auto errorMessage = strerror(errno);
@@ -90,4 +95,4 @@ ssize_t Socket::send(const void* ptr, size_t len)
     return r;
 }
 
-}
+} // namespace srtc

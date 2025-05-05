@@ -1,41 +1,43 @@
-#include "srtc/event_loop.h"
 #include "srtc/peer_connection.h"
-#include "srtc/peer_candidate.h"
-#include "srtc/sdp_offer.h"
-#include "srtc/sdp_answer.h"
-#include "srtc/track.h"
-#include "srtc/track_stats.h"
-#include "srtc/rtp_time_source.h"
 #include "srtc/byte_buffer.h"
-#include "srtc/logging.h"
-#include "srtc/x509_certificate.h"
-#include "srtc/scheduler.h"
-#include "srtc/packetizer.h"
+#include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
-#include "srtc/send_history.h"
-#include "srtc/srtp_connection.h"
-#include "srtc/util.h"
+#include "srtc/logging.h"
+#include "srtc/packetizer.h"
+#include "srtc/peer_candidate.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
+#include "srtc/rtp_time_source.h"
+#include "srtc/scheduler.h"
+#include "srtc/sdp_answer.h"
+#include "srtc/sdp_offer.h"
+#include "srtc/send_history.h"
+#include "srtc/srtp_connection.h"
+#include "srtc/track.h"
+#include "srtc/track_stats.h"
+#include "srtc/util.h"
+#include "srtc/x509_certificate.h"
 
 #include "stunmessage.h"
 
-#include <unistd.h>
+#include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <algorithm>
+#include <unistd.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
-namespace {
+namespace
+{
 
 std::once_flag gInitFlag;
 
 constexpr auto kSenderReportsInterval = std::chrono::seconds(1);
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
 PeerConnection::PeerConnection()
     : mEventLoop(EventLoop::factory())
@@ -181,12 +183,7 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& 
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({
-        mVideoSingleTrack,
-        mVideoSinglePacketizer,
-        { },
-        std::move(list)
-    });
+    mFrameSendQueue.push_back({ mVideoSingleTrack, mVideoSinglePacketizer, {}, std::move(list) });
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -207,25 +204,19 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({
-        mVideoSingleTrack,
-        mVideoSinglePacketizer,
-        std::move(buf)
-    });
+    mFrameSendQueue.push_back({ mVideoSingleTrack, mVideoSinglePacketizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
 }
 
-Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName,
-                                                         std::vector<ByteBuffer>&& list)
+Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list)
 {
     std::lock_guard lock(mMutex);
 
-    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(),
-                                   [&layerName](const auto& layer) {
-       return layer.ridName == layerName;
-    });
+    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
+                                   mVideoSimulcastLayerList.end(),
+                                   [&layerName](const auto& layer) { return layer.ridName == layerName; });
     if (iter == mVideoSimulcastLayerList.end()) {
         return { Error::Code::InvalidData, "There is no video layer named " + layerName };
     }
@@ -238,20 +229,13 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({
-        layer.track,
-        layer.packetizer,
-        { },
-        std::move(list)
-    });
+    mFrameSendQueue.push_back({ layer.track, layer.packetizer, {}, std::move(list) });
     mEventLoop->interrupt();
 
     return Error::OK;
-
 }
 
-Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName,
-                                                 ByteBuffer&& buf)
+Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf)
 {
     std::lock_guard lock(mMutex);
 
@@ -259,10 +243,9 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName,
         return Error::OK;
     }
 
-    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(),
-                                   [&layerName](const auto& layer) {
-                                       return layer.ridName == layerName;
-                                   });
+    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
+                                   mVideoSimulcastLayerList.end(),
+                                   [&layerName](const auto& layer) { return layer.ridName == layerName; });
     if (iter == mVideoSimulcastLayerList.end()) {
         return { Error::Code::InvalidData, "There is no video layer named " + layerName };
     }
@@ -275,11 +258,7 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName,
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({
-                                      layer.track,
-                                      layer.packetizer,
-                                      std::move(buf)
-                              });
+    mFrameSendQueue.push_back({ layer.track, layer.packetizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -300,11 +279,7 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
         return { Error::Code::InvalidData, "There is no audio packetizer" };
     }
 
-    mFrameSendQueue.push_back({
-                                      mAudioTrack,
-                                      mAudioPacketizer,
-                                      std::move(buf)
-                              });
+    mFrameSendQueue.push_back({ mAudioTrack, mAudioPacketizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -330,8 +305,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     while (true) {
         // Epoll for incoming data
         std::vector<void*> udataList;
-        eventLoop->wait(udataList,
-                        mLoopScheduler->getTimeoutMillis(1000));
+        eventLoop->wait(udataList, mLoopScheduler->getTimeoutMillis(1000));
 
         std::list<FrameToSend> frameSendQueue;
 
@@ -351,7 +325,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         for (const auto udata : udataList) {
             if (udata) {
                 // Read from socket
-                const auto ptr = reinterpret_cast<PeerCandidate *>(udata);
+                const auto ptr = reinterpret_cast<PeerCandidate*>(udata);
                 ptr->receiveFromSocket();
             }
         }
@@ -361,20 +335,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         // Frames to send
         if (mSelectedCandidate) {
-            for (auto& item: frameSendQueue) {
-                mSelectedCandidate->addSendFrame(
-                        PeerCandidate::FrameToSend{
-                                item.track,
-                                item.packetizer,
-                                std::move(item.buf),
-                                std::move(item.csd)
-                        }
-                );
+            for (auto& item : frameSendQueue) {
+                mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
+                    item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
             }
         }
 
         // Candidate processing
-        for (const auto& candidate: mConnectingCandidateList) {
+        for (const auto& candidate : mConnectingCandidateList) {
             candidate->process();
             if (mConnectingCandidateList.empty()) {
                 // A candidate reached ICE connected, and we removed all connecting ones
@@ -427,11 +395,8 @@ void PeerConnection::setConnectionState(ConnectionState state)
             }
 
             Task::cancelHelper(mTaskSenderReports);
-            mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
-                                                        __FILE__, __LINE__,
-                                                        [this] {
-                                                            sendSenderReports();
-                                                        });
+            mTaskSenderReports =
+                mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
         }
     }
 
@@ -464,29 +429,19 @@ void PeerConnection::startConnecting()
     }
 
     auto connectDelay = 0;
-    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i +=1) {
+    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
         if (i < hostList4.size()) {
             const auto host = hostList4[i];
             const auto candidate = std::make_shared<PeerCandidate>(
-                    this,
-                    mSdpOffer, mSdpAnswer,
-                    mLoopScheduler,
-                    host,
-                    mEventLoop,
-                    std::chrono::milliseconds(connectDelay));
+                this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
             mConnectingCandidateList.push_back(candidate);
         }
         if (i < hostList6.size()) {
             const auto host = hostList6[i];
             const auto candidate = std::make_shared<PeerCandidate>(
-                    this,
-                    mSdpOffer, mSdpAnswer,
-                    mLoopScheduler,
-                    host,
-                    mEventLoop,
-                    std::chrono::milliseconds(connectDelay));
+                this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
             mConnectingCandidateList.push_back(candidate);
-       }
+        }
 
         connectDelay += 100;
     }
@@ -500,7 +455,7 @@ std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksLocked() const
         if (const auto track = mVideoSingleTrack) {
             list.push_back(track);
         }
-        for (const auto& item: mVideoSimulcastTrackList) {
+        for (const auto& item : mVideoSimulcastTrackList) {
             list.push_back(item);
         }
         if (const auto track = mAudioTrack) {
@@ -543,8 +498,7 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
 {
-    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s",
-        static_cast<int>(error.mCode), error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s", static_cast<int>(error.mCode), error.mMessage.c_str());
 
     // We are connecting
     for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {
@@ -561,12 +515,12 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
     }
 }
 
-void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate *candidate, const srtc::Error &error)
+void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate* candidate, const srtc::Error& error)
 {
-    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s",
-        static_cast<int>(error.mCode), error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s", static_cast<int>(error.mCode), error.mMessage.c_str());
 
-    // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting again
+    // We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting
+    // again
     mSelectedCandidate.reset();
     startConnecting();
 }
@@ -574,17 +528,14 @@ void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate *candidate, c
 void PeerConnection::sendSenderReports()
 {
     Task::cancelHelper(mTaskSenderReports);
-    mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval,
-                                                __FILE__, __LINE__,
-                                                [this] {
-        sendSenderReports();
-    });
+    mTaskSenderReports =
+        mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
     std::lock_guard lock(mMutex);
 
     if (mConnectionState == ConnectionState::Connected) {
         const auto trackList = collectTracksLocked();
-        for (const auto& trackItem: trackList) {
+        for (const auto& trackItem : trackList) {
             ByteBuffer payload;
             ByteWriter w(payload);
 
@@ -604,9 +555,8 @@ void PeerConnection::sendSenderReports()
             w.writeU32(stats->getSentPackets());
             w.writeU32(stats->getSentBytes());
 
-            const auto packet = std::make_shared<RtcpPacket>(trackItem, 0,
-                                                             RtcpPacket::kSenderReport,
-                                                             std::move(payload));
+            const auto packet =
+                std::make_shared<RtcpPacket>(trackItem, 0, RtcpPacket::kSenderReport, std::move(payload));
             if (mSelectedCandidate) {
                 mSelectedCandidate->sendRtcpPacket(packet);
             }
@@ -614,4 +564,4 @@ void PeerConnection::sendSenderReports()
     }
 }
 
-}
+} // namespace srtc

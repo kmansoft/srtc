@@ -1,6 +1,7 @@
 #include "srtc/rtcp_packet_source.h"
 
-namespace srtc {
+namespace srtc
+{
 
 RtcpPacketSource::RtcpPacketSource(uint32_t ssrc)
     : mSSRC(ssrc)
@@ -26,4 +27,4 @@ void RtcpPacketSource::clear()
     mNextSequence = 0;
 }
 
-}
+} // namespace srtc

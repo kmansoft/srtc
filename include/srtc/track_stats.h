@@ -2,9 +2,11 @@
 
 #include <atomic>
 
-namespace srtc {
+namespace srtc
+{
 
-class TrackStats {
+class TrackStats
+{
 public:
     TrackStats();
     ~TrackStats();
@@ -22,4 +24,4 @@ private:
     std::atomic<uint32_t> mSentBytes;
 };
 
-}
+} // namespace srtc

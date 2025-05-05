@@ -1,15 +1,17 @@
 #pragma once
 
-#include "srtc/srtc.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/srtc.h"
 
 #include <list>
-#include <string>
 #include <memory>
+#include <string>
 
-namespace srtc {
+namespace srtc
+{
 
-class Socket {
+class Socket
+{
 public:
     explicit Socket(const anyaddr& addr);
     ~Socket();
@@ -24,7 +26,9 @@ public:
         ReceivedData(ByteBuffer&& buf, const anyaddr& addr, socklen_t addr_len)
             : buf(std::move(buf))
             , addr(addr)
-            , addr_len(addr_len) {}
+            , addr_len(addr_len)
+        {
+        }
     };
 
     [[nodiscard]] std::list<ReceivedData> receive();
@@ -38,4 +42,4 @@ private:
     const std::unique_ptr<uint8_t[]> mReceiveBuffer;
 };
 
-}
+} // namespace srtc

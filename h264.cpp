@@ -1,6 +1,7 @@
 #include "srtc/h264.h"
 
-namespace {
+namespace
+{
 
 bool is_nalu_4(const uint8_t* buf, size_t pos, size_t end)
 {
@@ -34,15 +35,17 @@ size_t find_next_nalu(const uint8_t* buf, size_t pos, size_t end)
     return end;
 }
 
-}
+} // namespace
 
-namespace srtc {
-namespace h264 {
+namespace srtc
+{
+namespace h264
+{
 
-NaluParser::NaluParser(const ByteBuffer &buf)
-        : mBuf(buf.data())
-        , mSize(buf.size())
-        , mPos(find_next_nalu(mBuf, 0, mSize))
+NaluParser::NaluParser(const ByteBuffer& buf)
+    : mBuf(buf.data())
+    , mSize(buf.size())
+    , mPos(find_next_nalu(mBuf, 0, mSize))
 {
     if (is_nalu_4(mBuf, mPos, mSize)) {
         mSkip = 4;
@@ -93,7 +96,7 @@ size_t NaluParser::currNaluSize() const
     return mNext - mPos;
 }
 
-const uint8_t *NaluParser::currData() const
+const uint8_t* NaluParser::currData() const
 {
     return mBuf + mPos + mSkip;
 }
@@ -103,5 +106,5 @@ size_t NaluParser::currDataSize() const
     return mNext - mPos - mSkip;
 }
 
-}
-}
+} // namespace h264
+} // namespace srtc

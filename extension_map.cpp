@@ -1,6 +1,7 @@
 #include "srtc/extension_map.h"
 
-namespace srtc {
+namespace srtc
+{
 
 void ExtensionMap::add(uint8_t id, const std::string& name)
 {
@@ -29,4 +30,4 @@ std::string ExtensionMap::findById(uint8_t id) const
     return {};
 }
 
-}
+} // namespace srtc

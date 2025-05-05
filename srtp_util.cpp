@@ -1,14 +1,15 @@
 #include "srtc/srtp_util.h"
 #include "srtc/srtp_openssl.h"
 
-#include <cstring>
 #include <cassert>
+#include <cstring>
 #include <mutex>
 
-#include <openssl/evp.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 
-namespace srtc {
+namespace srtc
+{
 
 // ----- CryptoBytes
 
@@ -153,14 +154,14 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
 
     const EVP_CIPHER* cipher;
     switch (masterKey.size()) {
-        case 16:
-            cipher = EVP_aes_128_ecb();
-            break;
-        case 32:
-            cipher = EVP_aes_256_ecb();
-            break;
-        default:
-            goto fail;
+    case 16:
+        cipher = EVP_aes_128_ecb();
+        break;
+    case 32:
+        cipher = EVP_aes_256_ecb();
+        break;
+    default:
+        goto fail;
     }
 
     for (auto blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
@@ -175,10 +176,7 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
         }
         assert(outlen == 16);
 
-        outputWriter.append(outbuf,
-        (blockIndex < blockCount - 1)
-                ? 16
-                : (desiredOutputSize - 16 * blockIndex));
+        outputWriter.append(outbuf, (blockIndex < blockCount - 1) ? 16 : (desiredOutputSize - 16 * blockIndex));
     }
     res = true;
 
@@ -187,4 +185,4 @@ fail:
     return res;
 }
 
-}
+} // namespace srtc

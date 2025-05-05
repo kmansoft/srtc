@@ -1,26 +1,24 @@
 #include <gtest/gtest.h>
 
-#include "srtc/srtp_util.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/srtp_util.h"
 
-#include <mutex>
 #include <cstring>
+#include <mutex>
 
-#include <srtp.h>
 #include <openssl/srtp.h>
+#include <srtp.h>
 
 // Init Cisco's libSRTP
 
-namespace {
+namespace
+{
 
 std::once_flag gSrtpInitFlag;
 
 void initLibSRTP()
 {
-    std::call_once(gSrtpInitFlag, [] {
-                        srtp_init();
-                   }
-    );
+    std::call_once(gSrtpInitFlag, [] { srtp_init(); });
 }
 
 void setFromHex(srtc::CryptoBytes& bytes, const char* hex)
@@ -54,7 +52,8 @@ void setFromHex(srtc::CryptoBytes& bytes, const char* hex)
     }
 }
 
-std::string toHex(const uint8_t* data, size_t len) {
+std::string toHex(const uint8_t* data, size_t len)
+{
     static constexpr auto alphabet = "0123456789ABCDEF";
 
     std::string s;
@@ -74,11 +73,12 @@ std::string toHex(const srtc::CryptoBytes& bytes)
     return toHex(bytes.data(), bytes.size());
 }
 
-}
+} // namespace
 
 // Key derivation
 
-TEST(KeyDerivation, TestRfc) {
+TEST(KeyDerivation, TestRfc)
+{
     std::cout << "KeyDerivation TestRfc" << std::endl;
 
     initLibSRTP();
@@ -114,20 +114,15 @@ TEST(KeyDerivation, TestRfc) {
     ASSERT_EQ(outputLabel2Str, "30CBBC08863D8C85D49DB34A9AE1");
 }
 
-TEST(KeyDerivation, TestSimpleInbound) {
+TEST(KeyDerivation, TestSimpleInbound)
+{
 
     std::cout << "KeyDerivation TestSimpleInbound" << std::endl;
 
     initLibSRTP();
 
-    const uint8_t kMasterKey[] = {
-            1, 2, 3, 4, 5, 6, 7, 8,
-            9, 10, 11, 12, 13, 14, 15, 16
-    };
-    const uint8_t kMasterSalt[] = {
-            31, 32, 33, 34, 35, 36,
-            41, 42, 43, 44, 45, 46
-    };
+    const uint8_t kMasterKey[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    const uint8_t kMasterSalt[] = { 31, 32, 33, 34, 35, 36, 41, 42, 43, 44, 45, 46 };
 
     const auto profileSSL = SRTP_AEAD_AES_128_GCM;
     const auto profileSRTP = srtp_profile_aead_aes_128_gcm;

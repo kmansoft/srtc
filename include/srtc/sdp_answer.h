@@ -1,29 +1,31 @@
 #pragma once
 
 #include "srtc/byte_buffer.h"
-#include "srtc/srtc.h"
 #include "srtc/error.h"
 #include "srtc/extension_map.h"
+#include "srtc/srtc.h"
 #include "srtc/x509_hash.h"
 
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
-namespace srtc {
+namespace srtc
+{
 
 class SdpOffer;
 class Track;
 
-class SdpAnswer {
+class SdpAnswer
+{
 public:
-
-    class TrackSelector {
+    class TrackSelector
+    {
     public:
         virtual ~TrackSelector() = default;
 
-        [[nodiscard]] virtual std::shared_ptr<Track> selectTrack(MediaType type,
-                                                                 const std::vector<std::shared_ptr<Track>>& list) const = 0;
+        [[nodiscard]] virtual std::shared_ptr<Track> selectTrack(
+            MediaType type, const std::vector<std::shared_ptr<Track>>& list) const = 0;
     };
 
     static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::shared_ptr<SdpOffer>& offer,
@@ -70,4 +72,4 @@ private:
               const X509Hash& certHash);
 };
 
-}
+} // namespace srtc

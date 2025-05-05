@@ -5,13 +5,15 @@
 struct evp_pkey_st;
 struct x509_st;
 
-namespace srtc {
+namespace srtc
+{
 
 class ByteBuffer;
 
 struct X509CertificateImpl;
 
-class X509Certificate {
+class X509Certificate
+{
 public:
     X509Certificate();
     ~X509Certificate();
@@ -26,4 +28,4 @@ private:
     X509CertificateImpl* const mImpl;
 };
 
-}
+} // namespace srtc

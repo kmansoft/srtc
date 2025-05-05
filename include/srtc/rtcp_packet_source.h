@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
-namespace srtc {
+namespace srtc
+{
 
-class RtcpPacketSource {
+class RtcpPacketSource
+{
 public:
     RtcpPacketSource(uint32_t ssrc);
     ~RtcpPacketSource();
@@ -19,5 +21,4 @@ private:
     uint32_t mNextSequence;
 };
 
-
-}
+} // namespace srtc

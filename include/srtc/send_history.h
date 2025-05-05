@@ -1,14 +1,16 @@
 #pragma once
 
-#include <memory>
 #include <list>
+#include <memory>
 #include <unordered_map>
 
-namespace srtc {
+namespace srtc
+{
 
 class RtpPacket;
 
-class SendHistory {
+class SendHistory
+{
 public:
     SendHistory();
     ~SendHistory();
@@ -26,4 +28,4 @@ private:
     std::unordered_map<uint32_t, TrackHistory> mTrackMap;
 };
 
-}
+} // namespace srtc

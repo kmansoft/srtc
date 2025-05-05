@@ -121,6 +121,10 @@ endif()
 
 target_include_directories(srtc PUBLIC "./include")
 
+target_compile_options(srtc
+        PRIVATE
+        "-ffunction-sections")
+
 target_link_libraries(
         srtc
         PRIVATE

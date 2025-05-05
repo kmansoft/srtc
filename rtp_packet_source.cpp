@@ -2,10 +2,10 @@
 
 #include <atomic>
 
-namespace srtc {
+namespace srtc
+{
 
-RtpPacketSource::RtpPacketSource(uint32_t ssrc,
-                                 uint8_t payloadId)
+RtpPacketSource::RtpPacketSource(uint32_t ssrc, uint8_t payloadId)
     : mSSRC(ssrc)
     , mPayloadId(payloadId)
     , mRandom(0, 30000)
@@ -46,4 +46,4 @@ void RtpPacketSource::clear()
     mNextSequence = mRandom.next();
 }
 
-}
+} // namespace srtc

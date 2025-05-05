@@ -1,19 +1,20 @@
 #pragma once
 
-#include "srtc/srtc.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/scheduler.h"
+#include "srtc/srtc.h"
 
+#include <functional>
+#include <list>
 #include <memory>
 #include <mutex>
-#include <thread>
-#include <list>
 #include <string>
-#include <functional>
+#include <thread>
 
-namespace srtc {
+namespace srtc
+{
 
 class SdpAnswer;
 class SdpOffer;
@@ -23,8 +24,8 @@ class Scheduler;
 class PeerCandidate;
 class EventLoop;
 
-class PeerConnection final :
-        public PeerCandidateListener {
+class PeerConnection final : public PeerCandidateListener
+{
 public:
     PeerConnection();
     ~PeerConnection();
@@ -52,10 +53,8 @@ public:
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
 
-    Error setVideoSimulcastCodecSpecificData(const std::string& layerName,
-                                             std::vector<ByteBuffer>&& list);
-    Error publishVideoSimulcastFrame(const std::string& layerName,
-                                     ByteBuffer&& buf);
+    Error setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list);
+    Error publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf);
 
     Error publishAudioFrame(ByteBuffer&& buf);
 
@@ -73,7 +72,11 @@ private:
         LayerInfo(const std::string& ridName,
                   const std::shared_ptr<Track>& track,
                   const std::shared_ptr<Packetizer>& packetizer)
-                  : ridName(ridName), track(track), packetizer(packetizer) {}
+            : ridName(ridName)
+            , track(track)
+            , packetizer(packetizer)
+        {
+        }
 
         std::string ridName;
         std::shared_ptr<Track> track;
@@ -81,8 +84,7 @@ private:
     };
     std::vector<LayerInfo> mVideoSimulcastLayerList;
 
-    void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer,
-                                 std::shared_ptr<SdpAnswer> answer);
+    void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer, std::shared_ptr<SdpAnswer> answer);
 
     void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
@@ -90,8 +92,8 @@ private:
 
     std::vector<std::shared_ptr<Track>> collectTracksLocked() const SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
-    bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
-    bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
+    bool mIsStarted SRTC_GUARDED_BY(mMutex) = {false};
+    bool mIsQuit SRTC_GUARDED_BY(mMutex) = {false};
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     // Event loop
@@ -100,8 +102,8 @@ private:
     struct FrameToSend {
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;                 // possibly empty
-        std::vector<ByteBuffer> csd;    // possibly empty
+        ByteBuffer buf;              // possibly empty
+        std::vector<ByteBuffer> csd; // possibly empty
     };
 
     std::list<FrameToSend> mFrameSendQueue;
@@ -115,7 +117,7 @@ private:
     void onCandidateLostConnection(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
-    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
+    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = {ConnectionState::Inactive};
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
@@ -134,4 +136,4 @@ private:
     std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
 };
 
-}
+} // namespace srtc

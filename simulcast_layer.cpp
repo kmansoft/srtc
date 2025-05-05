@@ -1,11 +1,9 @@
 #include "srtc/simulcast_layer.h"
 
-namespace srtc {
+namespace srtc
+{
 
-void buildGoogleVLA(
-    ByteBuffer& buf,
-    uint8_t ridId,
-    const std::vector<std::shared_ptr<SimulcastLayer>>& list)
+void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::shared_ptr<SimulcastLayer>>& list)
 {
     ByteWriter w(buf);
 
@@ -25,5 +23,4 @@ void buildGoogleVLA(
     }
 }
 
-
-}
+} // namespace srtc

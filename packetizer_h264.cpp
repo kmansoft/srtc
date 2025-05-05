@@ -152,8 +152,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 RtpExtension extension = buildExtension(simulcast, twcc, track, true, 0);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
-                result.push_back(std::make_shared<RtpPacket>(track, false, rollover, sequence, frameTimestamp,
-                                                             std::move(extension), std::move(payload)));
+                result.push_back(std::make_shared<RtpPacket>(
+                    track, false, rollover, sequence, frameTimestamp, std::move(extension), std::move(payload)));
             }
         }
 
@@ -170,12 +170,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             if (packetSize >= naluDataSize) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
                 const auto [rollover, sequence] = packetSource->getNextSequence();
-                auto payload = ByteBuffer{naluDataPtr, naluDataSize};
+                auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
                 result.push_back(extension.empty()
-                                     ? std::make_shared<RtpPacket>(track, true, rollover, sequence, frameTimestamp,
-                                                                   std::move(payload))
-                                     : std::make_shared<RtpPacket>(track, true, rollover, sequence, frameTimestamp,
-                                                                   std::move(extension), std::move(payload)));
+                                     ? std::make_shared<RtpPacket>(
+                                           track, true, rollover, sequence, frameTimestamp, std::move(payload))
+                                     : std::make_shared<RtpPacket>(track,
+                                                                   true,
+                                                                   rollover,
+                                                                   sequence,
+                                                                   frameTimestamp,
+                                                                   std::move(extension),
+                                                                   std::move(payload)));
             } else {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -217,10 +222,15 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     writer.write(dataPtr, writeNow);
 
                     result.push_back(extension.empty()
-                                         ? std::make_shared<RtpPacket>(track, isEnd, rollover, sequence, frameTimestamp,
-                                                                       std::move(payload))
-                                         : std::make_shared<RtpPacket>(track, isEnd, rollover, sequence, frameTimestamp,
-                                                                       std::move(extension), std::move(payload)));
+                                         ? std::make_shared<RtpPacket>(
+                                               track, isEnd, rollover, sequence, frameTimestamp, std::move(payload))
+                                         : std::make_shared<RtpPacket>(track,
+                                                                       isEnd,
+                                                                       rollover,
+                                                                       sequence,
+                                                                       frameTimestamp,
+                                                                       std::move(extension),
+                                                                       std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

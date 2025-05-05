@@ -1,23 +1,25 @@
-#include <sstream>
 #include <cassert>
 #include <cstring>
+#include <sstream>
 #include <string>
 
+#include "srtc/rtp_std_extensions.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/x509_certificate.h"
-#include "srtc/rtp_std_extensions.h"
 
-namespace {
+namespace
+{
 
-const char* codec_to_string(srtc::Codec codec) {
+const char* codec_to_string(srtc::Codec codec)
+{
     switch (codec) {
-        case srtc::Codec::H264:
-            return "H264/90000";
-        case srtc::Codec::Opus:
-            return "opus/48000/2";
-        default:
-            assert(false);
-            return "-";
+    case srtc::Codec::H264:
+        return "H264/90000";
+    case srtc::Codec::Opus:
+        return "opus/48000/2";
+    default:
+        assert(false);
+        return "-";
     }
 }
 
@@ -35,9 +37,10 @@ std::string list_to_string(uint32_t start, uint32_t end)
     return ss.str();
 }
 
-}
+} // namespace
 
-namespace srtc {
+namespace srtc
+{
 
 SdpOffer::SdpOffer(const OfferConfig& config,
                    const srtc::optional<PubVideoConfig>& videoConfig,
@@ -67,7 +70,7 @@ const OfferConfig& SdpOffer::getConfig() const
 std::pair<std::string, Error> SdpOffer::generate()
 {
     if (!mVideoConfig.has_value() && !mAudioConfig.has_value()) {
-        return { "", { Error::Code::InvalidData, "No video and no audio configured"} };
+        return { "", { Error::Code::InvalidData, "No video and no audio configured" } };
     }
 
     std::stringstream ss;
@@ -90,7 +93,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     if (mVideoConfig.has_value()) {
         const auto& list = mVideoConfig->codecList;
         if (list.empty()) {
-            return { "", { Error::Code::InvalidData, "The video config list is present but empty"} };
+            return { "", { Error::Code::InvalidData, "The video config list is present but empty" } };
         }
 
         if (mConfig.enableRTX) {
@@ -112,15 +115,14 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
-        for (const auto& item: list) {
+        for (const auto& item : list) {
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::H264) {
                 char buf[128];
                 std::snprintf(buf, sizeof(buf), "%06x", item.profileLevelId);
 
                 ss << "a=fmtp:" << payloadId
-                   << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="
-                   << buf << std::endl;
+                   << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" << buf << std::endl;
             }
             ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
             ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
@@ -185,7 +187,7 @@ std::pair<std::string, Error> SdpOffer::generate()
                 const auto videoSSRC = 1 + mRandomGenerator.next();
                 const auto videoRtxSSRC = 1 + mRandomGenerator.next();
 
-                mLayerSSRC.push_back({layer.name, videoSSRC, videoRtxSSRC});
+                mLayerSSRC.push_back({ layer.name, videoSSRC, videoRtxSSRC });
 
                 ss << "a=ssrc:" << videoSSRC << " cname:" << mConfig.cname << std::endl;
                 ss << "a=ssrc:" << videoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
@@ -204,7 +206,7 @@ std::pair<std::string, Error> SdpOffer::generate()
     if (mAudioConfig.has_value()) {
         const auto& list = mAudioConfig->codecList;
         if (list.empty()) {
-            return {"", {Error::Code::InvalidData, "The audio config list is present but empty"}};
+            return { "", { Error::Code::InvalidData, "The audio config list is present but empty" } };
         }
 
         if (mConfig.enableRTX) {
@@ -226,12 +228,10 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
-        for (const auto& item: list) {
+        for (const auto& item : list) {
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::Opus) {
-                ss << "a=fmtp:" << payloadId
-                   << " minptime=" << item.minptime
-                   << ";stereo=" << (item.stereo ? 1 : 0)
+                ss << "a=fmtp:" << payloadId << " minptime=" << item.minptime << ";stereo=" << (item.stereo ? 1 : 0)
                    << ";useinbandfec=1" << std::endl;
             }
 
@@ -327,14 +327,14 @@ std::string SdpOffer::generateRandomUUID()
     std::string res;
     for (size_t i = 0; i < 16; i += 1) {
         switch (i) {
-            case 4:
-            case 6:
-            case 8:
-            case 10:
-                res += '-';
-                break;
-            default:
-                break;
+        case 4:
+        case 6:
+        case 8:
+        case 10:
+            res += '-';
+            break;
+        default:
+            break;
         }
         res += ALPHABET[mRandomGenerator.next() & 0x0F];
         res += ALPHABET[mRandomGenerator.next() & 0x0F];
@@ -359,4 +359,4 @@ std::string SdpOffer::generateRandomString(size_t len)
     return res;
 }
 
-}
+} // namespace srtc

@@ -2,11 +2,12 @@
 
 #include "srtc/byte_buffer.h"
 
-#include <vector>
-#include <string>
 #include <memory>
+#include <string>
+#include <vector>
 
-namespace srtc {
+namespace srtc
+{
 
 struct SimulcastLayer {
     std::string name;
@@ -16,9 +17,6 @@ struct SimulcastLayer {
     uint32_t kilobitPerSecond;
 };
 
-void buildGoogleVLA(
-    ByteBuffer& buf,
-    uint8_t ridId,
-    const std::vector<std::shared_ptr<SimulcastLayer>>& list);
+void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::shared_ptr<SimulcastLayer>>& list);
 
-}
+} // namespace srtc

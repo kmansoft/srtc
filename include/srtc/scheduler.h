@@ -1,25 +1,26 @@
 #pragma once
 
-#include <chrono>
 #include <atomic>
-#include <functional>
-#include <thread>
-#include <memory>
-#include <thread>
-#include <mutex>
+#include <chrono>
 #include <condition_variable>
-#include <string>
+#include <functional>
 #include <list>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
 
 #include "srtc/srtc.h"
 
-namespace srtc {
+namespace srtc
+{
 
 class RealScheduler;
 
 // ----- Task
 
-class Task {
+class Task
+{
 public:
     virtual void cancel() = 0;
     virtual std::weak_ptr<Task> update(const std::chrono::milliseconds& delay) = 0;
@@ -31,7 +32,8 @@ public:
 
 // ----- Scheduler
 
-class Scheduler {
+class Scheduler
+{
 public:
     Scheduler();
 
@@ -40,17 +42,12 @@ public:
     using Delay = std::chrono::milliseconds;
     using Func = std::function<void(void)>;
 
-    std::weak_ptr<Task> submit(const char* file,
-                               int line,
-                               const Func& func)
+    std::weak_ptr<Task> submit(const char* file, int line, const Func& func)
     {
         return submit(Delay{0}, file, line, func);
     }
 
-    virtual std::weak_ptr<Task> submit(const Delay& delay,
-                                       const char* file,
-                                       int line,
-                                       const Func& func) = 0;
+    virtual std::weak_ptr<Task> submit(const Delay& delay, const char* file, int line, const Func& func) = 0;
 
     virtual void cancel(std::shared_ptr<Task>& task) = 0;
 
@@ -62,7 +59,8 @@ protected:
 
 // ---- RealScheduler
 
-class RealScheduler : public Scheduler {
+class RealScheduler : public Scheduler
+{
 public:
     RealScheduler() = default;
     ~RealScheduler() override = default;
@@ -70,21 +68,16 @@ public:
     virtual void dump() = 0;
 };
 
-
 // ----- ThreadScheduler
 
-class ThreadScheduler final :
-        public RealScheduler,
-        public std::enable_shared_from_this<ThreadScheduler> {
+class ThreadScheduler final : public RealScheduler, public std::enable_shared_from_this<ThreadScheduler>
+{
 public:
-    explicit ThreadScheduler(const std::string &name);
+    explicit ThreadScheduler(const std::string& name);
 
     ~ThreadScheduler() override;
 
-    std::weak_ptr<Task> submit(const Delay& delay,
-                               const char* file,
-                               int line,
-                               const Func& func) override;
+    std::weak_ptr<Task> submit(const Delay& delay, const char* file, int line, const Func& func) override;
 
     void cancel(std::shared_ptr<Task>& task) override;
 
@@ -93,8 +86,8 @@ public:
     void dump() override;
 
 private:
-
-    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl>
+    {
     public:
         TaskImpl(const std::weak_ptr<ThreadScheduler>& owner,
                  const When& when,
@@ -117,17 +110,14 @@ private:
     };
 
     struct TaskImplLess {
-        bool operator()(
-                const std::shared_ptr<TaskImpl>& left,
-                const std::shared_ptr<TaskImpl>& right)
+        bool operator()(const std::shared_ptr<TaskImpl>& left, const std::shared_ptr<TaskImpl>& right)
         {
             return left->mWhen < right->mWhen;
         };
     };
 
     void cancelImpl(const std::shared_ptr<TaskImpl>& task);
-    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
-                                   const Delay& delay);
+    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask, const Delay& delay);
 
     void threadFunc(std::string name);
 
@@ -142,18 +132,14 @@ private:
 
 // ----- LoopScheduler
 
-class LoopScheduler final :
-        public RealScheduler,
-        public std::enable_shared_from_this<LoopScheduler> {
+class LoopScheduler final : public RealScheduler, public std::enable_shared_from_this<LoopScheduler>
+{
 public:
     LoopScheduler();
 
     ~LoopScheduler() override;
 
-    std::weak_ptr<Task> submit(const Delay& delay,
-                               const char* file,
-                               int line,
-                               const Func& func) override;
+    std::weak_ptr<Task> submit(const Delay& delay, const char* file, int line, const Func& func) override;
 
     void cancel(std::shared_ptr<Task>& task) override;
 
@@ -166,14 +152,11 @@ public:
     void run();
 
 private:
-
-    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl>
+    {
     public:
-        TaskImpl(const std::weak_ptr<LoopScheduler>& owner,
-                 const When& when,
-                 const char* file,
-                 int line,
-                 const Func& func);
+        TaskImpl(
+            const std::weak_ptr<LoopScheduler>& owner, const When& when, const char* file, int line, const Func& func);
 
         ~TaskImpl() override;
 
@@ -188,9 +171,7 @@ private:
     };
 
     struct TaskImplLess {
-        bool operator()(
-                const std::shared_ptr<TaskImpl>& left,
-                const std::shared_ptr<TaskImpl>& right)
+        bool operator()(const std::shared_ptr<TaskImpl>& left, const std::shared_ptr<TaskImpl>& right)
         {
             return left->mWhen < right->mWhen;
         };
@@ -198,9 +179,8 @@ private:
 
     void assertCurrentThread() const;
 
-    void cancelImpl(std::shared_ptr<TaskImpl> &task);
-    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
-                                   const Delay& delay);
+    void cancelImpl(std::shared_ptr<TaskImpl>& task);
+    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask, const Delay& delay);
 
     std::thread::id mThreadId;
     std::vector<std::shared_ptr<TaskImpl>> mTaskQueue;
@@ -208,30 +188,24 @@ private:
 
 // ----- ScopedScheduler
 
-class ScopedScheduler final :
-        public Scheduler {
+class ScopedScheduler final : public Scheduler
+{
 public:
     explicit ScopedScheduler(const std::shared_ptr<RealScheduler>& scheduler);
 
     ~ScopedScheduler() override;
 
-    std::weak_ptr<Task> submit(const Delay& delay,
-                               const char* file,
-                               int line,
-                               const Func& func) override;
+    std::weak_ptr<Task> submit(const Delay& delay, const char* file, int line, const Func& func) override;
 
     void cancel(std::shared_ptr<Task>& task) override;
 
     [[nodiscard]] std::shared_ptr<RealScheduler> getRealScheduler() override;
 
 private:
-    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl> {
+    class TaskImpl final : public Task, public std::enable_shared_from_this<TaskImpl>
+    {
     public:
-        TaskImpl(ScopedScheduler* owner,
-                 const std::weak_ptr<Task>& task,
-                 const char* file,
-                 int line,
-                 const Func& func);
+        TaskImpl(ScopedScheduler* owner, const std::weak_ptr<Task>& task, const char* file, int line, const Func& func);
 
         ~TaskImpl() override;
 
@@ -246,8 +220,7 @@ private:
     };
 
     void cancelImpl(const std::shared_ptr<TaskImpl>& task);
-    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask,
-                                   const Delay& delay);
+    std::weak_ptr<Task> updateImpl(const std::shared_ptr<TaskImpl>& oldTask, const Delay& delay);
 
     void removeExpiredLocked() SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
@@ -257,4 +230,4 @@ private:
     const std::shared_ptr<RealScheduler> mScheduler;
 };
 
-}
+} // namespace srtc

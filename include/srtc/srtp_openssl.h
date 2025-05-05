@@ -1,6 +1,7 @@
 #pragma once
 
-namespace srtc {
+namespace srtc
+{
 
 void initOpenSSL();
 

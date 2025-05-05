@@ -1,18 +1,18 @@
-#include "srtc/peer_connection.h"
-#include "srtc/sdp_offer.h"
-#include "srtc/sdp_answer.h"
 #include "srtc/h264.h"
 #include "srtc/logging.h"
+#include "srtc/peer_connection.h"
+#include "srtc/sdp_answer.h"
+#include "srtc/sdp_offer.h"
 
 #include <curl/curl.h>
 #include <curl/easy.h>
 
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <memory>
 
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 // Program options
@@ -23,7 +23,8 @@ static std::string gWhipToken = "none";
 static bool gPrintSDP = false;
 static bool gLoopVideo = false;
 
-std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out) {
+std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
+{
     const auto total_size = size * nmemb;
     if (total_size) {
         out->append(in, total_size);
@@ -32,9 +33,8 @@ std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std
     return 0;
 }
 
-std::string perform_whip(const std::string& offer,
-                         const std::string& url,
-                         const std::string& token) {
+std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
+{
     const auto curl = curl_easy_init();
     if (!curl) {
         std::cout << "Error: cannot create a curl object" << std::endl;
@@ -53,7 +53,7 @@ std::string perform_whip(const std::string& offer,
     // follow redirects
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-    
+
     // Set the content type header to application/json
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/sdp");
@@ -96,18 +96,18 @@ std::string perform_whip(const std::string& offer,
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
     switch (state) {
-        case srtc::PeerConnection::ConnectionState::Inactive:
-            return "inactive";
-        case srtc::PeerConnection::ConnectionState::Connecting:
-            return "connecting";
-        case srtc::PeerConnection::ConnectionState::Connected:
-            return "connected";
-        case srtc::PeerConnection::ConnectionState::Failed:
-            return "failed";
-        case srtc::PeerConnection::ConnectionState::Closed:
-            return "closed";
-        default:
-            return "?";
+    case srtc::PeerConnection::ConnectionState::Inactive:
+        return "inactive";
+    case srtc::PeerConnection::ConnectionState::Connecting:
+        return "connecting";
+    case srtc::PeerConnection::ConnectionState::Connected:
+        return "connected";
+    case srtc::PeerConnection::ConnectionState::Failed:
+        return "failed";
+    case srtc::PeerConnection::ConnectionState::Closed:
+        return "closed";
+    default:
+        return "?";
     }
 }
 
@@ -140,8 +140,7 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
     return std::move(buf);
 }
 
-void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
-                   const srtc::ByteBuffer& data)
+void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, const srtc::ByteBuffer& data)
 {
     while (true) {
         std::vector<srtc::ByteBuffer> codecSpecificData;
@@ -152,24 +151,24 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
         for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
             const auto naluType = parser.currType();
             switch (naluType) {
-                case srtc::h264::NaluType::SPS:
-                case srtc::h264::NaluType::PPS:
-                    peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                    break;
-                case srtc::h264::NaluType::KeyFrame:
-                case srtc::h264::NaluType::NonKeyFrame:
-                    peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                    usleep(1000 * 40);  // 25 fps
-                    break;
-                default:
-                    break;
+            case srtc::h264::NaluType::SPS:
+            case srtc::h264::NaluType::PPS:
+                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                break;
+            case srtc::h264::NaluType::KeyFrame:
+            case srtc::h264::NaluType::NonKeyFrame:
+                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                usleep(1000 * 40); // 25 fps
+                break;
+            default:
+                break;
             }
 
             frameCount += 1;
 
             if ((frameCount % 25) == 0) {
                 std::cout << "Played " << std::setw(4) << frameCount << " video frames" << std::endl;
-            }   
+            }
         }
 
         if (gLoopVideo) {
@@ -180,7 +179,8 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection,
     }
 }
 
-void printUsage(const char* programName) {
+void printUsage(const char* programName)
+{
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -f, --file <path>    Path to H.264 file (default: " << gInputFile << ")" << std::endl;
@@ -192,14 +192,15 @@ void printUsage(const char* programName) {
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
     // Set logging to errors by default
     srtc::setLogLevel(SRTC_LOG_E);
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        
+
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             return 0;
@@ -237,7 +238,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
-    
+
     std::cout << "*** Using H.264 file: " << gInputFile << std::endl;
     std::cout << "*** Using WHIP URL: " << gWhipUrl << std::endl;
 
@@ -258,18 +259,11 @@ int main(int argc, char* argv[]) {
     std::cout << "*** Read " << inputFileData.size() << " bytes from input video file " << gInputFile << std::endl;
 
     // Offer
-    const OfferConfig offerConfig = {
-            .cname = "foo",
-            .enableRTX = true
-    };
-    const PubVideoConfig videoConfig = {
-            .codecList = {
-                { Codec::H264, 0x42e01f}
-            }
-    };
+    const OfferConfig offerConfig = { .cname = "foo", .enableRTX = true };
+    const PubVideoConfig videoConfig = { .codecList = { { Codec::H264, 0x42e01f } } };
 
     const auto offer = std::make_shared<SdpOffer>(offerConfig, videoConfig, nullopt);
-    const auto [ offerString, offerError ] = offer->generate();
+    const auto [offerString, offerError] = offer->generate();
     if (offerError.isError()) {
         std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;
         exit(1);
@@ -285,7 +279,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Answer
-    const auto [ answer, answerError ] = SdpAnswer::parse(offer, answerString, nullptr);
+    const auto [answer, answerError] = SdpAnswer::parse(offer, answerString, nullptr);
     if (answerError.isError()) {
         std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
         exit(1);
@@ -299,15 +293,15 @@ int main(int argc, char* argv[]) {
     const auto peerConnection = std::make_shared<PeerConnection>();
 
     peerConnection->setConnectionStateListener(
-            [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
-                std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
+        [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
+            std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
 
-                {
-                    std::lock_guard lock(connectionStateMutex);
-                    connectionState = state;
-                }
-                connectionStateCond.notify_one();
-    });
+            {
+                std::lock_guard lock(connectionStateMutex);
+                connectionState = state;
+            }
+            connectionStateCond.notify_one();
+        });
 
     peerConnection->setSdpOffer(offer);
     peerConnection->setSdpAnswer(answer);
@@ -316,9 +310,8 @@ int main(int argc, char* argv[]) {
     {
         std::unique_lock lock(connectionStateMutex);
         connectionStateCond.wait_for(lock, std::chrono::seconds(15), [&connectionState]() {
-            return
-                connectionState == PeerConnection::ConnectionState::Connected ||
-                connectionState == PeerConnection::ConnectionState::Failed;
+            return connectionState == PeerConnection::ConnectionState::Connected ||
+                   connectionState == PeerConnection::ConnectionState::Failed;
         });
 
         if (connectionState == PeerConnection::ConnectionState::Failed) {

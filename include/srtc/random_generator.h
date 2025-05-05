@@ -2,10 +2,11 @@
 
 #include <random>
 
-namespace srtc {
+namespace srtc
+{
 
-template <class Value>
-class RandomGenerator {
+template <class Value> class RandomGenerator
+{
 public:
     RandomGenerator(Value min, Value max);
     Value next();
@@ -16,4 +17,4 @@ private:
     std::uniform_int_distribution<Value> mRandomDist;
 };
 
-}
+} // namespace srtc

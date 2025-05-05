@@ -1,9 +1,9 @@
 #pragma once
 
-#include "srtc/error.h"
 #include "srtc/byte_buffer.h"
-#include "srtc/rtp_packet_source.h"
+#include "srtc/error.h"
 #include "srtc/replay_protection.h"
+#include "srtc/rtp_packet_source.h"
 #include "srtc/srtp_util.h"
 
 #include <memory>
@@ -11,11 +11,13 @@
 
 struct ssl_st;
 
-namespace srtc {
+namespace srtc
+{
 
 class SrtpCrypto;
 
-class SrtpConnection {
+class SrtpConnection
+{
 public:
     static const char* const kSrtpCipherList;
 
@@ -25,23 +27,16 @@ public:
     [[nodiscard]] size_t getMediaProtectionOverhead() const;
 
     // Returns false on error
-    bool protectOutgoingControl(const ByteBuffer& packetData,
-                                uint32_t sequence,
-                                ByteBuffer& output);
+    bool protectOutgoingControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output);
 
     // Returns false on error
-    bool protectOutgoingMedia(const ByteBuffer& packetData,
-                              uint32_t rollover,
-                              ByteBuffer& output);
+    bool protectOutgoingMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output);
 
     // Returns false on error
-    bool unprotectIncomingControl(const ByteBuffer& packetData,
-                                  ByteBuffer& output);
+    bool unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output);
 
     // Implementation
-    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto,
-                   bool isSetupActive,
-                   uint16_t profileId);
+    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, uint16_t profileId);
 
 private:
     const std::shared_ptr<SrtpCrypto> mCrypto;
@@ -60,8 +55,7 @@ private:
     };
 
     struct equal_to_channel_key {
-        bool operator()(const ChannelKey& lhs,
-                        const ChannelKey& rhs) const
+        bool operator()(const ChannelKey& lhs, const ChannelKey& rhs) const
         {
             return lhs.ssrc == rhs.ssrc && lhs.payloadId == rhs.payloadId;
         }
@@ -80,8 +74,7 @@ private:
                                     const ChannelKey& key,
                                     uint32_t maxPossibleValueForReplayProtection);
 
-    bool getRtcpSequenceNumber(const ByteBuffer& packet,
-                               uint32_t& outSequenceNumber) const;
+    bool getRtcpSequenceNumber(const ByteBuffer& packet, uint32_t& outSequenceNumber) const;
 };
 
-}
+} // namespace srtc
