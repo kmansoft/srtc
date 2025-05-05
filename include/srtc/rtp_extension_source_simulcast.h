@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <memory>
 
 namespace srtc {
 
@@ -20,9 +21,15 @@ public:
         uint8_t nVideoExtMediaId,
         uint8_t nVideoExtStreamId,
         uint8_t nVideoExtRepairedStreamId,
-        uint8_t nVideoExtGoogleVLA
-    );
+        uint8_t nVideoExtGoogleVLA);
     ~RtpExtensionSourceSimulcast() override;
+
+    static std::shared_ptr<RtpExtensionSourceSimulcast> factory(
+        bool isVideoSimulcast,
+        uint8_t nVideoExtMediaId,
+        uint8_t nVideoExtStreamId,
+        uint8_t nVideoExtRepairedStreamId,
+        uint8_t nVideoExtGoogleVLA);
 
     [[nodiscard]] bool shouldAdd(
             const std::shared_ptr<Track>& track,
@@ -48,7 +55,7 @@ public:
 
     void updateForRtx(
             RtpExtensionBuilder& builder,
-            const std::shared_ptr<Track>& track) const;
+            const std::shared_ptr<Track>& track);
 
 private:
     const uint8_t mVideoExtMediaId;

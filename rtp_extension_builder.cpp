@@ -28,6 +28,37 @@ void RtpExtensionBuilder::addBinaryValue(uint8_t id, const ByteBuffer& buf)
     mWriter.write(buf);
 }
 
+void RtpExtensionBuilder::addU16Value(uint8_t id, uint16_t value)
+{
+    const auto len = sizeof(value);
+    mWriter.writeU8(id);
+    mWriter.writeU8(len);
+    mWriter.writeU16(value);
+}
+
+void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
+{
+    ByteReader reader(mBuf);
+
+    while (reader.remaining() > 2) {
+        const auto extensionId = reader.readU8();
+        const auto extensionLen = reader.readU8();
+
+        if (extensionId == id) {
+            const auto offset = reader.current();
+            const auto data = mBuf.data();
+
+            data[offset+0] = (value >> 16) & 0xFF;
+            data[offset+1] = (value & 0xFF);
+
+            return;
+        }
+        reader.skip(extensionLen);
+    }
+
+    addU16Value(id, value);
+}
+
 RtpExtension RtpExtensionBuilder::build()
 {
     if (mBuf.empty()) {

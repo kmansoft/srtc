@@ -31,6 +31,7 @@ class SrtpConnection;
 class RtcpPacket;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
+class RtpExtensionSourceTWCC;
 
 class PeerCandidate final {
 public:
@@ -66,6 +67,8 @@ private:
     void onReceivedRtcMessage(ByteBuffer&& buf);
     void onReceivedRtcMessageUnprotected(const ByteBuffer& buf);
 
+    void onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
+
     void forgetExpiredStunRequests();
 
     PeerCandidateListener* const mListener;
@@ -83,6 +86,7 @@ private:
     const uint8_t mVideoExtRepairedStreamId;
     const uint8_t mVideoExtGoogleVLA;
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
+    const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 
     std::shared_ptr<SrtpConnection> mSrtp;
 

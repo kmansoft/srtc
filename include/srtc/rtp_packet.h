@@ -48,6 +48,7 @@ public:
     };
 
     [[nodiscard]] Output generate() const;
+    [[nodiscard]] Output generateExt(const RtpExtension& extension) const;
     [[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
 private:

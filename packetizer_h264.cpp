@@ -21,6 +21,34 @@ constexpr uint8_t STAP_A = 24;
 constexpr uint8_t FU_A = 28;
 constexpr size_t kMinPayloadSize = 600;
 
+srtc::RtpExtension buildExtension(
+    const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
+    const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
+    const std::shared_ptr<srtc::Track>& track,
+    bool isKeyFrame,
+    int packetNumber)
+{
+    srtc::RtpExtension extension;
+
+    const auto wantsSimulcast = simulcast && simulcast->wants(track, isKeyFrame, packetNumber);
+    const auto wantsTWCC = twcc && twcc->wants(track, isKeyFrame, packetNumber);
+
+    if (wantsSimulcast || wantsTWCC) {
+        srtc::RtpExtensionBuilder builder;
+
+        if (wantsSimulcast) {
+            simulcast->add(builder, track, isKeyFrame, packetNumber);
+        }
+        if (wantsTWCC) {
+            twcc->add(builder, track, isKeyFrame, packetNumber);
+        }
+
+        extension = builder.build();
+    }
+
+    return extension;
+}
+
 size_t adjustPacketSize(size_t basicPacketSize, const srtc::RtpExtension& extension)
 {
     const auto extensionSize = extension.size();
@@ -74,6 +102,7 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
 
 std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
     const std::shared_ptr<RtpExtensionSource>& simulcast,
+    const std::shared_ptr<RtpExtensionSource>& twcc,
     size_t mediaProtectionOverhead,
     const srtc::ByteBuffer& frame)
 {
@@ -120,12 +149,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
                     writer.write(csd.data(), csd.size());
                 }
 
-                RtpExtension extension;
-                if (simulcast && simulcast->wants(track, true, 0)) {
-                    RtpExtensionBuilder builder;
-                    simulcast->add(builder, track, true, 0);
-                    extension = builder.build();
-                }
+                RtpExtension extension = buildExtension(simulcast, twcc, track, true, 0);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(
@@ -142,12 +166,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            RtpExtension extension;
-            if (simulcast && simulcast->wants(track, true, 0)) {
-                RtpExtensionBuilder builder;
-                simulcast->add(builder, track, naluType == NaluType::KeyFrame, 0);
-                extension = builder.build();
-            }
+            RtpExtension extension = buildExtension(simulcast, twcc, track, true, 0);
 
             auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
             auto packetSize = adjustPacketSize(basicPacketSize, extension);
@@ -181,21 +200,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
                     if (packetNumber > 0) {
-                        extension.clear();
-
-                        if (simulcast && simulcast->wants(track, true, packetNumber)) {
-                            RtpExtensionBuilder builder;
-                            simulcast->add(builder, track, naluType == NaluType::KeyFrame, packetNumber);
-                            extension = builder.build();
-                        }            
+                        extension = buildExtension(simulcast, twcc, track, naluType == NaluType::KeyFrame, packetNumber);
                     }
 
-                    packetSize = adjustPacketSize(basicPacketSize, extension);
+                    packetSize = adjustPacketSize(basicPacketSize, extension) - 2 /*  FU_A headers */;
                     if (packetNumber == 0 && packetSize >= dataSize) {
                         // The frame now fits in one packet, but a FU-A cannot have both start and end
                         packetSize = dataSize - 10;
                     }
-                    packetSize -= 2;    // FU_A header
 
                     ByteBuffer payload;
                     ByteWriter writer(payload);

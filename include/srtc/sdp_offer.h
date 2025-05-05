@@ -20,6 +20,7 @@ class X509Certificate;
 struct OfferConfig {
     std::string cname;
     bool enableRTX = true;
+    bool enableTWCC = true;
 };
 
 struct PubVideoCodec {
@@ -48,6 +49,8 @@ public:
              const srtc::optional<PubVideoConfig>& videoConfig,
              const srtc::optional<PubAudioConfig>& audioConfig);
     ~SdpOffer() = default;
+
+    const OfferConfig& getConfig() const;
 
     [[nodiscard]] std::pair<std::string, Error> generate();
 

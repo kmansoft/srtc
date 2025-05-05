@@ -15,6 +15,7 @@
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_extension_source_simulcast.h"
+#include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
 
@@ -197,11 +198,10 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
     , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
     , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
-    , mExtensionSourceSimulcast(
-        answer->isVideoSimulcast()
-        ? std::make_shared<RtpExtensionSourceSimulcast>(
-            mVideoExtMediaId, mVideoExtStreamId, mVideoExtRepairedStreamId, mVideoExtGoogleVLA)
-        : nullptr)
+    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(
+        answer->isVideoSimulcast(),
+        mVideoExtMediaId, mVideoExtStreamId, mVideoExtRepairedStreamId, mVideoExtGoogleVLA))
+    , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer))
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
     , mScheduler(scheduler)
@@ -294,7 +294,7 @@ void PeerCandidate::process()
             }
 
             // Packetize
-            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
+            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast, mExtensionSourceTWCC,
                                                               mSrtp->getMediaProtectionOverhead(),
                                                               item.buf);
 
@@ -617,65 +617,81 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 
             switch (rtcpFmt) {
                 // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
-                case 1: {
-                    while (rtcpReader.remaining() >= 4) {
-                        const auto pid = rtcpReader.readU16();
-                        const auto blp = rtcpReader.readU16();
-
-                        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
-
-                        std::vector<uint16_t> missingSeqList;
-                        missingSeqList.push_back(pid);
-
-                        if (blp != 0) {
-                            for (auto index = 0; index < 16; index += 1) {
-                                if (blp & (1 << index)) {
-                                    LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-                                    missingSeqList.push_back(pid + index + 1);
-                                }
-                            }
-                        }
-
-                        for (const auto seq : missingSeqList) {
-                            const auto packet = mSendHistory->find(rtcpSSRC_1, seq);
-                            if (packet && mSrtp) {
-                                // Generate
-                                const auto track = packet->getTrack();
-
-                                RtpPacket::Output packetData;
-                                if (track->getRtxPayloadId() > 0) {
-                                    auto extension = packet->getExtension();
-
-                                    if (track->isSimulcast() && mExtensionSourceSimulcast) {
-                                        auto builder = RtpExtensionBuilder::from(extension);
-                                        mExtensionSourceSimulcast->updateForRtx(builder, track);
-                                        extension = builder.build();
-                                    }
-
-                                    packetData = packet->generateRtx(extension);
-                                } else {
-                                    packetData = packet->generate();
-                                }
-
-                                ByteBuffer protectedData;
-                                if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
-                                    // And send
-                                    const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
-                                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
-                                        packet->getSSRC(), packet->getSequence(), sentSize,
-                                        packet->getTrack()->getRtxPayloadId() > 0);
-                                } else {
-                                    LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
-                                }
-                            } else {
-                                LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", rtcpSSRC_1, seq);
-                            }
-                        }
-                    }
-                }   break;
+                case 1:
+                    onReceivedRtcMessage_205_1(rtcpSSRC_1, rtcpReader);
+                    break;
                 default:
                     LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
                     break;
+            }
+        }
+    }
+}
+
+void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
+{
+    while (rtcpReader.remaining() >= 4) {
+        const auto pid = rtcpReader.readU16();
+        const auto blp = rtcpReader.readU16();
+
+        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+
+        std::vector<uint16_t> missingSeqList;
+        missingSeqList.push_back(pid);
+
+        if (blp != 0) {
+            for (auto index = 0; index < 16; index += 1) {
+                if (blp & (1 << index)) {
+                    LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                    missingSeqList.push_back(pid + index + 1);
+                }
+            }
+        }
+
+        for (const auto seq : missingSeqList) {
+            const auto packet = mSendHistory->find(ssrc, seq);
+            if (packet && mSrtp) {
+                // Generate
+                const auto track = packet->getTrack();
+
+                RtpPacket::Output packetData;
+                if (track->getRtxPayloadId() > 0) {
+                    auto extension = packet->getExtension();
+
+                    if (track->isSimulcast() && mExtensionSourceSimulcast || mExtensionSourceTWCC) {
+                        auto builder = RtpExtensionBuilder::from(extension);
+                        if (track->isSimulcast() && mExtensionSourceSimulcast) {
+                            mExtensionSourceSimulcast->updateForRtx(builder, track);
+                        }
+                        if (mExtensionSourceTWCC) {
+                            mExtensionSourceTWCC->updateForRtx(builder, track);
+                        }
+                        extension = builder.build();
+                    }
+
+                    packetData = packet->generateRtx(extension);
+                } else if (mExtensionSourceTWCC) {
+                    auto extension = packet->getExtension();
+                    auto builder = RtpExtensionBuilder::from(extension);
+                    mExtensionSourceTWCC->updateForRtx(builder, track);
+                    extension = builder.build();
+                    packetData = packet->generateExt(extension);
+                } else {
+                    packetData = packet->generate();
+                }
+
+                ByteBuffer protectedData;
+                if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
+                    // And send
+                    const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
+                    LOG(SRTC_LOG_V, "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
+                        packet->getSSRC(), packet->getSequence(), sentSize,
+                        packet->getTrack()->getRtxPayloadId() > 0);
+                } else {
+                    LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
+                }
+            } else {
+                LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", ssrc, seq);
             }
         }
     }

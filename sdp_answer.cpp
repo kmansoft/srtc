@@ -596,9 +596,14 @@ std::vector<Host> SdpAnswer::getHostList() const
     return mHostList;
 }
 
+bool SdpAnswer::hasVideoMedia() const
+{
+    return mVideoSingleTrack != nullptr || !mVideoSimulcastTrackList.empty();
+}
+
 bool SdpAnswer::isVideoSimulcast() const
 {
-    return !mVideoSingleTrack && !mVideoSimulcastTrackList.empty();
+    return mVideoSingleTrack == nullptr && !mVideoSimulcastTrackList.empty();
 }
 
 std::shared_ptr<Track> SdpAnswer::getVideoSingleTrack() const
@@ -609,6 +614,11 @@ std::shared_ptr<Track> SdpAnswer::getVideoSingleTrack() const
 std::vector<std::shared_ptr<Track>> SdpAnswer::getVideoSimulcastTrackList() const
 {
     return mVideoSimulcastTrackList;
+}
+
+bool SdpAnswer::hasAudioMedia() const
+{
+    return mAudioTrack != nullptr;
 }
 
 std::shared_ptr<Track> SdpAnswer::getAudioTrack() const

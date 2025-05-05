@@ -1,6 +1,8 @@
 #include "srtc/packetizer_opus.h"
 #include "srtc/track.h"
 #include "srtc/rtp_packet_source.h"
+#include "srtc/rtp_extension_source.h"
+#include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_time_source.h"
 
 namespace srtc {
@@ -12,9 +14,11 @@ PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
 
 PacketizerOpus::~PacketizerOpus() = default;
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                               [[maybe_unused]] size_t mediaProtectionOverhead,
-                                                               const srtc::ByteBuffer& frame)
+std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
+    [[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
+    const std::shared_ptr<RtpExtensionSource>& twcc,
+    [[maybe_unused]] size_t mediaProtectionOverhead,
+    const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
 
@@ -32,10 +36,21 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate([[maybe_unused]] 
         payload.resize(RtpPacket::kMaxPayloadSize);
     }
 
+    RtpExtension extension;
+    if (twcc && twcc->wants(track, false, 0)) {
+        RtpExtensionBuilder builder;
+        twcc->add(builder, track, false, 0);
+        extension = builder.build();
+    }
+
     const auto [rollover, sequence] = packetSource->getNextSequence();
     result.push_back(
-            std::make_shared<RtpPacket>(
-                    track, false, rollover, sequence, frameTimestamp, std::move(payload)));
+            extension.empty()
+            ? std::make_shared<RtpPacket>(
+                    track, false, rollover, sequence, frameTimestamp, std::move(payload))
+            : std::make_shared<RtpPacket>(
+                track, false, rollover, sequence, frameTimestamp, std::move(extension), std::move(payload))
+        );
 
     return result;
 }

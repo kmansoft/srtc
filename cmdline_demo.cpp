@@ -20,6 +20,7 @@
 static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
+static bool gPrintSDP = false;
 static bool gLoopVideo = false;
 
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out) {
@@ -186,10 +187,15 @@ void printUsage(const char* programName) {
     std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
     std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
     std::cout << "  -l, --loop           Loop the file" << std::endl;
+    std::cout << "  -v, --verbose        Verbose logging" << std::endl;
+    std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
+    // Set logging to errors by default
+    srtc::setLogLevel(SRTC_LOG_E);
+
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -220,6 +226,11 @@ int main(int argc, char* argv[]) {
             }
         } else if (arg == "-l" || arg == "--loop") {
             gLoopVideo = true;
+        } else if (arg == "-v" || arg == "--verbose") {
+            std::cout << "Setting logging to verbose" << std::endl;
+            srtc::setLogLevel(SRTC_LOG_V);
+        } else if (arg == "-s" || arg == "--sdp") {
+            gPrintSDP = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -246,9 +257,6 @@ int main(int argc, char* argv[]) {
     const auto inputFileData = readInputFile(gInputFile);
     std::cout << "*** Read " << inputFileData.size() << " bytes from input video file " << gInputFile << std::endl;
 
-    // Set logging to errors
-    srtc::setLogLevel(SRTC_LOG_E);
-
     // Offer
     const OfferConfig offerConfig = {
             .cname = "foo",
@@ -266,9 +274,15 @@ int main(int argc, char* argv[]) {
         std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;
         exit(1);
     }
+    if (gPrintSDP) {
+        std::cout << "----- SDP offer -----\n" << offerString << std::endl;
+    }
 
     // WHIP
     const auto answerString = perform_whip(offerString, gWhipUrl, gWhipToken);
+    if (gPrintSDP) {
+        std::cout << "----- SDP answer -----\n" << answerString << std::endl;
+    }
 
     // Answer
     const auto [ answer, answerError ] = SdpAnswer::parse(offer, answerString, nullptr);

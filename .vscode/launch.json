@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "cmdline_demo",
+            "name": "Command Line Demo",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/cmake-vs-build-Debug/cmdline_demo",

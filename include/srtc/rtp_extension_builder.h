@@ -16,6 +16,9 @@ public:
 
     void addStringValue(uint8_t id, const std::string& value);
     void addBinaryValue(uint8_t id, const ByteBuffer& buf);
+    void addU16Value(uint8_t id, uint16_t value);
+
+    void addOrReplaceU16Value(uint8_t id, uint16_t value);
 
     [[nodiscard]] RtpExtension build();
 

@@ -283,6 +283,11 @@ ByteReader::ByteReader(const uint8_t* buf, size_t size)
 {
 }
 
+size_t ByteReader::current() const
+{
+    return mPos;
+}
+
 size_t ByteReader::remaining() const
 {
     if (mLen <= mPos) {

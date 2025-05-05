@@ -59,6 +59,11 @@ SdpOffer::SdpOffer(const OfferConfig& config,
 {
 }
 
+const OfferConfig& SdpOffer::getConfig() const
+{
+    return mConfig;
+}
+
 std::pair<std::string, Error> SdpOffer::generate()
 {
     if (!mVideoConfig.has_value() && !mAudioConfig.has_value()) {
@@ -134,6 +139,10 @@ std::pair<std::string, Error> SdpOffer::generate()
         const auto& layerList = mVideoConfig->simulcastLayerList;
         if (layerList.empty()) {
             // No simulcast
+            if (mConfig.enableTWCC) {
+                ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
+            }
+
             ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
@@ -152,6 +161,10 @@ std::pair<std::string, Error> SdpOffer::generate()
                 ss << "a=extmap:3 " << RtpStandardExtensions::kExtSdesRtpRepairedStreamId << std::endl;
             }
             ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
+
+            if (mConfig.enableTWCC) {
+                ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
+            }
 
             for (const auto& layer : layerList) {
                 ss << "a=rid:" << layer.name << " send" << std::endl;
@@ -231,6 +244,10 @@ std::pair<std::string, Error> SdpOffer::generate()
             } else {
                 payloadId += 1;
             }
+        }
+
+        if (mConfig.enableTWCC) {
+            ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
         }
 
         ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;

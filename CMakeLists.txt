@@ -39,6 +39,7 @@ add_library(srtc
         include/srtc/rtp_extension.h
         include/srtc/rtp_extension_builder.h
         include/srtc/rtp_extension_source_simulcast.h
+        include/srtc/rtp_extension_source_twcc.h
         include/srtc/rtp_extension_source.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
@@ -80,6 +81,7 @@ add_library(srtc
         rtp_extension.cpp
         rtp_extension_builder.cpp
         rtp_extension_source_simulcast.cpp
+        rtp_extension_source_twcc.cpp
         rtp_extension_source.cpp
         rtp_packet.cpp
         rtp_packet_source.cpp

@@ -24,6 +24,24 @@ RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast(
 
 RtpExtensionSourceSimulcast::~RtpExtensionSourceSimulcast() = default;
 
+std::shared_ptr<RtpExtensionSourceSimulcast> RtpExtensionSourceSimulcast::factory(
+    bool isVideoSimulcast,
+    uint8_t nVideoExtMediaId,
+    uint8_t nVideoExtStreamId,
+    uint8_t nVideoExtRepairedStreamId,
+    uint8_t nVideoExtGoogleVLA)
+{
+    if (isVideoSimulcast) {
+        if (nVideoExtMediaId > 0 && nVideoExtStreamId > 0 && nVideoExtGoogleVLA > 0) {
+            return std::make_shared<RtpExtensionSourceSimulcast>(
+                nVideoExtMediaId, nVideoExtStreamId,
+                nVideoExtRepairedStreamId, nVideoExtGoogleVLA);
+        }
+    }
+
+    return {};
+}
+
 bool RtpExtensionSourceSimulcast::shouldAdd(
         const std::shared_ptr<Track>& track,
         const std::shared_ptr<Packetizer>& packetizer,
@@ -77,7 +95,7 @@ void RtpExtensionSourceSimulcast::add(
 
 void RtpExtensionSourceSimulcast::updateForRtx(
     RtpExtensionBuilder& builder,
-    const std::shared_ptr<Track>& track) const
+    const std::shared_ptr<Track>& track)
 {
     const auto layer = track->getSimulcastLayer();
 

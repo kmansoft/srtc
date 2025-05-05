@@ -10,6 +10,7 @@ public:
     static const std::string kExtSdesRtpStreamId;
     static const std::string kExtSdesRtpRepairedStreamId;
     static const std::string kExtGoogleVLA;
+    static const std::string kExtGoogleTWCC;
 };
 
 }
