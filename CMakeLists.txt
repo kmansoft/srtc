@@ -293,9 +293,8 @@ install(FILES
         DESTINATION include/srtc
 )
 
-file(GLOB SRTC_LIBS "${CMAKE_CURRENT_BINARY_DIR}/lib*.a")
-
 install(FILES
-        ${SRTC_LIBS}
+        ${CMAKE_CURRENT_BINARY_DIR}/libsrtc.a
+        ${CMAKE_CURRENT_BINARY_DIR}/libstun.a
         DESTINATION lib
 )
