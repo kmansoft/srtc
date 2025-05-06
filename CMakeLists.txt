@@ -6,6 +6,8 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
+option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
@@ -172,9 +174,9 @@ target_include_directories(srtc PRIVATE
 target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/stun")
 
-# Tests - only when not cross-compiling e.g. Android
+# Tests - only when not cross-compiling e.g. Android, and when enabled
 
-if(NOT CMAKE_CROSSCOMPILING)
+if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
 
     # Google Test
 
@@ -183,7 +185,9 @@ if(NOT CMAKE_CROSSCOMPILING)
             URL https://github.com/google/googletest/archive/04ee1b4f2aefdffb0135d7cf2a2c519fe50dabe4.zip
     )
 
+    set(INSTALL_GTEST OFF)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
     FetchContent_MakeAvailable(googletest)
 
     # LibSRTP - only for tests
@@ -279,3 +283,19 @@ if(UNIX AND NOT ANDROID)
             CURL::libcurl
     )
 endif()
+
+# Install
+
+file(GLOB SRTC_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include/srtc/*.h")
+
+install(FILES
+        ${SRTC_INCLUDES}
+        DESTINATION include/srtc
+)
+
+file(GLOB SRTC_LIBS "${CMAKE_CURRENT_BINARY_DIR}/lib*.a")
+
+install(FILES
+        ${SRTC_LIBS}
+        DESTINATION lib
+)
