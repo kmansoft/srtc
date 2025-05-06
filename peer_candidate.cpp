@@ -752,7 +752,20 @@ int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 
 long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 {
-    return 1;
+    switch (cmd) {
+    case BIO_CTRL_DUP:
+    case BIO_CTRL_FLUSH:
+        return 1;
+#ifdef BIO_CTRL_GET_KTLS_SEND
+    case BIO_CTRL_GET_KTLS_SEND:
+        return 0;
+#endif
+#ifdef BIO_CTRL_GET_KTLS_RECV
+    case BIO_CTRL_GET_KTLS_RECV:
+        return 0;
+#endif
+    }
+    return 0;
 }
 
 int PeerCandidate::dgram_free(BIO* b)
