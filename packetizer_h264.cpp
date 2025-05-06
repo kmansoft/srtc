@@ -11,7 +11,7 @@
 
 #include <list>
 
-#define LOG(...) srtc::log("H264_pktzr", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "H264_pktzr", __VA_ARGS__)
 
 namespace
 {
@@ -107,6 +107,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                                                                const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
+    uint16_t keyFrameSliceCount = 0;
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
@@ -132,7 +133,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
         } else if (naluType == NaluType::KeyFrame) {
             // Send codec specific data first as a STAP-A
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
-            if (!mCSD.empty()) {
+            if (!mCSD.empty() && keyFrameSliceCount == 0) {
                 uint8_t nri = 0;
                 for (const auto& csd : mCSD) {
                     nri = std::max(nri, static_cast<uint8_t>(csd.data()[0] & 0x60));
@@ -155,6 +156,9 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 result.push_back(std::make_shared<RtpPacket>(
                     track, false, rollover, sequence, frameTimestamp, std::move(extension), std::move(payload)));
             }
+
+            // Track slices
+            keyFrameSliceCount += 1;
         }
 
         if (naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
@@ -238,6 +242,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 }
             }
         }
+    }
+
+    if (keyFrameSliceCount > 1) {
+        LOG(SRTC_LOG_V, "Key frame slice count: %u", keyFrameSliceCount);
     }
 
     return result;

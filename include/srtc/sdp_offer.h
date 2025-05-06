@@ -20,8 +20,9 @@ class X509Certificate;
 
 struct OfferConfig {
     std::string cname;
+    bool debugDropFrames = false;
     bool enableRTX = true;
-    bool enableTWCC = true;
+    bool enableTWCC = false;
 };
 
 struct PubVideoCodec {
