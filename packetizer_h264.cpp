@@ -164,12 +164,12 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             addedParameters = true;
         }
 
-        if (naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
+        if (naluType == NaluType::SEI || naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
             // Now the frame itself
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
 
-            RtpExtension extension = buildExtension(simulcast, twcc, track, true, 0);
+            RtpExtension extension = buildExtension(simulcast, twcc, track, naluType == NaluType::KeyFrame, 0);
 
             auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
             auto packetSize = adjustPacketSize(basicPacketSize, extension);
