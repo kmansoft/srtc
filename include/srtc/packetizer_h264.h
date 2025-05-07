@@ -20,7 +20,8 @@ public:
                                                    const ByteBuffer& frame) override;
 
 private:
-    std::vector<ByteBuffer> mCSD; // Without NALU header
+    srtc::ByteBuffer mSPS; // Without Annex B header
+    srtc::ByteBuffer mPPS;
 };
 
 } // namespace srtc

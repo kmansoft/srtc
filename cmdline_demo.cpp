@@ -20,13 +20,15 @@
 static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
+static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintInfo = false;
 static bool gLoopVideo = false;
 
 // Bit reader for determining frame boundaries
 
-class BitReader {
+class BitReader
+{
 private:
     const uint8_t* const data;
     const size_t dataSize;
@@ -34,24 +36,30 @@ private:
 
 public:
     BitReader(const uint8_t* buffer, size_t size)
-        : data(buffer), dataSize(size), bitPos(0) {}
+        : data(buffer)
+        , dataSize(size)
+        , bitPos(0)
+    {
+    }
 
     uint32_t readBit();
     uint32_t readBits(size_t n);
     uint32_t readUnsignedExpGolomb();
 };
 
-uint32_t BitReader::readBit() {
+uint32_t BitReader::readBit()
+{
     if ((bitPos >> 3) >= dataSize)
         return 0;
-        
+
     uint8_t byte = data[bitPos >> 3];
     uint32_t bit = (byte >> (7 - (bitPos & 7))) & 1;
     bitPos++;
     return bit;
 }
 
-uint32_t BitReader::readBits(size_t n) {
+uint32_t BitReader::readBits(size_t n)
+{
     uint32_t value = 0;
     for (size_t i = 0; i < n; i++) {
         value = (value << 1) | readBit();
@@ -59,21 +67,21 @@ uint32_t BitReader::readBits(size_t n) {
     return value;
 }
 
-uint32_t BitReader::readUnsignedExpGolomb() {
+uint32_t BitReader::readUnsignedExpGolomb()
+{
     // Count leading zeros
     int leadingZeros = 0;
     while (readBit() == 0 && leadingZeros < 32) {
         leadingZeros++;
     }
-    
+
     if (leadingZeros == 0)
         return 0;
-    
+
     // Read remaining bits
     uint32_t remainingBits = readBits(leadingZeros);
     return (1 << leadingZeros) - 1 + remainingBits;
 }
-
 
 // WHIP
 
@@ -194,7 +202,8 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
     return std::move(buf);
 }
 
-void printFileInfo(const srtc::ByteBuffer& data) {
+void printFileInfo(const srtc::ByteBuffer& data)
+{
     uint32_t naluCount = 0;
     uint32_t parameterCount = 0;
     uint32_t frameCount = 0;
@@ -245,7 +254,7 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
 
         srtc::ByteBuffer sps, pps;
         srtc::ByteBuffer frame;
-    
+
         for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
             const auto naluType = parser.currType();
             switch (naluType) {
@@ -281,10 +290,9 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 break;
             }
 
-            if (frameCount > 0 && (frameCount % 25) == 0) {
-                std::cout << "Played "
-                    << std::setw(5) << naluCount << " nalus"
-                    << std::setw(5) << frameCount << " video frames" << std::endl;
+            if (!gQuiet && frameCount > 0 && (frameCount % 25) == 0) {
+                std::cout << "Played " << std::setw(5) << naluCount << " nalus" << std::setw(5) << frameCount
+                          << " video frames" << std::endl;
             }
         }
 
@@ -293,10 +301,9 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
             frame.clear();
         }
 
-        if (frameCount > 0 && (frameCount % 25) != 0) {
-            std::cout << "Played "
-                << std::setw(5) << naluCount << " nalus"
-                << std::setw(5) << frameCount << " video frames" << std::endl;
+        if (!gQuiet && frameCount > 0 && (frameCount % 25) != 0) {
+            std::cout << "Played " << std::setw(5) << naluCount << " nalus" << std::setw(5) << frameCount
+                      << " video frames" << std::endl;
         }
 
         if (gLoopVideo) {
@@ -315,7 +322,8 @@ void printUsage(const char* programName)
     std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
     std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
     std::cout << "  -l, --loop           Loop the file" << std::endl;
-    std::cout << "  -v, --verbose        Verbose logging" << std::endl;
+    std::cout << "  -v, --verbose        Verbose logging from the srtc library" << std::endl;
+    std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  -i, --info           Print input file info" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
@@ -357,8 +365,9 @@ int main(int argc, char* argv[])
         } else if (arg == "-l" || arg == "--loop") {
             gLoopVideo = true;
         } else if (arg == "-v" || arg == "--verbose") {
-            std::cout << "Setting logging to verbose" << std::endl;
             srtc::setLogLevel(SRTC_LOG_V);
+        } else if (arg == "-q" || arg == "--quiet") {
+            gQuiet = true;
         } else if (arg == "-s" || arg == "--sdp") {
             gPrintSDP = true;
         } else if (arg == "-i" || arg == "--info") {
@@ -393,7 +402,7 @@ int main(int argc, char* argv[])
     if (gPrintInfo) {
         printFileInfo(inputFileData);
     }
-   
+
     // Offer
     const OfferConfig offerConfig = { .cname = "foo", .enableRTX = true };
     const PubVideoConfig videoConfig = { .codecList = { { Codec::H264, 0x42e01f } } };

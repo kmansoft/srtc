@@ -10,7 +10,6 @@
 #include "srtc/track.h"
 
 #include <list>
-#include <iostream>
 
 #define LOG(level, ...) srtc::log(level, "H264_pktzr", __VA_ARGS__)
 
@@ -81,10 +80,19 @@ PacketizerH264::~PacketizerH264() = default;
 
 void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
 {
-    mCSD.clear();
+    mSPS.clear();
+    mPPS.clear();
+
+    int target = 0;
     for (const auto& item : csd) {
         for (NaluParser parser(item); parser; parser.next()) {
-            mCSD.emplace_back(parser.currData(), parser.currDataSize());
+            if (target == 0) {
+                mSPS.assign(parser.currData(), parser.currDataSize());
+                target += 1;
+            } else if (target == 1) {
+                mPPS.assign(parser.currData(), parser.currDataSize());
+                target += 1;
+            }
         }
     }
 }
@@ -110,8 +118,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
     // https://datatracker.ietf.org/doc/html/rfc6184
 
-    std::cout << "------- frame size = " <<  frame.size() << std::endl;
-
     bool addedParameters = false;
 
     const auto track = getTrack();
@@ -124,23 +130,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naluType = parser.currType();
 
-        if (naluType == NaluType::SPS || naluType == NaluType::PPS) {
-            // Update codec specific data
-            if (naluType == NaluType::SPS) {
-                mCSD.clear();
-            }
-
-            if (parser.currDataSize() > 0) {
-                mCSD.emplace_back(parser.currData(), parser.currDataSize());
-            }
+        if (naluType == NaluType::SPS) {
+            // Update SPS
+            mSPS.assign(parser.currData(), parser.currDataSize());
+        } else if (naluType == NaluType::PPS) {
+            // Update PPS
+            mPPS.assign(parser.currData(), parser.currDataSize());
         } else if (naluType == NaluType::KeyFrame) {
             // Send codec specific data first as a STAP-A
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
-            if (!mCSD.empty() && !addedParameters) {
-                uint8_t nri = 0;
-                for (const auto& csd : mCSD) {
-                    nri = std::max(nri, static_cast<uint8_t>(csd.data()[0] & 0x60));
-                }
+            if (!mSPS.empty() && !mPPS.empty() && !addedParameters) {
+                const uint8_t nri = std::max(mSPS.data()[0] & 0x60, mPPS.data()[0] & 0x60);
 
                 ByteBuffer payload;
                 ByteWriter writer(payload);
@@ -148,12 +148,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 // nri is already shifted left
                 writer.writeU8(nri | STAP_A);
 
-                std::cout << "Adding SPS/PPS, size = " << mCSD.size() << std::endl;
+                writer.writeU16(static_cast<uint16_t>(mSPS.size()));
+                writer.write(mSPS.data(), mSPS.size());
 
-                for (const auto& csd : mCSD) {
-                    writer.writeU16(static_cast<uint16_t>(csd.size()));
-                    writer.write(csd.data(), csd.size());
-                }
+                writer.writeU16(static_cast<uint16_t>(mPPS.size()));
+                writer.write(mPPS.data(), mPPS.size());
 
                 RtpExtension extension = buildExtension(simulcast, twcc, track, true, 0);
 
@@ -227,16 +226,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                         (isStart ? (1 << 7) : 0) | (isEnd ? (1 << 6) : 0) | static_cast<uint8_t>(naluType);
                     writer.writeU8(fuHeader);
 
+                    const auto marker = isEnd && parser.isAtEnd();
+
                     const auto writeNow = std::min(dataSize, packetSize);
                     writer.write(dataPtr, writeNow);
 
-                    const auto marker = isEnd && parser.isAtEnd();
-                    std::cout
-                        << "FU_A, type = "
-                        << static_cast<uint32_t>(naluType)
-                        << ", packet = " << packetNumber
-                        << ", marker = " << marker << std::endl;
-    
                     result.push_back(extension.empty()
                                          ? std::make_shared<RtpPacket>(
                                                track, marker, rollover, sequence, frameTimestamp, std::move(payload))
@@ -254,26 +248,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 }
             }
         }
-    }
-
-    auto resultPos = 0;
-    const auto resultSize = result.size();
-
-    std::cout << "Total " << resultSize << " packets" << std::endl;
-
-    for (const auto& item : result) {
-        if (resultPos == resultSize - 1) {
-            if (!item->getMarker()) {
-                std::cout << "MARKER should be set, but it is NOT at pos = " <<  resultPos << std::endl;
-            }
-            assert(item->getMarker());
-        } else {
-            if (item->getMarker()) {
-                std::cout << "MARKER should not be set, but it is at pos = " <<  resultPos << std::endl;
-            }
-            assert(!item->getMarker());
-        }
-        resultPos += 1;
     }
 
     return result;
