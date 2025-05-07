@@ -69,8 +69,10 @@ void log_v(int level, const char* tag, const char* format, va_list ap)
 
         char buf[2048];
         std::vsnprintf(buf, sizeof(buf), format, ap);
-        std::cout << std::put_time(local_tm, "%Y-%m-%d %H:%M:%S") << "." << std::setw(3) << std::setfill('0') << ms
-                  << " " << tag << ": " << buf << std::endl;
+        std::cout
+            << std::put_time(local_tm, "%Y-%m-%d %H:%M:%S")
+            << "." << std::setw(3) << std::setfill('0') << ms << std::setfill(' ')
+            << " " << tag << ": " << buf << std::endl;
 #endif
     }
 }

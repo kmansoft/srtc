@@ -21,7 +21,61 @@ static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
 static std::string gWhipToken = "none";
 static bool gPrintSDP = false;
+static bool gPrintInfo = false;
 static bool gLoopVideo = false;
+
+// Bit reader for determining frame boundaries
+
+class BitReader {
+private:
+    const uint8_t* const data;
+    const size_t dataSize;
+    size_t bitPos;
+
+public:
+    BitReader(const uint8_t* buffer, size_t size)
+        : data(buffer), dataSize(size), bitPos(0) {}
+
+    uint32_t readBit();
+    uint32_t readBits(size_t n);
+    uint32_t readUnsignedExpGolomb();
+};
+
+uint32_t BitReader::readBit() {
+    if ((bitPos >> 3) >= dataSize)
+        return 0;
+        
+    uint8_t byte = data[bitPos >> 3];
+    uint32_t bit = (byte >> (7 - (bitPos & 7))) & 1;
+    bitPos++;
+    return bit;
+}
+
+uint32_t BitReader::readBits(size_t n) {
+    uint32_t value = 0;
+    for (size_t i = 0; i < n; i++) {
+        value = (value << 1) | readBit();
+    }
+    return value;
+}
+
+uint32_t BitReader::readUnsignedExpGolomb() {
+    // Count leading zeros
+    int leadingZeros = 0;
+    while (readBit() == 0 && leadingZeros < 32) {
+        leadingZeros++;
+    }
+    
+    if (leadingZeros == 0)
+        return 0;
+    
+    // Read remaining bits
+    uint32_t remainingBits = readBits(leadingZeros);
+    return (1 << leadingZeros) - 1 + remainingBits;
+}
+
+
+// WHIP
 
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
 {
@@ -140,35 +194,109 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
     return std::move(buf);
 }
 
+void printFileInfo(const srtc::ByteBuffer& data) {
+    uint32_t naluCount = 0;
+    uint32_t parameterCount = 0;
+    uint32_t frameCount = 0;
+
+    for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
+        const auto naluType = parser.currType();
+
+        switch (naluType) {
+        default:
+            break;
+        case srtc::h264::NaluType::KeyFrame:
+        case srtc::h264::NaluType::NonKeyFrame:
+            naluCount += 1;
+            break;
+        case srtc::h264::NaluType::SPS:
+        case srtc::h264::NaluType::PPS:
+            parameterCount += 1;
+            break;
+        }
+
+        switch (naluType) {
+        default:
+            break;
+        case srtc::h264::NaluType::KeyFrame:
+        case srtc::h264::NaluType::NonKeyFrame:
+            BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
+            const auto first_mb_in_slice = br.readUnsignedExpGolomb();
+            if (first_mb_in_slice == 0) {
+                frameCount += 1;
+            }
+            break;
+        }
+    }
+
+    std::cout << "*** NALU count:      " << std::setw(4) << naluCount << std::endl;
+    std::cout << "*** Parameter count: " << std::setw(4) << parameterCount << std::endl;
+    std::cout << "*** Frame count:     " << std::setw(4) << frameCount << std::endl;
+}
+
 void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, const srtc::ByteBuffer& data)
 {
     while (true) {
         std::vector<srtc::ByteBuffer> codecSpecificData;
 
-        // Iterate other frames
+        // Iterate other nalus
+        uint32_t naluCount = 0;
         uint32_t frameCount = 0;
 
+        srtc::ByteBuffer sps, pps;
+        srtc::ByteBuffer frame;
+    
         for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
             const auto naluType = parser.currType();
             switch (naluType) {
+            default:
+                break;
             case srtc::h264::NaluType::SPS:
+                sps.assign(parser.currNalu(), parser.currNaluSize());
+                break;
             case srtc::h264::NaluType::PPS:
-                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
+                pps.assign(parser.currNalu(), parser.currNaluSize());
                 break;
             case srtc::h264::NaluType::KeyFrame:
             case srtc::h264::NaluType::NonKeyFrame:
-                peerConnection->publishVideoSingleFrame({ parser.currNalu(), parser.currNaluSize() });
-                usleep(1000 * 40); // 25 fps
-                break;
-            default:
+                BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
+                const auto first_mb_in_slice = br.readUnsignedExpGolomb();
+                if (first_mb_in_slice == 0) {
+                    if (naluType == srtc::h264::NaluType::KeyFrame) {
+                        std::vector<srtc::ByteBuffer> parameters;
+                        parameters.push_back(sps.copy());
+                        parameters.push_back(pps.copy());
+                        peerConnection->setVideoSingleCodecSpecificData(std::move(parameters));
+                    }
+
+                    if (!frame.empty()) {
+                        peerConnection->publishVideoSingleFrame(std::move(frame));
+                        frame.clear();
+                    }
+                    frameCount += 1;
+                    usleep(1000 * 40); // 25 fps
+                }
+                frame.append(parser.currNalu(), parser.currNaluSize());
+                naluCount += 1;
                 break;
             }
 
-            frameCount += 1;
-
-            if ((frameCount % 25) == 0) {
-                std::cout << "Played " << std::setw(4) << frameCount << " video frames" << std::endl;
+            if (frameCount > 0 && (frameCount % 25) == 0) {
+                std::cout << "Played "
+                    << std::setw(5) << naluCount << " nalus"
+                    << std::setw(5) << frameCount << " video frames" << std::endl;
             }
+        }
+
+        if (!frame.empty()) {
+            peerConnection->publishVideoSingleFrame(std::move(frame));
+            frame.clear();
+        }
+
+        if (frameCount > 0 && (frameCount % 25) != 0) {
+            std::cout << "Played "
+                << std::setw(5) << naluCount << " nalus"
+                << std::setw(5) << frameCount << " video frames" << std::endl;
         }
 
         if (gLoopVideo) {
@@ -189,6 +317,7 @@ void printUsage(const char* programName)
     std::cout << "  -l, --loop           Loop the file" << std::endl;
     std::cout << "  -v, --verbose        Verbose logging" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
+    std::cout << "  -i, --info           Print input file info" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -232,6 +361,8 @@ int main(int argc, char* argv[])
             srtc::setLogLevel(SRTC_LOG_V);
         } else if (arg == "-s" || arg == "--sdp") {
             gPrintSDP = true;
+        } else if (arg == "-i" || arg == "--info") {
+            gPrintInfo = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -258,6 +389,11 @@ int main(int argc, char* argv[])
     const auto inputFileData = readInputFile(gInputFile);
     std::cout << "*** Read " << inputFileData.size() << " bytes from input video file " << gInputFile << std::endl;
 
+    // Print file info
+    if (gPrintInfo) {
+        printFileInfo(inputFileData);
+    }
+   
     // Offer
     const OfferConfig offerConfig = { .cname = "foo", .enableRTX = true };
     const PubVideoConfig videoConfig = { .codecList = { { Codec::H264, 0x42e01f } } };

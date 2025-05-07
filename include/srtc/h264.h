@@ -14,6 +14,7 @@ namespace h264
 enum class NaluType : uint8_t {
     NonKeyFrame = 1,
     KeyFrame = 5,
+    SEI = 6,
     SPS = 7,
     PPS = 8
 };
@@ -25,6 +26,8 @@ public:
     explicit operator bool() const;
 
     [[nodiscard]] bool isAtStart() const;
+    [[nodiscard]] bool isAtEnd() const;
+
     void next();
 
     [[nodiscard]] uint8_t currRefIdc() const;

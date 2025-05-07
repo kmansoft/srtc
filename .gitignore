@@ -4,3 +4,4 @@ cmake-vs-build-*
 .vscode
 CMakePresets.json
 *.mp4
+token.txt

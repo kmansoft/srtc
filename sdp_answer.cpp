@@ -452,7 +452,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
                     }
                 } else if (key == "candidate") {
                     // a=candidate:182981660 1 udp 2130706431 99.181.107.72 443 typ host
-                    if (props.size() == 7) {
+                    if (props.size() >= 7) {
                         if (props[0] == "1" && props[1] == "udp" && props[5] == "typ" && props[6] == "host") {
                             if (const auto port = parse_int(props[4]); port > 0 && port < 63536) {
                                 Host host{};

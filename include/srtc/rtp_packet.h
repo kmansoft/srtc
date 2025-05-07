@@ -38,6 +38,7 @@ public:
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
     [[nodiscard]] RtpExtension getExtension() const;
+    [[nodiscard]] bool getMarker() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint32_t getRollover() const;
     [[nodiscard]] size_t getPayloadSize() const;

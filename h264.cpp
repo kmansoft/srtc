@@ -65,6 +65,11 @@ bool NaluParser::isAtStart() const
     return mPos == 0;
 }
 
+bool NaluParser::isAtEnd() const
+{
+    return mNext >= mSize;
+}
+
 void NaluParser::next()
 {
     mPos = mNext;

@@ -86,6 +86,11 @@ RtpExtension RtpPacket::getExtension() const
     return mExtension.copy();
 }
 
+bool RtpPacket::getMarker() const
+{
+    return mMarker;
+}
+
 uint8_t RtpPacket::getPayloadId() const
 {
     return mPayloadId;

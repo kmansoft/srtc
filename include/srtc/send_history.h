@@ -4,6 +4,8 @@
 #include <memory>
 #include <unordered_map>
 
+#include <cstdint>
+
 namespace srtc
 {
 
