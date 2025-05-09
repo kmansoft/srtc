@@ -60,6 +60,7 @@ add_library(srtc
         include/srtc/srtp_openssl.h
         include/srtc/srtp_util.h
         include/srtc/track.h
+        include/srtc/track_selector.h
         include/srtc/track_stats.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
@@ -102,6 +103,7 @@ add_library(srtc
         srtp_openssl.cpp
         srtp_util.cpp
         track.cpp
+        track_selector.cpp
         track_stats.cpp
         util.cpp
         x509_certificate.cpp

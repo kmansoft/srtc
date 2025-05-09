@@ -403,11 +403,30 @@ int main(int argc, char* argv[])
         printFileInfo(inputFileData);
     }
 
-    // Offer
-    const OfferConfig offerConfig = { .cname = "foo", .enableRTX = true };
-    const PubVideoConfig videoConfig = { .codecList = { { Codec::H264, 0x42e01f } } };
+    // Peer connection state
+    std::mutex connectionStateMutex;
+    PeerConnection::ConnectionState connectionState = PeerConnection::ConnectionState::Inactive;
+    std::condition_variable connectionStateCond;
 
-    const auto offer = std::make_shared<SdpOffer>(offerConfig, videoConfig, nullopt);
+    // Peer connection
+    const auto peerConnection = std::make_shared<PeerConnection>();
+
+    peerConnection->setConnectionStateListener(
+        [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
+            std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
+
+            {
+                std::lock_guard lock(connectionStateMutex);
+                connectionState = state;
+            }
+            connectionStateCond.notify_one();
+        });
+
+    // Offer
+    const OfferConfig offerConfig = { .cname = "foo", .enable_rtx = true };
+    const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
+
+    const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, nullopt);
     const auto [offerString, offerError] = offer->generate();
     if (offerError.isError()) {
         std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;
@@ -424,30 +443,13 @@ int main(int argc, char* argv[])
     }
 
     // Answer
-    const auto [answer, answerError] = SdpAnswer::parse(offer, answerString, nullptr);
+    const auto [answer, answerError] = peerConnection->parsePublishSdpAnswer(offer, answerString, nullptr);
     if (answerError.isError()) {
         std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
         exit(1);
     }
 
-    // Peer connection
-    std::mutex connectionStateMutex;
-    PeerConnection::ConnectionState connectionState = PeerConnection::ConnectionState::Inactive;
-    std::condition_variable connectionStateCond;
-
-    const auto peerConnection = std::make_shared<PeerConnection>();
-
-    peerConnection->setConnectionStateListener(
-        [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
-            std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
-
-            {
-                std::lock_guard lock(connectionStateMutex);
-                connectionState = state;
-            }
-            connectionStateCond.notify_one();
-        });
-
+    // Connect the peer connection
     peerConnection->setSdpOffer(offer);
     peerConnection->setSdpAnswer(answer);
 

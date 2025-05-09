@@ -66,6 +66,13 @@ PeerConnection::~PeerConnection()
     }
 }
 
+std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const OfferConfig& config,
+                                                                const srtc::optional<PubVideoConfig>& videoConfig,
+                                                                const srtc::optional<PubAudioConfig>& audioConfig)
+{
+    return std::shared_ptr<SdpOffer>(new SdpOffer(config, videoConfig, audioConfig));
+}
+
 Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 {
     std::lock_guard lock(mMutex);
@@ -79,6 +86,12 @@ Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
     mSdpOffer = offer;
 
     return Error::OK;
+}
+
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishSdpAnswer(
+    const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
+{
+    return SdpAnswer::parse(offer, answer, selector);
 }
 
 Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)

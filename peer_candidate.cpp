@@ -322,7 +322,8 @@ void PeerCandidate::process()
                         // works
                         const auto& config = mOffer->getConfig();
                         const auto randomValue = mNoSendRandomGenerator.next();
-                        if (config.debugDropFrames && randomValue < 5 && item.track->getMediaType() == MediaType::Video) {
+                        if (config.debug_drop_frames && randomValue < 5 &&
+                            item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
                             const auto w = mSocket->send(protectedData.data(), protectedData.size());

@@ -13,13 +13,13 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::share
     w.writeU8(0);
 
     for (const auto& layer : list) {
-        w.writeLEB128(layer->kilobitPerSecond);
+        w.writeLEB128(layer->kilobits_per_second);
     }
 
     for (const auto& layer : list) {
         w.writeU16(layer->width - 1);
         w.writeU16(layer->height - 1);
-        w.writeU8(layer->framesPerSecond);
+        w.writeU8(layer->frames_per_second);
     }
 }
 

@@ -35,7 +35,7 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
                                                                         const std::shared_ptr<SdpAnswer>& answer)
 {
     const auto& config = offer->getConfig();
-    if (!config.enableTWCC) {
+    if (!config.enable_bwe) {
         return {};
     }
 

@@ -9,6 +9,7 @@
 
 #include "srtc/error.h"
 #include "srtc/optional.h"
+#include "srtc/publish_config.h"
 #include "srtc/random_generator.h"
 #include "srtc/simulcast_layer.h"
 #include "srtc/srtc.h"
@@ -16,41 +17,26 @@
 namespace srtc
 {
 
+class PeerConnection;
 class X509Certificate;
 
 struct OfferConfig {
     std::string cname;
-    bool debugDropFrames = false;
-    bool enableRTX = true;
-    bool enableTWCC = false;
-};
-
-struct PubVideoCodec {
-    Codec codec;
-    uint32_t profileLevelId; // for h264
-};
-
-struct PubVideoConfig {
-    std::vector<PubVideoCodec> codecList;
-    std::vector<SimulcastLayer> simulcastLayerList;
-};
-
-struct PubAudioCodec {
-    Codec codec;
-    uint32_t minptime;
-    bool stereo;
-};
-
-struct PubAudioConfig {
-    std::vector<PubAudioCodec> codecList;
+    bool debug_drop_frames = false;
+    bool enable_rtx = true;
+    bool enable_bwe = false;
 };
 
 class SdpOffer
 {
-public:
+private:
+    friend PeerConnection;
+
     SdpOffer(const OfferConfig& config,
              const srtc::optional<PubVideoConfig>& videoConfig,
              const srtc::optional<PubAudioConfig>& audioConfig);
+
+public:
     ~SdpOffer() = default;
 
     const OfferConfig& getConfig() const;

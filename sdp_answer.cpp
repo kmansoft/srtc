@@ -2,6 +2,7 @@
 #include "srtc/extension_map.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
+#include "srtc/track_selector.h"
 #include "srtc/util.h"
 #include "srtc/x509_hash.h"
 
@@ -159,8 +160,9 @@ struct ParseMediaState {
     void addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList, const std::string& ridName);
     void setPayloadList(const std::vector<uint8_t>& list);
     [[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
-    [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(
-        uint32_t ssrc, uint32_t rtxSsrc, const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const;
+    [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(uint32_t ssrc,
+                                                           uint32_t rtxSsrc,
+                                                           const std::shared_ptr<srtc::TrackSelector>& selector) const;
     [[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(
         const std::shared_ptr<srtc::SdpOffer>& offer, const std::shared_ptr<srtc::Track>& singleTrack) const;
 };
@@ -175,8 +177,8 @@ void ParseMediaState::addSimulcastLayer(const std::vector<srtc::SimulcastLayer>&
                 ridName,
                 layer.width,
                 layer.height,
-                layer.framesPerSecond,
-                layer.kilobitPerSecond,
+                layer.frames_per_second,
+                layer.kilobits_per_second,
                 static_cast<uint16_t>(i),
             });
             break;
@@ -203,8 +205,9 @@ ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const
     return nullptr;
 }
 
-std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(
-    uint32_t ssrc, uint32_t rtxSsrc, const std::shared_ptr<srtc::SdpAnswer::TrackSelector>& selector) const
+std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
+                                                          uint32_t rtxSsrc,
+                                                          const std::shared_ptr<srtc::TrackSelector>& selector) const
 {
     if (id < 0) {
         return nullptr;

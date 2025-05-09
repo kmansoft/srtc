@@ -2,9 +2,13 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
+#include "srtc/optional.h"
 #include "srtc/peer_candidate_listener.h"
+#include "srtc/publish_config.h"
 #include "srtc/scheduler.h"
+#include "srtc/sdp_offer.h"
 #include "srtc/srtc.h"
+#include "srtc/track_selector.h"
 
 #include <functional>
 #include <list>
@@ -30,7 +34,14 @@ public:
     PeerConnection();
     ~PeerConnection();
 
+    std::shared_ptr<SdpOffer> createPublishSdpOffer(const OfferConfig& config,
+                                                    const srtc::optional<PubVideoConfig>& videoConfig,
+                                                    const srtc::optional<PubAudioConfig>& audioConfig);
     Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
+
+    std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
+                                                                       const std::string& answer,
+                                                                       const std::shared_ptr<TrackSelector>& selector);
     Error setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
     std::shared_ptr<SdpOffer> getSdpOffer() const;
@@ -92,8 +103,8 @@ private:
 
     std::vector<std::shared_ptr<Track>> collectTracksLocked() const SRTC_SHARED_LOCKS_REQUIRED(mMutex);
 
-    bool mIsStarted SRTC_GUARDED_BY(mMutex) = {false};
-    bool mIsQuit SRTC_GUARDED_BY(mMutex) = {false};
+    bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
+    bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     // Event loop
@@ -117,7 +128,7 @@ private:
     void onCandidateLostConnection(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
-    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = {ConnectionState::Inactive};
+    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);

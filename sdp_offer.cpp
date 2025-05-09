@@ -91,12 +91,12 @@ std::pair<std::string, Error> SdpOffer::generate()
 
     // Video
     if (mVideoConfig.has_value()) {
-        const auto& list = mVideoConfig->codecList;
+        const auto& list = mVideoConfig->codec_list;
         if (list.empty()) {
             return { "", { Error::Code::InvalidData, "The video config list is present but empty" } };
         }
 
-        if (mConfig.enableRTX) {
+        if (mConfig.enable_rtx) {
             ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
         } else {
             ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
@@ -119,7 +119,7 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::H264) {
                 char buf[128];
-                std::snprintf(buf, sizeof(buf), "%06x", item.profileLevelId);
+                std::snprintf(buf, sizeof(buf), "%06x", item.profile_level_id);
 
                 ss << "a=fmtp:" << payloadId
                    << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" << buf << std::endl;
@@ -127,7 +127,7 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
             ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
 
-            if (mConfig.enableRTX) {
+            if (mConfig.enable_rtx) {
                 const auto payloadIdRtx = payloadId + 1;
                 ss << "a=rtpmap:" << payloadIdRtx << " rtx/90000" << std::endl;
                 ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
@@ -138,17 +138,17 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
         }
 
-        const auto& layerList = mVideoConfig->simulcastLayerList;
+        const auto& layerList = mVideoConfig->simulcast_layer_list;
         if (layerList.empty()) {
             // No simulcast
-            if (mConfig.enableTWCC) {
+            if (mConfig.enable_bwe) {
                 ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
             }
 
             ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-            if (mConfig.enableRTX) {
+            if (mConfig.enable_rtx) {
                 ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
                 ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
@@ -159,12 +159,12 @@ std::pair<std::string, Error> SdpOffer::generate()
             // Simulcast
             ss << "a=extmap:1 " << RtpStandardExtensions::kExtSdesMid << std::endl;
             ss << "a=extmap:2 " << RtpStandardExtensions::kExtSdesRtpStreamId << std::endl;
-            if (mConfig.enableRTX) {
+            if (mConfig.enable_rtx) {
                 ss << "a=extmap:3 " << RtpStandardExtensions::kExtSdesRtpRepairedStreamId << std::endl;
             }
             ss << "a=extmap:4 " << RtpStandardExtensions::kExtGoogleVLA << std::endl;
 
-            if (mConfig.enableTWCC) {
+            if (mConfig.enable_bwe) {
                 ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
             }
 
@@ -192,7 +192,7 @@ std::pair<std::string, Error> SdpOffer::generate()
                 ss << "a=ssrc:" << videoSSRC << " cname:" << mConfig.cname << std::endl;
                 ss << "a=ssrc:" << videoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
-                if (mConfig.enableRTX) {
+                if (mConfig.enable_rtx) {
                     ss << "a=ssrc:" << videoRtxSSRC << " cname:" << mConfig.cname << std::endl;
                     ss << "a=ssrc:" << videoRtxSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
 
@@ -204,12 +204,12 @@ std::pair<std::string, Error> SdpOffer::generate()
 
     // Audio
     if (mAudioConfig.has_value()) {
-        const auto& list = mAudioConfig->codecList;
+        const auto& list = mAudioConfig->codec_list;
         if (list.empty()) {
             return { "", { Error::Code::InvalidData, "The audio config list is present but empty" } };
         }
 
-        if (mConfig.enableRTX) {
+        if (mConfig.enable_rtx) {
             ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
         } else {
             ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
@@ -235,7 +235,7 @@ std::pair<std::string, Error> SdpOffer::generate()
                    << ";useinbandfec=1" << std::endl;
             }
 
-            if (mConfig.enableRTX) {
+            if (mConfig.enable_rtx) {
                 const auto payloadIdRtx = payloadId + 1;
                 ss << "a=rtpmap:" << payloadIdRtx << " rtx/48000" << std::endl;
                 ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
@@ -246,14 +246,14 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
         }
 
-        if (mConfig.enableTWCC) {
+        if (mConfig.enable_bwe) {
             ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
         }
 
         ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
         ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
 
-        if (mConfig.enableRTX) {
+        if (mConfig.enable_rtx) {
             ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
 
@@ -268,7 +268,7 @@ std::pair<std::string, Error> SdpOffer::generate()
 srtc::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
 {
     if (mVideoConfig.has_value()) {
-        return mVideoConfig->simulcastLayerList;
+        return mVideoConfig->simulcast_layer_list;
     }
 
     return srtc::nullopt;

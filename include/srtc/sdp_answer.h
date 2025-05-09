@@ -15,23 +15,19 @@ namespace srtc
 
 class SdpOffer;
 class Track;
+class PeerConnection;
+class TrackSelector;
 
 class SdpAnswer
 {
-public:
-    class TrackSelector
-    {
-    public:
-        virtual ~TrackSelector() = default;
-
-        [[nodiscard]] virtual std::shared_ptr<Track> selectTrack(
-            MediaType type, const std::vector<std::shared_ptr<Track>>& list) const = 0;
-    };
+private:
+    friend PeerConnection;
 
     static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::shared_ptr<SdpOffer>& offer,
                                                               const std::string& answer,
                                                               const std::shared_ptr<TrackSelector>& selector);
 
+public:
     ~SdpAnswer();
 
     [[nodiscard]] std::string getIceUFrag() const;
