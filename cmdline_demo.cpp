@@ -23,6 +23,8 @@ static std::string gWhipToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintInfo = false;
+static bool gDropPackets = false;
+static bool gEnableBWE = false;
 static bool gLoopVideo = false;
 
 // Bit reader for determining frame boundaries
@@ -326,6 +328,8 @@ void printUsage(const char* programName)
     std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  -i, --info           Print input file info" << std::endl;
+    std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
+    std::cout << "  -b, --bwe            Enable Google's TWCC congestion control for bandwidth estimation" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -372,6 +376,10 @@ int main(int argc, char* argv[])
             gPrintSDP = true;
         } else if (arg == "-i" || arg == "--info") {
             gPrintInfo = true;
+        } else if (arg == "-d" || arg == "--drop") {
+            gDropPackets = true;
+        } else if (arg == "-b" || arg == "--bwe") {
+            gEnableBWE = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -423,7 +431,9 @@ int main(int argc, char* argv[])
         });
 
     // Offer
-    const OfferConfig offerConfig = { .cname = "foo", .enable_rtx = true };
+    const OfferConfig offerConfig = {
+        .cname = "foo", .enable_rtx = true, .debug_drop_packets = gDropPackets, .enable_bwe = gEnableBWE
+    };
     const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
 
     const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, nullopt);

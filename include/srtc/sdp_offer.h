@@ -22,9 +22,9 @@ class X509Certificate;
 
 struct OfferConfig {
     std::string cname;
-    bool debug_drop_frames = false;
     bool enable_rtx = true;
     bool enable_bwe = false;
+    bool debug_drop_packets = false;
 };
 
 class SdpOffer

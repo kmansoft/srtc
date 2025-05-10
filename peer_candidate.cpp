@@ -322,7 +322,7 @@ void PeerCandidate::process()
                         // works
                         const auto& config = mOffer->getConfig();
                         const auto randomValue = mNoSendRandomGenerator.next();
-                        if (config.debug_drop_frames && randomValue < 5 &&
+                        if (config.debug_drop_packets && randomValue < 5 &&
                             item.track->getMediaType() == MediaType::Video) {
                             LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
                         } else {
@@ -619,7 +619,7 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
                 onReceivedRtcMessage_205_1(rtcpSSRC_1, rtcpReader);
                 break;
             case 15:
-                // Google'e Transport-Wide Congension Control/*  */
+                // Google'e Transport-Wide Congension Control
                 onReceivedRtcMessage_205_15(rtcpSSRC_1, rtcpReader);
                 break;
             default:
@@ -704,6 +704,9 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 
 void PeerCandidate::onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
 {
+    if (rtcpReader.remaining() >= 8 && mExtensionSourceTWCC) {
+        mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
+    }
 }
 
 void PeerCandidate::forgetExpiredStunRequests()

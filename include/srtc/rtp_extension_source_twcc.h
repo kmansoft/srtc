@@ -10,6 +10,7 @@ namespace srtc
 
 class Track;
 class ByteBuffer;
+class ByteReader;
 class Packetizer;
 class RtpExtensionBuilder;
 class SdpOffer;
@@ -32,6 +33,8 @@ public:
              int packetNumber) override;
 
     void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track);
+
+    void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
 private:
     const uint8_t mVideoExtTWCC;
