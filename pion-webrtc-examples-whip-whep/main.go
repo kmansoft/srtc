@@ -8,6 +8,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -126,14 +127,18 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	// Set a handler for when a new remote track starts, this handler saves buffers to disk as
-	// an ivf file, since we could have multiple video tracks we provide a counter.
-	// In your application this is where you would handle/process video
+	// Set a handler for when a new remote track starts
 	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) { //nolint: revive
 		for {
 			pkt, _, err := track.ReadRTP()
 			if err != nil {
-				panic(err)
+				if errors.Is(err, io.EOF) {
+					fmt.Printf("***** EOF reading from publish peer connection\n")
+					peerConnection = nil
+					break
+				} else {
+					panic(err)
+				}
 			}
 
 			if track.Kind() == webrtc.RTPCodecTypeVideo {
