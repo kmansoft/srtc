@@ -478,6 +478,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                     updateConnectionLostTimeout();
                 } else {
                     // Initial connection
+                    LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
+
                     mSentUseCandidate = true;
 
                     Task::cancelHelper(mTaskSendStunConnectRequest);
