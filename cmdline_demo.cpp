@@ -437,7 +437,7 @@ int main(int argc, char* argv[])
 
     // Offer
     const OfferConfig offerConfig = {
-        .cname = "foo", .enable_rtx = true, .debug_drop_packets = gDropPackets, .enable_bwe = gEnableBWE
+        .cname = "foo", .enable_rtx = true, .enable_bwe = gEnableBWE, .debug_drop_packets = gDropPackets
     };
     const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
 
