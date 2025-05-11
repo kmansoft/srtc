@@ -8,6 +8,7 @@
 #include "srtc/track.h"
 #include "srtc/twcc.h"
 
+#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
