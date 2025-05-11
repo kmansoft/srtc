@@ -269,6 +269,11 @@ ByteReader::ByteReader(const uint8_t* buf, size_t size)
 {
 }
 
+size_t ByteReader::size() const
+{
+    return mLen;
+}
+
 size_t ByteReader::current() const
 {
     return mPos;

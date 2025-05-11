@@ -23,7 +23,7 @@ uint32_t FeedbackHeaderHistory::getPacketCount() const
     return mPacketCount;
 }
 
-float FeedbackHeaderHistory::getPacketLostPercent() const
+float FeedbackHeaderHistory::getPacketsLostPercent() const
 {
     if (mPacketCount == 0) {
         return 0.0f;
@@ -39,27 +39,23 @@ float FeedbackHeaderHistory::getPacketLostPercent() const
 
 void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 {
-    mPacketCount += header->packet_status_count;
-
-    if (!mHistory.empty()) {
-        const auto last = mHistory.back();
-
-        if (last->fb_pkt_count >= 0xF0 && header->fb_pkt_count <= 0x10) {
-            // We wrapped
-            header->fb_pkt_count_expanded = ((last->fb_pkt_count_expanded & ~0xFFu) + 0x100) | header->fb_pkt_count;
-        } else {
-            // No wrapping, but carry over the expanded count
-            header->fb_pkt_count_expanded = (last->fb_pkt_count_expanded & ~0xFFu) | header->fb_pkt_count;
-        }
+    if (mLastFbPktCount >= 0xF0 && header->fb_pkt_count <= 0x10) {
+        // We wrapped
+        mLastFbPktCountExpanded += 1000;
     }
 
-    if (mHistory.empty() || mHistory.back()->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
+    mLastFbPktCount = header->fb_pkt_count;
+    header->fb_pkt_expanded = header->fb_pkt_count + mLastFbPktCountExpanded;
+
+    mPacketCount += header->packet_status_count;
+
+    if (mHistory.empty() || mHistory.back()->fb_pkt_expanded < header->fb_pkt_expanded) {
         // Can append at the end
         mHistory.push_back(header);
     } else {
         // Find the right place to insert
         auto it = mHistory.begin();
-        while (it != mHistory.end() && (*it)->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
+        while (it != mHistory.end() && (*it)->fb_pkt_expanded < header->fb_pkt_expanded) {
             ++it;
         }
         mHistory.insert(it, header);
@@ -70,7 +66,7 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
             if (next == mHistory.end()) {
                 break;
             }
-            assert((*next)->fb_pkt_count_expanded > (*curr)->fb_pkt_count_expanded);
+            assert((*next)->fb_pkt_expanded > (*curr)->fb_pkt_expanded);
         }
 #endif
     }

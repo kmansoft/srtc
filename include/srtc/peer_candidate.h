@@ -34,6 +34,8 @@ class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
 
+struct PublishConnectionStats;
+
 class PeerCandidate final
 {
 public:
@@ -58,6 +60,8 @@ public:
     void process();
 
     void sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
+
+    void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
     void startConnecting();
@@ -98,7 +102,7 @@ private:
     std::list<ByteBuffer> mRawSendQueue;
     std::list<FrameToSend> mFrameSendQueue;
 
-    bool mSentUseCandidate = {false};
+    bool mSentUseCandidate = { false };
 
 #ifdef NDEBUG
 #else
@@ -116,7 +120,7 @@ private:
     ssl_ctx_st* mDtlsCtx = {};
     ssl_st* mDtlsSsl = {};
     bio_st* mDtlsBio = {};
-    DtlsState mDtlsState = {DtlsState::Inactive};
+    DtlsState mDtlsState = { DtlsState::Inactive };
 
     // OpenSSL BIO
     static int dgram_read(struct bio_st* b, char* out, int outl);

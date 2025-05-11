@@ -33,6 +33,7 @@ namespace
 std::once_flag gInitFlag;
 
 constexpr auto kSenderReportsInterval = std::chrono::seconds(1);
+constexpr auto kConnectionStatsInterval = std::chrono::seconds(10);
 
 } // namespace
 
@@ -183,6 +184,12 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
 {
     std::lock_guard lock(mListenerMutex);
     mConnectionStateListener = listener;
+}
+
+void PeerConnection::setPublishConnectionStatListener(const PublishConnectionStatListener& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mPublishConnectionStatListener = listener;
 }
 
 Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
@@ -410,6 +417,10 @@ void PeerConnection::setConnectionState(ConnectionState state)
             Task::cancelHelper(mTaskSenderReports);
             mTaskSenderReports =
                 mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+
+            Task::cancelHelper(mTaskConnectionStats);
+            mTaskConnectionStats =
+                mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
         }
     }
 
@@ -577,4 +588,35 @@ void PeerConnection::sendSenderReports()
     }
 }
 
+void PeerConnection::sendConnectionStats()
+{
+    Task::cancelHelper(mTaskConnectionStats);
+    mTaskConnectionStats =
+        mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
+
+    PublishConnectionStats connectionStats = {};
+
+    {
+        std::lock_guard lock(mMutex);
+        if (mConnectionState != ConnectionState::Connected) {
+            return;
+        }
+
+        const auto trackList = collectTracksLocked();
+        for (const auto& trackItem : trackList) {
+            const auto stats = trackItem->getStats();
+            connectionStats.packet_count += stats->getSentPackets();
+            connectionStats.byte_count += stats->getSentBytes();
+        }
+
+        if (mSelectedCandidate) {
+            mSelectedCandidate->updatePublishConnectionStats(connectionStats);
+        }
+    }
+
+    std::lock_guard lock(mListenerMutex);
+    if (mPublishConnectionStatListener) {
+        mPublishConnectionStatListener(connectionStats);
+    }
+}
 } // namespace srtc

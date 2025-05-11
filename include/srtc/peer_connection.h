@@ -61,6 +61,9 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
+    using PublishConnectionStatListener = std::function<void(const PublishConnectionStats&)>;
+    void setPublishConnectionStatListener(const PublishConnectionStatListener& listener);
+
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
 
@@ -132,6 +135,7 @@ private:
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
+    PublishConnectionStatListener mPublishConnectionStatListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
@@ -140,6 +144,10 @@ private:
     // Sender reports
     void sendSenderReports();
     std::weak_ptr<Task> mTaskSenderReports;
+
+    // Connection stats
+    void sendConnectionStats();
+    std::weak_ptr<Task> mTaskConnectionStats;
 
     // These are only used on the worker thread so don't need mutexes
     std::shared_ptr<LoopScheduler> mLoopScheduler;

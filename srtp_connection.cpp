@@ -9,6 +9,7 @@
 #include "srtc/srtp_connection.h"
 #include "srtc/logging.h"
 #include "srtc/srtp_crypto.h"
+#include "srtc/util.h"
 
 #include <mutex>
 
@@ -19,6 +20,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
 
@@ -163,12 +165,33 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
         return false;
     }
 
-    if (mCrypto->unprotectReceiveRtcp(packetData, output)) {
-        channelValue.replayProtection->set(sequenceNumber);
-        return true;
+    if (!mCrypto->unprotectReceiveRtcp(packetData, output)) {
+        return false;
     }
 
-    return false;
+    const auto outputData = output.data();
+    const auto outputSize = output.size();
+    if (outputSize < 4 + 4) {
+        // 4 byte header
+        // 4 byte SSRC
+        LOG(SRTC_LOG_E, "Incoming RTCP packet is too small after unprotecting");
+        return false;
+    }
+
+    const auto padding = (outputData[0] & 0x20) != 0;
+    if (padding) {
+        const auto lastByte = outputData[outputSize - 1];
+        if (lastByte + 4 + 4 > outputSize) {
+            LOG(SRTC_LOG_E,
+                "Incoming RTCP packet padding is too large: lastByte = %u, size = %zu",
+                lastByte,
+                outputSize);
+            return false;
+        }
+    }
+
+    channelValue.replayProtection->set(sequenceNumber);
+    return true;
 }
 
 SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, uint16_t profileId)

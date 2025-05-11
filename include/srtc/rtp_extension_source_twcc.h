@@ -41,6 +41,8 @@ public:
 
     void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
+    [[nodiscard]] float getPacketsLostPercent() const;
+
 private:
     const uint8_t mVideoExtTWCC;
     const uint8_t mAudioExtTWCC;

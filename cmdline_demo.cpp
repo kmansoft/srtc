@@ -430,6 +430,11 @@ int main(int argc, char* argv[])
             connectionStateCond.notify_one();
         });
 
+    peerConnection->setPublishConnectionStatListener([](const PublishConnectionStats& stats) {
+        std::cout << "*** PeerConnection stats: sent " << stats.packet_count << " packets, " << stats.byte_count
+                  << " bytes, " << stats.packets_lost_percent << "% packet loss" << std::endl;
+    });
+
     // Offer
     const OfferConfig offerConfig = {
         .cname = "foo", .enable_rtx = true, .debug_drop_packets = gDropPackets, .enable_bwe = gEnableBWE

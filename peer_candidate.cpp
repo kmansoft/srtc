@@ -254,6 +254,13 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
     }
 }
 
+void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
+{
+    if (mExtensionSourceTWCC) {
+        stats.packets_lost_percent = mExtensionSourceTWCC->getPacketsLostPercent();
+    }
+}
+
 void PeerCandidate::process()
 {
     const auto now = std::chrono::steady_clock::now();
@@ -295,7 +302,6 @@ void PeerCandidate::process()
                 mExtensionSourceSimulcast, mExtensionSourceTWCC, mSrtp->getMediaProtectionOverhead(), item.buf);
 
             const auto stats = item.track->getStats();
-            stats->incrementSentPackets(packetList.size());
 
             for (const auto& packet : packetList) {
                 // Save
@@ -304,6 +310,7 @@ void PeerCandidate::process()
                 }
 
                 // Keep stats
+                stats->incrementSentPackets(1);
                 stats->incrementSentBytes(packet->getPayloadSize());
 
                 // Generate
@@ -692,6 +699,11 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
                         packet->getSequence(),
                         sentSize,
                         packet->getTrack()->getRtxPayloadId() > 0);
+
+                    // Keep stats
+                    const auto stats = packet->getTrack()->getStats();
+                    stats->incrementSentPackets(1);
+                    stats->incrementSentBytes(packet->getPayloadSize());
                 } else {
                     LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
                 }

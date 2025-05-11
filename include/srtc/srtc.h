@@ -55,4 +55,10 @@ std::string to_string(const anyaddr& addr);
 #define SRTC_SHARED_LOCKS_REQUIRED(...)
 #endif
 
+struct PublishConnectionStats {
+    size_t packet_count;
+    size_t byte_count;
+    float packets_lost_percent;
+};
+
 } // namespace srtc

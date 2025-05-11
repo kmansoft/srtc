@@ -23,9 +23,9 @@ struct FeedbackHeader {
     const uint16_t base_seq_number;
     const uint16_t packet_status_count;
     const int32_t reference_time;
-    const uint8_t fb_pkt_count;
+    const uint16_t fb_pkt_count;
 
-    uint32_t fb_pkt_count_expanded;
+    uint16_t fb_pkt_expanded;
     uint16_t packet_lost_count;
 
     FeedbackHeader(uint16_t base_seq_number, uint16_t packet_status_count, int32_t reference_time, uint8_t fb_pkt_count)
@@ -33,7 +33,7 @@ struct FeedbackHeader {
         , packet_status_count(packet_status_count)
         , reference_time(reference_time)
         , fb_pkt_count(fb_pkt_count)
-        , fb_pkt_count_expanded(fb_pkt_count)
+        , fb_pkt_expanded(fb_pkt_count)
         , packet_lost_count(0)
     {
     }
@@ -48,11 +48,14 @@ public:
     void save(const std::shared_ptr<FeedbackHeader>& header);
 
     [[nodiscard]] uint32_t getPacketCount() const;
-    [[nodiscard]] float getPacketLostPercent() const;
+    [[nodiscard]] float getPacketsLostPercent() const;
 
 private:
     uint32_t mPacketCount;
     std::list<std::shared_ptr<FeedbackHeader>> mHistory;
+
+    uint16_t mLastFbPktCount = 0;
+    uint16_t mLastFbPktCountExpanded = 0;
 };
 
 // Status of a single RTP packet
