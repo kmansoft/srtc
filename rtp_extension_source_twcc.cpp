@@ -6,6 +6,10 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
+#include "srtc/twcc.h"
+
+#include <map>
+#include <memory>
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
@@ -17,24 +21,6 @@ uint8_t findTWCCExtension(const srtc::ExtensionMap& map)
     return map.findByName(srtc::RtpStandardExtensions::kExtGoogleTWCC);
 }
 
-// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.3
-constexpr auto kTWCC_CHUNK_RUN_LENGTH = 0;
-// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
-constexpr auto kTWC_CHUNK_STATUS_VECTOR = 1;
-
-// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
-constexpr auto kTWCC_SYMBOL_NOT_RECEIVED = 0;
-constexpr auto kTWCC_SYMBOL_RECEIVED_SMALL_DELTA = 1;
-constexpr auto kTWCC_SYMBOL_RECEIVED_LARGE_DELTA = 2;
-constexpr auto kTWCC_SYMBOL_RECEIVED_NO_TS = 3;
-
-struct TWCCHeader {
-    uint16_t base_seq_number;
-    uint16_t packet_status_count;
-    int32_t reference_time;
-    uint8_t fb_pkt_count;
-};
-
 } // namespace
 
 namespace srtc
@@ -44,6 +30,7 @@ RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC, uint8_t nA
     : mVideoExtTWCC(nVideoExtTWCC)
     , mAudioExtTWCC(nAudioExtTWCC)
     , mNextPacketSEQ(1)
+    , mHeaderHistory(std::make_shared<twcc::FeedbackHeaderHistory>())
 {
 }
 
@@ -130,27 +117,37 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     const uint16_t packet_status_count = reader.readU16();
     const uint32_t reference_time_and_fb_pkt_count = reader.readU32();
 
-    const TWCCHeader header = { base_seq_number,
-                                packet_status_count,
-                                static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8),
-                                static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFF) };
+    const auto header =
+        std::make_shared<twcc::FeedbackHeader>(base_seq_number,
+                                               packet_status_count,
+                                               static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8),
+                                               static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFF));
 
-    const auto reference_time_micros = 64 * 1000 * header.reference_time;
+    const auto reference_time_micros = 64 * 1000 * header->reference_time;
     LOG(SRTC_LOG_V,
         "RTCP TWCC packet: base_seq_number=%u, packet_status_count=%u, reference_time=%u, fb_pkt_count=%u",
-        header.base_seq_number,
-        header.packet_status_count,
-        header.reference_time,
-        header.fb_pkt_count);
+        header->base_seq_number,
+        header->packet_status_count,
+        header->reference_time,
+        header->fb_pkt_count);
 
-    std::unique_ptr<PacketInfo[]> packetInfo(new PacketInfo[header.packet_status_count]);
-    std::memset(packetInfo.get(), 0, sizeof(PacketInfo) * header.packet_status_count);
+    const std::unique_ptr<twcc::PacketStatus* [], std::function<void(twcc::PacketStatus**)>> packetList {
+        new twcc::PacketStatus*[header->packet_status_count],
+            [count = header->packet_status_count](twcc::PacketStatus** ptr) {
+                for (size_t i = 0; i < count; ++i) {
+                    delete ptr[i];
+                }
+                delete[] ptr;
+            }
+    };
+    std::memset(packetList.get(), 0, header->packet_status_count * sizeof(twcc::PacketStatus*));
 
     // Be careful, this can wrap (and that's OK)
-    const uint16_t past_end_seq_number = header.base_seq_number + header.packet_status_count;
+    const uint16_t past_end_seq_number = header->base_seq_number + header->packet_status_count;
 
     // Read the chunks
-    for (uint16_t seq_number = header.base_seq_number; seq_number != past_end_seq_number; /* do not increment here */) {
+    for (uint16_t seq_number = header->base_seq_number; seq_number != past_end_seq_number;
+         /* do not increment here */) {
         if (reader.remaining() < 2) {
             LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading chunk header");
             return;
@@ -159,7 +156,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         const auto chunkHeader = reader.readU16();
         const auto chunkType = (chunkHeader >> 15) & 0x01;
 
-        if (chunkType == kTWCC_CHUNK_RUN_LENGTH) {
+        if (chunkType == twcc::kCHUNK_RUN_LENGTH) {
             // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.3
             const auto symbol = (chunkHeader >> 13) & 0x03;
             const auto runLength = chunkHeader & 0x1FFF;
@@ -170,36 +167,33 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
             }
 
             for (uint16_t j = 0; j < runLength; ++j) {
-                const auto ptr = packetInfo.get() + seq_number - header.base_seq_number;
-                ptr->seq = seq_number;
-                ptr->status = symbol;
+                const auto ptr = new twcc::PacketStatus(seq_number, symbol);
+                packetList[seq_number - header->base_seq_number] = ptr;
 
                 if (++seq_number == past_end_seq_number) {
                     break;
                 }
             }
-        } else if (chunkType == kTWC_CHUNK_STATUS_VECTOR && ((chunkHeader >> 14) & 0x01) == 0) {
+        } else if (chunkType == twcc::kCHUNK_STATUS_VECTOR && ((chunkHeader >> 14) & 0x01) == 0) {
             // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
             for (uint16_t shift = 14; shift != 0; shift -= 1) {
                 const auto symbol =
-                    ((chunkHeader >> (shift - 1)) & 0x01) ? kTWCC_SYMBOL_RECEIVED_NO_TS : kTWCC_SYMBOL_NOT_RECEIVED;
+                    ((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_NO_TS : twcc::kSTATUS_NOT_RECEIVED;
 
-                const auto ptr = packetInfo.get() + seq_number - header.base_seq_number;
-                ptr->seq = seq_number;
-                ptr->status = symbol;
+                const auto ptr = new twcc::PacketStatus(seq_number, symbol);
+                packetList.get()[seq_number - header->base_seq_number] = ptr;
 
                 if (++seq_number == past_end_seq_number) {
                     break;
                 }
             }
-        } else if (chunkType == kTWC_CHUNK_STATUS_VECTOR && ((chunkHeader >> 14) & 0x01) == 1) {
+        } else if (chunkType == twcc::kCHUNK_STATUS_VECTOR && ((chunkHeader >> 14) & 0x01) == 1) {
             // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
             for (uint16_t shift = 14; shift != 0; shift -= 2) {
                 const auto symbol = (chunkHeader >> (shift - 2)) & 0x03;
 
-                const auto ptr = packetInfo.get() + seq_number - header.base_seq_number;
-                ptr->seq = seq_number;
-                ptr->status = symbol;
+                const auto ptr = new twcc::PacketStatus(seq_number, symbol);
+                packetList[seq_number - header->base_seq_number] = ptr;
 
                 if (++seq_number == past_end_seq_number) {
                     break;
@@ -212,52 +206,52 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     }
 
     // Read the time deltas
-    if (reader.remaining() < header.packet_status_count) {
+    if (reader.remaining() < header->packet_status_count) {
         LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading time deltas");
         return;
     }
-    for (size_t i = 0; i < header.packet_status_count; ++i) {
-        auto& packet = packetInfo[i];
+    for (uint16_t i = 0; i < header->packet_status_count; ++i) {
+        auto ptr = packetList[i];
+        if (!ptr) {
+            LOG(SRTC_LOG_E, "RTCP TWCC missing packet status for seq_number %u", header->base_seq_number + i);
+            return;
+        }
 
-        if (packet.status == kTWCC_SYMBOL_RECEIVED_SMALL_DELTA) {
+        if (ptr->status == twcc::kSTATUS_RECEIVED_SMALL_DELTA) {
             if (reader.remaining() < 1) {
                 LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading small delta");
                 return;
             }
 
             const auto delta = reader.readU8();
-            packet.delta_micros = 250 * delta;
-        } else if (packet.status == kTWCC_SYMBOL_RECEIVED_LARGE_DELTA) {
+            ptr->delta_micros = 250 * delta;
+        } else if (ptr->status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
             if (reader.remaining() < 2) {
                 LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading large delta");
                 return;
             }
 
             const auto delta = static_cast<int16_t>(reader.readU16());
-            packet.delta_micros = 250 * delta;
+            ptr->delta_micros = 250 * delta;
         }
 
-        switch (packet.status) {
-        case kTWCC_SYMBOL_NOT_RECEIVED:
-            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u not received", packet.seq);
+        switch (ptr->status) {
+        case twcc::kSTATUS_NOT_RECEIVED:
+            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u not received", ptr->seq);
             break;
-        case kTWCC_SYMBOL_RECEIVED_NO_TS:
-            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u received, no timestamp", packet.seq);
+        case twcc::kSTATUS_RECEIVED_NO_TS:
+            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u received, no timestamp", ptr->seq);
             break;
-        case kTWCC_SYMBOL_RECEIVED_SMALL_DELTA:
-            LOG(SRTC_LOG_V,
-                "RTCP TWCC packet: seq_number=%u received, small delta=%d",
-                packet.seq,
-                packet.delta_micros);
+        case twcc::kSTATUS_RECEIVED_SMALL_DELTA:
+            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u received, small delta=%d", ptr->seq, ptr->delta_micros);
             break;
-        case kTWCC_SYMBOL_RECEIVED_LARGE_DELTA:
-            LOG(SRTC_LOG_V,
-                "RTCP TWCC packet: seq_number=%u received, large delta=%d",
-                packet.seq,
-                packet.delta_micros);
+        case twcc::kSTATUS_RECEIVED_LARGE_DELTA:
+            LOG(SRTC_LOG_V, "RTCP TWCC packet: seq_number=%u received, large delta=%d", ptr->seq, ptr->delta_micros);
             break;
         }
     }
+
+    mHeaderHistory->save(header);
 }
 
 } // namespace srtc

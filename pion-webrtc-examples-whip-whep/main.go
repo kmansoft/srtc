@@ -119,10 +119,11 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	// Allow us to receive 1 video trac
+	// Allow us to receive 1 video track
 	if _, err = peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo); err != nil {
 		panic(err)
 	}
+	// And one audio track
 	if _, err = peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio); err != nil {
 		panic(err)
 	}

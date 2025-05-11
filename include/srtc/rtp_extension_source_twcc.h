@@ -5,6 +5,11 @@
 #include <cstdint>
 #include <memory>
 
+namespace srtc::twcc
+{
+class FeedbackHeaderHistory;
+};
+
 namespace srtc
 {
 
@@ -40,12 +45,7 @@ private:
     const uint8_t mVideoExtTWCC;
     const uint8_t mAudioExtTWCC;
     uint16_t mNextPacketSEQ;
-
-    struct PacketInfo {
-        int32_t delta_micros; // signed
-        uint16_t seq;
-        uint8_t status;
-    };
+    std::shared_ptr<twcc::FeedbackHeaderHistory> mHeaderHistory;
 };
 
 } // namespace srtc
