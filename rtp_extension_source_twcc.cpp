@@ -91,23 +91,6 @@ void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
     }
 }
 
-void RtpExtensionSourceTWCC::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track)
-{
-    const auto seq = mNextPacketSEQ;
-    mNextPacketSEQ += 1;
-
-    const auto media = track->getMediaType();
-    if (const auto id = mVideoExtTWCC; media == MediaType::Video && id != 0) {
-        // Video media
-        LOG(SRTC_LOG_V, "Adding SEQ=%u to resend video", seq);
-        builder.addOrReplaceU16Value(id, seq);
-    } else if (const auto id = mAudioExtTWCC; media == MediaType::Audio && id != 0) {
-        // Audio media
-        LOG(SRTC_LOG_V, "Adding SEQ=%u to resend audio", seq);
-        builder.addOrReplaceU16Value(id, seq);
-    }
-}
-
 void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader)
 {
     if (reader.remaining() < 8) {
@@ -133,11 +116,13 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         header->reference_time,
         header->fb_pkt_count);
 
-    std::printf("RTCP TWCC packet: base_seq_number=%u, packet_status_count=%u, reference_time=%u, fb_pkt_count=%u\n",
-                header->base_seq_number,
-                header->packet_status_count,
-                header->reference_time,
-                header->fb_pkt_count);
+    std::printf(
+        "RTCP TWCC packet: size=%zu, base_seq_number=%u, packet_status_count=%u, reference_time=%u, fb_pkt_count=%u\n",
+        reader.size(),
+        header->base_seq_number,
+        header->packet_status_count,
+        header->reference_time,
+        header->fb_pkt_count);
 
     const std::unique_ptr<twcc::PacketStatus* [], std::function<void(twcc::PacketStatus**)>> packetList {
         new twcc::PacketStatus*[header->packet_status_count],
@@ -281,7 +266,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
-    if (statusReceivedNoTSCount > 100) {
+    if (statusReceivedNoTSCount > 0) {
         std::printf("RTCP TWCC packet: %u packets received with no timestamp out of %u in the RTCP packet\n",
                     statusReceivedNoTSCount,
                     header->packet_status_count);

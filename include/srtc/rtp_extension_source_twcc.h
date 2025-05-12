@@ -37,8 +37,6 @@ public:
              bool isKeyFrame,
              int packetNumber) override;
 
-    void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track);
-
     void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
     [[nodiscard]] float getPacketsLostPercent() const;

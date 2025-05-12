@@ -408,7 +408,7 @@ void PeerCandidate::process()
 void PeerCandidate::startConnecting()
 {
     // Start from scratch
-    mDtlsState = DtlsState::Activating;
+    mDtlsState = DtlsState::Inactive;
     mSentUseCandidate = false;
 
     // Notify the listener
@@ -667,24 +667,15 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
                 if (track->getRtxPayloadId() > 0) {
                     auto extension = packet->getExtension();
 
-                    if (track->isSimulcast() && mExtensionSourceSimulcast || mExtensionSourceTWCC) {
+                    if (track->isSimulcast() && mExtensionSourceSimulcast) {
                         auto builder = RtpExtensionBuilder::from(extension);
                         if (track->isSimulcast() && mExtensionSourceSimulcast) {
                             mExtensionSourceSimulcast->updateForRtx(builder, track);
-                        }
-                        if (mExtensionSourceTWCC) {
-                            mExtensionSourceTWCC->updateForRtx(builder, track);
                         }
                         extension = builder.build();
                     }
 
                     packetData = packet->generateRtx(extension);
-                } else if (mExtensionSourceTWCC) {
-                    auto extension = packet->getExtension();
-                    auto builder = RtpExtensionBuilder::from(extension);
-                    mExtensionSourceTWCC->updateForRtx(builder, track);
-                    extension = builder.build();
-                    packetData = packet->generateExt(extension);
                 } else {
                     packetData = packet->generate();
                 }
@@ -832,6 +823,8 @@ void PeerCandidate::freeDTLS()
         SSL_CTX_free(mDtlsCtx);
         mDtlsCtx = nullptr;
     }
+
+    mDtlsBio = nullptr;
 }
 
 // State

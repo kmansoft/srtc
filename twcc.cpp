@@ -5,7 +5,7 @@
 namespace
 {
 
-constexpr auto kMaxPacketCount = 512;
+constexpr auto kMaxPacketCount = 1024;
 
 }
 
