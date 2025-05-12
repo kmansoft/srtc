@@ -188,6 +188,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
                 outputSize);
             return false;
         }
+        output.resize(outputSize - lastByte);
     }
 
     channelValue.replayProtection->set(sequenceNumber);

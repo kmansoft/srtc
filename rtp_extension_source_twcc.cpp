@@ -176,8 +176,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 
             if (runLength > 1000) {
                 LOG(SRTC_LOG_E,
-                    "RTCP TWCC packet: run_length %u, packet_status_count %u, packet size %lu",
+                    "RTCP TWCC packet: run_length %u, symbol %d, packet_status_count %u, packet size %lu",
                     runLength,
+                    symbol,
                     header->packet_status_count,
                     reader.size());
             }
@@ -270,6 +271,22 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
             break;
         }
     }
+
+#ifndef NDEBUG
+    unsigned int statusReceivedNoTSCount = 0;
+    for (uint16_t i = 0; i < header->packet_status_count; ++i) {
+        auto ptr = packetList[i];
+        if (ptr && ptr->status == twcc::kSTATUS_RECEIVED_NO_TS) {
+            statusReceivedNoTSCount += 1;
+        }
+    }
+
+    if (statusReceivedNoTSCount > 100) {
+        std::printf("RTCP TWCC packet: %u packets received with no timestamp out of %u in the RTCP packet\n",
+                    statusReceivedNoTSCount,
+                    header->packet_status_count);
+    }
+#endif
 
     mHeaderHistory->save(header);
 }

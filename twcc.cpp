@@ -39,13 +39,23 @@ float FeedbackHeaderHistory::getPacketsLostPercent() const
 
 void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 {
-    if (mLastFbPktCount >= 0xF0 && header->fb_pkt_count <= 0x10) {
+    if (mLastFbPktCount >= 0xE0 && header->fb_pkt_count <= 0x20) {
         // We wrapped
         mLastFbPktCountExpanded += 1000;
     }
 
     mLastFbPktCount = header->fb_pkt_count;
     header->fb_pkt_expanded = header->fb_pkt_count + mLastFbPktCountExpanded;
+
+    // https://github.com/pion/webrtc/issues/3122
+    for (auto iter = mHistory.begin(); iter != mHistory.end();) {
+        if ((*iter)->fb_pkt_expanded == header->fb_pkt_expanded) {
+            std::printf("RTCP TWCC packet: removing duplicate fb_pkt_expanded=%u\n", header->fb_pkt_expanded);
+            iter = mHistory.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
 
     mPacketCount += header->packet_status_count;
 
