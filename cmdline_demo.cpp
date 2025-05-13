@@ -27,6 +27,10 @@ static bool gDropPackets = false;
 static bool gEnableBWE = false;
 static bool gLoopVideo = false;
 
+// State
+
+static std::atomic_bool gIsConnectionFailed = false;
+
 // Bit reader for determining frame boundaries
 
 class BitReader
@@ -296,6 +300,11 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 std::cout << "Played " << std::setw(5) << naluCount << " nalus" << std::setw(5) << frameCount
                           << " video frames" << std::endl;
             }
+
+            if (gIsConnectionFailed) {
+                std::cout << "*** Connection failed, stopping video playback" << std::endl;
+                return;
+            }
         }
 
         if (!frame.empty()) {
@@ -422,6 +431,10 @@ int main(int argc, char* argv[])
     peerConnection->setConnectionStateListener(
         [&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
             std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
+
+            if (state == PeerConnection::ConnectionState::Failed) {
+                gIsConnectionFailed = true;
+            }
 
             {
                 std::lock_guard lock(connectionStateMutex);
