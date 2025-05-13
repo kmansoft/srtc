@@ -1,8 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <ctime>
 #include <list>
 #include <memory>
+
+namespace srtc
+{
+class RtpPacket;
+}
 
 // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-
 namespace srtc::twcc
@@ -22,22 +28,22 @@ constexpr auto kSTATUS_RECEIVED_NO_TS = 3;
 struct FeedbackHeader {
     const uint16_t base_seq_number;
     const uint16_t packet_status_count;
-    const int32_t reference_time;
     const uint16_t fb_pkt_count;
+	const int64_t reference_time_micros;
 
     uint16_t fb_pkt_expanded;
-    uint16_t packet_lost_count;
 
     FeedbackHeader(uint16_t base_seq_number, uint16_t packet_status_count, int32_t reference_time, uint8_t fb_pkt_count)
         : base_seq_number(base_seq_number)
         , packet_status_count(packet_status_count)
-        , reference_time(reference_time)
+        , reference_time_micros(64 * 1000 * reference_time)
         , fb_pkt_count(fb_pkt_count)
         , fb_pkt_expanded(fb_pkt_count)
-        , packet_lost_count(0)
     {
     }
 };
+
+// A history of such headers
 
 class FeedbackHeaderHistory
 {
@@ -48,7 +54,6 @@ public:
     void save(const std::shared_ptr<FeedbackHeader>& header);
 
     [[nodiscard]] uint32_t getPacketCount() const;
-    [[nodiscard]] float getPacketsLostPercent() const;
 
 private:
     uint32_t mPacketCount;
@@ -59,17 +64,38 @@ private:
 };
 
 // Status of a single RTP packet
-struct PacketStatus {
-    const uint16_t seq;
-    const uint8_t status;
-    int32_t delta_micros;
 
-    PacketStatus(uint16_t seq, uint8_t status)
-        : seq(seq)
-        , status(status)
-        , delta_micros(0)
-    {
-    }
+struct PacketStatus {
+    struct timespec when_sent;
+
+	int32_t send_delta_micros;
+    uint16_t seq;
+    uint16_t nack_count;
+
+    int32_t reported_delta_micros;
+    uint8_t reported_status;
+};
+
+// A history of such packets
+
+class PacketStatusHistory
+{
+public:
+    PacketStatusHistory();
+    ~PacketStatusHistory();
+
+    void save(uint16_t seq);
+
+	// may return nullptr
+	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
+
+	[[nodiscard]] uint32_t getPacketCount() const;
+	[[nodiscard]] float getPacketsLostPercent() const;
+
+private:
+    uint16_t mMinSeq;
+    uint16_t mMaxSeq;
+    std::unique_ptr<PacketStatus[]> mHistory;
 };
 
 } // namespace srtc::twcc
