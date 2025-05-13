@@ -17,6 +17,7 @@
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/util.h"
+#include "srtc/srtc.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -529,11 +530,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 		if (err == SSL_ERROR_WANT_READ) {
 			LOG(SRTC_LOG_V, "Still in progress");
 		} else if (r1 == 1 && err == 0) {
-			const auto cipher = SSL_get_cipher(mDtlsSsl);
-			const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
-
-			LOG(SRTC_LOG_V, "Completed with cipher %s, profile %s", cipher, profile->name);
-
 			const auto cert = SSL_get_peer_certificate(mDtlsSsl);
 			if (cert == nullptr) {
 				// Error, no certificate
@@ -559,6 +555,11 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 					if (srtpError.isOk()) {
 						mSrtp = srtpConn;
 						mDtlsState = DtlsState::Completed;
+
+						const auto addr = to_string(mHost.addr);
+						const auto cipher = SSL_get_cipher(mDtlsSsl);
+						const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
+						LOG(SRTC_LOG_V, "Connected to %s with cipher %s, profile %s", addr.c_str(), cipher, profile->name);
 
 						emitOnDtlsConnected();
 
