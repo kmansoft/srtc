@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/rtp_extension_source.h"
+#include "srtc/util.h"
 
 #include <cstdint>
 #include <memory>
@@ -39,7 +40,7 @@ public:
 			 bool isKeyFrame,
 			 int packetNumber) override;
 
-	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
+	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t dataSize);
 	void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
 
 	void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
@@ -54,6 +55,14 @@ private:
 	uint16_t mNextPacketSEQ;
 	std::shared_ptr<twcc::PacketStatusHistory> mPacketHistory;
 	std::shared_ptr<twcc::FeedbackHeaderHistory> mHeaderHistory;
+
+	struct TempPacket {
+		int32_t delta_micros;
+		uint8_t status;
+	};
+	TempBuffer<TempPacket> mTempPacketBuffer;
+
+	uint8_t getExtensionId(const std::shared_ptr<Track>& track);
 };
 
 } // namespace srtc

@@ -166,6 +166,17 @@ uint32_t RtpPacket::getSSRC() const
     return mSSRC;
 }
 
+uint32_t RtpPacket::computeSize() const {
+	size_t size = 12;	// RTP header
+	if (!mExtension.empty()) {
+		size += mExtension.size();
+	}
+	if (!mPayload.empty()) {
+		size += mPayload.size();
+	}
+	return size;
+}
+
 RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 {
     const auto rtxPayloadId = mTrack->getRtxPayloadId();

@@ -91,7 +91,7 @@ PacketStatusHistory::PacketStatusHistory()
 
 PacketStatusHistory::~PacketStatusHistory() = default;
 
-void PacketStatusHistory::save(uint16_t seq)
+void PacketStatusHistory::save(uint16_t seq, size_t size)
 {
 	PacketStatus* curr;
 
@@ -114,13 +114,16 @@ void PacketStatusHistory::save(uint16_t seq)
 		}
 	}
 
-	clock_gettime(CLOCK_MONOTONIC, &curr->when_sent);
+
+	struct timespec now = {};
+	clock_gettime(CLOCK_MONOTONIC, &now);
 	curr->seq = seq;
+	curr->size = size;
+	curr->sent_time_micros = now.tv_sec * 1000000 + now.tv_nsec / 1000;
 
 	if (mMinSeq != mMaxSeq) {
 		const auto prev = mHistory.get() + ((mMaxSeq + 0x10000 - 1) & kMaxPacketMask);
-		curr->send_delta_micros = static_cast<int32_t>((curr->when_sent.tv_sec - prev->when_sent.tv_sec) * 1000000 +
-													   (curr->when_sent.tv_nsec - prev->when_sent.tv_nsec) / 1000);
+		curr->sent_delta_micros = static_cast<int32_t>(curr->sent_time_micros - prev->sent_time_micros);;
 	}
 }
 

@@ -44,6 +44,7 @@ public:
     [[nodiscard]] size_t getPayloadSize() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
+	[[nodiscard]] uint32_t computeSize() const;
 
     struct Output {
         ByteBuffer buf;

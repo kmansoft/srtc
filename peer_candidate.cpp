@@ -324,7 +324,7 @@ void PeerCandidate::process()
 
 						// Record in TWCC
 						if (mExtensionSourceTWCC) {
-							mExtensionSourceTWCC->onBeforeSendingRtpPacket(packet);
+							mExtensionSourceTWCC->onBeforeSendingRtpPacket(packet, protectedData.size());
 						}
 
 #ifdef NDEBUG

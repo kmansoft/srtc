@@ -24,4 +24,44 @@ struct NtpTime {
 
 void getNtpTime(NtpTime& ntp);
 
+template <typename T>
+class TempBuffer {
+public:
+	TempBuffer();
+	~TempBuffer();
+
+	TempBuffer(const TempBuffer<T>& other) = delete;
+	TempBuffer<T>& operator=(const TempBuffer<T>& other) = delete;
+
+	T* ensure(size_t count);
+
+private:
+	T* mPtr;
+	size_t mSize;
+};
+
+template <typename T>
+TempBuffer<T>::TempBuffer()
+	: mPtr(nullptr)
+	, mSize(0)
+{
+}
+
+template <typename T>
+TempBuffer<T>::~TempBuffer() {
+	delete[] mPtr;
+	mPtr = nullptr;
+	mSize = 0;
+}
+
+template <typename T>
+T* TempBuffer<T>::ensure(size_t count) {
+	if (mSize < count) {
+		delete[] mPtr;
+		mPtr = new T[count];
+		mSize = count;
+	}
+	return mPtr;
+}
+
 } // namespace srtc

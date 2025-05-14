@@ -66,13 +66,16 @@ private:
 // Status of a single RTP packet
 
 struct PacketStatus {
-    struct timespec when_sent;
+	int64_t sent_time_micros;
+	int64_t reported_time_micros;
 
-	int32_t send_delta_micros;
-    uint16_t seq;
-    uint16_t nack_count;
+	int32_t sent_delta_micros;
+	int32_t reported_delta_micros;
 
-    int32_t reported_delta_micros;
+	size_t size;
+
+	uint16_t seq;
+	uint16_t nack_count;
     uint8_t reported_status;
 };
 
@@ -84,7 +87,7 @@ public:
     PacketStatusHistory();
     ~PacketStatusHistory();
 
-    void save(uint16_t seq);
+    void save(uint16_t seq, size_t size);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
