@@ -81,7 +81,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "", RTCPFeedback: nil},
 		PayloadType:        97,
 	}, webrtc.RTPCodecTypeAudio); err != nil {
 		panic(err)
