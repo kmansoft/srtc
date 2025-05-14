@@ -11,6 +11,8 @@ namespace
 constexpr auto kMaxPacketCount = 1024;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 
+static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");;
+
 } // namespace
 
 namespace srtc::twcc
@@ -161,6 +163,7 @@ float PacketStatusHistory::getPacketsLostPercent() const
 	}
 
 	uint32_t lost = 0u;
+	uint32_t with_time = 0u;
 
 	const auto base = mHistory.get();
 	for (uint16_t seq = mMinSeq;;) {
@@ -170,12 +173,17 @@ float PacketStatusHistory::getPacketsLostPercent() const
 		if (ptr->nack_count > 0) {
 			lost += ptr->nack_count;
 		}
+		if (ptr->reported_time_micros > 0) {
+			with_time += 1;
+		}
 
 		if (seq == mMaxSeq) {
 			break;
 		}
 		seq += 1;
 	}
+
+	std::printf("*** RTCP TWCC packet: lost=%u with_time=%u total=%u\n", lost, with_time, total);
 
 	return std::clamp<float>(100.0f * static_cast<float>(lost) / static_cast<float>(total), 0.0f, 100.0f);
 }

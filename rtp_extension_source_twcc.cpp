@@ -318,7 +318,7 @@ float RtpExtensionSourceTWCC::getPacketsLostPercent() const
 	return mPacketHistory->getPacketsLostPercent();
 }
 
-uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track)
+uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
 	const auto media = track->getMediaType();
 	if (media == MediaType::Video) {
