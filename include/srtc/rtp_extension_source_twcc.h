@@ -40,14 +40,14 @@ public:
 			 bool isKeyFrame,
 			 int packetNumber) override;
 
-	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t dataSize);
+	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t encryptedSize);
 	void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
 
 	void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
 	[[nodiscard]] bool getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const;
 
-	[[nodiscard]] float getPacketsLostPercent() const;
+	void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
 	const uint8_t mVideoExtTWCC;

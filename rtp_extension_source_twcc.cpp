@@ -92,14 +92,15 @@ void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
 	}
 }
 
-void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t dataSize)
+void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t encryptedSize)
 {
 	uint16_t seq;
 	if (!getFeedbackSeq(packet, seq)) {
 		return;
 	}
 
-	mPacketHistory->save(seq, dataSize);
+	const auto payloadSize = packet->getPayloadSize();
+	mPacketHistory->save(seq, payloadSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
@@ -313,9 +314,9 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 	return false;
 }
 
-float RtpExtensionSourceTWCC::getPacketsLostPercent() const
+void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	return mPacketHistory->getPacketsLostPercent();
+	stats.packets_lost_percent = mPacketHistory->getPacketsLostPercent();
 }
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const

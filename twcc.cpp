@@ -11,7 +11,7 @@ namespace
 constexpr auto kMaxPacketCount = 1024;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 
-static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");;
+static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");
 
 } // namespace
 
@@ -93,7 +93,7 @@ PacketStatusHistory::PacketStatusHistory()
 
 PacketStatusHistory::~PacketStatusHistory() = default;
 
-void PacketStatusHistory::save(uint16_t seq, size_t size)
+void PacketStatusHistory::save(uint16_t seq, size_t payloadSize, size_t encryptedSize)
 {
 	PacketStatus* curr;
 
@@ -116,16 +116,16 @@ void PacketStatusHistory::save(uint16_t seq, size_t size)
 		}
 	}
 
-
 	struct timespec now = {};
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	curr->seq = seq;
-	curr->size = size;
+	curr->payload_size = payloadSize;
+	curr->encrypted_size = encryptedSize;
 	curr->sent_time_micros = now.tv_sec * 1000000 + now.tv_nsec / 1000;
 
 	if (mMinSeq != mMaxSeq) {
 		const auto prev = mHistory.get() + ((mMaxSeq + 0x10000 - 1) & kMaxPacketMask);
-		curr->sent_delta_micros = static_cast<int32_t>(curr->sent_time_micros - prev->sent_time_micros);;
+		curr->sent_delta_micros = static_cast<int32_t>(curr->sent_time_micros - prev->sent_time_micros);
 	}
 }
 
@@ -152,6 +152,9 @@ PacketStatus* PacketStatusHistory::get(uint16_t seq) const
 
 uint32_t PacketStatusHistory::getPacketCount() const
 {
+	if (!mHistory) {
+		return 0;
+	}
 	return (mMaxSeq - mMinSeq + 1 + 0x10000) & 0xFFFF;
 }
 

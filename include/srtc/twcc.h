@@ -26,21 +26,21 @@ constexpr auto kSTATUS_RECEIVED_NO_TS = 3;
 
 // A single RTCP feedback packet can contain statuses and timestamps of multiple RTP packets
 struct FeedbackHeader {
-    const uint16_t base_seq_number;
-    const uint16_t packet_status_count;
-    const uint16_t fb_pkt_count;
+	const uint16_t base_seq_number;
+	const uint16_t packet_status_count;
+	const uint16_t fb_pkt_count;
 	const int64_t reference_time_micros;
 
-    uint16_t fb_pkt_expanded;
+	uint16_t fb_pkt_expanded;
 
-    FeedbackHeader(uint16_t base_seq_number, uint16_t packet_status_count, int32_t reference_time, uint8_t fb_pkt_count)
-        : base_seq_number(base_seq_number)
-        , packet_status_count(packet_status_count)
-        , reference_time_micros(64 * 1000 * reference_time)
-        , fb_pkt_count(fb_pkt_count)
-        , fb_pkt_expanded(fb_pkt_count)
-    {
-    }
+	FeedbackHeader(uint16_t base_seq_number, uint16_t packet_status_count, int32_t reference_time, uint8_t fb_pkt_count)
+		: base_seq_number(base_seq_number)
+		, packet_status_count(packet_status_count)
+		, reference_time_micros(64 * 1000 * reference_time)
+		, fb_pkt_count(fb_pkt_count)
+		, fb_pkt_expanded(fb_pkt_count)
+	{
+	}
 };
 
 // A history of such headers
@@ -48,19 +48,19 @@ struct FeedbackHeader {
 class FeedbackHeaderHistory
 {
 public:
-    FeedbackHeaderHistory();
-    ~FeedbackHeaderHistory();
+	FeedbackHeaderHistory();
+	~FeedbackHeaderHistory();
 
-    void save(const std::shared_ptr<FeedbackHeader>& header);
+	void save(const std::shared_ptr<FeedbackHeader>& header);
 
-    [[nodiscard]] uint32_t getPacketCount() const;
+	[[nodiscard]] uint32_t getPacketCount() const;
 
 private:
-    uint32_t mPacketCount;
-    std::list<std::shared_ptr<FeedbackHeader>> mHistory;
+	uint32_t mPacketCount;
+	std::list<std::shared_ptr<FeedbackHeader>> mHistory;
 
-    uint16_t mLastFbPktCount = 0;
-    uint16_t mLastFbPktCountExpanded = 0;
+	uint16_t mLastFbPktCount = 0;
+	uint16_t mLastFbPktCountExpanded = 0;
 };
 
 // Status of a single RTP packet
@@ -69,14 +69,15 @@ struct PacketStatus {
 	int64_t sent_time_micros;
 	int64_t reported_time_micros;
 
+	size_t payload_size;
+	size_t encrypted_size;
+
 	int32_t sent_delta_micros;
 	int32_t reported_delta_micros;
 
-	size_t size;
-
 	uint16_t seq;
 	uint16_t nack_count;
-    uint8_t reported_status;
+	uint8_t reported_status;
 };
 
 // A history of such packets
@@ -84,10 +85,10 @@ struct PacketStatus {
 class PacketStatusHistory
 {
 public:
-    PacketStatusHistory();
-    ~PacketStatusHistory();
+	PacketStatusHistory();
+	~PacketStatusHistory();
 
-    void save(uint16_t seq, size_t size);
+	void save(uint16_t seq, size_t payloadSize, size_t encryptedSize);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
@@ -96,9 +97,9 @@ public:
 	[[nodiscard]] float getPacketsLostPercent() const;
 
 private:
-    uint16_t mMinSeq;
-    uint16_t mMaxSeq;
-    std::unique_ptr<PacketStatus[]> mHistory;
+	uint16_t mMinSeq;
+	uint16_t mMaxSeq;
+	std::unique_ptr<PacketStatus[]> mHistory;
 };
 
 } // namespace srtc::twcc
