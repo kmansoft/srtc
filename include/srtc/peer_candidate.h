@@ -107,6 +107,8 @@ private:
 #ifdef NDEBUG
 #else
     RandomGenerator<uint32_t> mNoSendRandomGenerator;
+	size_t mDebugDroppedOutPackets = { 0 };
+	size_t mDebugTotalOutPackets = { 0 };
 #endif
 
     // DTLS

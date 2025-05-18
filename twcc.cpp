@@ -149,6 +149,30 @@ PacketStatus* PacketStatusHistory::get(uint16_t seq) const
 	return nullptr;
 }
 
+void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
+{
+	// Search backwards from max until we find a packet that's been received
+	const auto max = findMostRecentReceivedPacket();
+	if (!max) {
+		return;
+	}
+
+	const auto base = mHistory.get();
+	for (uint16_t seq = max.value();;) {
+		const auto index = seq & kMaxPacketMask;
+		const auto ptr = base + index;
+
+		if (ptr->reported_status == twcc::kSTATUS_NOT_RECEIVED) {
+			ptr->reported_as_not_received = true;
+		}
+
+		if (seq == mMinSeq) {
+			break;
+		}
+		seq -= 1;
+	}
+}
+
 uint32_t PacketStatusHistory::getPacketCount() const
 {
 	if (!mHistory) {
@@ -165,6 +189,7 @@ float PacketStatusHistory::getPacketsLostPercent() const
 	}
 
 	uint32_t lost = 0u;
+	uint32_t nacked = 0u;
 	uint32_t with_time = 0u;
 
 	const auto base = mHistory.get();
@@ -172,8 +197,11 @@ float PacketStatusHistory::getPacketsLostPercent() const
 		const auto index = seq & kMaxPacketMask;
 		const auto ptr = base + index;
 
+		if (ptr->reported_as_not_received > 0) {
+			lost += 1;
+		}
 		if (ptr->nack_count > 0) {
-			lost += ptr->nack_count;
+			nacked += ptr->nack_count;
 		}
 		if (ptr->reported_time_micros > 0) {
 			with_time += 1;
@@ -185,9 +213,32 @@ float PacketStatusHistory::getPacketsLostPercent() const
 		seq += 1;
 	}
 
-	std::printf("*** RTCP TWCC packet: nacked=%u, with_time=%u, total=%u\n", lost, with_time, total);
+	std::printf("*** RTCP TWCC packet: lost=%u, nacked=%u, with_time=%u, total=%u\n", lost, nacked, with_time, total);
 
-	return std::clamp<float>(100.0f * static_cast<float>(lost) / static_cast<float>(total), 0.0f, 100.0f);
+	return std::clamp<float>(
+		100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
+}
+
+std::optional<uint16_t> PacketStatusHistory::findMostRecentReceivedPacket() const
+{
+	const PacketStatus* base = mHistory.get();
+	if (!base) {
+		return std::nullopt;
+	}
+
+	for (uint16_t seq = mMaxSeq;;) {
+		const auto index = seq & kMaxPacketMask;
+		const auto ptr = base + index;
+
+		if (ptr->reported_status == twcc::kSTATUS_RECEIVED_SMALL_DELTA ||
+			ptr->reported_status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
+			return seq;
+		}
+		if (seq == mMinSeq) {
+			break;
+		}
+		seq -= 1;
+	}
 }
 
 } // namespace srtc::twcc

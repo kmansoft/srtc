@@ -4,6 +4,7 @@
 #include <ctime>
 #include <list>
 #include <memory>
+#include <optional>
 
 namespace srtc
 {
@@ -77,7 +78,9 @@ struct PacketStatus {
 
 	uint16_t seq;
 	uint16_t nack_count;
+
 	uint8_t reported_status;
+	bool reported_as_not_received;
 };
 
 // A history of such packets
@@ -93,6 +96,8 @@ public:
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
 
+	void update(const std::shared_ptr<FeedbackHeader>& header);
+
 	[[nodiscard]] uint32_t getPacketCount() const;
 	[[nodiscard]] float getPacketsLostPercent() const;
 
@@ -100,6 +105,8 @@ private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
+
+	std::optional<uint16_t> findMostRecentReceivedPacket() const;
 };
 
 } // namespace srtc::twcc

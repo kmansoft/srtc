@@ -12,12 +12,12 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/send_history.h"
+#include "srtc/srtc.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/util.h"
-#include "srtc/srtc.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -258,6 +258,18 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	if (mExtensionSourceTWCC) {
+
+#ifndef NDEBUG
+		if (mDebugTotalOutPackets > 0) {
+			const auto percentLost =
+				100.0f * static_cast<float>(mDebugDroppedOutPackets) / static_cast<float>(mDebugTotalOutPackets);
+			std::printf(
+				"*** Dropped %zu out of %zu packets, %.2f%%\n",
+				mDebugDroppedOutPackets,
+				mDebugTotalOutPackets,
+				percentLost);
+		}
+#endif
 		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
 	}
 }
@@ -338,6 +350,8 @@ void PeerCandidate::process()
 						if (config.debug_drop_packets && randomValue < 5 &&
 							item.track->getMediaType() == MediaType::Video) {
 
+							mDebugDroppedOutPackets += 1;
+
 							uint16_t twcc;
 							if (mExtensionSourceTWCC && mExtensionSourceTWCC->getFeedbackSeq(packet, twcc)) {
 								LOG(SRTC_LOG_V, "NOT sending packet %u, twcc %u", packet->getSequence(), twcc);
@@ -350,6 +364,8 @@ void PeerCandidate::process()
 							// LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
 							(void)w;
 						}
+
+						mDebugTotalOutPackets += 1;
 #endif
 					}
 				} else {
@@ -559,7 +575,11 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 						const auto addr = to_string(mHost.addr);
 						const auto cipher = SSL_get_cipher(mDtlsSsl);
 						const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
-						LOG(SRTC_LOG_V, "Connected to %s with cipher %s, profile %s", addr.c_str(), cipher, profile->name);
+						LOG(SRTC_LOG_V,
+							"Connected to %s with cipher %s, profile %s",
+							addr.c_str(),
+							cipher,
+							profile->name);
 
 						emitOnDtlsConnected();
 

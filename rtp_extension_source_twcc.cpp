@@ -278,6 +278,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 		prev_ptr = curr_ptr;
 	}
 
+	mPacketHistory->update(header);
 	mHeaderHistory->save(header);
 }
 
