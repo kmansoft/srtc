@@ -37,14 +37,15 @@ public:
     ~RtpPacket();
 
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
-    [[nodiscard]] RtpExtension getExtension() const;
+	[[nodiscard]] const RtpExtension& getExtension() const;
     [[nodiscard]] bool getMarker() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint32_t getRollover() const;
     [[nodiscard]] size_t getPayloadSize() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
-	[[nodiscard]] uint32_t computeSize() const;
+
+	void setExtension(RtpExtension&& extension);
 
     struct Output {
         ByteBuffer buf;
@@ -52,7 +53,6 @@ public:
     };
 
     [[nodiscard]] Output generate() const;
-    [[nodiscard]] Output generateExt(const RtpExtension& extension) const;
     [[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
 private:
@@ -63,8 +63,8 @@ private:
     const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
-    const RtpExtension mExtension;
     const ByteBuffer mPayload;
+	RtpExtension mExtension;
 };
 
 } // namespace srtc

@@ -81,9 +81,9 @@ std::shared_ptr<Track> RtpPacket::getTrack() const
     return mTrack;
 }
 
-RtpExtension RtpPacket::getExtension() const
+const RtpExtension& RtpPacket::getExtension() const
 {
-    return mExtension.copy();
+    return mExtension;
 }
 
 bool RtpPacket::getMarker() const
@@ -136,45 +136,14 @@ RtpPacket::Output RtpPacket::generate() const
     return { std::move(buf), mRollover };
 }
 
-RtpPacket::Output RtpPacket::generateExt(const RtpExtension& extension) const
-{
-    // https://blog.webex.com/engineering/introducing-rtp-the-packet-format/
-
-    ByteBuffer buf;
-    ByteWriter writer(buf);
-
-    // V=2 | P | X | CC | M | PT
-    const auto ext = !extension.empty();
-    const uint16_t header = (2 << 14) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
-    writer.writeU16(header);
-
-    writer.writeU16(mSequence);
-    writer.writeU32(mTimestamp);
-    writer.writeU32(mSSRC);
-
-    // Extension
-    writeExtension(writer, extension);
-
-    // Payload
-    writePayload(writer, mPayload);
-
-    return { std::move(buf), mRollover };
-}
-
 uint32_t RtpPacket::getSSRC() const
 {
     return mSSRC;
 }
 
-uint32_t RtpPacket::computeSize() const {
-	size_t size = 12;	// RTP header
-	if (!mExtension.empty()) {
-		size += mExtension.size();
-	}
-	if (!mPayload.empty()) {
-		size += mPayload.size();
-	}
-	return size;
+void RtpPacket::setExtension(RtpExtension&& extension)
+{
+	mExtension = std::move(extension);
 }
 
 RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const

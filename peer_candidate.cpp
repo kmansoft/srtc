@@ -703,13 +703,11 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 
 				RtpPacket::Output packetData;
 				if (track->getRtxPayloadId() > 0) {
-					auto extension = packet->getExtension();
+					RtpExtension extension = packet->getExtension().copy();
 
 					if (track->isSimulcast() && mExtensionSourceSimulcast) {
 						auto builder = RtpExtensionBuilder::from(extension);
-						if (track->isSimulcast() && mExtensionSourceSimulcast) {
-							mExtensionSourceSimulcast->updateForRtx(builder, track);
-						}
+						mExtensionSourceSimulcast->updateForRtx(builder, track);
 						extension = builder.build();
 					}
 
