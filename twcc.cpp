@@ -119,8 +119,8 @@ void PacketStatusHistory::save(uint16_t seq, size_t payloadSize, size_t encrypte
 	struct timespec now = {};
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	curr->seq = seq;
-	curr->payload_size = payloadSize;
-	curr->encrypted_size = encryptedSize;
+	curr->payload_size = static_cast<uint16_t>(payloadSize);
+	curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
 	curr->sent_time_micros = now.tv_sec * 1000000 + now.tv_nsec / 1000;
 
 	if (mMinSeq != mMaxSeq) {
@@ -129,7 +129,6 @@ void PacketStatusHistory::save(uint16_t seq, size_t payloadSize, size_t encrypte
 	}
 }
 
-// may return nullptr
 PacketStatus* PacketStatusHistory::get(uint16_t seq) const
 {
 	const auto base = mHistory.get();
@@ -186,7 +185,7 @@ float PacketStatusHistory::getPacketsLostPercent() const
 		seq += 1;
 	}
 
-	std::printf("*** RTCP TWCC packet: lost=%u with_time=%u total=%u\n", lost, with_time, total);
+	std::printf("*** RTCP TWCC packet: nacked=%u, with_time=%u, total=%u\n", lost, with_time, total);
 
 	return std::clamp<float>(100.0f * static_cast<float>(lost) / static_cast<float>(total), 0.0f, 100.0f);
 }

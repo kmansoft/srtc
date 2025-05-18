@@ -69,11 +69,11 @@ struct PacketStatus {
 	int64_t sent_time_micros;
 	int64_t reported_time_micros;
 
-	size_t payload_size;
-	size_t encrypted_size;
-
 	int32_t sent_delta_micros;
 	int32_t reported_delta_micros;
+
+	uint16_t payload_size;
+	uint16_t encrypted_size;
 
 	uint16_t seq;
 	uint16_t nack_count;

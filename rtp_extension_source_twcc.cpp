@@ -116,6 +116,8 @@ void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>&
 	}
 }
 
+//	https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
+
 void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader)
 {
 	if (reader.remaining() < 8) {
@@ -188,7 +190,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 			// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
 			for (uint16_t shift = 14; shift != 0; shift -= 1) {
 				const auto symbol =
-					((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_NO_TS : twcc::kSTATUS_NOT_RECEIVED;
+					((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_SMALL_DELTA : twcc::kSTATUS_NOT_RECEIVED;
 
 				const auto index = (seq_number + 0x10000 - header->base_seq_number) & 0xffff;
 				assert(index >= 0);
@@ -237,7 +239,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 				ptr->reported_status = twcc::kSTATUS_RECEIVED_SMALL_DELTA;
 				ptr->reported_delta_micros = tempList[i].delta_micros = 250 * delta;
 			}
-		} else if (ptr->reported_status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
+		} else if (symbol == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
 			if (reader.remaining() < 2) {
 				LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading large delta");
 				return;
@@ -282,13 +284,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const
 {
 	const auto track = packet->getTrack();
-
-	uint8_t nExtId = 0;
-	if (track->getMediaType() == MediaType::Video) {
-		nExtId = mVideoExtTWCC;
-	} else if (track->getMediaType() == MediaType::Audio) {
-		nExtId = mAudioExtTWCC;
-	}
+	const auto nExtId = getExtensionId(track);
 	if (nExtId == 0) {
 		return false;
 	}
