@@ -162,6 +162,11 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 		const auto index = seq & kMaxPacketMask;
 		const auto ptr = base + index;
 
+		if (ptr->reported_checked) {
+			break;
+		}
+		ptr->reported_checked = true;
+
 		if (ptr->reported_status == twcc::kSTATUS_NOT_RECEIVED) {
 			ptr->reported_as_not_received = true;
 		}

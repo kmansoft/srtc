@@ -80,7 +80,9 @@ struct PacketStatus {
 	uint16_t nack_count;
 
 	uint8_t reported_status;
+
 	bool reported_as_not_received;
+	bool reported_checked;
 };
 
 // A history of such packets
@@ -106,7 +108,7 @@ private:
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
 
-	std::optional<uint16_t> findMostRecentReceivedPacket() const;
+	[[nodiscard]] std::optional<uint16_t> findMostRecentReceivedPacket() const;
 };
 
 } // namespace srtc::twcc
