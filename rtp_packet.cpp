@@ -69,8 +69,8 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
     , mRollover(rollover)
     , mSequence(sequence)
     , mTimestamp(timestamp)
-    , mExtension(std::move(extension))
     , mPayload(std::move(payload))
+	, mExtension(std::move(extension))
 {
 }
 

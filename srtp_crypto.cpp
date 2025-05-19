@@ -167,7 +167,7 @@ bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCo
     const auto encryptedData = encrypted.data();
 
     // The header is not encrypted
-    auto headerSize = 4 + 4 + 4;
+    auto headerSize = 4u + 4 + 4;
     if ((header & kRTP_ExtensionBit) != 0) {
         const auto extensionSize = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 14));
         headerSize += 4;
@@ -191,7 +191,7 @@ bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCo
     }
 
     // The header is AAD
-    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, headerSize)) {
+    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, static_cast<int>(headerSize))) {
         goto fail;
     }
 
@@ -272,7 +272,7 @@ bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet, uint32_t rolloverCou
     const auto encryptedData = encrypted.data();
 
     // The header is not encrypted
-    auto headerSize = 4 + 4 + 4;
+    auto headerSize = 4u + 4 + 4;
     if ((header & kRTP_ExtensionBit) != 0) {
         const auto extensionSize = ntohs(*reinterpret_cast<const uint16_t*>(packetData + 14));
         headerSize += 4;
@@ -654,7 +654,7 @@ bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet, ByteBuffer& p
 
 fail:
     if (final_ret > 0) {
-        assert(plain_len == plainSize);
+        assert(plain_len == static_cast<int>(plainSize));
         plain.resize(plainSize);
         return true;
     }
@@ -758,7 +758,7 @@ bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet, ByteBuffer& pl
 
 fail:
     if (final_ret > 0) {
-        assert(plain_len == plainSize);
+        assert(plain_len == static_cast<int>(plainSize));
         plain.resize(plainSize);
         return true;
     }

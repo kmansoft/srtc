@@ -32,14 +32,14 @@ struct FeedbackHeader {
 	const uint16_t fb_pkt_count;
 	const int64_t reference_time_micros;
 
-	uint16_t fb_pkt_expanded;
+	uint16_t fb_pkt_count_expanded;
 
 	FeedbackHeader(uint16_t base_seq_number, uint16_t packet_status_count, int32_t reference_time, uint8_t fb_pkt_count)
 		: base_seq_number(base_seq_number)
 		, packet_status_count(packet_status_count)
-		, reference_time_micros(64 * 1000 * reference_time)
 		, fb_pkt_count(fb_pkt_count)
-		, fb_pkt_expanded(fb_pkt_count)
+		, reference_time_micros(64 * 1000 * reference_time)
+		, fb_pkt_count_expanded(fb_pkt_count)
 	{
 	}
 };

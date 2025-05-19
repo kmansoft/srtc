@@ -40,12 +40,12 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 	}
 
 	mLastFbPktCount = header->fb_pkt_count;
-	header->fb_pkt_expanded = header->fb_pkt_count + mLastFbPktCountExpanded;
+	header->fb_pkt_count_expanded = header->fb_pkt_count + mLastFbPktCountExpanded;
 
 	// https://github.com/pion/webrtc/issues/3122
 	for (auto iter = mHistory.begin(); iter != mHistory.end();) {
-		if ((*iter)->fb_pkt_expanded == header->fb_pkt_expanded) {
-			std::printf("RTCP TWCC packet: removing duplicate fb_pkt_expanded=%u\n", header->fb_pkt_expanded);
+		if ((*iter)->fb_pkt_count_expanded == header->fb_pkt_count_expanded) {
+			std::printf("RTCP TWCC packet: removing duplicate fb_pkt_expanded=%u\n", header->fb_pkt_count_expanded);
 			iter = mHistory.erase(iter);
 		} else {
 			++iter;
@@ -54,13 +54,13 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 
 	mPacketCount += header->packet_status_count;
 
-	if (mHistory.empty() || mHistory.back()->fb_pkt_expanded < header->fb_pkt_expanded) {
+	if (mHistory.empty() || mHistory.back()->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
 		// Can append at the end
 		mHistory.push_back(header);
 	} else {
 		// Find the right place to insert
 		auto it = mHistory.begin();
-		while (it != mHistory.end() && (*it)->fb_pkt_expanded < header->fb_pkt_expanded) {
+		while (it != mHistory.end() && (*it)->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
 			++it;
 		}
 		mHistory.insert(it, header);
@@ -71,7 +71,7 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 			if (next == mHistory.end()) {
 				break;
 			}
-			assert((*next)->fb_pkt_expanded > (*curr)->fb_pkt_expanded);
+			assert((*next)->fb_pkt_count_expanded > (*curr)->fb_pkt_count_expanded);
 		}
 #endif
 	}
@@ -244,6 +244,8 @@ std::optional<uint16_t> PacketStatusHistory::findMostRecentReceivedPacket() cons
 		}
 		seq -= 1;
 	}
+
+	return std::nullopt;
 }
 
 } // namespace srtc::twcc

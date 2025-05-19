@@ -133,11 +133,6 @@ bool SrtpConnection::protectOutgoingMedia(const ByteBuffer& packetData, uint32_t
         return false;
     }
 
-    const ChannelKey key = { ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8)),
-                             static_cast<uint8_t>(packetData.data()[1] & 0x7F) };
-
-    const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, 0);
-
     return mCrypto->protectSendRtp(packetData, rollover, output);
 }
 
@@ -181,7 +176,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
     const auto padding = (outputData[0] & 0x20) != 0;
     if (padding) {
         const auto lastByte = outputData[outputSize - 1];
-        if (lastByte + 4 + 4 > outputSize) {
+        if (lastByte + 4u + 4u > outputSize) {
             LOG(SRTC_LOG_E,
                 "Incoming RTCP packet padding is too large: lastByte = %u, size = %zu",
                 lastByte,

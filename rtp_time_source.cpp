@@ -4,10 +4,10 @@ namespace srtc
 {
 
 RtpTimeSource::RtpTimeSource(uint32_t clockRate)
-    : mClockRate(clockRate)
-    , mRandom(0, std::numeric_limits<int32_t>::max())
+    : mRandom(0, std::numeric_limits<int32_t>::max())
+    , mClockRate(clockRate)
+	, mClockBaseTime(std::chrono::steady_clock::now())
     , mClockBaseValue(mRandom.next())
-    , mClockBaseTime(std::chrono::steady_clock::now())
 {
 }
 

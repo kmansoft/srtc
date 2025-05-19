@@ -352,7 +352,7 @@ std::string SdpOffer::generateRandomString(size_t len)
     std::string res;
     res.reserve(len);
 
-    for (auto i = 0; i < len; i += 1) {
+    for (auto i = 0u; i < len; i += 1) {
         res += ALPHABET[mRandomGenerator.next() % alphabetLen];
     }
 
