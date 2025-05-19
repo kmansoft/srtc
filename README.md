@@ -6,7 +6,7 @@ Features:
 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++
-- Conservative means it uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI.
+- Conservative means it uses C++ 17, does not use exceptions or RTTI.
 - Only one worker thread per PeerConnection.
 - Supports H264 (any profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
 - Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension.

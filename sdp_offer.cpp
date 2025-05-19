@@ -43,8 +43,8 @@ namespace srtc
 {
 
 SdpOffer::SdpOffer(const OfferConfig& config,
-                   const srtc::optional<PubVideoConfig>& videoConfig,
-                   const srtc::optional<PubAudioConfig>& audioConfig)
+                   const std::optional<PubVideoConfig>& videoConfig,
+                   const std::optional<PubAudioConfig>& audioConfig)
     : mRandomGenerator(0, 0x7ffffffe)
     , mConfig(config)
     , mVideoConfig(videoConfig)
@@ -265,13 +265,13 @@ std::pair<std::string, Error> SdpOffer::generate()
     return { ss.str(), Error::OK };
 }
 
-srtc::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
+std::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
 {
     if (mVideoConfig.has_value()) {
         return mVideoConfig->simulcast_layer_list;
     }
 
-    return srtc::nullopt;
+    return std::nullopt;
 }
 
 std::string SdpOffer::getIceUFrag() const

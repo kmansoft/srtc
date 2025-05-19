@@ -454,7 +454,7 @@ int main(int argc, char* argv[])
 	};
 	const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
 
-	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, nullopt);
+	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, std::nullopt);
 	const auto [offerString, offerError] = offer->generate();
 	if (offerError.isError()) {
 		std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;

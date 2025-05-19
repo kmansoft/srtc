@@ -2,7 +2,6 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
-#include "srtc/optional.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
 #include "srtc/scheduler.h"
@@ -35,8 +34,8 @@ public:
     ~PeerConnection();
 
     std::shared_ptr<SdpOffer> createPublishSdpOffer(const OfferConfig& config,
-                                                    const srtc::optional<PubVideoConfig>& videoConfig,
-                                                    const srtc::optional<PubAudioConfig>& audioConfig);
+                                                    const std::optional<PubVideoConfig>& videoConfig,
+                                                    const std::optional<PubAudioConfig>& audioConfig);
     Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
 
     std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,

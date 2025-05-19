@@ -98,7 +98,7 @@ StunMessage make_stun_message_binding_response(const std::shared_ptr<srtc::IceAg
 	// https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
 	const auto icePassword = offer->getIcePassword();
 
-	agent->finishMessage(&msg, srtc::nullopt, icePassword);
+	agent->finishMessage(&msg, std::nullopt, icePassword);
 
 	return msg;
 }

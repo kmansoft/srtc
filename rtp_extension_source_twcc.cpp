@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 

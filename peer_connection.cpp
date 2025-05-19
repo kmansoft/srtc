@@ -68,8 +68,8 @@ PeerConnection::~PeerConnection()
 }
 
 std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const OfferConfig& config,
-                                                                const srtc::optional<PubVideoConfig>& videoConfig,
-                                                                const srtc::optional<PubAudioConfig>& audioConfig)
+                                                                const std::optional<PubVideoConfig>& videoConfig,
+                                                                const std::optional<PubAudioConfig>& audioConfig)
 {
     return std::shared_ptr<SdpOffer>(new SdpOffer(config, videoConfig, audioConfig));
 }
