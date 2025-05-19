@@ -79,12 +79,16 @@ bool RtpExtensionSourceTWCC::wants(const std::shared_ptr<Track>& track,
 	return getExtensionId(track) != 0;
 }
 
-void RtpExtensionSourceTWCC::add([[maybe_unused]] RtpExtensionBuilder& builder,
-								 [[maybe_unused]] const std::shared_ptr<Track>& track,
+void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
+								 const std::shared_ptr<Track>& track,
 								 [[maybe_unused]] bool isKeyFrame,
 								 [[maybe_unused]] int packetNumber)
 {
-	// Because of pacing, we don't assign a sequence number here, but only before generating
+	// Because of pacing, we don't assign a sequence number here, we do it before generating. But we still want to
+	// write a placeholder so that packet size measurement works correctly.
+	if (const auto id = getExtensionId(track); id != 0) {
+		builder.addU16Value(id, 0);
+	}
 }
 
 void RtpExtensionSourceTWCC::onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet)
@@ -199,8 +203,8 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 		} else if (chunkType == twcc::kCHUNK_STATUS_VECTOR && ((chunkHeader >> 14) & 0x01) == 0) {
 			// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
 			for (uint16_t shift = 14; shift != 0; shift -= 1) {
-				const auto symbol =
-					((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_SMALL_DELTA : twcc::kSTATUS_NOT_RECEIVED;
+				const auto symbol = ((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_SMALL_DELTA
+																		  : twcc::kSTATUS_NOT_RECEIVED;
 
 				const auto index = (seq_number + 0x10000 - header->base_seq_number) & 0xffff;
 				assert(index >= 0);

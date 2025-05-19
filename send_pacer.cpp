@@ -65,7 +65,7 @@ void SendPacer::sendPaced(const std::list<std::shared_ptr<RtpPacket>>& packetLis
 		return;
 	}
 	if (spreadMillis == 0) {
-		for (const auto packet : packetList) {
+		for (const auto& packet : packetList) {
 			sendImpl(packet);
 		}
 		return;
@@ -76,7 +76,7 @@ void SendPacer::sendPaced(const std::list<std::shared_ptr<RtpPacket>>& packetLis
 	const auto now = std::chrono::steady_clock::now();
 
 	unsigned int i = 0;
-	for (const auto packet : packetList) {
+	for (const auto& packet : packetList) {
 		const auto when = now + delta * i;
 		const auto item = std::make_shared<Item>(when, packet);
 
