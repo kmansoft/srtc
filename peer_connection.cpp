@@ -324,8 +324,16 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
     // Our processing loop
     while (true) {
         // Epoll for incoming data
+		auto timeout = mLoopScheduler->getTimeoutMillis(1000);
+		if (mSelectedCandidate) {
+			const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(1000);
+			if (timeout > selectedTimeout) {
+				timeout = selectedTimeout;
+			}
+		}
+
         std::vector<void*> udataList;
-        eventLoop->wait(udataList, mLoopScheduler->getTimeoutMillis(1000));
+        eventLoop->wait(udataList, timeout);
 
         std::list<FrameToSend> frameSendQueue;
 
@@ -363,7 +371,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
         // Candidate processing
         for (const auto& candidate : mConnectingCandidateList) {
-            candidate->process();
+            candidate->run();
             if (mConnectingCandidateList.empty()) {
                 // A candidate reached ICE connected, and we removed all connecting ones
                 break;
@@ -371,7 +379,7 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
         }
 
         if (mSelectedCandidate) {
-            mSelectedCandidate->process();
+            mSelectedCandidate->run();
         }
     }
 

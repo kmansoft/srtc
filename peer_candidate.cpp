@@ -12,12 +12,11 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/send_history.h"
-#include "srtc/srtc.h"
+#include "srtc/send_pacer.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -186,10 +185,6 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 	, mIceAgent(std::make_shared<IceAgent>())
 	, mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
 	, mSendHistory(std::make_shared<SendHistory>())
-#ifdef NDEBUG
-#else
-	, mNoSendRandomGenerator(0, 99)
-#endif
 	, mUniqueId(++gNextUniqueId)
 	, mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
 	, mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
@@ -258,25 +253,24 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	if (mExtensionSourceTWCC) {
-
-#ifndef NDEBUG
-		if (mDebugTotalOutPackets > 0) {
-			const auto percentLost =
-				100.0f * static_cast<float>(mDebugDroppedOutPackets) / static_cast<float>(mDebugTotalOutPackets);
-			std::printf(
-				"*** Dropped %zu out of %zu packets, %.2f%%\n",
-				mDebugDroppedOutPackets,
-				mDebugTotalOutPackets,
-				percentLost);
-		}
-#endif
 		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
 	}
 }
 
-void PeerCandidate::process()
+[[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
 {
-	const auto now = std::chrono::steady_clock::now();
+	if (mSendPacer) {
+		return mSendPacer->getTimeoutMillis(defaultValue);
+	}
+	return defaultValue;
+}
+
+void PeerCandidate::run()
+{
+	// Sending
+	if (mSendPacer) {
+		mSendPacer->run();
+	}
 
 	// Raw data
 	while (!mRawSendQueue.empty()) {
@@ -291,6 +285,12 @@ void PeerCandidate::process()
 	while (!mFrameSendQueue.empty()) {
 		const auto item = std::move(mFrameSendQueue.front());
 		mFrameSendQueue.erase(mFrameSendQueue.begin());
+
+		if (mSrtp == nullptr || mSendPacer == nullptr) {
+			// We are not connected yet
+			LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
+			continue;
+		}
 
 		if (!item.csd.empty()) {
 			// Codec Specific Data
@@ -314,62 +314,14 @@ void PeerCandidate::process()
 			const auto packetList = item.packetizer->generate(
 				mExtensionSourceSimulcast, mExtensionSourceTWCC, mSrtp->getMediaProtectionOverhead(), item.buf);
 
-			const auto stats = item.track->getStats();
+			// Flush
+			mSendPacer->flush(item.track);
 
-			for (const auto& packet : packetList) {
-				// Save
-				if (item.track->hasNack() || item.track->getRtxPayloadId() > 0) {
-					mSendHistory->save(packet);
-				}
-
-				// Generate
-				const auto packetData = packet->generate();
-				if (mSrtp) {
-					ByteBuffer protectedData;
-					if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
-						// Update send timeout
-						mLastSendTime = now;
-
-						// Keep stats
-						stats->incrementSentPackets(1);
-						stats->incrementSentBytes(protectedData.size());
-
-						// Record in TWCC
-						if (mExtensionSourceTWCC) {
-							mExtensionSourceTWCC->onBeforeSendingRtpPacket(packet, protectedData.size());
-						}
-
-#ifdef NDEBUG
-						// Send
-						(void)mSocket->send(protectedData.data(), protectedData.size());
-#else
-						// In debug mode, we have deliberate 5% packet loss to make sure that NACK / RTX processing
-						// works
-						const auto& config = mOffer->getConfig();
-						const auto randomValue = mNoSendRandomGenerator.next();
-						if (config.debug_drop_packets && randomValue < 5 &&
-							item.track->getMediaType() == MediaType::Video) {
-
-							mDebugDroppedOutPackets += 1;
-
-							uint16_t twcc;
-							if (mExtensionSourceTWCC && mExtensionSourceTWCC->getFeedbackSeq(packet, twcc)) {
-								LOG(SRTC_LOG_V, "NOT sending packet %u, twcc %u", packet->getSequence(), twcc);
-							} else {
-								LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
-							}
-						} else {
-							const auto w = mSocket->send(protectedData.data(), protectedData.size());
-							// This is too much
-							// LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
-							(void)w;
-						}
-
-						mDebugTotalOutPackets += 1;
-#endif
-					}
+			if (!packetList.empty()) {
+				if (packetList.size() <= 1) {
+					mSendPacer->sendNow(packetList.front());
 				} else {
-					LOG(SRTC_LOG_V, "SRTP is not initialized yet");
+					mSendPacer->sendPaced(packetList, SendPacer::kDefaultSpreadMillis);
 				}
 			}
 		}
@@ -570,6 +522,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 					if (srtpError.isOk()) {
 						mSrtp = srtpConn;
+						mSendPacer = std::make_shared<SendPacer>(
+							mOffer->getConfig(), mSrtp, mSocket, mSendHistory, mExtensionSourceTWCC, [this]() {
+								mLastSendTime = std::chrono::steady_clock::now();
+							});
 						mDtlsState = DtlsState::Completed;
 
 						const auto addr = to_string(mHost.addr);

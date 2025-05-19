@@ -79,16 +79,26 @@ bool RtpExtensionSourceTWCC::wants(const std::shared_ptr<Track>& track,
 	return getExtensionId(track) != 0;
 }
 
-void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
-								 const std::shared_ptr<Track>& track,
+void RtpExtensionSourceTWCC::add([[maybe_unused]] RtpExtensionBuilder& builder,
+								 [[maybe_unused]] const std::shared_ptr<Track>& track,
 								 [[maybe_unused]] bool isKeyFrame,
 								 [[maybe_unused]] int packetNumber)
 {
-	const auto seq = mNextPacketSEQ;
-	mNextPacketSEQ += 1;
+	// Because of pacing, we don't assign a sequence number here, but only before generating
+}
 
+void RtpExtensionSourceTWCC::onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet)
+{
+	const auto track = packet->getTrack();
 	if (const auto id = getExtensionId(track); id != 0) {
-		builder.addU16Value(id, seq);
+		auto builder = RtpExtensionBuilder::from(packet->getExtension());
+
+		const auto seq = mNextPacketSEQ;
+		mNextPacketSEQ += 1;
+
+		builder.addOrReplaceU16Value(id, seq);
+
+		packet->setExtension(builder.build());
 	}
 }
 

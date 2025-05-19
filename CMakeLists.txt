@@ -51,6 +51,7 @@ add_library(srtc
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
         include/srtc/send_history.h
+        include/srtc/send_pacer.h
         include/srtc/simulcast_layer.h
         include/srtc/socket.h
         include/srtc/srtc.h
@@ -95,6 +96,7 @@ add_library(srtc
         sdp_offer.cpp
         scheduler.cpp
         send_history.cpp
+        send_pacer.cpp
         simulcast_layer.cpp
         socket.cpp
         srtc.cpp

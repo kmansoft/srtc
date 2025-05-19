@@ -33,6 +33,7 @@ class RtcpPacket;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
+class SendPacer;
 
 struct PublishConnectionStats;
 
@@ -57,7 +58,9 @@ public:
         std::vector<ByteBuffer> csd; // possibly empty
     };
     void addSendFrame(FrameToSend&& frame);
-    void process();
+
+	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
+    void run();
 
     void sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
 
@@ -94,6 +97,7 @@ private:
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 
     std::shared_ptr<SrtpConnection> mSrtp;
+	std::shared_ptr<SendPacer> mSendPacer;
 
     std::list<ByteBuffer> mDtlsReceiveQueue;
 
@@ -103,13 +107,6 @@ private:
     std::list<FrameToSend> mFrameSendQueue;
 
     bool mSentUseCandidate = { false };
-
-#ifdef NDEBUG
-#else
-    RandomGenerator<uint32_t> mNoSendRandomGenerator;
-	size_t mDebugDroppedOutPackets = { 0 };
-	size_t mDebugTotalOutPackets = { 0 };
-#endif
 
     // DTLS
     enum class DtlsState {

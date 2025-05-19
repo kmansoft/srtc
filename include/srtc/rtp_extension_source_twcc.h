@@ -40,6 +40,7 @@ public:
 			 bool isKeyFrame,
 			 int packetNumber) override;
 
+	void onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
 	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t encryptedSize);
 	void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
 
