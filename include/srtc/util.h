@@ -64,4 +64,6 @@ T* TempBuffer<T>::ensure(size_t count) {
 	return mPtr;
 }
 
+int64_t getSystemTimeMicros();
+
 } // namespace srtc

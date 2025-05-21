@@ -33,7 +33,7 @@ namespace
 std::once_flag gInitFlag;
 
 constexpr auto kSenderReportsInterval = std::chrono::seconds(1);
-constexpr auto kConnectionStatsInterval = std::chrono::seconds(10);
+constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
 
 } // namespace
 

@@ -9,11 +9,9 @@
 #include "srtc/track.h"
 #include "srtc/twcc.h"
 
-#include <cstring>
-#include <functional>
-#include <map>
-#include <memory>
 #include <cassert>
+#include <cstring>
+#include <memory>
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
@@ -161,6 +159,10 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	// Be careful, this can wrap (and that's OK)
 	const auto past_end_seq_number = static_cast<uint16_t>(header->base_seq_number + header->packet_status_count);
 
+	if (header->base_seq_number == 0) {
+		std::printf("TWCC packets base = %u, count = %u\n", header->base_seq_number, header->packet_status_count);
+	}
+
 	// Read the chunks
 	for (uint16_t seq_number = header->base_seq_number; seq_number != past_end_seq_number; /* do not increment */) {
 		if (reader.remaining() < 2) {
@@ -268,6 +270,36 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 		}
 	}
 
+#if 0
+	auto count_not_received = 0u;
+	auto count_small_delta = 0u;
+	auto count_large_delta = 0u;
+
+	for (uint16_t i = 0; i < header->packet_status_count; ++i) {
+		const auto symbol = tempList[i].status;
+		switch (symbol) {
+		case twcc::kSTATUS_NOT_RECEIVED:
+			count_not_received += 1;
+			break;
+		case twcc::kSTATUS_RECEIVED_SMALL_DELTA:
+			count_small_delta += 1;
+			break;
+		case twcc::kSTATUS_RECEIVED_LARGE_DELTA:
+			count_large_delta += 1;
+			break;
+		default:
+			break;
+		}
+	}
+
+	std::printf("TWCC packets base = %u, count = %u, not received = %u, small delta = %u, large delta = %u\n",
+				header->base_seq_number,
+				header->packet_status_count,
+				count_not_received,
+				count_small_delta,
+				count_large_delta);
+#endif
+
 	twcc::PacketStatus* prev_ptr = nullptr;
 
 	if (isReceivedWithTime(tempList[0].status)) {
@@ -329,6 +361,7 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	stats.packets_lost_percent = mPacketHistory->getPacketsLostPercent();
+	stats.rtt_ms = mPacketHistory->getRttMillis();
 }
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const

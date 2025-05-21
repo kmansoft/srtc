@@ -6,6 +6,8 @@
 #include <memory>
 #include <optional>
 
+#include "srtc/filter.h"
+
 namespace srtc
 {
 class RtpPacket;
@@ -102,13 +104,17 @@ public:
 
 	[[nodiscard]] uint32_t getPacketCount() const;
 	[[nodiscard]] float getPacketsLostPercent() const;
+	[[nodiscard]] float getRttMillis() const;
 
 private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
+	Filter<float> mPacketsLostFilter;
+	Filter<float> mRttFilter;
+	int64_t mPacketLostLastUpdated;
 
-	[[nodiscard]] std::optional<uint16_t> findMostRecentReceivedPacket() const;
+	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;
 };
 
 } // namespace srtc::twcc

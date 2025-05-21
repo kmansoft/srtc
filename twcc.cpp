@@ -1,4 +1,5 @@
 #include "srtc/twcc.h"
+#include "srtc/util.h"
 
 #include <algorithm>
 #include <cassert>
@@ -88,6 +89,7 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
+	, mPacketLostLastUpdated(0)
 {
 }
 
@@ -116,12 +118,10 @@ void PacketStatusHistory::save(uint16_t seq, size_t payloadSize, size_t encrypte
 		}
 	}
 
-	struct timespec now = {};
-	clock_gettime(CLOCK_MONOTONIC, &now);
 	curr->seq = seq;
 	curr->payload_size = static_cast<uint16_t>(payloadSize);
 	curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
-	curr->sent_time_micros = now.tv_sec * 1000000 + now.tv_nsec / 1000;
+	curr->sent_time_micros = getSystemTimeMicros();
 
 	if (mMinSeq != mMaxSeq) {
 		const auto prev = mHistory.get() + ((mMaxSeq + 0x10000 - 1) & kMaxPacketMask);
@@ -157,8 +157,15 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 		return;
 	}
 
+	const auto now = getSystemTimeMicros();
 	const auto base = mHistory.get();
-	for (uint16_t seq = max.value();;) {
+
+	if (((mMaxSeq - max->seq) & 0xFFFFu) <= 100) {
+		const auto rtt = static_cast<float>(now - max->sent_time_micros) / 1000.f;
+		mRttFilter.update(rtt);
+	}
+
+	for (uint16_t seq = max->seq;;) {
 		const auto index = seq & kMaxPacketMask;
 		const auto ptr = base + index;
 
@@ -176,6 +183,40 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 		}
 		seq -= 1;
 	}
+
+	// Update stats at most once per second
+	const auto total = getPacketCount();
+	if (now >= mPacketLostLastUpdated + 1000000 && total >= 10) {
+		mPacketLostLastUpdated = now;
+
+		uint32_t lost = 0u;
+		uint32_t nacked = 0u;
+		uint32_t with_time = 0u;
+
+		for (uint16_t seq = mMinSeq;;) {
+			const auto index = seq & kMaxPacketMask;
+			const auto ptr = base + index;
+
+			if (ptr->reported_as_not_received) {
+				lost += 1;
+			}
+			if (ptr->nack_count > 0) {
+				nacked += ptr->nack_count;
+			}
+			if (ptr->reported_time_micros > 0) {
+				with_time += 1;
+			}
+
+			if (seq == mMaxSeq) {
+				break;
+			}
+			seq += 1;
+		}
+
+		const auto value = std::clamp<float>(
+			100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
+		mPacketsLostFilter.update(value);
+	}
 }
 
 uint32_t PacketStatusHistory::getPacketCount() const
@@ -188,47 +229,19 @@ uint32_t PacketStatusHistory::getPacketCount() const
 
 float PacketStatusHistory::getPacketsLostPercent() const
 {
-	const auto total = getPacketCount();
-	if (total == 0) {
-		return 0.0f;
-	}
-
-	uint32_t lost = 0u;
-	uint32_t nacked = 0u;
-	uint32_t with_time = 0u;
-
-	const auto base = mHistory.get();
-	for (uint16_t seq = mMinSeq;;) {
-		const auto index = seq & kMaxPacketMask;
-		const auto ptr = base + index;
-
-		if (ptr->reported_as_not_received > 0) {
-			lost += 1;
-		}
-		if (ptr->nack_count > 0) {
-			nacked += ptr->nack_count;
-		}
-		if (ptr->reported_time_micros > 0) {
-			with_time += 1;
-		}
-
-		if (seq == mMaxSeq) {
-			break;
-		}
-		seq += 1;
-	}
-
-	std::printf("*** RTCP TWCC packet: lost=%u, nacked=%u, with_time=%u, total=%u\n", lost, nacked, with_time, total);
-
-	return std::clamp<float>(
-		100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
+	return mPacketsLostFilter.get();
 }
 
-std::optional<uint16_t> PacketStatusHistory::findMostRecentReceivedPacket() const
+float PacketStatusHistory::getRttMillis() const
 {
-	const PacketStatus* base = mHistory.get();
+	return mRttFilter.get();
+}
+
+PacketStatus* PacketStatusHistory::findMostRecentReceivedPacket() const
+{
+	PacketStatus* base = mHistory.get();
 	if (!base) {
-		return std::nullopt;
+		return nullptr;
 	}
 
 	for (uint16_t seq = mMaxSeq;;) {
@@ -237,7 +250,7 @@ std::optional<uint16_t> PacketStatusHistory::findMostRecentReceivedPacket() cons
 
 		if (ptr->reported_status == twcc::kSTATUS_RECEIVED_SMALL_DELTA ||
 			ptr->reported_status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
-			return seq;
+			return ptr;
 		}
 		if (seq == mMinSeq) {
 			break;
@@ -245,7 +258,7 @@ std::optional<uint16_t> PacketStatusHistory::findMostRecentReceivedPacket() cons
 		seq -= 1;
 	}
 
-	return std::nullopt;
+	return nullptr;
 }
 
 } // namespace srtc::twcc

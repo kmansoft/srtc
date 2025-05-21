@@ -59,6 +59,7 @@ struct PublishConnectionStats {
     size_t packet_count;
     size_t byte_count;
     float packets_lost_percent;
+	float rtt_ms;
 };
 
 } // namespace srtc

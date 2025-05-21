@@ -77,9 +77,8 @@ bool operator==(const anyaddr& addr1, const anyaddr& addr2)
 
 void getNtpTime(NtpTime& ntp)
 {
-	struct timespec current_time = {};
-
 	// Get current time
+	struct timespec current_time = {};
 	clock_gettime(CLOCK_REALTIME, &current_time);
 
 	// Convert Unix time to NTP time
@@ -88,12 +87,21 @@ void getNtpTime(NtpTime& ntp)
 	// Difference is 70 years plus 17 leap days = 2208988800 seconds
 	constexpr uint32_t NTP_UNIX_OFFSET = 2208988800UL;
 
-	// Set seconds field
+	// Set the seconds field
 	ntp.seconds = current_time.tv_sec + NTP_UNIX_OFFSET;
 
 	// Convert nanoseconds to NTP fraction format (2^-32 seconds)
 	// 2^32 / 10^9 = 4.294967296
 	ntp.fraction = static_cast<uint32_t>(static_cast<double>(current_time.tv_nsec) * 4.294967296);
+}
+
+
+int64_t getSystemTimeMicros()
+{
+	// Get current time
+	struct timespec ts = {};
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return static_cast<int64_t>(ts.tv_sec) * 1000000l + ts.tv_nsec / 1000l;
 }
 
 } // namespace srtc

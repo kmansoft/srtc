@@ -445,7 +445,8 @@ int main(int argc, char* argv[])
 
 	peerConnection->setPublishConnectionStatListener([](const PublishConnectionStats& stats) {
 		std::cout << "*** PeerConnection stats: sent " << stats.packet_count << " packets, " << stats.byte_count
-				  << " bytes, " << std::setprecision(3) << stats.packets_lost_percent << "% packet loss" << std::endl;
+				  << " bytes, " << std::setprecision(3) << stats.packets_lost_percent << "% packet loss, "
+				  << stats.rtt_ms << " ms rtt" << std::endl;
 	});
 
 	// Offer
