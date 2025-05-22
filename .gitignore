@@ -6,3 +6,4 @@ CMakePresets.json
 *.mp4
 token.txt
 go.sum
+build
