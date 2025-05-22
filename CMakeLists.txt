@@ -24,7 +24,6 @@ add_library(srtc
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
-        include/srtc/filter.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
         include/srtc/logging.h
@@ -70,7 +69,6 @@ add_library(srtc
         byte_buffer.cpp
         error.cpp
         extension_map.cpp
-        filter.cpp
         h264.cpp
         ice_agent.cpp
         logging.cpp

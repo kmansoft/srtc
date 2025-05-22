@@ -104,4 +104,31 @@ int64_t getSystemTimeMicros()
 	return static_cast<int64_t>(ts.tv_sec) * 1000000l + ts.tv_nsec / 1000l;
 }
 
+template <class T>
+Filter<T>::Filter()
+	: mValue(std::nullopt)
+{
+}
+
+template <class T>
+void Filter<T>::update(T value)
+{
+	if (mValue.has_value()) {
+		mValue = static_cast<T>(mValue.value() * 0.9f + value * 0.1f);
+	} else {
+		mValue = value;
+	}
+}
+
+template <class T>
+T Filter<T>::get() const
+{
+	if (mValue.has_value()) {
+		return mValue.value();
+	}
+	return {};
+}
+
+template class Filter<float>;
+
 } // namespace srtc

@@ -6,7 +6,7 @@
 #include <memory>
 #include <optional>
 
-#include "srtc/filter.h"
+#include "srtc/util.h"
 
 namespace srtc
 {

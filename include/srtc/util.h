@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <optional>
 
 namespace srtc
 {
@@ -65,5 +66,18 @@ T* TempBuffer<T>::ensure(size_t count) {
 }
 
 int64_t getSystemTimeMicros();
+
+template <class T>
+class Filter
+{
+public:
+	Filter();
+
+	void update(T value);
+	T get() const;
+
+private:
+	std::optional<T> mValue;
+};
 
 } // namespace srtc

@@ -51,17 +51,19 @@ ByteBuffer::ByteBuffer(ByteBuffer&& other) noexcept
 
 ByteBuffer& ByteBuffer::operator=(ByteBuffer&& other) noexcept
 {
-    delete[] mBuf;
+	if (this != &other) {
+		delete[] mBuf;
 
-    mBuf = other.mBuf;
-    mLen = other.mLen;
-    mCap = other.mCap;
+		mBuf = other.mBuf;
+		mLen = other.mLen;
+		mCap = other.mCap;
 
-    other.mBuf = nullptr;
-    other.mLen = 0;
-    other.mCap = 0;
+		other.mBuf = nullptr;
+		other.mLen = 0;
+		other.mCap = 0;
+	}
 
-    return *this;
+	return *this;
 }
 
 bool ByteBuffer::empty() const
