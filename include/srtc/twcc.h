@@ -105,10 +105,8 @@ public:
 	void update(const std::shared_ptr<FeedbackHeader>& header);
 
 	[[nodiscard]] uint32_t getPacketCount() const;
-	[[nodiscard]] bool isDataRecentEnough() const;
-	[[nodiscard]] float getPacketsLostPercent() const;
-	[[nodiscard]] float getRttMillis() const;
-	[[nodiscard]] float getBandwidthKbitPerSecond() const;
+
+	void updatePublishConnectionStats(PublishConnectionStats& stats);
 
 private:
 	uint16_t mMinSeq;

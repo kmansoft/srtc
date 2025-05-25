@@ -362,15 +362,7 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 
 void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	if (mPacketHistory->isDataRecentEnough()) {
-		stats.packets_lost_percent = mPacketHistory->getPacketsLostPercent();
-		stats.rtt_ms = mPacketHistory->getRttMillis();
-		stats.bandwidth_kbit_per_second = mPacketHistory->getBandwidthKbitPerSecond();
-	} else {
-		stats.packets_lost_percent = 0;
-		stats.rtt_ms = 0;
-		stats.bandwidth_kbit_per_second = 0;
-	}
+	mPacketHistory->updatePublishConnectionStats(stats);
 }
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const

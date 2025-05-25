@@ -9,9 +9,10 @@
 namespace
 {
 
-constexpr auto kMaxPacketCount = 1024;
+constexpr auto kMaxPacketCount = 2048;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 constexpr auto kBandwidthTimePeriodMicros = 1200000; // 1.2 seconds
+constexpr auto kBandwidthTimeEnoughMicros = 500000; // 0.5 seconds
 constexpr auto kMaxDataRecentEnoughMicros = 3000000;
 
 static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");
@@ -270,7 +271,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 			// Calculate duration
 			const auto durationMicros = temp[0].received_time_micros - temp[size - 1].received_time_micros;
-			if (durationMicros >= kBandwidthTimePeriodMicros) {
+			if (durationMicros >= kBandwidthTimeEnoughMicros) {
 				// Calculate total size
 				int64_t totalSize = 0;
 				for (size_t i = 0; i < size; ++i) {
@@ -293,23 +294,19 @@ uint32_t PacketStatusHistory::getPacketCount() const
 	return (mMaxSeq - mMinSeq + 1 + 0x10000) & 0xFFFF;
 }
 
-bool PacketStatusHistory::isDataRecentEnough() const
+void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
 {
-	return getSystemTimeMicros() - mLastUpdated <= kMaxDataRecentEnoughMicros;
-}
-
-float PacketStatusHistory::getPacketsLostPercent() const
-{
-	return mPacketsLostFilter.get();
-}
-
-float PacketStatusHistory::getRttMillis() const
-{
-	return mRttFilter.get();
-}
-
-float PacketStatusHistory::getBandwidthKbitPerSecond() const {
-	return mBandwidthFilter.get() / 1024.0f;
+	if (getSystemTimeMicros() - mLastUpdated <= kMaxDataRecentEnoughMicros) {
+		stats.packet_count = getPacketCount();
+		stats.packets_lost_percent = mPacketsLostFilter.get();
+        stats.rtt_ms = mRttFilter.get();
+		stats.bandwidth_kbit_per_second = mBandwidthFilter.get() / 1024.0f;
+	} else {
+		stats.packet_count = 0;
+		stats.packets_lost_percent = 0.0f;
+        stats.rtt_ms = 0.0f;
+		stats.bandwidth_kbit_per_second = 0.0f;
+	}
 }
 
 PacketStatus* PacketStatusHistory::findMostRecentReceivedPacket() const
