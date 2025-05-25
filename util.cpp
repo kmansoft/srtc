@@ -95,7 +95,6 @@ void getNtpTime(NtpTime& ntp)
 	ntp.fraction = static_cast<uint32_t>(static_cast<double>(current_time.tv_nsec) * 4.294967296);
 }
 
-
 int64_t getSystemTimeMicros()
 {
 	// Get current time
@@ -105,19 +104,22 @@ int64_t getSystemTimeMicros()
 }
 
 template <class T>
-Filter<T>::Filter()
-	: mValue(std::nullopt)
+Filter<T>::Filter(float factor)
+	: mFactor(factor)
+	, mValue(std::nullopt)
+	, mTimestamp(0)
 {
 }
 
 template <class T>
-void Filter<T>::update(T value)
+void Filter<T>::update(T value, int64_t timestamp)
 {
 	if (mValue.has_value()) {
-		mValue = static_cast<T>(mValue.value() * 0.9f + value * 0.1f);
+		mValue = static_cast<T>(mValue.value() * (1 - mFactor) + value * mFactor);
 	} else {
 		mValue = value;
 	}
+	mTimestamp = timestamp;
 }
 
 template <class T>
@@ -127,6 +129,12 @@ T Filter<T>::get() const
 		return mValue.value();
 	}
 	return {};
+}
+
+template <class T>
+int64_t Filter<T>::getTimestamp() const
+{
+	return mTimestamp;
 }
 
 template class Filter<float>;

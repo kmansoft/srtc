@@ -321,7 +321,11 @@ void PeerCandidate::run()
 				if (packetList.size() <= 1) {
 					mSendPacer->sendNow(packetList.front());
 				} else {
-					mSendPacer->sendPaced(packetList, SendPacer::kDefaultSpreadMillis);
+					auto spread = SendPacer::kDefaultSpreadMillis;
+					if (mExtensionSourceTWCC) {
+						spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, spread);
+					}
+					mSendPacer->sendPaced(packetList, spread);
 				}
 			}
 		}

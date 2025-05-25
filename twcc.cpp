@@ -12,7 +12,7 @@ namespace
 constexpr auto kMaxPacketCount = 2048;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 constexpr auto kBandwidthTimePeriodMicros = 1200000; // 1.2 seconds
-constexpr auto kBandwidthTimeEnoughMicros = 500000; // 0.5 seconds
+constexpr auto kBandwidthTimeEnoughMicros = 500000;	 // 0.5 seconds
 constexpr auto kMaxDataRecentEnoughMicros = 3000000;
 
 static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");
@@ -89,23 +89,10 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 
 // PacketStatusHistory
 
-int PacketStatusHistory::compare_received_packet(const void* p1, const void* p2)
-{
-	const auto t1 = static_cast<const ReceivedPacket*>(p1);
-	const auto t2 = static_cast<const ReceivedPacket*>(p2);
-
-	if (t1->received_time_micros < t2->received_time_micros) {
-		return 1;
-	} else if (t1->received_time_micros > t2->received_time_micros) {
-		return -1;
-	} else {
-		return 0;
-	}
-}
-
 PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
+	, mBandwidthFilter(0.15f)
 	, mLastUpdated(0)
 {
 }
@@ -181,7 +168,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 	// Update the RTT
 	if (((mMaxSeq - max->seq) & 0xFFFFu) <= 100) {
 		const auto rtt = static_cast<float>(now - max->sent_time_micros) / 1000.f;
-		mRttFilter.update(rtt);
+		mRttFilter.update(rtt, now);
 	}
 
 	// Calculate which packets have not been received
@@ -232,7 +219,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 		const auto value = std::clamp<float>(
 			100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
-		mPacketsLostFilter.update(value);
+		mPacketsLostFilter.update(value, now);
 
 		// Calculate base bandwidth
 		mReceivedPacketBuf.clear();
@@ -244,12 +231,9 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 			if (ptr->reported_status == twcc::kSTATUS_RECEIVED_SMALL_DELTA ||
 				ptr->reported_status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
 
-				const auto dest = mReceivedPacketBuf.append();
-				dest->size = ptr->generated_size;
-				dest->received_time_micros = ptr->received_time_micros;
+				mReceivedPacketBuf.emplace_back(ptr->received_time_micros, ptr->generated_size);
 
-				if (const auto oldest = mReceivedPacketBuf.data();
-					oldest->received_time_micros - ptr->received_time_micros >= kBandwidthTimePeriodMicros &&
+				if (max->received_time_micros - ptr->received_time_micros >= kBandwidthTimePeriodMicros &&
 					mReceivedPacketBuf.size() >= 10) {
 					break;
 				}
@@ -263,10 +247,10 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 		if (mReceivedPacketBuf.size() >= 10) {
 			// The buffer should be close to being sorted, but maybe not quite
-			const auto temp = mReceivedPacketBuf.data();
-			const auto size = mReceivedPacketBuf.size();
+			std::sort(mReceivedPacketBuf.begin(), mReceivedPacketBuf.end(), CompareReceivedPacket());
 
-			std::qsort(temp, size, sizeof(ReceivedPacket), compare_received_packet);
+			const auto size = mReceivedPacketBuf.size();
+			const auto temp = mReceivedPacketBuf.data();
 			assert(temp[0].received_time_micros >= temp[size - 1].received_time_micros);
 
 			// Calculate duration
@@ -280,7 +264,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 				const auto bitsPerSecond =
 					(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
-				mBandwidthFilter.update(bitsPerSecond);
+				mBandwidthFilter.update(bitsPerSecond, now);
 			}
 		}
 	}
@@ -294,17 +278,31 @@ uint32_t PacketStatusHistory::getPacketCount() const
 	return (mMaxSeq - mMinSeq + 1 + 0x10000) & 0xFFFF;
 }
 
+unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize, unsigned int defaultValue) const
+{
+	const auto now = getSystemTimeMicros();
+	if (mHistory && now - mBandwidthFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
+		const auto bitsPerSecond = mBandwidthFilter.get();
+		if (bitsPerSecond >= 100000.0f) {
+			const auto bytesPerSecond = bitsPerSecond / 8.0f;
+			const auto spread = static_cast<float>(1000 * totalSize) / bytesPerSecond;
+			const auto safe = std::clamp(spread, 10.0f, 66.6f) * 0.8f;
+			return static_cast<unsigned int>(safe);
+		}
+	}
+
+	return defaultValue;
+}
+
 void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
 {
-	if (getSystemTimeMicros() - mLastUpdated <= kMaxDataRecentEnoughMicros) {
-		stats.packet_count = getPacketCount();
+	if (mHistory && getSystemTimeMicros() - mLastUpdated <= kMaxDataRecentEnoughMicros) {
 		stats.packets_lost_percent = mPacketsLostFilter.get();
-        stats.rtt_ms = mRttFilter.get();
+		stats.rtt_ms = mRttFilter.get();
 		stats.bandwidth_kbit_per_second = mBandwidthFilter.get() / 1024.0f;
 	} else {
-		stats.packet_count = 0;
 		stats.packets_lost_percent = 0.0f;
-        stats.rtt_ms = 0.0f;
+		stats.rtt_ms = 0.0f;
 		stats.bandwidth_kbit_per_second = 0.0f;
 	}
 }

@@ -31,13 +31,16 @@ template <class T>
 class Filter
 {
 public:
-	Filter();
+	Filter(float factor = 0.1f);
 
-	void update(T value);
-	T get() const;
+	void update(T value, int64_t timestamp);
+	[[nodiscard]] T get() const;
+	[[nodiscard]] int64_t getTimestamp() const;
 
 private:
+	const float mFactor;
 	std::optional<T> mValue;
+	int64_t mTimestamp;
 };
 
 } // namespace srtc

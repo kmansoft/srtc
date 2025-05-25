@@ -5,9 +5,10 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <vector>
 
-#include "srtc/util.h"
 #include "srtc/temp_buffer.h"
+#include "srtc/util.h"
 
 namespace srtc
 {
@@ -106,6 +107,7 @@ public:
 
 	[[nodiscard]] uint32_t getPacketCount() const;
 
+	[[nodiscard]] unsigned int getPacingSpreadMillis(size_t totalSize, unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats);
 
 private:
@@ -120,10 +122,22 @@ private:
 	struct ReceivedPacket {
 		uint64_t received_time_micros;
 		uint16_t size;
-	};
-	DynamicTempBuffer<ReceivedPacket> mReceivedPacketBuf;
 
-	static int compare_received_packet(const void* p1, const void* p2);
+		ReceivedPacket(uint64_t received_time_micros, uint16_t size)
+			: received_time_micros(received_time_micros)
+			, size(size)
+		{
+		}
+	};
+
+	struct CompareReceivedPacket {
+		bool operator()(const ReceivedPacket& a, const ReceivedPacket& b) const
+		{
+			return a.received_time_micros > b.received_time_micros;
+		}
+	};
+
+	std::vector<ReceivedPacket> mReceivedPacketBuf;
 
 	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;
 };

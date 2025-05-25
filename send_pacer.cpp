@@ -38,15 +38,24 @@ SendPacer::~SendPacer() = default;
 
 void SendPacer::flush(const std::shared_ptr<Track>& track)
 {
+	size_t flushCount = 0;
+
 	for (auto iter = mQueue.begin(); iter != mQueue.end();) {
 		const auto packet = (*iter)->packet;
 		if (packet->getTrack()->getSSRC() == track->getSSRC()) {
 			iter = mQueue.erase(iter);
 			sendImpl(packet);
+			flushCount += 1;
 		} else {
 			++iter;
 		}
 	}
+
+	(void) flushCount;
+
+//	if (flushCount > 0) {
+//		std::printf("*** Flushed %zu packets\n", flushCount);
+//	}
 }
 
 void SendPacer::sendNow(const std::shared_ptr<RtpPacket>& packet)

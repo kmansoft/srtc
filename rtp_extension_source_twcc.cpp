@@ -360,6 +360,17 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 	return false;
 }
 
+unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+														   unsigned int defaultValue) const
+{
+	size_t totalSize = 0;
+	for (const auto& packet : list) {
+		totalSize += packet->getPayloadSize();
+	}
+
+	return mPacketHistory->getPacingSpreadMillis(totalSize, defaultValue);
+}
+
 void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	mPacketHistory->updatePublishConnectionStats(stats);

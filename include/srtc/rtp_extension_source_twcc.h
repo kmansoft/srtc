@@ -5,6 +5,7 @@
 #include "srtc/util.h"
 
 #include <cstdint>
+#include <list>
 #include <memory>
 
 namespace srtc::twcc
@@ -23,6 +24,7 @@ class Packetizer;
 class RtpExtensionBuilder;
 class SdpOffer;
 class SdpAnswer;
+class RtpPacket;
 class RtpPacket;
 
 class RtpExtensionSourceTWCC : public RtpExtensionSource
@@ -49,6 +51,8 @@ public:
 
 	[[nodiscard]] bool getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const;
 
+	[[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+													 unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
