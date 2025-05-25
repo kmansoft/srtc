@@ -186,10 +186,10 @@ void PeerConnection::setConnectionStateListener(const ConnectionStateListener& l
     mConnectionStateListener = listener;
 }
 
-void PeerConnection::setPublishConnectionStatListener(const PublishConnectionStatListener& listener)
+void PeerConnection::setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener)
 {
     std::lock_guard lock(mListenerMutex);
-    mPublishConnectionStatListener = listener;
+    mPublishConnectionStatsListener = listener;
 }
 
 Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
@@ -623,8 +623,8 @@ void PeerConnection::sendConnectionStats()
     }
 
     std::lock_guard lock(mListenerMutex);
-    if (mPublishConnectionStatListener) {
-        mPublishConnectionStatListener(connectionStats);
+    if (mPublishConnectionStatsListener) {
+        mPublishConnectionStatsListener(connectionStats);
     }
 }
 } // namespace srtc

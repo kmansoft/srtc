@@ -105,7 +105,9 @@ void RtpExtensionSourceTWCC::onBeforeGeneratingRtpPacket(const std::shared_ptr<R
 	}
 }
 
-void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t encryptedSize)
+void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet,
+													  size_t generatedSize,
+													  size_t encryptedSize)
 {
 	uint16_t seq;
 	if (!getFeedbackSeq(packet, seq)) {
@@ -113,7 +115,7 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
 	}
 
 	const auto payloadSize = packet->getPayloadSize();
-	mPacketHistory->save(seq, payloadSize, encryptedSize);
+	mPacketHistory->save(seq, payloadSize, generatedSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
@@ -254,7 +256,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 			const auto delta = reader.readU8();
 			if (ptr) {
 				ptr->reported_status = twcc::kSTATUS_RECEIVED_SMALL_DELTA;
-				ptr->reported_delta_micros = tempList[i].delta_micros = 250 * delta;
+				ptr->received_delta_micros = tempList[i].delta_micros = 250 * delta;
 			}
 		} else if (symbol == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
 			if (reader.remaining() < 2) {
@@ -265,7 +267,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 			const auto delta = static_cast<int16_t>(reader.readU16());
 			if (ptr) {
 				ptr->reported_status = twcc::kSTATUS_RECEIVED_LARGE_DELTA;
-				ptr->reported_delta_micros = tempList[i].delta_micros = 250 * delta;
+				ptr->received_delta_micros = tempList[i].delta_micros = 250 * delta;
 			}
 		}
 	}
@@ -308,7 +310,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 		const auto ptr = mPacketHistory->get(seq);
 		if (ptr) {
 			prev_ptr = ptr;
-			prev_ptr->reported_time_micros = abs_time;
+			prev_ptr->received_time_micros = abs_time;
 		}
 	}
 	for (size_t i = 1; i < header->packet_status_count && prev_ptr; i += 1) {
@@ -319,7 +321,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 		const auto curr_seq = static_cast<uint16_t>(header->base_seq_number + i);
 		const auto curr_ptr = mPacketHistory->get(curr_seq);
 		if (curr_ptr) {
-			curr_ptr->reported_time_micros = prev_ptr->reported_time_micros + tempList[i].delta_micros;
+			curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
 		}
 
 		prev_ptr = curr_ptr;
@@ -360,8 +362,15 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 
 void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	stats.packets_lost_percent = mPacketHistory->getPacketsLostPercent();
-	stats.rtt_ms = mPacketHistory->getRttMillis();
+	if (mPacketHistory->isDataRecentEnough()) {
+		stats.packets_lost_percent = mPacketHistory->getPacketsLostPercent();
+		stats.rtt_ms = mPacketHistory->getRttMillis();
+		stats.bandwidth_kbit_per_second = mPacketHistory->getBandwidthKbitPerSecond();
+	} else {
+		stats.packets_lost_percent = 0;
+		stats.rtt_ms = 0;
+		stats.bandwidth_kbit_per_second = 0;
+	}
 }
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const

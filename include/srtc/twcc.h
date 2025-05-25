@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "srtc/util.h"
+#include "srtc/temp_buffer.h"
 
 namespace srtc
 {
@@ -70,12 +71,13 @@ private:
 
 struct PacketStatus {
 	int64_t sent_time_micros;
-	int64_t reported_time_micros;
+	int64_t received_time_micros;
 
 	int32_t sent_delta_micros;
-	int32_t reported_delta_micros;
+	int32_t received_delta_micros;
 
 	uint16_t payload_size;
+	uint16_t generated_size;
 	uint16_t encrypted_size;
 
 	uint16_t seq;
@@ -95,7 +97,7 @@ public:
 	PacketStatusHistory();
 	~PacketStatusHistory();
 
-	void save(uint16_t seq, size_t payloadSize, size_t encryptedSize);
+	void save(uint16_t seq, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
@@ -103,8 +105,10 @@ public:
 	void update(const std::shared_ptr<FeedbackHeader>& header);
 
 	[[nodiscard]] uint32_t getPacketCount() const;
+	[[nodiscard]] bool isDataRecentEnough() const;
 	[[nodiscard]] float getPacketsLostPercent() const;
 	[[nodiscard]] float getRttMillis() const;
+	[[nodiscard]] float getBandwidthKbitPerSecond() const;
 
 private:
 	uint16_t mMinSeq;
@@ -112,7 +116,16 @@ private:
 	std::unique_ptr<PacketStatus[]> mHistory;
 	Filter<float> mPacketsLostFilter;
 	Filter<float> mRttFilter;
-	int64_t mPacketLostLastUpdated;
+	Filter<float> mBandwidthFilter;
+	int64_t mLastUpdated;
+
+	struct ReceivedPacket {
+		uint64_t received_time_micros;
+		uint16_t size;
+	};
+	DynamicTempBuffer<ReceivedPacket> mReceivedPacketBuf;
+
+	static int compare_received_packet(const void* p1, const void* p2);
 
 	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;
 };

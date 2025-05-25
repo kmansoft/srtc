@@ -136,7 +136,7 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
 
 		// Record in TWCC
 		if (mTWCC) {
-			mTWCC->onBeforeSendingRtpPacket(packet, protectedData.size());
+			mTWCC->onBeforeSendingRtpPacket(packet, packetData.buf.size(), protectedData.size());
 		}
 
 		// Notify the sending callback

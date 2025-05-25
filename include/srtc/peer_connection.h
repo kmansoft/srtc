@@ -60,8 +60,8 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
-    using PublishConnectionStatListener = std::function<void(const PublishConnectionStats&)>;
-    void setPublishConnectionStatListener(const PublishConnectionStatListener& listener);
+    using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
+    void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
 
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
@@ -134,7 +134,7 @@ private:
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
-    PublishConnectionStatListener mPublishConnectionStatListener SRTC_GUARDED_BY(mListenerMutex);
+    PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);

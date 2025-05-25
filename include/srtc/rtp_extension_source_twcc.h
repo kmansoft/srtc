@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/rtp_extension_source.h"
+#include "srtc/temp_buffer.h"
 #include "srtc/util.h"
 
 #include <cstdint>
@@ -41,7 +42,7 @@ public:
 			 int packetNumber) override;
 
 	void onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
-	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t encryptedSize);
+	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t generatedSize, size_t encryptedSize);
 	void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
 
 	void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
@@ -61,7 +62,7 @@ private:
 		int32_t delta_micros;
 		uint8_t status;
 	};
-	TempBuffer<TempPacket> mTempPacketBuffer;
+	FixedTempBuffer<TempPacket> mTempPacketBuffer;
 
 	[[nodiscard]] uint8_t getExtensionId(const std::shared_ptr<Track>& track) const;
 };
