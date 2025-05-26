@@ -34,7 +34,7 @@ public:
 			  const std::function<void()>& onSend);
 	~SendPacer();
 
-	static constexpr auto kDefaultSpreadMillis = 14u;
+	static constexpr auto kDefaultSpreadMillis = 15u;
 
 	void flush(const std::shared_ptr<Track>& track);
 

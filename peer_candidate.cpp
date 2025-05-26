@@ -164,6 +164,21 @@ uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer, const
 	return answer->getVideoExtensionMap().findByName(name);
 }
 
+float calculateLayerBandwidthScale(const std::vector<std::shared_ptr<srtc::SimulcastLayer>>& layerList,
+								   const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
+{
+	if (layerList.empty()) {
+		return 1.0f;
+	}
+
+	uint32_t total = 0;
+	for (const auto& layer : layerList) {
+		total += layer->kilobits_per_second;
+	}
+
+	return static_cast<float>(trackLayer->kilobits_per_second) / static_cast<float>(total);
+}
+
 } // namespace
 
 namespace srtc
@@ -296,14 +311,18 @@ void PeerCandidate::run()
 			// Codec Specific Data
 			item.packetizer->setCodecSpecificData(item.csd);
 		} else if (!item.buf.empty()) {
+			// Simulcast layers
+			std::vector<std::shared_ptr<SimulcastLayer>> layerList;
+			if (item.track->isSimulcast()) {
+				for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
+					layerList.push_back(trackItem->getSimulcastLayer());
+				}
+			}
+
 			// Frame data
 			if (mExtensionSourceSimulcast) {
 				if (item.track->isSimulcast() &&
 					mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
-					std::vector<std::shared_ptr<SimulcastLayer>> layerList;
-					for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
-						layerList.push_back(trackItem->getSimulcastLayer());
-					}
 					mExtensionSourceSimulcast->prepare(item.track, layerList);
 				} else {
 					mExtensionSourceSimulcast->clear();
@@ -314,16 +333,22 @@ void PeerCandidate::run()
 			const auto packetList = item.packetizer->generate(
 				mExtensionSourceSimulcast, mExtensionSourceTWCC, mSrtp->getMediaProtectionOverhead(), item.buf);
 
-			// Flush
+			// Flush any packets from the same track which we haven't sent yet
 			mSendPacer->flush(item.track);
 
+			// Use the pacer to send
 			if (!packetList.empty()) {
 				if (packetList.size() <= 1) {
 					mSendPacer->sendNow(packetList.front());
 				} else {
 					auto spread = SendPacer::kDefaultSpreadMillis;
 					if (mExtensionSourceTWCC) {
-						spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, spread);
+						auto bandwidthScale = 1.0f;
+						if (item.track->isSimulcast()) {
+							// Each layer gets a portion of the total bandwidth
+							bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
+						}
+						spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
 					}
 					mSendPacer->sendPaced(packetList, spread);
 				}

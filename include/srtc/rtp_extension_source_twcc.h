@@ -52,6 +52,7 @@ public:
 	[[nodiscard]] bool getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const;
 
 	[[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+													 float bandwidthScale,
 													 unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 

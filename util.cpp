@@ -123,7 +123,7 @@ void Filter<T>::update(T value, int64_t timestamp)
 }
 
 template <class T>
-T Filter<T>::get() const
+T Filter<T>::value() const
 {
 	if (mValue.has_value()) {
 		return mValue.value();

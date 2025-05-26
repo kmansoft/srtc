@@ -31,10 +31,10 @@ template <class T>
 class Filter
 {
 public:
-	Filter(float factor = 0.1f);
+	explicit Filter(float factor);
 
 	void update(T value, int64_t timestamp);
-	[[nodiscard]] T get() const;
+	[[nodiscard]] T value() const;
 	[[nodiscard]] int64_t getTimestamp() const;
 
 private:

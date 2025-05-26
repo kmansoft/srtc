@@ -107,7 +107,9 @@ public:
 
 	[[nodiscard]] uint32_t getPacketCount() const;
 
-	[[nodiscard]] unsigned int getPacingSpreadMillis(size_t totalSize, unsigned int defaultValue) const;
+	[[nodiscard]] unsigned int getPacingSpreadMillis(size_t totalSize,
+													 float bandwidthScale,
+													 unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats);
 
 private:

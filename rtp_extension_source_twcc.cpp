@@ -361,6 +361,7 @@ bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& pa
 }
 
 unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+														   float bandwidthScale,
 														   unsigned int defaultValue) const
 {
 	size_t totalSize = 0;
@@ -368,7 +369,7 @@ unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::list<std::
 		totalSize += packet->getPayloadSize();
 	}
 
-	return mPacketHistory->getPacingSpreadMillis(totalSize, defaultValue);
+	return mPacketHistory->getPacingSpreadMillis(totalSize, bandwidthScale, defaultValue);
 }
 
 void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats& stats) const

@@ -92,7 +92,9 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
-	, mBandwidthFilter(0.15f)
+	, mPacketsLostFilter(0.2f)
+	, mRttFilter(0.2f)
+	, mBandwidthFilter(0.2f)
 	, mLastUpdated(0)
 {
 }
@@ -278,15 +280,19 @@ uint32_t PacketStatusHistory::getPacketCount() const
 	return (mMaxSeq - mMinSeq + 1 + 0x10000) & 0xFFFF;
 }
 
-unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize, unsigned int defaultValue) const
+unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
+														float bandwidthScale,
+														unsigned int defaultValue) const
 {
 	const auto now = getSystemTimeMicros();
 	if (mHistory && now - mBandwidthFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
-		const auto bitsPerSecond = mBandwidthFilter.get();
+		const auto bitsPerSecond = mBandwidthFilter.value();
 		if (bitsPerSecond >= 100000.0f) {
-			const auto bytesPerSecond = bitsPerSecond / 8.0f;
+			const auto bytesPerSecond = bitsPerSecond * bandwidthScale / 8.0f;
 			const auto spread = static_cast<float>(1000 * totalSize) / bytesPerSecond;
-			const auto safe = std::clamp(spread, 10.0f, 66.6f) * 0.8f;
+
+			// The clamping assumes video fps between 15 and 60
+			const auto safe = std::clamp(spread, 16.0f, 66.6f) * 0.8f;
 			return static_cast<unsigned int>(safe);
 		}
 	}
@@ -296,13 +302,18 @@ unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize, unsign
 
 void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
 {
-	if (mHistory && getSystemTimeMicros() - mLastUpdated <= kMaxDataRecentEnoughMicros) {
-		stats.packets_lost_percent = mPacketsLostFilter.get();
-		stats.rtt_ms = mRttFilter.get();
-		stats.bandwidth_kbit_per_second = mBandwidthFilter.get() / 1024.0f;
+	const auto now = getSystemTimeMicros();
+	if (mHistory && now - mLastUpdated <= kMaxDataRecentEnoughMicros) {
+		stats.packets_lost_percent = mPacketsLostFilter.value();
+		stats.rtt_ms = mRttFilter.value();
 	} else {
 		stats.packets_lost_percent = 0.0f;
 		stats.rtt_ms = 0.0f;
+	}
+
+	if (mHistory && now - mBandwidthFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
+		stats.bandwidth_kbit_per_second = mBandwidthFilter.value() / 1024.0f;
+	} else {
 		stats.bandwidth_kbit_per_second = 0.0f;
 	}
 }
