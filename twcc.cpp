@@ -49,7 +49,6 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 	// https://github.com/pion/webrtc/issues/3122
 	for (auto iter = mHistory.begin(); iter != mHistory.end();) {
 		if ((*iter)->fb_pkt_count_expanded == header->fb_pkt_count_expanded) {
-			std::printf("RTCP TWCC packet: removing duplicate fb_pkt_expanded=%u\n", header->fb_pkt_count_expanded);
 			iter = mHistory.erase(iter);
 		} else {
 			++iter;

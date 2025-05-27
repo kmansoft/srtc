@@ -152,8 +152,8 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	const auto header =
 		std::make_shared<twcc::FeedbackHeader>(base_seq_number,
 											   packet_status_count,
-											   static_cast<int32_t>(reference_time_and_fb_pkt_count) >> 8,
-											   static_cast<uint8_t>(reference_time_and_fb_pkt_count) & 0xFF);
+											   static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8),
+											   static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFFu));
 
 	const auto tempList = mTempPacketBuffer.ensure(header->packet_status_count);
 	std::memset(tempList, 0, sizeof(TempPacket) * header->packet_status_count);

@@ -42,7 +42,7 @@ struct FeedbackHeader {
 		: base_seq_number(base_seq_number)
 		, packet_status_count(packet_status_count)
 		, fb_pkt_count(fb_pkt_count)
-		, reference_time_micros(64 * 1000 * reference_time)
+		, reference_time_micros(64 * 1000 * static_cast<int64_t>(reference_time))
 		, fb_pkt_count_expanded(fb_pkt_count)
 	{
 	}
