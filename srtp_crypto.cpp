@@ -222,6 +222,7 @@ bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCo
 fail:
     if (final_ret > 0) {
         assert(total_len + headerSize + digestSize == encryptedSize);
+        (void) total_len;
         encrypted.resize(encryptedSize);
         return true;
     }
@@ -328,6 +329,7 @@ bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet, uint32_t rolloverCou
 fail:
     if (final_ret > 0) {
         assert(total_len + headerSize + digestSize == encryptedSize);
+        (void) total_len;
         encrypted.resize(encryptedSize);
         return true;
     }
@@ -437,6 +439,7 @@ bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet, uint32_t seq, Byte
 fail:
     if (final_ret > 0) {
         assert(total_len + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
+        (void) total_len;
         encrypted.resize(encryptedSize);
         return true;
     }
@@ -523,6 +526,7 @@ bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet, uint32_t seq, ByteB
 fail:
     if (final_ret > 0) {
         assert(total_len + headerSize + trailerSize + digestSize == encryptedSize);
+        (void) total_len;
         encrypted.resize(encryptedSize);
         return true;
     }
