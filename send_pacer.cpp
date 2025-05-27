@@ -80,8 +80,8 @@ void SendPacer::sendPaced(const std::list<std::shared_ptr<RtpPacket>>& packetLis
 		return;
 	}
 
-	// Delta = desired spread / (number of packets - 1)
-	const auto delta = std::chrono::microseconds (1000 * spreadMillis / (size - 1));
+	// Delta = desired spread / number of packets
+	const auto delta = std::chrono::microseconds (1000 * spreadMillis / size);
 	const auto now = std::chrono::steady_clock::now();
 
 	unsigned int i = 0;

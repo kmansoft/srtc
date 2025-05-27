@@ -480,16 +480,14 @@ std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksLocked() const
 {
 	std::vector<std::shared_ptr<Track>> list;
 
-	if (mConnectionState == ConnectionState::Connected) {
-		if (const auto track = mVideoSingleTrack) {
-			list.push_back(track);
-		}
-		for (const auto& item : mVideoSimulcastTrackList) {
-			list.push_back(item);
-		}
-		if (const auto track = mAudioTrack) {
-			list.push_back(track);
-		}
+	if (const auto track = mVideoSingleTrack) {
+		list.push_back(track);
+	}
+	for (const auto& item : mVideoSimulcastTrackList) {
+		list.push_back(item);
+	}
+	if (const auto track = mAudioTrack) {
+		list.push_back(track);
 	}
 
 	return list;

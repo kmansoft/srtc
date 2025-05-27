@@ -20,8 +20,8 @@ public:
     void incrementSentBytes(uint32_t increment);
 
 private:
-    std::atomic<uint32_t> mSentPackets;
-    std::atomic<uint32_t> mSentBytes;
+    uint32_t mSentPackets;
+    uint32_t mSentBytes;
 };
 
 } // namespace srtc
