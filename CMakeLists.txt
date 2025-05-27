@@ -27,7 +27,6 @@ add_library(srtc
         include/srtc/h264.h
         include/srtc/ice_agent.h
         include/srtc/logging.h
-        include/srtc/optional.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_opus.h
@@ -51,6 +50,7 @@ add_library(srtc
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
         include/srtc/send_history.h
+        include/srtc/send_pacer.h
         include/srtc/simulcast_layer.h
         include/srtc/socket.h
         include/srtc/srtc.h
@@ -95,6 +95,7 @@ add_library(srtc
         sdp_offer.cpp
         scheduler.cpp
         send_history.cpp
+        send_pacer.cpp
         simulcast_layer.cpp
         socket.cpp
         srtc.cpp
@@ -129,7 +130,10 @@ target_include_directories(srtc PUBLIC "./include")
 
 target_compile_options(srtc
         PRIVATE
-        "-ffunction-sections")
+        "-ffunction-sections"
+        "-Wall"
+        "-Werror"
+)
 
 target_link_libraries(
         srtc

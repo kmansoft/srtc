@@ -21,7 +21,7 @@ int createSocket(const srtc::anyaddr& addr)
     return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
-constexpr auto kReceiveBufferSize = 2048;
+constexpr auto kReceiveBufferSize = 16 * 1024;
 
 } // namespace
 

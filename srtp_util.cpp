@@ -164,7 +164,7 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
         goto fail;
     }
 
-    for (auto blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+    for (auto blockIndex = 0u; blockIndex < blockCount; blockIndex += 1) {
         input[14] = (blockIndex >> 16) & 0xff;
         input[15] = blockIndex & 0xff;
 

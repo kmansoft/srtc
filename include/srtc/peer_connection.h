@@ -2,7 +2,6 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
-#include "srtc/optional.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
 #include "srtc/scheduler.h"
@@ -35,8 +34,8 @@ public:
     ~PeerConnection();
 
     std::shared_ptr<SdpOffer> createPublishSdpOffer(const OfferConfig& config,
-                                                    const srtc::optional<PubVideoConfig>& videoConfig,
-                                                    const srtc::optional<PubAudioConfig>& audioConfig);
+                                                    const std::optional<PubVideoConfig>& videoConfig,
+                                                    const std::optional<PubAudioConfig>& audioConfig);
     Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
 
     std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
@@ -60,6 +59,9 @@ public:
     };
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
+
+    using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
+    void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
 
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
@@ -132,6 +134,7 @@ private:
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
+    PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
@@ -140,6 +143,10 @@ private:
     // Sender reports
     void sendSenderReports();
     std::weak_ptr<Task> mTaskSenderReports;
+
+    // Connection stats
+    void sendConnectionStats();
+    std::weak_ptr<Task> mTaskConnectionStats;
 
     // These are only used on the worker thread so don't need mutexes
     std::shared_ptr<LoopScheduler> mLoopScheduler;

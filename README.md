@@ -6,13 +6,14 @@ Features:
 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++
-- Conservative means it uses C++ 17, can be made C++ 14 with little effort; does not use exceptions or RTTI.
+- Conservative means it's C++ 17, and does not use exceptions or RTTI.
 - Only one worker thread per PeerConnection.
 - Supports H264 (any profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
 - Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension.
 - SDP offer generation and SDP response parsing.
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
+- Pacing and basic bandwidth estimation using the TWCC extension (ongoing work).
 - Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
 - Command line demo has been tested with Pion and Amazon IVS.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
@@ -154,4 +155,3 @@ This library is my side project.
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
 supports those.
-

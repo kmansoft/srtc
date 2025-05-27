@@ -187,12 +187,16 @@ void ThreadScheduler::threadFunc(const std::string name)
                 });
             }
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
             if (mIsQuit) {
                 break;
             }
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 
             if (!mTaskQueue.empty()) {
                 if (mTaskQueue.front()->mWhen <= std::chrono::steady_clock::now()) {

@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "srtc/error.h"
-#include "srtc/optional.h"
 #include "srtc/publish_config.h"
 #include "srtc/random_generator.h"
 #include "srtc/simulcast_layer.h"
@@ -33,17 +32,17 @@ private:
     friend PeerConnection;
 
     SdpOffer(const OfferConfig& config,
-             const srtc::optional<PubVideoConfig>& videoConfig,
-             const srtc::optional<PubAudioConfig>& audioConfig);
+             const std::optional<PubVideoConfig>& videoConfig,
+             const std::optional<PubAudioConfig>& audioConfig);
 
 public:
     ~SdpOffer() = default;
 
-    const OfferConfig& getConfig() const;
+    [[nodiscard]] const OfferConfig& getConfig() const;
 
     [[nodiscard]] std::pair<std::string, Error> generate();
 
-    [[nodiscard]] srtc::optional<std::vector<SimulcastLayer>> getVideoSimulcastLayerList() const;
+    [[nodiscard]] std::optional<std::vector<SimulcastLayer>> getVideoSimulcastLayerList() const;
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
@@ -62,8 +61,8 @@ private:
     RandomGenerator<uint32_t> mRandomGenerator;
 
     const OfferConfig mConfig;
-    const srtc::optional<PubVideoConfig> mVideoConfig;
-    const srtc::optional<PubAudioConfig> mAudioConfig;
+    const std::optional<PubVideoConfig> mVideoConfig;
+    const std::optional<PubAudioConfig> mAudioConfig;
 
     const uint64_t mOriginId;
 
