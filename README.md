@@ -150,7 +150,7 @@ This library is my side project.
 
 - I'd lke to implement support for Simulcast (multiple video layers on the same peer connection). This is done.
 
-- Google's Transport Wide Congestion Control.
+- Google's Transport Wide Congestion Control. This is partially done and will continue to improve.
 
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
