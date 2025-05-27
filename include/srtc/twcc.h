@@ -118,7 +118,8 @@ private:
 	std::unique_ptr<PacketStatus[]> mHistory;
 	Filter<float> mPacketsLostFilter;
 	Filter<float> mRttFilter;
-	Filter<float> mBandwidthFilter;
+	Filter<float> mBandwidthActualFilter;
+	Filter<float> mBandwidthSuggestedFilter;
 	int64_t mLastUpdated;
 
 	struct ReceivedPacket {

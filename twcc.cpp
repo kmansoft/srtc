@@ -94,7 +94,8 @@ PacketStatusHistory::PacketStatusHistory()
 	, mMaxSeq(0)
 	, mPacketsLostFilter(0.2f)
 	, mRttFilter(0.2f)
-	, mBandwidthFilter(0.2f)
+	, mBandwidthActualFilter(0.2f)
+	, mBandwidthSuggestedFilter(0.2f)
 	, mLastUpdated(0)
 {
 }
@@ -251,6 +252,8 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 			// The buffer should be close to being sorted, but maybe not quite
 			std::sort(mReceivedPacketBuf.begin(), mReceivedPacketBuf.end(), CompareReceivedPacket());
 
+			// TODO We don't really need to store received packets or sort them, it's enough to keep track of min/max times
+			// but let's keep this code for now in case it's needed for more advanced banwidth estimation
 			const auto size = mReceivedPacketBuf.size();
 			const auto temp = mReceivedPacketBuf.data();
 			assert(temp[0].received_time_micros >= temp[size - 1].received_time_micros);
@@ -264,9 +267,16 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 					totalSize += temp[i].size;
 				}
 
-				const auto bitsPerSecond =
+				const auto actualBitsPerSecond =
 					(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
-				mBandwidthFilter.update(bitsPerSecond, now);
+				mBandwidthActualFilter.update(actualBitsPerSecond, now);
+
+				auto suggestedBitsPerSecond = actualBitsPerSecond;
+				if (mPacketsLostFilter.value() >= 0.1f) {
+					// Experi
+					suggestedBitsPerSecond *= 0.9f;
+				}
+				mBandwidthSuggestedFilter.update(suggestedBitsPerSecond, now);
 			}
 		}
 	}
@@ -285,8 +295,8 @@ unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
 														unsigned int defaultValue) const
 {
 	const auto now = getSystemTimeMicros();
-	if (mHistory && now - mBandwidthFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
-		const auto bitsPerSecond = mBandwidthFilter.value();
+	if (mHistory && now - mBandwidthActualFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
+		const auto bitsPerSecond = mBandwidthActualFilter.value();
 		if (bitsPerSecond >= 100000.0f) {
 			const auto bytesPerSecond = bitsPerSecond * bandwidthScale / 8.0f;
 			const auto spread = static_cast<float>(1000 * totalSize) / bytesPerSecond;
@@ -311,10 +321,16 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 		stats.rtt_ms = 0.0f;
 	}
 
-	if (mHistory && now - mBandwidthFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
-		stats.bandwidth_kbit_per_second = mBandwidthFilter.value() / 1024.0f;
+	// Actual bandwidth
+	if (mHistory && now - mBandwidthActualFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
+		stats.bandwidth_actual_kbit_per_second = mBandwidthActualFilter.value() / 1024.0f;
 	} else {
-		stats.bandwidth_kbit_per_second = 0.0f;
+		stats.bandwidth_actual_kbit_per_second = 0.0f;
+	}
+
+	// Suggested bandwidth
+	if (mHistory && now - mBandwidthSuggestedFilter.getTimestamp() <= kMaxDataRecentEnoughMicros) {
+		stats.bandwidth_suggested_kbit_per_second = mBandwidthSuggestedFilter.value() / 1024.0f;
 	}
 }
 
