@@ -116,8 +116,8 @@ private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
-	Filter<float> mPacketsLostFilter;
-	Filter<float> mRttFilter;
+	Filter<float> mPacketsLostPercentFilter;
+	Filter<float> mRttMillisFilter;
 	Filter<float> mBandwidthActualFilter;
 	Filter<float> mBandwidthSuggestedFilter;
 	int64_t mLastUpdated;

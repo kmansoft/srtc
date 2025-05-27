@@ -1,10 +1,8 @@
 #include "srtc/twcc.h"
-#include "srtc/util.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <iostream>
 
 namespace
 {
@@ -91,8 +89,8 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
-	, mPacketsLostFilter(0.2f)
-	, mRttFilter(0.2f)
+	, mPacketsLostPercentFilter(0.2f)
+	, mRttMillisFilter(0.2f)
 	, mBandwidthActualFilter(0.2f)
 	, mBandwidthSuggestedFilter(0.2f)
 	, mLastUpdated(0)
@@ -169,8 +167,8 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 	// Update the RTT
 	if (((mMaxSeq - max->seq) & 0xFFFFu) <= 100) {
-		const auto rtt = static_cast<float>(now - max->sent_time_micros) / 1000.f;
-		mRttFilter.update(rtt, now);
+		const auto rttMillis = static_cast<float>(now - max->sent_time_micros) / 1000.f;
+		mRttMillisFilter.update(rttMillis, now);
 	}
 
 	// Calculate which packets have not been received
@@ -221,7 +219,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 
 		const auto value = std::clamp<float>(
 			100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
-		mPacketsLostFilter.update(value, now);
+		mPacketsLostPercentFilter.update(value, now);
 
 		// Calculate base bandwidth
 		mReceivedPacketBuf.clear();
@@ -261,7 +259,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 			const auto durationMicros = temp[0].received_time_micros - temp[size - 1].received_time_micros;
 			if (durationMicros >= kBandwidthTimeEnoughMicros) {
 				// Calculate total size
-				int64_t totalSize = 0;
+				size_t totalSize = 0;
 				for (size_t i = 0; i < size; ++i) {
 					totalSize += temp[i].size;
 				}
@@ -271,8 +269,8 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 				mBandwidthActualFilter.update(actualBitsPerSecond, now);
 
 				auto suggestedBitsPerSecond = actualBitsPerSecond;
-				if (mPacketsLostFilter.value() >= 0.1f) {
-					// Experi
+				if (mPacketsLostPercentFilter.value() >= 10.0f) {
+					// Experiencing high packet loss
 					suggestedBitsPerSecond *= 0.9f;
 				}
 				mBandwidthSuggestedFilter.update(suggestedBitsPerSecond, now);
@@ -313,8 +311,8 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 {
 	const auto now = getSystemTimeMicros();
 	if (mHistory && now - mLastUpdated <= kMaxDataRecentEnoughMicros) {
-		stats.packets_lost_percent = mPacketsLostFilter.value();
-		stats.rtt_ms = mRttFilter.value();
+		stats.packets_lost_percent = mPacketsLostPercentFilter.value();
+		stats.rtt_ms = mRttMillisFilter.value();
 	} else {
 		stats.packets_lost_percent = 0.0f;
 		stats.rtt_ms = 0.0f;
