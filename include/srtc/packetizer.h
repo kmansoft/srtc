@@ -1,7 +1,6 @@
 #pragma once
 
 #include "srtc/error.h"
-#include "srtc/optional.h"
 #include "srtc/random_generator.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/srtc.h"

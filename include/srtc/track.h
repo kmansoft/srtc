@@ -1,6 +1,5 @@
 #pragma once
 
-#include "srtc/optional.h"
 #include "srtc/simulcast_layer.h"
 #include "srtc/srtc.h"
 
@@ -20,7 +19,7 @@ class Track
 {
 public:
     struct SimulcastLayer : public srtc::SimulcastLayer {
-        uint16_t index; // [0..3]
+        uint16_t index = { 0 }; // [0..3]
     };
 
     struct CodecOptions {

@@ -48,8 +48,8 @@ ReplayProtection::ReplayProtection(uint32_t maxPossibleValue, uint32_t size)
     , mSize(size)
     , mStorageSize((size + 8 - 1) / 8)
     , mMaxDistanceForward(size / 4)
-    , mStorage(nullptr)
     , mCurMax(0) // not used until we allocate mStorage
+	, mStorage(nullptr)
 {
     assert(maxPossibleValue == std::numeric_limits<uint16_t>::max() ||
            maxPossibleValue == std::numeric_limits<uint32_t>::max());

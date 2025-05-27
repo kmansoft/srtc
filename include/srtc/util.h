@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <optional>
 
 namespace srtc
 {
@@ -23,5 +24,23 @@ struct NtpTime {
 };
 
 void getNtpTime(NtpTime& ntp);
+
+int64_t getSystemTimeMicros();
+
+template <class T>
+class Filter
+{
+public:
+	explicit Filter(float factor);
+
+	void update(T value, int64_t timestamp);
+	[[nodiscard]] T value() const;
+	[[nodiscard]] int64_t getTimestamp() const;
+
+private:
+	const float mFactor;
+	std::optional<T> mValue;
+	int64_t mTimestamp;
+};
 
 } // namespace srtc

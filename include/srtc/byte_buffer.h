@@ -80,6 +80,7 @@ public:
     ByteReader(const ByteBuffer& buf, size_t size);
     ByteReader(const uint8_t* buf, size_t size);
 
+    [[nodiscard]] size_t size() const;
     [[nodiscard]] size_t current() const;
     [[nodiscard]] size_t remaining() const;
 

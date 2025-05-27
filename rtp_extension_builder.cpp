@@ -1,6 +1,8 @@
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/util.h"
 
 #include <algorithm>
+#include <cassert>
 
 namespace srtc
 {
@@ -46,10 +48,12 @@ void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
         const auto extensionLen = reader.readU8();
 
         if (extensionId == id) {
+			assert(extensionLen == 2);
+
             const auto offset = reader.current();
             const auto data = mBuf.data();
 
-            data[offset + 0] = (value >> 16) & 0xFF;
+            data[offset + 0] = (value >> 8) & 0xFF;
             data[offset + 1] = (value & 0xFF);
 
             return;

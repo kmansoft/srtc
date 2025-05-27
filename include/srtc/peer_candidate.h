@@ -33,6 +33,9 @@ class RtcpPacket;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
+class SendPacer;
+
+struct PublishConnectionStats;
 
 class PeerCandidate final
 {
@@ -55,9 +58,13 @@ public:
         std::vector<ByteBuffer> csd; // possibly empty
     };
     void addSendFrame(FrameToSend&& frame);
-    void process();
+
+	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
+    void run();
 
     void sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
+
+    void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
     void startConnecting();
@@ -90,6 +97,7 @@ private:
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 
     std::shared_ptr<SrtpConnection> mSrtp;
+	std::shared_ptr<SendPacer> mSendPacer;
 
     std::list<ByteBuffer> mDtlsReceiveQueue;
 
@@ -98,12 +106,7 @@ private:
     std::list<ByteBuffer> mRawSendQueue;
     std::list<FrameToSend> mFrameSendQueue;
 
-    bool mSentUseCandidate = {false};
-
-#ifdef NDEBUG
-#else
-    RandomGenerator<uint32_t> mNoSendRandomGenerator;
-#endif
+    bool mSentUseCandidate = { false };
 
     // DTLS
     enum class DtlsState {
@@ -116,7 +119,7 @@ private:
     ssl_ctx_st* mDtlsCtx = {};
     ssl_st* mDtlsSsl = {};
     bio_st* mDtlsBio = {};
-    DtlsState mDtlsState = {DtlsState::Inactive};
+    DtlsState mDtlsState = { DtlsState::Inactive };
 
     // OpenSSL BIO
     static int dgram_read(struct bio_st* b, char* out, int outl);

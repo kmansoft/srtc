@@ -9,6 +9,7 @@
 #include "srtc/srtp_connection.h"
 #include "srtc/logging.h"
 #include "srtc/srtp_crypto.h"
+#include "srtc/util.h"
 
 #include <mutex>
 
@@ -19,6 +20,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
 
@@ -131,11 +133,6 @@ bool SrtpConnection::protectOutgoingMedia(const ByteBuffer& packetData, uint32_t
         return false;
     }
 
-    const ChannelKey key = { ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8)),
-                             static_cast<uint8_t>(packetData.data()[1] & 0x7F) };
-
-    const auto& channelValue = ensureSrtpChannel(mSrtpOutMap, key, 0);
-
     return mCrypto->protectSendRtp(packetData, rollover, output);
 }
 
@@ -163,12 +160,34 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
         return false;
     }
 
-    if (mCrypto->unprotectReceiveRtcp(packetData, output)) {
-        channelValue.replayProtection->set(sequenceNumber);
-        return true;
+    if (!mCrypto->unprotectReceiveRtcp(packetData, output)) {
+        return false;
     }
 
-    return false;
+    const auto outputData = output.data();
+    const auto outputSize = output.size();
+    if (outputSize < 4 + 4) {
+        // 4 byte header
+        // 4 byte SSRC
+        LOG(SRTC_LOG_E, "Incoming RTCP packet is too small after unprotecting");
+        return false;
+    }
+
+    const auto padding = (outputData[0] & 0x20) != 0;
+    if (padding) {
+        const auto lastByte = outputData[outputSize - 1];
+        if (lastByte + 4u + 4u > outputSize) {
+            LOG(SRTC_LOG_E,
+                "Incoming RTCP packet padding is too large: lastByte = %u, size = %zu",
+                lastByte,
+                outputSize);
+            return false;
+        }
+        output.resize(outputSize - lastByte);
+    }
+
+    channelValue.replayProtection->set(sequenceNumber);
+    return true;
 }
 
 SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, uint16_t profileId)

@@ -29,6 +29,15 @@ struct Host {
     union anyaddr addr;
 };
 
+struct PublishConnectionStats {
+	size_t packet_count;
+	size_t byte_count;
+	float packets_lost_percent;
+	float rtt_ms;
+	float bandwidth_actual_kbit_per_second;
+	float bandwidth_suggested_kbit_per_second;
+};
+
 std::string to_string(const anyaddr& addr);
 
 #if defined __has_attribute && __has_attribute(guarded_by)

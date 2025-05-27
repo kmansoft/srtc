@@ -78,8 +78,6 @@ void RtpExtensionSourceSimulcast::add(RtpExtensionBuilder& builder,
                                       bool isKeyFrame,
                                       int packetNumber)
 {
-    // LOG(SRTC_LOG_V, "Adding extensions for layer %s", mCurLayerName.c_str());
-
     builder.addStringValue(mVideoExtMediaId, mCurMediaId);
     builder.addStringValue(mVideoExtStreamId, mCurLayerName);
     builder.addBinaryValue(mVideoExtGoogleVLA, mCurGoogleVLA);
@@ -95,7 +93,9 @@ void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, con
         }
     }
     if (const auto id = mVideoExtRepairedStreamId; id != 0) {
-        builder.addStringValue(id, layer->name);
+		if (!builder.contains(id)) {
+			builder.addStringValue(id, layer->name);
+		}
     }
 }
 

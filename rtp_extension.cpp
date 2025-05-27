@@ -25,10 +25,12 @@ RtpExtension::RtpExtension(RtpExtension&& source) noexcept
 
 RtpExtension& RtpExtension::operator=(RtpExtension&& source) noexcept
 {
-    mId = source.mId;
-    mData = std::move(source.mData);
+	if (this != &source) {
+		mId = source.mId;
+		mData = std::move(source.mData);
 
-    source.mId = 0;
+		source.mId = 0;
+	}
 
     return *this;
 }
