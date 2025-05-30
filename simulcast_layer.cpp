@@ -5,6 +5,8 @@ namespace srtc
 
 void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::shared_ptr<SimulcastLayer>>& list)
 {
+    buf.clear();
+
     ByteWriter w(buf);
 
     // https://webrtc.googlesource.com/src/+/refs/heads/main/docs/native-code/rtp-hdrext/video-layers-allocation00

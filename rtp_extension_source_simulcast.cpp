@@ -58,8 +58,7 @@ void RtpExtensionSourceSimulcast::prepare(const std::shared_ptr<Track>& track,
 
     mCurMediaId = track->getMediaId();
     mCurLayerName = layer->name;
-    
-    mCurGoogleVLA.clear();
+
     buildGoogleVLA(mCurGoogleVLA, layer->index, layerList);
 }
 
