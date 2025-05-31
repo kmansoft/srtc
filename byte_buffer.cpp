@@ -73,10 +73,15 @@ bool ByteBuffer::empty() const
 
 void ByteBuffer::clear()
 {
-    delete[] mBuf;
-    mBuf = nullptr;
     mLen = 0;
-    mCap = 0;
+}
+
+void ByteBuffer::free()
+{
+	delete[] mBuf;
+	mBuf = nullptr;
+	mLen = 0;
+	mCap = 0;
 }
 
 void ByteBuffer::assign(const uint8_t* src, size_t size)

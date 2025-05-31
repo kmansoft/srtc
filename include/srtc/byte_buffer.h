@@ -26,6 +26,7 @@ public:
     [[nodiscard]] bool empty() const;
 
     void clear();
+	void free();
     void assign(const uint8_t* src, size_t size);
     void resize(size_t size);
     void reserve(size_t size);

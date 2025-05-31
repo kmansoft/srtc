@@ -96,7 +96,7 @@ private:
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 
-    std::shared_ptr<SrtpConnection> mSrtp;
+    std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;
 
     std::list<ByteBuffer> mDtlsReceiveQueue;
@@ -107,6 +107,8 @@ private:
     std::list<FrameToSend> mFrameSendQueue;
 
     bool mSentUseCandidate = { false };
+
+	ByteBuffer mProtectedBuf;
 
     // DTLS
     enum class DtlsState {
@@ -139,7 +141,6 @@ private:
     void emitOnIceConnected();
     void emitOnDtlsConnected();
     void emitOnFailedToConnect(const Error& error);
-    void emitOnLostConnection(const Error& error);
 
     // Sending STUN requests and responses
     void sendStunBindingRequest(unsigned int iteration);

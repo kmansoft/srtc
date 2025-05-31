@@ -542,16 +542,6 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 	}
 }
 
-void PeerConnection::onCandidateLostConnection(srtc::PeerCandidate* candidate, const srtc::Error& error)
-{
-	LOG(SRTC_LOG_E, "Candidate lost connection: %d %s", static_cast<int>(error.mCode), error.mMessage.c_str());
-
-	// We are currently connected, the candidate lost connection and then failed to re-establish, so start connecting
-	// again
-	mSelectedCandidate.reset();
-	startConnecting();
-}
-
 void PeerConnection::sendSenderReports()
 {
 	Task::cancelHelper(mTaskSenderReports);

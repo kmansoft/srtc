@@ -40,7 +40,7 @@ int verify_callback(int ok, X509_STORE_CTX* store_ctx)
 constexpr auto kIceMessageBufferSize = 2048;
 
 constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kReceiveTimeout = std::chrono::milliseconds(5000);
+constexpr std::chrono::milliseconds kConnectionLostTimeout = std::chrono::milliseconds(5000);
 constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::milliseconds(1000);
 constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds(5000);
 constexpr std::chrono::milliseconds kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
@@ -225,6 +225,12 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 	mEventLoop->registerSocket(mSocket->fd(), this);
 
 	mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
+
+	// Trim stun requests from time to time
+	Task::cancelHelper(mTaskExpireStunRequests);
+
+	mTaskExpireStunRequests =
+		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
 }
 
 PeerCandidate::~PeerCandidate()
@@ -252,15 +258,14 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 
 void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
-	if (mSrtp) {
+	if (mSrtpConnection) {
 		const auto track = packet->getTrack();
 		const auto rtcpSource = track->getRtcpPacketSource();
 
 		const auto packetData = packet->generate();
 
-		ByteBuffer protectedData;
-		if (mSrtp->protectOutgoingControl(packetData, rtcpSource->getNextSequence(), protectedData)) {
-			const auto w = mSocket->send(protectedData.data(), protectedData.size());
+		if (mSrtpConnection->protectOutgoingControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
 			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
 		}
 	}
@@ -302,7 +307,7 @@ void PeerCandidate::run()
 		const auto item = std::move(mFrameSendQueue.front());
 		mFrameSendQueue.erase(mFrameSendQueue.begin());
 
-		if (mSrtp == nullptr || mSendPacer == nullptr) {
+		if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
 			// We are not connected yet
 			LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
 			continue;
@@ -331,8 +336,10 @@ void PeerCandidate::run()
 			}
 
 			// Packetize
-			const auto packetList = item.packetizer->generate(
-				mExtensionSourceSimulcast, mExtensionSourceTWCC, mSrtp->getMediaProtectionOverhead(), item.buf);
+			const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
+															  mExtensionSourceTWCC,
+															  mSrtpConnection->getMediaProtectionOverhead(),
+															  item.buf);
 
 			// Flush any packets from the same track which we haven't sent yet
 			mSendPacer->flush(item.track);
@@ -420,16 +427,21 @@ void PeerCandidate::startConnecting()
 	// Notify the listener
 	emitOnConnecting();
 
-	// We have a timeout
+	// Clean up some things
+	Task::cancelHelper(mTaskConnectionLostTimeout);
+	Task::cancelHelper(mTaskKeepAliveTimeout);
+
+	mSrtpConnection.reset();
+	mSendPacer.reset();
+
+	// Connecting should take a limited amount of time
+	Task::cancelHelper(mTaskConnectTimeout);
+
 	mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
 		emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
 	});
 
-	// Trim stun requests from time to time
-	mTaskExpireStunRequests =
-		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
-
-	// Open the conversation by sending an STUN binding request
+	// Open the conversation by sending a STUN binding request
 	sendStunBindingRequest(0);
 }
 
@@ -544,14 +556,17 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 				const auto actualHashBin = ByteBuffer{ fpBuf, fpSize };
 
 				if (expectedHash.getBin() == actualHashBin) {
-					const auto [srtpConn, srtpError] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
+					const auto [srtpConnection, srtpError] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
 
 					if (srtpError.isOk()) {
-						mSrtp = srtpConn;
-						mSendPacer = std::make_shared<SendPacer>(
-							mOffer->getConfig(), mSrtp, mSocket, mSendHistory, mExtensionSourceTWCC, [this]() {
-								mLastSendTime = std::chrono::steady_clock::now();
-							});
+						mSrtpConnection = srtpConnection;
+						mSendPacer =
+							std::make_shared<SendPacer>(mOffer->getConfig(),
+														mSrtpConnection,
+														mSocket,
+														mSendHistory,
+														mExtensionSourceTWCC,
+														[this]() { mLastSendTime = std::chrono::steady_clock::now(); });
 						mDtlsState = DtlsState::Completed;
 
 						const auto addr = to_string(mHost.addr);
@@ -570,7 +585,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 						mLastReceiveTime = std::chrono::steady_clock::now();
 						updateConnectionLostTimeout();
-
 						updateKeepAliveTimeout();
 					} else {
 						// Error, failed to initialize SRTP
@@ -603,9 +617,9 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
-	if (is_rtcp_message(buf) && mSrtp) {
+	if (is_rtcp_message(buf) && mSrtpConnection) {
 		ByteBuffer output;
-		if (mSrtp->unprotectIncomingControl(buf, output)) {
+		if (mSrtpConnection->unprotectIncomingControl(buf, output)) {
 			LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
 			onReceivedRtcMessageUnprotected(output);
 		}
@@ -680,7 +694,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 				mExtensionSourceTWCC->onPacketWasNacked(packet);
 			}
 
-			if (packet && mSrtp) {
+			if (packet && mSrtpConnection) {
 				// Generate
 				const auto track = packet->getTrack();
 
@@ -699,10 +713,9 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 					packetData = packet->generate();
 				}
 
-				ByteBuffer protectedData;
-				if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
+				if (mSrtpConnection->protectOutgoingMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
 					// And send
-					const auto sentSize = mSocket->send(protectedData.data(), protectedData.size());
+					const auto sentSize = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
 					LOG(SRTC_LOG_V,
 						"Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
 						packet->getSSRC(),
@@ -713,7 +726,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 					// Keep stats
 					const auto stats = packet->getTrack()->getStats();
 					stats->incrementSentPackets(1);
-					stats->incrementSentBytes(protectedData.size());
+					stats->incrementSentBytes(mProtectedBuf.size());
 				} else {
 					LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
 				}
@@ -726,7 +739,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 
 void PeerCandidate::onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
 {
-	if (rtcpReader.remaining() >= 8 && mExtensionSourceTWCC) {
+	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
 	}
 }
@@ -734,7 +747,9 @@ void PeerCandidate::onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpR
 void PeerCandidate::forgetExpiredStunRequests()
 {
 	mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
-	mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+
+	mTaskExpireStunRequests =
+		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
 }
 
 // Custom BIO for DGRAM
@@ -786,14 +801,15 @@ long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 		return 1;
 #ifdef BIO_CTRL_GET_KTLS_SEND
 	case BIO_CTRL_GET_KTLS_SEND:
-		return 0;
+		// Fallthrough
 #endif
 #ifdef BIO_CTRL_GET_KTLS_RECV
 	case BIO_CTRL_GET_KTLS_RECV:
-		return 0;
+		// Fallthrough
 #endif
+	default:
+		return 0;
 	}
-	return 0;
 }
 
 int PeerCandidate::dgram_free(BIO* b)
@@ -843,6 +859,7 @@ void PeerCandidate::freeDTLS()
 		mDtlsCtx = nullptr;
 	}
 
+	mDtlsReceiveQueue.clear();
 	mDtlsBio = nullptr;
 }
 
@@ -866,11 +883,6 @@ void PeerCandidate::emitOnDtlsConnected()
 void PeerCandidate::emitOnFailedToConnect(const Error& error)
 {
 	mListener->onCandidateFailedToConnect(this, error);
-}
-
-void PeerCandidate::emitOnLostConnection(const srtc::Error& error)
-{
-	mListener->onCandidateLostConnection(this, error);
 }
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
@@ -910,10 +922,10 @@ void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
 void PeerCandidate::updateConnectionLostTimeout()
 {
 	if (const auto task = mTaskConnectionLostTimeout.lock()) {
-		mTaskConnectionLostTimeout = task->update(kReceiveTimeout);
+		mTaskConnectionLostTimeout = task->update(kConnectionLostTimeout);
 	} else {
 		mTaskConnectionLostTimeout =
-			mScheduler.submit(kReceiveTimeout, __FILE__, __LINE__, [this] { onConnectionLostTimeout(); });
+			mScheduler.submit(kConnectionLostTimeout, __FILE__, __LINE__, [this] { onConnectionLostTimeout(); });
 	}
 }
 
@@ -923,7 +935,7 @@ void PeerCandidate::onConnectionLostTimeout()
 		ptr->cancel();
 	}
 
-	emitOnLostConnection({ Error::Code::InvalidData, "Connection lost timeout" });
+	startConnecting();
 }
 
 void PeerCandidate::updateKeepAliveTimeout()
