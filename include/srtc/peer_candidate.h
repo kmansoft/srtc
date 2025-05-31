@@ -142,8 +142,8 @@ private:
     void emitOnLostConnection(const Error& error);
 
     // Sending STUN requests and responses
-    void sendStunBindingRequest();
-    void sendStunBindingResponse();
+    void sendStunBindingRequest(unsigned int iteration);
+    void sendStunBindingResponse(unsigned int iteration);
 
     // Timeouts
     void updateConnectionLostTimeout();

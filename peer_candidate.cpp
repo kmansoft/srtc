@@ -45,7 +45,8 @@ constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::millisecond
 constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds(5000);
 constexpr std::chrono::milliseconds kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
 constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
-constexpr std::chrono::milliseconds kConnectRepeatTimeout = std::chrono::milliseconds(100);
+constexpr std::chrono::milliseconds kConnectRepeatPeriod = std::chrono::milliseconds(100);
+constexpr std::chrono::milliseconds kConnectRepeatIncrement = std::chrono::milliseconds(100);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -416,10 +417,6 @@ void PeerCandidate::run()
 
 void PeerCandidate::startConnecting()
 {
-	// Start from scratch
-	mDtlsState = DtlsState::Inactive;
-	mSentUseCandidate = false;
-
 	// Notify the listener
 	emitOnConnecting();
 
@@ -433,7 +430,7 @@ void PeerCandidate::startConnecting()
 		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
 
 	// Open the conversation by sending an STUN binding request
-	sendStunBindingRequest();
+	sendStunBindingRequest(0);
 }
 
 void PeerCandidate::addSendRaw(ByteBuffer&& buf)
@@ -501,7 +498,7 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 					Task::cancelHelper(mTaskSendStunConnectRequest);
 
 					emitOnIceConnected();
-					sendStunBindingResponse();
+					sendStunBindingResponse(0);
 
 					mDtlsState = DtlsState::Activating;
 				}
@@ -514,6 +511,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
 void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
+	Task::cancelHelper(mTaskSendStunConnectResponse);
+
 	mDtlsReceiveQueue.push_back(std::move(buf));
 
 	// Try the handshake
@@ -521,8 +520,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 		const auto r1 = SSL_do_handshake(mDtlsSsl);
 		const auto err = SSL_get_error(mDtlsSsl, r1);
 		LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
-
-		Task::cancelHelper(mTaskSendStunConnectResponse);
 
 		if (err == SSL_ERROR_WANT_READ) {
 			LOG(SRTC_LOG_V, "Still in progress");
@@ -568,6 +565,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 						emitOnDtlsConnected();
 
+						Task::cancelHelper(mTaskSendStunConnectRequest);
 						Task::cancelHelper(mTaskConnectTimeout);
 
 						mLastReceiveTime = std::chrono::steady_clock::now();
@@ -875,19 +873,26 @@ void PeerCandidate::emitOnLostConnection(const srtc::Error& error)
 	mListener->onCandidateLostConnection(this, error);
 }
 
-void PeerCandidate::sendStunBindingRequest()
+void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 {
+	// Start from scratch
+	freeDTLS();
+	mDtlsState = DtlsState::Inactive;
+	mSentUseCandidate = false;
+
 	LOG(SRTC_LOG_V, "Sending STUN binding request %d", mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
-	mTaskSendStunConnectRequest =
-		mScheduler.submit(kConnectRepeatTimeout, __FILE__, __LINE__, [this] { sendStunBindingRequest(); });
+	mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
+													__FILE__,
+													__LINE__,
+													[this, iteration] { sendStunBindingRequest(iteration + 1); });
 }
 
-void PeerCandidate::sendStunBindingResponse()
+void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
 {
 	LOG(SRTC_LOG_V, "Sending STUN binding response %d", mUniqueId);
 
@@ -896,8 +901,10 @@ void PeerCandidate::sendStunBindingResponse()
 
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
-	mTaskSendStunConnectResponse =
-		mScheduler.submit(kConnectRepeatTimeout, __FILE__, __LINE__, [this] { sendStunBindingResponse(); });
+	mTaskSendStunConnectResponse = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
+													 __FILE__,
+													 __LINE__,
+													 [this, iteration] { sendStunBindingResponse(iteration + 1); });
 }
 
 void PeerCandidate::updateConnectionLostTimeout()
