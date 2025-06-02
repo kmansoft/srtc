@@ -74,9 +74,6 @@ struct PacketStatus {
 	int64_t sent_time_micros;
 	int64_t received_time_micros;
 
-	int32_t sent_delta_micros;
-	int32_t received_delta_micros;
-
 	uint16_t payload_size;
 	uint16_t generated_size;
 	uint16_t encrypted_size;
@@ -88,6 +85,7 @@ struct PacketStatus {
 
 	bool reported_as_not_received;
 	bool reported_checked;
+	bool received_time_present;
 };
 
 // A history of such packets
@@ -98,7 +96,7 @@ public:
 	PacketStatusHistory();
 	~PacketStatusHistory();
 
-	void save(uint16_t seq, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
+	void saveOutgoingPacket(uint16_t seq, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
@@ -116,31 +114,71 @@ private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
-	Filter<float> mPacketsLostPercentFilter;
 	Filter<float> mRttMillisFilter;
+	Filter<float> mPacketsLostPercentFilter;
 	Filter<float> mBandwidthActualFilter;
-	Filter<float> mBandwidthSuggestedFilter;
-	int64_t mLastUpdated;
 
-	struct ReceivedPacket {
+	struct LastPacketInfo {
+		uint16_t seq;
+		int64_t sent_time_micros;
+
+		LastPacketInfo()
+			: seq(0)
+			, sent_time_micros(0)
+		{
+		}
+
+		[[nodiscard]] bool isEnough(const PacketStatus* max, unsigned int minPackets, unsigned int minMicros) const
+		{
+			return static_cast<uint16_t>(max->seq - seq) >= minPackets &&
+				   max->sent_time_micros - sent_time_micros >= minMicros;
+		}
+
+		void update(const PacketStatus* max)
+		{
+			seq = max->seq;
+			sent_time_micros = max->sent_time_micros;
+		}
+	};
+
+	LastPacketInfo mLastMaxForBandwidthActual;
+	LastPacketInfo mLastMaxForBandwidthTrend;
+
+	struct ActualItem {
 		uint64_t received_time_micros;
 		uint16_t size;
 
-		ReceivedPacket(uint64_t received_time_micros, uint16_t size)
+		ActualItem(uint64_t received_time_micros, uint16_t size)
 			: received_time_micros(received_time_micros)
 			, size(size)
 		{
 		}
 	};
 
-	struct CompareReceivedPacket {
-		bool operator()(const ReceivedPacket& a, const ReceivedPacket& b) const
+	struct CompareActualItem {
+		bool operator()(const ActualItem& a, const ActualItem& b) const
 		{
 			return a.received_time_micros > b.received_time_micros;
 		}
 	};
 
-	std::vector<ReceivedPacket> mReceivedPacketBuf;
+	std::vector<ActualItem> mActualItemBuf;
+
+	struct TrendItem {
+		double x;
+		double y;
+
+		TrendItem(double x, double y)
+			: x(x)
+			, y(y)
+		{
+		}
+	};
+
+	std::vector<TrendItem> mTrendItemBuf;
+
+	bool calculateBandwidthActual(int64_t now, PacketStatus* max);
+	bool calculateBandwidthTrend(int64_t now, PacketStatus* max);
 
 	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;
 };

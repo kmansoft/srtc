@@ -115,7 +115,7 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
 	}
 
 	const auto payloadSize = packet->getPayloadSize();
-	mPacketHistory->save(seq, payloadSize, generatedSize, encryptedSize);
+	mPacketHistory->saveOutgoingPacket(seq, payloadSize, generatedSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
@@ -254,9 +254,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 			}
 
 			const auto delta = reader.readU8();
+			tempList[i].delta_micros = 250 * delta;
 			if (ptr) {
 				ptr->reported_status = twcc::kSTATUS_RECEIVED_SMALL_DELTA;
-				ptr->received_delta_micros = tempList[i].delta_micros = 250 * delta;
 			}
 		} else if (symbol == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
 			if (reader.remaining() < 2) {
@@ -265,9 +265,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 			}
 
 			const auto delta = static_cast<int16_t>(reader.readU16());
+			tempList[i].delta_micros = 250 * delta;
 			if (ptr) {
 				ptr->reported_status = twcc::kSTATUS_RECEIVED_LARGE_DELTA;
-				ptr->received_delta_micros = tempList[i].delta_micros = 250 * delta;
 			}
 		}
 	}
@@ -305,30 +305,31 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	twcc::PacketStatus* prev_ptr = nullptr;
 
 	if (isReceivedWithTime(tempList[0].status)) {
-		const auto abs_time = header->reference_time_micros + tempList[0].delta_micros;
-		const auto seq = header->base_seq_number;
-		const auto ptr = mPacketHistory->get(seq);
-		if (ptr) {
-			prev_ptr = ptr;
-			prev_ptr->received_time_micros = abs_time;
+		const auto curr_seq = header->base_seq_number;
+		const auto curr_ptr = mPacketHistory->get(curr_seq);
+		if (curr_ptr) {
+			prev_ptr = curr_ptr;
+			prev_ptr->received_time_micros = header->reference_time_micros + tempList[0].delta_micros;
+			prev_ptr->received_time_present = true;
 		}
 	}
 	for (size_t i = 1; i < header->packet_status_count && prev_ptr; i += 1) {
-		if (!isReceivedWithTime(tempList[i].status)) {
+		if (isReceivedWithTime(tempList[i].status)) {
+			const uint16_t curr_seq = header->base_seq_number + i;
+			const auto curr_ptr = mPacketHistory->get(curr_seq);
+			if (curr_ptr) {
+				curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
+				curr_ptr->received_time_present = true;
+			}
+
+			prev_ptr = curr_ptr;
+		} else {
 			break;
 		}
-
-		const auto curr_seq = static_cast<uint16_t>(header->base_seq_number + i);
-		const auto curr_ptr = mPacketHistory->get(curr_seq);
-		if (curr_ptr) {
-			curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
-		}
-
-		prev_ptr = curr_ptr;
 	}
 
-	mPacketHistory->update(header);
 	mHeaderHistory->save(header);
+	mPacketHistory->update(header);
 }
 
 bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const
