@@ -19,8 +19,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
-#include <unistd.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
