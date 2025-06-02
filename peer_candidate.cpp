@@ -23,6 +23,7 @@
 #include <cstring>
 
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerCandidate", __VA_ARGS__)
 
@@ -35,6 +36,17 @@ int verify_callback(int ok, X509_STORE_CTX* store_ctx)
 {
 	// We verify cert has ourselves after the handshake has completed
 	return 1;
+}
+
+std::string get_openssl_error()
+{
+	BIO *bio = BIO_new(BIO_s_mem());
+	ERR_print_errors(bio);
+	char *buf;
+	size_t len = BIO_get_mem_data(bio, &buf);
+	std::string ret(buf, len);
+	BIO_free(bio);
+	return ret;
 }
 
 constexpr auto kIceMessageBufferSize = 2048;
@@ -218,7 +230,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 {
 	assert(mListener);
 
-	LOG(SRTC_LOG_V, "Constructor for %p %d", static_cast<void*>(this), mUniqueId);
+	LOG(SRTC_LOG_V, "Constructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
 	initOpenSSL();
 
@@ -235,7 +247,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
 PeerCandidate::~PeerCandidate()
 {
-	LOG(SRTC_LOG_V, "Destructor for %p %d", static_cast<void*>(this), mUniqueId);
+	LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
 	mEventLoop->unregisterSocket(mSocket->fd());
 
@@ -370,10 +382,10 @@ void PeerCandidate::run()
 		mRawReceiveQueue.erase(mRawReceiveQueue.begin());
 
 		if (is_stun_message(data.buf)) {
-			LOG(SRTC_LOG_V, "Received STUN message %zd, %d", data.buf.size(), data.buf.data()[0]);
+			LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
 			onReceivedStunMessage(data);
 		} else if (mDtlsSsl && is_dtls_message(data.buf)) {
-			LOG(SRTC_LOG_V, "Received DTLS message %zd, %d", data.buf.size(), data.buf.data()[0]);
+			LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
 			onReceivedDtlsMessage(std::move(data.buf));
 		} else if (is_rtc_message(data.buf)) {
 			LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
@@ -460,8 +472,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 	const auto stunMessageClass = stun_message_get_class(&incomingMessage);
 	const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
 
-	LOG(SRTC_LOG_V, "STUN message class  = %d", stunMessageClass);
-	LOG(SRTC_LOG_V, "STUN message method = %d", stunMessageMethod);
+	LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
+	LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
 
 	if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
 		const auto offerUserName = mOffer->getIceUFrag();
@@ -507,8 +519,6 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
 					mSentUseCandidate = true;
 
-					Task::cancelHelper(mTaskSendStunConnectRequest);
-
 					emitOnIceConnected();
 					sendStunBindingResponse(0);
 
@@ -536,6 +546,8 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 		if (err == SSL_ERROR_WANT_READ) {
 			LOG(SRTC_LOG_V, "Still in progress");
 		} else if (r1 == 1 && err == 0) {
+			Task::cancelHelper(mTaskSendStunConnectRequest);
+
 			const auto cert = SSL_get_peer_certificate(mDtlsSsl);
 			if (cert == nullptr) {
 				// Error, no certificate
@@ -604,9 +616,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 			}
 		} else {
 			// Error during DTLS handshake
-			LOG(SRTC_LOG_E, "Failed during DTLS handshake");
+			const auto opensslError = get_openssl_error();
+			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
 			mDtlsState = DtlsState::Failed;
-			emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake" });
+			//emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError});
 		}
 
 		if (mDtlsState == DtlsState::Failed) {
@@ -892,7 +905,7 @@ void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 	mDtlsState = DtlsState::Inactive;
 	mSentUseCandidate = false;
 
-	LOG(SRTC_LOG_V, "Sending STUN binding request %d", mUniqueId);
+	LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
@@ -906,7 +919,7 @@ void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 
 void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
 {
-	LOG(SRTC_LOG_V, "Sending STUN binding response %d", mUniqueId);
+	LOG(SRTC_LOG_V, "Sending STUN binding response #%u", mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, true);
@@ -957,7 +970,7 @@ void PeerCandidate::onKeepAliveTimeout()
 		return;
 	}
 
-	LOG(SRTC_LOG_V, "Sending a keep alive STUN request %d", mUniqueId);
+	LOG(SRTC_LOG_V, "Sending a keep alive STUN request %u", mUniqueId);
 
 	const auto request = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
