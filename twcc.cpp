@@ -454,7 +454,6 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 	}
 
 	std::reverse(mTrendItemBuf.begin(), mTrendItemBuf.end());
-	const auto duration = mTrendItemBuf.back().x - mTrendItemBuf.front().x;
 
 	const auto slope = calculateSlope(mTrendItemBuf);
 	if (!slope.has_value()) {
