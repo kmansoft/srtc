@@ -370,34 +370,34 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 		seq -= 1;
 	}
 
-	if (mActualItemBuf.size() >= kActualMinPackets) {
-		// The buffer should be close to being sorted, but maybe not quite
-		std::sort(mActualItemBuf.begin(), mActualItemBuf.end(), CompareActualItem());
-
-		// TODO We don't really need to store packets or sort them, it's enough to keep track of min/max times
-		// and total size, but let's keep this code for now in case it's needed later for something else.
-		const auto size = mActualItemBuf.size();
-		const auto temp = mActualItemBuf.data();
-		assert(temp[0].received_time_micros >= temp[size - 1].received_time_micros);
-
-		// Calculate duration
-		const auto durationMicros = temp[0].received_time_micros - temp[size - 1].received_time_micros;
-		if (durationMicros >= kActualMinMicros) {
-			// Calculate total size
-			size_t totalSize = 0;
-			for (size_t i = 0; i < size; ++i) {
-				totalSize += temp[i].size;
-			}
-
-			const auto actualBitsPerSecond =
-				(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
-			mBandwidthActualFilter.update(actualBitsPerSecond, now);
-
-			return true;
-		}
+	if (mActualItemBuf.size() < kActualMinPackets) {
+		return false;
 	}
 
-	return false;
+	// The buffer should be close to being sorted, but maybe not quite
+	std::sort(mActualItemBuf.begin(), mActualItemBuf.end(), CompareActualItem());
+
+	// TODO We don't really need to store packets or sort them, it's enough to keep track of min/max times
+	// and total size, but let's keep this code for now in case it's needed later for something else.
+	assert(mActualItemBuf.front().received_time_micros >= mActualItemBuf.back().received_time_micros);
+
+	// Calculate duration
+	const auto durationMicros = mActualItemBuf.front().received_time_micros - mActualItemBuf.back().received_time_micros;
+	if (durationMicros < kActualMinMicros) {
+		return false;
+	}
+
+	// Calculate total size
+	size_t totalSize = 0;
+	for (const auto& item : mActualItemBuf) {
+		totalSize += item.size;
+	}
+
+	const auto actualBitsPerSecond =
+		(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
+	mBandwidthActualFilter.update(actualBitsPerSecond, now);
+
+	return true;
 }
 
 bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max)
@@ -415,7 +415,6 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 	// Calculate time deltas
 	mTrendItemBuf.clear();
 
-	auto enough = false;
 	for (uint16_t curr_seq = max->seq;;) {
 		const auto curr_ptr = base + (curr_seq & kMaxPacketMask);
 
@@ -438,7 +437,6 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 
 					if (max->received_time_micros - curr_ptr->received_time_micros >= kTrendMinMicros &&
 						mTrendItemBuf.size() >= kTrendMinPackets) {
-						enough = true;
 						break;
 					}
 				}
@@ -451,20 +449,21 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 		curr_seq -= 1;
 	}
 
-	if (!enough) {
+	if (mTrendItemBuf.size() < kTrendMinPackets) {
 		return false;
 	}
 
 	std::reverse(mTrendItemBuf.begin(), mTrendItemBuf.end());
+	const auto duration = mTrendItemBuf.back().x - mTrendItemBuf.front().x;
 
 	const auto slope = calculateSlope(mTrendItemBuf);
-	if (slope.has_value()) {
-		LOG(SRTC_LOG_V, "Trend slope = %.4f", slope.value());
-		std::printf("***** TREND SLOPE = %.4f\n", slope.value());
-		return true;
+	if (!slope.has_value()) {
+		return false;
 	}
 
-	return false;
+	LOG(SRTC_LOG_V, "Trend slope = %.4f", slope.value());
+	std::printf("***** TREND SLOPE = %.4f\n", slope.value());
+	return true;
 }
 
 PacketStatus* PacketStatusHistory::findMostRecentReceivedPacket() const
