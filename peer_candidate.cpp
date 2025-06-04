@@ -664,6 +664,10 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 			const auto lastSR = rtcpReader.readU32();
 			const auto delaySinceLastSR = rtcpReader.readU32();
 
+			(void) ssrc;
+			(void) lastSR;
+			(void) delaySinceLastSR;
+
 			// std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
 			// 			ssrc, lastSR, delaySinceLastSR, highestReceived);
 
