@@ -74,8 +74,6 @@ StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAge
 											  const char* label,
 											  bool useCandidate)
 {
-	std::printf(">>> Making stun binding request %s\n", label);
-
 	StunMessage msg = {};
 	agent->initRequest(&msg, buf, len, STUN_BINDING);
 
@@ -415,7 +413,7 @@ void PeerCandidate::run()
 
 			SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
 			SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
-			// SSL_CTX_set_read_ahead(mDtlsCtx, 1);
+			SSL_CTX_set_read_ahead(mDtlsCtx, 1);
 
 			mDtlsSsl = SSL_new(mDtlsCtx);
 
@@ -438,10 +436,6 @@ void PeerCandidate::run()
 
 void PeerCandidate::startConnecting()
 {
-	char host[128];
-	inet_ntop(mHost.addr.sin_ipv4.sin_family, &mHost.addr.sin_ipv4.sin_addr, host, sizeof(host));
-	std::printf(">>> PeerCandidate::startConnecting to %s port %u #%u\n", host, ntohs(mHost.addr.sin_ipv4.sin_port), mUniqueId);
-
 	// Notify the listener
 	emitOnConnecting();
 
@@ -477,8 +471,6 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
 	const auto stunMessageClass = stun_message_get_class(&incomingMessage);
 	const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
-
-	std::printf(">>> Received STUN message, class = %d, method = %d\n", stunMessageClass, stunMessageMethod);
 
 	LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
 	LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
@@ -553,10 +545,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
 	Task::cancelHelper(mTaskSendStunConnectRequest);
 	Task::cancelHelper(mTaskSendStunConnectResponse);
-
-	if (!buf.empty()) {
-		std::printf(">>> Received DTLS packet %u, size = %zu\n", buf.data()[0], buf.size());
-	}
 
 	mDtlsReceiveQueue.push_back(std::move(buf));
 
@@ -860,8 +848,6 @@ int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 	auto ptr = BIO_get_data(b);
 	auto data = reinterpret_cast<dgram_data*>(ptr);
 
-	std::printf(">>> Sending DTLS packet: %u, size = %d\n", in[0], inl);
-
 	data->pc->addSendRaw({ reinterpret_cast<const uint8_t*>(in), static_cast<size_t>(inl) });
 
 	return inl;
@@ -871,7 +857,7 @@ long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 {
 	switch (cmd) {
 	case BIO_CTRL_DGRAM_QUERY_MTU:
-		return 1400;
+		return 1200;
 	case BIO_CTRL_DUP:
 	case BIO_CTRL_FLUSH:
 		return 1;
@@ -924,8 +910,6 @@ BIO* PeerCandidate::BIO_new_dgram(PeerCandidate* pc)
 
 void PeerCandidate::freeDTLS()
 {
-	std::printf(">>> freeDTLS #%u\n", mUniqueId);
-
 	if (mDtlsSsl) {
 		SSL_shutdown(mDtlsSsl);
 		SSL_free(mDtlsSsl);
@@ -965,8 +949,6 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 {
-	std::printf(">>> PeerCandidate::sendStunBindingRequest, iteration = %u, #%u\n", iteration, mUniqueId);
-
 	LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(

@@ -20,29 +20,23 @@ struct X509CertificateImpl {
 X509Certificate::X509Certificate()
     : mImpl(new X509CertificateImpl{})
 {
-    // https://stackoverflow.com/questions/256405/programmatically-create-x509-certificate-using-openssl
-
-    BIGNUM* e = BN_new();
-    BN_set_word(e, RSA_F4);
+	constexpr auto curveId = NID_X9_62_prime256v1;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
     mImpl->pkey = nullptr;
 
-    const auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+    const auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
     EVP_PKEY_keygen_init(ctx);
+	EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, curveId);
 
-    EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
-    EVP_PKEY_CTX_set1_rsa_keygen_pubexp(ctx, e);
-
-    EVP_PKEY_keygen(ctx, &mImpl->pkey);
+	EVP_PKEY_keygen(ctx, &mImpl->pkey);
 #else
     mImpl->pkey = EVP_PKEY_new();
-    auto rsa = RSA_new();
-    RSA_generate_key_ex(rsa, 2048, e, nullptr);
-    EVP_PKEY_assign_RSA(mImpl->pkey, rsa);
-#endif
 
-    BN_free(e);
+    auto ec = EC_KEY_new_by_curve_name(curveId);
+    EC_KEY_generate_key(ec);
+    EVP_PKEY_assign_EC_KEY(mImpl->pkey, ec);
+#endif
 
     mImpl->x509 = X509_new();
 
@@ -60,7 +54,7 @@ X509Certificate::X509Certificate()
 
     X509_set_issuer_name(mImpl->x509, name);
 
-    X509_sign(mImpl->x509, mImpl->pkey, EVP_sha1());
+    X509_sign(mImpl->x509, mImpl->pkey, EVP_sha256());
 
     // Fingerprint
     uint8_t fpBuf[32] = {};
@@ -71,6 +65,10 @@ X509Certificate::X509Certificate()
 
     mImpl->fp256bin = { fpBuf, fpSize };
     mImpl->fp256hex = bin_to_hex(fpBuf, fpSize);
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	EVP_PKEY_CTX_free(ctx);
+#endif
 }
 
 struct evp_pkey_st* X509Certificate::getPrivateKey() const
