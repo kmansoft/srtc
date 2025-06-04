@@ -412,7 +412,7 @@ void PeerCandidate::run()
 
 			SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
 			SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
-			SSL_CTX_set_read_ahead(mDtlsCtx, 1);
+			// SSL_CTX_set_read_ahead(mDtlsCtx, 1);
 
 			mDtlsSsl = SSL_new(mDtlsCtx);
 
@@ -510,15 +510,22 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 			if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
 				if (mSentUseCandidate) {
 					// Keep-alive
+					LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
+
 					mLastReceiveTime = std::chrono::steady_clock::now();
+
 					updateConnectionLostTimeout();
+					emitOnConnected();
+
+					Task::cancelHelper(mTaskConnectTimeout);
+					Task::cancelHelper(mTaskConnectionRestoreTimeout);
 				} else {
 					// Initial connection
 					LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
 
 					mSentUseCandidate = true;
 
-					emitOnIceConnected();
+					emitOnIceSelected();
 					sendStunBindingResponse(0);
 
 					mDtlsState = DtlsState::Activating;
@@ -533,6 +540,11 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
 	Task::cancelHelper(mTaskSendStunConnectResponse);
+
+	if (!buf.empty() && buf.data()[0] == 21) {
+		// Ignore DTLS alerts
+		return;
+	}
 
 	mDtlsReceiveQueue.push_back(std::move(buf));
 
@@ -589,7 +601,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							cipher,
 							profile->name);
 
-						emitOnDtlsConnected();
+						emitOnConnected();
 
 						Task::cancelHelper(mTaskSendStunConnectRequest);
 						Task::cancelHelper(mTaskConnectTimeout);
@@ -615,10 +627,12 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 			}
 		} else {
 			// Error during DTLS handshake
+			Task::cancelHelper(mTaskSendStunConnectRequest);
+
 			const auto opensslError = get_openssl_error();
 			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
 			mDtlsState = DtlsState::Failed;
-			// emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError});
+			emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
 		}
 
 		if (mDtlsState == DtlsState::Failed) {
@@ -797,7 +811,7 @@ void PeerCandidate::forgetExpiredStunRequests()
 // Custom BIO for DGRAM
 
 struct dgram_data {
-	srtc::PeerCandidate* pc;
+	PeerCandidate* pc;
 };
 
 int PeerCandidate::dgram_read(BIO* b, char* out, int outl)
@@ -912,14 +926,14 @@ void PeerCandidate::emitOnConnecting()
 	mListener->onCandidateConnecting(this);
 }
 
-void PeerCandidate::emitOnIceConnected()
+void PeerCandidate::emitOnIceSelected()
 {
-	mListener->onCandidateIceConnected(this);
+	mListener->onCandidateIceSelected(this);
 }
 
-void PeerCandidate::emitOnDtlsConnected()
+void PeerCandidate::emitOnConnected()
 {
-	mListener->onCandidateDtlsConnected(this);
+	mListener->onCandidateConnected(this);
 }
 
 void PeerCandidate::emitOnFailedToConnect(const Error& error)
@@ -973,11 +987,33 @@ void PeerCandidate::updateConnectionLostTimeout()
 
 void PeerCandidate::onConnectionLostTimeout()
 {
-	if (const auto ptr = mTaskConnectionLostTimeout.lock()) {
-		ptr->cancel();
-	}
+	Task::cancelHelper(mTaskConnectionLostTimeout);
 
-	startConnecting();
+	emitOnConnecting();
+
+	LOG(SRTC_LOG_V, "Sending a restore connection STUN request #%u", mUniqueId);
+
+	// Connecting should take a limited amount of time
+	Task::cancelHelper(mTaskConnectTimeout);
+
+	mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
+		emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
+	});
+
+	// Send ice requests
+	sendConnectionRestoreRequest();
+}
+
+void PeerCandidate::sendConnectionRestoreRequest()
+{
+	Task::cancelHelper(mTaskConnectionRestoreTimeout);
+
+	const auto request = make_stun_message_binding_request(
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
+	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
+
+	mTaskConnectionRestoreTimeout =
+		mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] { sendConnectionRestoreRequest(); });
 }
 
 void PeerCandidate::updateKeepAliveTimeout()
@@ -1001,7 +1037,7 @@ void PeerCandidate::onKeepAliveTimeout()
 		return;
 	}
 
-	LOG(SRTC_LOG_V, "Sending a keep alive STUN request %u", mUniqueId);
+	LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
 
 	const auto request = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);

@@ -502,7 +502,7 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 	setConnectionState(ConnectionState::Connecting);
 }
 
-void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
+void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 {
 	for (const auto& item : mConnectingCandidateList) {
 		if (item.get() == candidate) {
@@ -516,7 +516,7 @@ void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 	mLoopScheduler->dump();
 }
 
-void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
+void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 {
 	setConnectionState(ConnectionState::Connected);
 }

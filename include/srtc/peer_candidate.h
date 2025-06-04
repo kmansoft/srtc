@@ -138,8 +138,8 @@ private:
 
     // State
     void emitOnConnecting();
-    void emitOnIceConnected();
-    void emitOnDtlsConnected();
+    void emitOnIceSelected();
+    void emitOnConnected();
     void emitOnFailedToConnect(const Error& error);
 
     // Sending STUN requests and responses
@@ -149,6 +149,7 @@ private:
     // Timeouts
     void updateConnectionLostTimeout();
     void onConnectionLostTimeout();
+	void sendConnectionRestoreRequest();
     void updateKeepAliveTimeout();
     void onKeepAliveTimeout();
 
@@ -160,6 +161,7 @@ private:
     std::weak_ptr<Task> mTaskSendStunConnectRequest;
     std::weak_ptr<Task> mTaskSendStunConnectResponse;
     std::weak_ptr<Task> mTaskConnectionLostTimeout;
+    std::weak_ptr<Task> mTaskConnectionRestoreTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskKeepAliveTimeout;
 

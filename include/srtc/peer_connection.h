@@ -124,8 +124,8 @@ private:
     // PeerCandidateListener
     void onCandidateHasDataToSend(PeerCandidate* candidate) override;
     void onCandidateConnecting(PeerCandidate* candidate) override;
-    void onCandidateIceConnected(PeerCandidate* candidate) override;
-    void onCandidateDtlsConnected(PeerCandidate* candidate) override;
+    void onCandidateIceSelected(PeerCandidate* candidate) override;
+    void onCandidateConnected(PeerCandidate* candidate) override;
     void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
 
     // Overall connection state and listener
