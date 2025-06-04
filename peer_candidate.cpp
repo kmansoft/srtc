@@ -71,6 +71,7 @@ StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAge
 											  size_t len,
 											  const std::shared_ptr<srtc::SdpOffer>& offer,
 											  const std::shared_ptr<srtc::SdpAnswer>& answer,
+											  const char* label,
 											  bool useCandidate)
 {
 	StunMessage msg = {};
@@ -412,7 +413,7 @@ void PeerCandidate::run()
 
 			SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
 			SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
-			// SSL_CTX_set_read_ahead(mDtlsCtx, 1);
+			SSL_CTX_set_read_ahead(mDtlsCtx, 1);
 
 			mDtlsSsl = SSL_new(mDtlsCtx);
 
@@ -515,7 +516,10 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 					mLastReceiveTime = std::chrono::steady_clock::now();
 
 					updateConnectionLostTimeout();
-					emitOnConnected();
+
+					if (mDtlsState == DtlsState::Completed) {
+						emitOnConnected();
+					}
 
 					Task::cancelHelper(mTaskConnectTimeout);
 					Task::cancelHelper(mTaskConnectionRestoreTimeout);
@@ -539,12 +543,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
 void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
+	Task::cancelHelper(mTaskSendStunConnectRequest);
 	Task::cancelHelper(mTaskSendStunConnectResponse);
-
-	if (!buf.empty() && buf.data()[0] == 21) {
-		// Ignore DTLS alerts
-		return;
-	}
 
 	mDtlsReceiveQueue.push_back(std::move(buf));
 
@@ -557,8 +557,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 		if (err == SSL_ERROR_WANT_READ) {
 			LOG(SRTC_LOG_V, "Still in progress");
 		} else if (r1 == 1 && err == 0) {
-			Task::cancelHelper(mTaskSendStunConnectRequest);
-
 			const auto cert = SSL_get_peer_certificate(mDtlsSsl);
 			if (cert == nullptr) {
 				// Error, no certificate
@@ -601,10 +599,8 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							cipher,
 							profile->name);
 
-						emitOnConnected();
-
-						Task::cancelHelper(mTaskSendStunConnectRequest);
 						Task::cancelHelper(mTaskConnectTimeout);
+						emitOnConnected();
 
 						mLastReceiveTime = std::chrono::steady_clock::now();
 						updateConnectionLostTimeout();
@@ -616,22 +612,26 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							static_cast<int>(srtpError.mCode),
 							srtpError.mMessage.c_str());
 						mDtlsState = DtlsState::Failed;
+
+						Task::cancelHelper(mTaskConnectTimeout);
 						emitOnFailedToConnect(srtpError);
 					}
 				} else {
 					// Error, certificate hash does not match
 					LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
 					mDtlsState = DtlsState::Failed;
+
+					Task::cancelHelper(mTaskConnectTimeout);
 					emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match" });
 				}
 			}
 		} else {
 			// Error during DTLS handshake
-			Task::cancelHelper(mTaskSendStunConnectRequest);
-
 			const auto opensslError = get_openssl_error();
 			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
 			mDtlsState = DtlsState::Failed;
+
+			Task::cancelHelper(mTaskConnectTimeout);
 			emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
 		}
 
@@ -841,6 +841,10 @@ int PeerCandidate::dgram_read(BIO* b, char* out, int outl)
 
 int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 {
+	if (inl == 0) {
+		return 0;
+	}
+
 	auto ptr = BIO_get_data(b);
 	auto data = reinterpret_cast<dgram_data*>(ptr);
 
@@ -852,6 +856,8 @@ int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 {
 	switch (cmd) {
+	case BIO_CTRL_DGRAM_QUERY_MTU:
+		return 1200;
 	case BIO_CTRL_DUP:
 	case BIO_CTRL_FLUSH:
 		return 1;
@@ -943,15 +949,10 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 {
-	// Start from scratch
-	freeDTLS();
-	mDtlsState = DtlsState::Inactive;
-	mSentUseCandidate = false;
-
 	LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "start to connect", false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
 	mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
@@ -965,7 +966,7 @@ void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
 	LOG(SRTC_LOG_V, "Sending STUN binding response #%u", mUniqueId);
 
 	const auto iceMessage = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, true);
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "use candidate", true);
 
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
@@ -1009,7 +1010,7 @@ void PeerCandidate::sendConnectionRestoreRequest()
 	Task::cancelHelper(mTaskConnectionRestoreTimeout);
 
 	const auto request = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "connection restore", false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 
 	mTaskConnectionRestoreTimeout =
@@ -1031,16 +1032,14 @@ void PeerCandidate::onKeepAliveTimeout()
 	updateKeepAliveTimeout();
 
 	const auto now = std::chrono::steady_clock::now();
-	const auto isSendGood = now - mLastSendTime < kKeepAliveSendTimeout;
-	const auto isReceiveGood = now - mLastReceiveTime < kKeepAliveSendTimeout;
-	if (isSendGood && isReceiveGood) {
+	if (now - mLastSendTime < kKeepAliveSendTimeout && now - mLastReceiveTime < kKeepAliveSendTimeout) {
 		return;
 	}
 
 	LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
 
 	const auto request = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive" , false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 }
 

@@ -426,11 +426,22 @@ int main(int argc, char* argv[])
 	std::condition_variable connectionStateCond;
 
 	// Peer connection
+	auto connectedReported = false;
+	const auto ms0 = std::chrono::steady_clock::now();
 	const auto peerConnection = std::make_shared<PeerConnection>();
 
 	peerConnection->setConnectionStateListener(
-		[&connectionStateMutex, &connectionState, &connectionStateCond](const PeerConnection::ConnectionState& state) {
-			std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
+		[ms0, &connectedReported, &connectionStateMutex, &connectionState, &connectionStateCond](
+			const PeerConnection::ConnectionState& state) {
+			if (state == PeerConnection::ConnectionState::Connected && !connectedReported) {
+				const auto ms1 = std::chrono::steady_clock::now();
+				const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(ms1 - ms0).count();
+				std::cout << "*** PeerConnection state: " << connectionStateToString(state) << " in " << millis
+						  << " millis" << std::endl;
+				connectedReported = true;
+			} else {
+				std::cout << "*** PeerConnection state: " << connectionStateToString(state) << std::endl;
+			}
 
 			if (state == PeerConnection::ConnectionState::Failed) {
 				gIsConnectionFailed = true;
