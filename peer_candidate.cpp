@@ -995,7 +995,9 @@ void PeerCandidate::onKeepAliveTimeout()
 	updateKeepAliveTimeout();
 
 	const auto now = std::chrono::steady_clock::now();
-	if (now - mLastSendTime > kKeepAliveSendTimeout && now - mLastReceiveTime > kKeepAliveSendTimeout) {
+	const auto isSendGood = now - mLastSendTime < kKeepAliveSendTimeout;
+	const auto isReceiveGood = now - mLastReceiveTime < kKeepAliveSendTimeout;
+	if (isSendGood && isReceiveGood) {
 		return;
 	}
 
