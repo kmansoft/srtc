@@ -438,7 +438,9 @@ void PeerCandidate::run()
 
 void PeerCandidate::startConnecting()
 {
-	std::printf(">>> PeerCandidate::startConnecting #%u\n", mUniqueId);
+	char host[128];
+	inet_ntop(mHost.addr.sin_ipv4.sin_family, &mHost.addr.sin_ipv4.sin_addr, host, sizeof(host));
+	std::printf(">>> PeerCandidate::startConnecting to %s port %u #%u\n", host, ntohs(mHost.addr.sin_ipv4.sin_port), mUniqueId);
 
 	// Notify the listener
 	emitOnConnecting();
@@ -609,10 +611,8 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							cipher,
 							profile->name);
 
-						emitOnConnected();
-
-						Task::cancelHelper(mTaskSendStunConnectRequest);
 						Task::cancelHelper(mTaskConnectTimeout);
+						emitOnConnected();
 
 						mLastReceiveTime = std::chrono::steady_clock::now();
 						updateConnectionLostTimeout();
@@ -624,22 +624,26 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							static_cast<int>(srtpError.mCode),
 							srtpError.mMessage.c_str());
 						mDtlsState = DtlsState::Failed;
+
+						Task::cancelHelper(mTaskConnectTimeout);
 						emitOnFailedToConnect(srtpError);
 					}
 				} else {
 					// Error, certificate hash does not match
 					LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
 					mDtlsState = DtlsState::Failed;
+
+					Task::cancelHelper(mTaskConnectTimeout);
 					emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match" });
 				}
 			}
 		} else {
 			// Error during DTLS handshake
-			Task::cancelHelper(mTaskSendStunConnectRequest);
-
 			const auto opensslError = get_openssl_error();
 			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
 			mDtlsState = DtlsState::Failed;
+
+			Task::cancelHelper(mTaskConnectTimeout);
 			emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
 		}
 
@@ -866,6 +870,8 @@ int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 {
 	switch (cmd) {
+	case BIO_CTRL_DGRAM_QUERY_MTU:
+		return 1400;
 	case BIO_CTRL_DUP:
 	case BIO_CTRL_FLUSH:
 		return 1;
