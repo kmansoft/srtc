@@ -373,7 +373,7 @@ TEST(SrtpCrypto, RtcpSend)
 
 TEST(SrtpCrypto, RtcpSendMulti)
 {
-    std::cout << "SrtpCrypto RtcpSend" << std::endl;
+    std::cout << "SrtpCrypto RtcpSendMulti" << std::endl;
 
     initLibSRTP();
     srtc::initOpenSSL();
