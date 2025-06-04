@@ -273,7 +273,8 @@ if(UNIX AND NOT ANDROID)
 
     add_executable(cmdline_demo
             cmdline_demo.cpp
-            )
+            include/srtc/rtcp_defs.h
+    )
 
     add_dependencies(cmdline_demo srtc)
 

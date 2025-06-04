@@ -85,7 +85,7 @@ void getNtpTime(NtpTime& ntp)
 	// NTP epoch starts at Jan 1, 1900
 	// Unix epoch starts at Jan 1, 1970
 	// Difference is 70 years plus 17 leap days = 2208988800 seconds
-	constexpr uint32_t NTP_UNIX_OFFSET = 2208988800UL;
+	constexpr uint32_t NTP_UNIX_OFFSET = 2208988800L;
 
 	// Set the seconds field
 	ntp.seconds = current_time.tv_sec + NTP_UNIX_OFFSET;

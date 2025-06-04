@@ -37,4 +37,9 @@ void TrackStats::incrementSentBytes(uint32_t increment)
     mSentBytes += increment;
 }
 
+void TrackStats::setSenderReport(const RtcpSenderReport& senderReport)
+{
+	mSenderReport = senderReport;
+}
+
 } // namespace srtc

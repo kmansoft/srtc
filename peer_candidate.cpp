@@ -649,12 +649,34 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 
 	const auto rtcpRC = rtcpReader.readU8() & 0x1f;
 	const auto rtcpPT = rtcpReader.readU8();
-	const auto rtcpLength = 4 * (1 + rtcpReader.readU16());
+	const auto rtcpLength = rtcpReader.readU16();
 	const auto rtcpSSRC = rtcpReader.readU32();
 
 	LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT, rtcpLength, rtcpSSRC);
 
-	if (rtcpPT == 205) {
+	if (rtcpPT == 201) {
+		// https://www.freesoft.org/CIE/RFC/1889/20.htm
+		while (rtcpReader.remaining() >= 24) {
+			const auto ssrc = rtcpReader.readU32();
+			const auto lost = rtcpReader.readU32();
+			const auto highestReceived = rtcpReader.readU32();
+			const auto jitter = rtcpReader.readU32();
+			const auto lastSR = rtcpReader.readU32();
+			const auto delaySinceLastSR = rtcpReader.readU32();
+
+			// std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
+			// 			ssrc, lastSR, delaySinceLastSR, highestReceived);
+
+			const auto lostFraction = static_cast<uint8_t>(lost >> 24);
+			const auto lostPackets = static_cast<uint32_t>(lost & 0xFFFFFFu);
+
+			(void) highestReceived;
+			(void) jitter;
+			(void) lostFraction;
+			(void) lostPackets;
+		}
+
+	} else if (rtcpPT == 205) {
 		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
 		// RTPFB: Transport layer FB message
 		if (rtcpReader.remaining() >= 4) {

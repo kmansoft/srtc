@@ -574,6 +574,7 @@ void PeerConnection::sendSenderReports()
 				std::make_shared<RtcpPacket>(trackItem, 0, RtcpPacket::kSenderReport, std::move(payload));
 			if (mSelectedCandidate) {
 				mSelectedCandidate->sendRtcpPacket(packet);
+				stats->setSenderReport({ ntp, rtpTime });
 			}
 		}
 	}

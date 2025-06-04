@@ -47,6 +47,8 @@ ByteBuffer RtcpPacket::generate() const
     const auto lenRaw = 2 + 2 + 4 + mPayload.size();
     const auto lenRTCP = (lenRaw + 3) / 4 - 1;
 
+	std::printf("RTCP generate, len_raw = %zu, len_rtcp = %zu\n", lenRaw, lenRTCP);
+
     w.writeU16(header);
     w.writeU16(lenRTCP);
     w.writeU32(mSSRC);

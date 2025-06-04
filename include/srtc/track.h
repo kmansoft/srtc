@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/simulcast_layer.h"
+#include "srtc/rtcp_defs.h"
 #include "srtc/srtc.h"
 
 #include <atomic>

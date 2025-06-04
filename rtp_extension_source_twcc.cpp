@@ -161,10 +161,6 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	// Be careful, this can wrap (and that's OK)
 	const auto past_end_seq_number = static_cast<uint16_t>(header->base_seq_number + header->packet_status_count);
 
-	if (header->base_seq_number == 0) {
-		std::printf("TWCC packets base = %u, count = %u\n", header->base_seq_number, header->packet_status_count);
-	}
-
 	// Read the chunks
 	for (uint16_t seq_number = header->base_seq_number; seq_number != past_end_seq_number; /* do not increment */) {
 		if (reader.remaining() < 2) {
