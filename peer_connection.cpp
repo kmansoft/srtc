@@ -449,10 +449,13 @@ void PeerConnection::startConnecting()
 	for (const auto& host : mSdpAnswer->getHostList()) {
 		if (host.addr.ss.ss_family == AF_INET) {
 			hostList4.push_back(host);
+			// DEBUG
+			break;
 		}
-		if (host.addr.ss.ss_family == AF_INET6) {
-			hostList6.push_back(host);
-		}
+		// DEBUG
+		// if (host.addr.ss.ss_family == AF_INET6) {
+		// 	hostList6.push_back(host);
+		// }
 	}
 
 	auto connectDelay = 0;
