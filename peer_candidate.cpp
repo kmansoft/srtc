@@ -476,6 +476,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 	const auto stunMessageClass = stun_message_get_class(&incomingMessage);
 	const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
 
+	std::printf(">>> Received STUN message, class = %d, method = %d\n", stunMessageClass, stunMessageMethod);
+
 	LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
 	LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
 
