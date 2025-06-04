@@ -5,30 +5,33 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <list>
 
 namespace srtc
 {
 
 class Track;
+class ByteBuffer;
 
 class RtcpPacket
 {
 public:
 	static constexpr uint8_t kSenderReport = 200;
 
-    RtcpPacket(const std::shared_ptr<Track>& track, uint8_t rc, uint8_t payloadId, ByteBuffer&& payload);
+	RtcpPacket(uint32_t ssrc, uint8_t rc, uint8_t payloadId, ByteBuffer&& payload);
 
     ~RtcpPacket();
 
-    [[nodiscard]] std::shared_ptr<Track> getTrack() const;
+    [[nodiscard]] uint32_t getSSRC() const;
     [[nodiscard]] uint8_t getRC() const;
     [[nodiscard]] uint8_t getPayloadId() const;
-    [[nodiscard]] uint32_t getSSRC() const;
+	[[nodiscard]] const ByteBuffer& getPayload() const;
 
     [[nodiscard]] ByteBuffer generate() const;
 
+    static std::list<std::shared_ptr<RtcpPacket>> fromUdpPacket(const srtc::ByteBuffer& data);
+
 private:
-    const std::shared_ptr<Track> mTrack;
     const uint32_t mSSRC;
     const uint8_t mRC;
     const uint8_t mPayloadId;

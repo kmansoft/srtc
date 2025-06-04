@@ -22,8 +22,8 @@
 #include <cassert>
 #include <cstring>
 
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerCandidate", __VA_ARGS__)
 
@@ -40,9 +40,9 @@ int verify_callback(int ok, X509_STORE_CTX* store_ctx)
 
 std::string get_openssl_error()
 {
-	BIO *bio = BIO_new(BIO_s_mem());
+	BIO* bio = BIO_new(BIO_s_mem());
 	ERR_print_errors(bio);
-	char *buf;
+	char* buf;
 	size_t len = BIO_get_mem_data(bio, &buf);
 	std::string ret(buf, len);
 	BIO_free(bio);
@@ -268,10 +268,9 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 	mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
+void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
 {
 	if (mSrtpConnection) {
-		const auto track = packet->getTrack();
 		const auto rtcpSource = track->getRtcpPacketSource();
 
 		const auto packetData = packet->generate();
@@ -619,7 +618,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 			const auto opensslError = get_openssl_error();
 			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
 			mDtlsState = DtlsState::Failed;
-			//emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError});
+			// emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError});
 		}
 
 		if (mDtlsState == DtlsState::Failed) {
@@ -634,28 +633,31 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 		ByteBuffer output;
 		if (mSrtpConnection->unprotectIncomingControl(buf, output)) {
 			LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
-			onReceivedRtcMessageUnprotected(output);
+
+			const auto list = RtcpPacket::fromUdpPacket(output);
+			for (const auto& packet : list) {
+				onReceivedRtcpPacket(packet);
+			}
 		}
 	}
 }
 
-void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
+void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
 
-	const auto unprotectedSize = buf.size();
-	ByteReader rtcpReader = { buf.data(), unprotectedSize };
+	const auto rtcpRC = packet->getRC();
+	const auto rtcpPT = packet->getPayloadId();
 
-	const auto rtcpRC = rtcpReader.readU8() & 0x1f;
-	const auto rtcpPT = rtcpReader.readU8();
-	const auto rtcpLength = rtcpReader.readU16();
-	const auto rtcpSSRC = rtcpReader.readU32();
+	const auto& payload = packet->getPayload();
+	ByteReader rtcpReader = { payload.data(), payload.size() };
 
-	LOG(SRTC_LOG_V, "RTCP payload = %d, len = %d, SSRC = %u", rtcpPT, rtcpLength, rtcpSSRC);
+	LOG(SRTC_LOG_V, "RTCP payload = %d, len = %zu, SSRC = %u", rtcpPT, payload.size(), packet->getSSRC());
 
 	if (rtcpPT == 201) {
-		// https://www.freesoft.org/CIE/RFC/1889/20.htm
+		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
+		// Receiver Report
 		while (rtcpReader.remaining() >= 24) {
 			const auto ssrc = rtcpReader.readU32();
 			const auto lost = rtcpReader.readU32();
@@ -664,9 +666,9 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 			const auto lastSR = rtcpReader.readU32();
 			const auto delaySinceLastSR = rtcpReader.readU32();
 
-			(void) ssrc;
-			(void) lastSR;
-			(void) delaySinceLastSR;
+			(void)ssrc;
+			(void)lastSR;
+			(void)delaySinceLastSR;
 
 			// std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
 			// 			ssrc, lastSR, delaySinceLastSR, highestReceived);
@@ -674,12 +676,11 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 			const auto lostFraction = static_cast<uint8_t>(lost >> 24);
 			const auto lostPackets = static_cast<uint32_t>(lost & 0xFFFFFFu);
 
-			(void) highestReceived;
-			(void) jitter;
-			(void) lostFraction;
-			(void) lostPackets;
+			(void)highestReceived;
+			(void)jitter;
+			(void)lostFraction;
+			(void)lostPackets;
 		}
-
 	} else if (rtcpPT == 205) {
 		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
 		// RTPFB: Transport layer FB message
@@ -691,9 +692,11 @@ void PeerCandidate::onReceivedRtcMessageUnprotected(const ByteBuffer& buf)
 			switch (rtcpFmt) {
 			case 1:
 				// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
+				// NACKs
 				onReceivedRtcMessage_205_1(rtcpSSRC_1, rtcpReader);
 				break;
 			case 15:
+				// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
 				// Google'e Transport-Wide Congension Control
 				onReceivedRtcMessage_205_15(rtcpSSRC_1, rtcpReader);
 				break;

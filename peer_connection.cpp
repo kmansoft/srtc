@@ -571,9 +571,9 @@ void PeerConnection::sendSenderReports()
 			w.writeU32(stats->getSentBytes());
 
 			const auto packet =
-				std::make_shared<RtcpPacket>(trackItem, 0, RtcpPacket::kSenderReport, std::move(payload));
+				std::make_shared<RtcpPacket>(trackItem->getSSRC(), 0, RtcpPacket::kSenderReport, std::move(payload));
 			if (mSelectedCandidate) {
-				mSelectedCandidate->sendRtcpPacket(packet);
+				mSelectedCandidate->sendRtcpPacket(trackItem, packet);
 				stats->setSenderReport({ ntp, rtpTime });
 			}
 		}

@@ -62,7 +62,7 @@ public:
 	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
     void run();
 
-    void sendRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
+	void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
@@ -73,7 +73,7 @@ private:
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
     void onReceivedRtcMessage(ByteBuffer&& buf);
-    void onReceivedRtcMessageUnprotected(const ByteBuffer& buf);
+    void onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
 
     void onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
     void onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);

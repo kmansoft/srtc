@@ -46,7 +46,7 @@ TEST(SrtpCrypto, RtpSend)
     initLibSRTP();
     srtc::initOpenSSL();
 
-    static const uint16_t kOpenSslProfileList[] = {
+    static constexpr uint16_t kOpenSslProfileList[] = {
         SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
@@ -242,7 +242,7 @@ TEST(SrtpCrypto, RtcpSend)
     initLibSRTP();
     srtc::initOpenSSL();
 
-    static const uint16_t kOpenSslProfileList[] = {
+    static constexpr uint16_t kOpenSslProfileList[] = {
         SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
@@ -330,16 +330,13 @@ TEST(SrtpCrypto, RtcpSend)
         uint32_t ssrc = 0x12345678;
         uint32_t sequence = 1;
 
-        const auto track = std::make_shared<srtc::Track>(
-            0, srtc::MediaType::Video, "0", ssrc, 96, 0, 0, srtc::Codec::H264, nullptr, nullptr, 90000, false, false);
-
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + lrand48() % 1000;
             srtc::ByteBuffer payload(payloadSize);
             RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
-            const auto packet = std::make_shared<srtc::RtcpPacket>(track, 0x11, 0x22, std::move(payload));
+            const auto packet = std::make_shared<srtc::RtcpPacket>(ssrc, 0x11, 0x22, std::move(payload));
             // This is our packet's unencrypted data
             const auto source = packet->generate();
 
@@ -378,7 +375,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
     initLibSRTP();
     srtc::initOpenSSL();
 
-    static const uint16_t kOpenSslProfileList[] = {
+    static constexpr uint16_t kOpenSslProfileList[] = {
         SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
@@ -466,9 +463,6 @@ TEST(SrtpCrypto, RtcpSendMulti)
         uint32_t ssrc = 0x12345678;
         uint32_t sequence = 1;
 
-        const auto track = std::make_shared<srtc::Track>(
-            0, srtc::MediaType::Video, "0", ssrc, 96, 0, 0, srtc::Codec::H264, nullptr, nullptr, 90000, false, false);
-
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             // Packet 1
             const auto payloadSize1 = 5 + lrand48() % 200;
@@ -476,7 +470,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
             RAND_bytes(payload1.data(), static_cast<int>(payload1.capacity()));
             payload1.resize(payloadSize1);
 
-            const auto packet1 = std::make_shared<srtc::RtcpPacket>(track, 0x01, 0x22, std::move(payload1));
+            const auto packet1 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x01, 0x22, std::move(payload1));
 
             // Packet 2
             const auto payloadSize2 = 5 + lrand48() % 200;
@@ -484,7 +478,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
             RAND_bytes(payload2.data(), static_cast<int>(payload2.capacity()));
             payload2.resize(payloadSize2);
 
-            const auto packet2 = std::make_shared<srtc::RtcpPacket>(track, 0x03, 0x44, std::move(payload2));
+            const auto packet2 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x03, 0x44, std::move(payload2));
 
             // This is our unencrypted data
             const auto source1 = packet1->generate();
@@ -530,7 +524,7 @@ TEST(SrtpCrypto, RtcpReceive)
     initLibSRTP();
     srtc::initOpenSSL();
 
-    static const uint16_t kOpenSslProfileList[] = {
+    static constexpr uint16_t kOpenSslProfileList[] = {
         SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
@@ -673,7 +667,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
     initLibSRTP();
     srtc::initOpenSSL();
 
-    static const uint16_t kOpenSslProfileList[] = {
+    static constexpr uint16_t kOpenSslProfileList[] = {
         SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
