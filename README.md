@@ -41,7 +41,7 @@ via the state callback.
 Once connected, you can start sending audio and video samples using these methods:
 
 - setVideoSingleCodecSpecificData
-- publishSingleVideoFrame
+- publishVideoSingleFrame
 - publishAudioFrame
 
 For simulcast, the methods are similar but different:
