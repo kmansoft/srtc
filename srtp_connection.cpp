@@ -164,26 +164,12 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
         return false;
     }
 
-    const auto outputData = output.data();
     const auto outputSize = output.size();
     if (outputSize < 4 + 4) {
         // 4 byte header
         // 4 byte SSRC
         LOG(SRTC_LOG_E, "Incoming RTCP packet is too small after unprotecting");
         return false;
-    }
-
-    const auto padding = (outputData[0] & 0x20) != 0;
-    if (padding) {
-        const auto lastByte = outputData[outputSize - 1];
-        if (lastByte + 4u + 4u > outputSize) {
-            LOG(SRTC_LOG_E,
-                "Incoming RTCP packet padding is too large: lastByte = %u, size = %zu",
-                lastByte,
-                outputSize);
-            return false;
-        }
-        output.resize(outputSize - lastByte);
     }
 
     channelValue.replayProtection->set(sequenceNumber);
