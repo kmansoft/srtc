@@ -24,6 +24,7 @@ public:
               uint32_t rollover,
               uint16_t sequence,
               uint32_t timestamp,
+              uint8_t padding,
               ByteBuffer&& payload);
 
     RtpPacket(const std::shared_ptr<Track>& track,
@@ -31,6 +32,7 @@ public:
               uint32_t rollover,
               uint16_t sequence,
               uint32_t timestamp,
+              uint8_t padding,
               RtpExtension&& extension,
               ByteBuffer&& payload);
 
@@ -45,6 +47,7 @@ public:
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
 
+	// The extension is mutable
 	void setExtension(RtpExtension&& extension);
 
     struct Output {
@@ -63,6 +66,7 @@ private:
     const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
+	const uint8_t mPadding;
     const ByteBuffer mPayload;
 	RtpExtension mExtension;
 };
