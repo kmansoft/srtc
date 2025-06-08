@@ -43,6 +43,7 @@ public:
     [[nodiscard]] bool getMarker() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint32_t getRollover() const;
+	[[nodiscard]] uint8_t getPaddingSize() const;
     [[nodiscard]] size_t getPayloadSize() const;
     [[nodiscard]] uint16_t getSequence() const;
     [[nodiscard]] uint32_t getSSRC() const;
@@ -66,7 +67,7 @@ private:
     const uint32_t mRollover;
     const uint16_t mSequence;
     const uint32_t mTimestamp;
-	const uint8_t mPadding;
+	const uint8_t mPaddingSize;
     const ByteBuffer mPayload;
 	RtpExtension mExtension;
 };

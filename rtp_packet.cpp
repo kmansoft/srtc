@@ -62,7 +62,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 	, mRollover(rollover)
 	, mSequence(sequence)
 	, mTimestamp(timestamp)
-	, mPadding(padding)
+	, mPaddingSize(padding)
 	, mPayload(std::move(payload))
 {
 }
@@ -82,7 +82,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 	, mRollover(rollover)
 	, mSequence(sequence)
 	, mTimestamp(timestamp)
-	, mPadding(padding)
+	, mPaddingSize(padding)
 	, mPayload(std::move(payload))
 	, mExtension(std::move(extension))
 {
@@ -115,6 +115,11 @@ uint32_t RtpPacket::getRollover() const
 	return mRollover;
 }
 
+uint8_t RtpPacket::getPaddingSize() const
+{
+	return mPaddingSize;
+}
+
 size_t RtpPacket::getPayloadSize() const
 {
 	return mPayload.size();
@@ -133,7 +138,7 @@ RtpPacket::Output RtpPacket::generate() const
 	ByteWriter writer(buf);
 
 	// V=2 | P | X | CC | M | PT
-	const auto pad = mPadding != 0;
+	const auto pad = mPaddingSize != 0;
 	const auto ext = !mExtension.empty();
 	const uint16_t header =
 		(2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7F);
@@ -150,7 +155,12 @@ RtpPacket::Output RtpPacket::generate() const
 	writePayload(writer, mPayload);
 
 	// Write padding
-	writePadding(writer, mPadding);
+	writePadding(writer, mPaddingSize);
+
+	if (mPaddingSize > 0) {
+		std::printf("***** Packet with padding: payload size = %zu, padding size = %u\n",
+			mPayload.size(), mPaddingSize);
+	}
 
 	return { std::move(buf), mRollover };
 }
@@ -176,7 +186,7 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 	ByteWriter writer(buf);
 
 	// V=2 | P | X | CC | M | PT
-	const auto pad = mPadding != 0;
+	const auto pad = mPaddingSize != 0;
 	const auto ext = !extension.empty();
 	const uint16_t header =
 		(2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7F);
@@ -198,7 +208,7 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 	writePayload(writer, mPayload);
 
 	// Padding
-	writePadding(writer, mPadding);
+	writePadding(writer, mPaddingSize);
 
 	return { std::move(buf), rtxRollover };
 }

@@ -22,6 +22,11 @@ constexpr auto kTrendMinMicros = 100u * 1000u;
 
 static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");
 
+// TODO - measure and come up with real value
+constexpr auto kSlopeThreshold = 0.1;
+constexpr auto kOverusingSinceMicros = 1 * 1000 * 1000u;	// One second
+constexpr auto kOverusingCount = 5;
+
 template <class T>
 std::optional<double> calculateSlope(const std::vector<T>& list)
 {
@@ -130,17 +135,20 @@ PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
 	, mRttMillisFilter(0.2f)
+	, mInstantPacketLossPercent(0.0f)
 	, mPacketsLostPercentFilter(0.2f)
 	, mBandwidthActualFilter(0.2f)
+	, mInstantTrendlineEstimate(TrendlineEstimate::kNormal)
+	, mSmoothedTrendlineEstimate(TrendlineEstimate::kNormal)
+	, mOverusingSinceMicros(-1)
+	, mOverusingCount(0)
 {
 }
 
 PacketStatusHistory::~PacketStatusHistory() = default;
 
-void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
-											 size_t payloadSize,
-											 size_t generatedSize,
-											 size_t encryptedSize)
+void PacketStatusHistory::saveOutgoingPacket(
+	uint16_t seq, size_t paddingSize, size_t payloadSize, size_t generatedSize, size_t encryptedSize)
 {
 	PacketStatus* curr;
 
@@ -164,6 +172,7 @@ void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
 	}
 
 	curr->seq = seq;
+	curr->padding_size = static_cast<uint16_t>(paddingSize);
 	curr->payload_size = static_cast<uint16_t>(payloadSize);
 	curr->generated_size = static_cast<uint16_t>(generatedSize);
 	curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
@@ -311,6 +320,11 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 	}
 }
 
+bool PacketStatusHistory::shouldStopProbing() const
+{
+	return mInstantPacketLossPercent >= 10.0f || mInstantTrendlineEstimate == TrendlineEstimate::kOveruse;
+}
+
 bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* max)
 {
 	const auto base = mHistory.get();
@@ -344,9 +358,9 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 		seq += 1;
 	}
 
-	const auto value = std::clamp<float>(
+	mInstantPacketLossPercent = std::clamp<float>(
 		100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
-	mPacketsLostPercentFilter.update(value, now);
+	mPacketsLostPercentFilter.update(mInstantPacketLossPercent, now);
 
 	// Calculate actual bandwidth
 	mActualItemBuf.clear();
@@ -382,7 +396,8 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	assert(mActualItemBuf.front().received_time_micros >= mActualItemBuf.back().received_time_micros);
 
 	// Calculate duration
-	const auto durationMicros = mActualItemBuf.front().received_time_micros - mActualItemBuf.back().received_time_micros;
+	const auto durationMicros =
+		mActualItemBuf.front().received_time_micros - mActualItemBuf.back().received_time_micros;
 	if (durationMicros < kActualMinMicros) {
 		return false;
 	}
@@ -460,8 +475,36 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 		return false;
 	}
 
-	LOG(SRTC_LOG_V, "Trend slope = %.4f", slope.value());
-	std::printf("***** TREND SLOPE = %.4f\n", slope.value());
+	LOG(SRTC_LOG_Z, ">>> Trend slope = %.4f", slope.value());
+
+	if (slope.value() >= kSlopeThreshold) {
+		// Overuse, make sure it's not a random one time event
+		if (mOverusingSinceMicros == -1) {
+			mOverusingSinceMicros = now;
+			mOverusingCount = 0;
+		}
+		mOverusingCount += 1;
+
+		mInstantTrendlineEstimate = TrendlineEstimate::kOveruse;
+		if (now - mOverusingSinceMicros >= kOverusingSinceMicros && mOverusingCount >= kOverusingCount) {
+			mSmoothedTrendlineEstimate = TrendlineEstimate::kOveruse;
+		}
+	} else if (slope.value() <= -kSlopeThreshold) {
+		// Underuse
+		mOverusingSinceMicros = -1;
+		mOverusingCount = 0;
+
+		mInstantTrendlineEstimate = TrendlineEstimate::kUnderuse;
+		mSmoothedTrendlineEstimate = TrendlineEstimate::kUnderuse;
+	} else {
+		// Normal
+		mOverusingSinceMicros = -1;
+		mOverusingCount = 0;
+
+		mInstantTrendlineEstimate = TrendlineEstimate::kNormal;
+		mSmoothedTrendlineEstimate = TrendlineEstimate::kNormal;
+	}
+
 	return true;
 }
 

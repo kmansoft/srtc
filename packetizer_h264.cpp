@@ -22,6 +22,24 @@ constexpr uint8_t STAP_A = 24;
 constexpr uint8_t FU_A = 28;
 constexpr size_t kMinPayloadSize = 600;
 
+uint8_t getPadding(const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
+				   const std::shared_ptr<srtc::RtpExtensionSource>& twcc)
+{
+	uint8_t padding = 0;
+
+	if (simulcast) {
+		const auto p = simulcast->padding();
+		padding = std::max(padding, p);
+	}
+
+	if (twcc) {
+		const auto p = twcc->padding();
+		padding = std::max(padding, p);
+	}
+
+	return padding;
+}
+
 srtc::RtpExtension buildExtension(const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
 								  const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
 								  const std::shared_ptr<srtc::Track>& track,
@@ -49,19 +67,24 @@ srtc::RtpExtension buildExtension(const std::shared_ptr<srtc::RtpExtensionSource
 	return extension;
 }
 
-size_t adjustPacketSize(size_t basicPacketSize, const srtc::RtpExtension& extension)
+size_t adjustPacketSize(size_t basicPacketSize, size_t padding, const srtc::RtpExtension& extension)
 {
+	auto sizeLessPadding = basicPacketSize;
+	if (padding > 0 && padding <= basicPacketSize / 2) {
+		sizeLessPadding -= padding;
+	}
+
 	const auto extensionSize = extension.size();
 	if (extensionSize == 0) {
-		return basicPacketSize;
+		return sizeLessPadding;
 	}
 
 	// We need to be careful with unsigned math
 	if (extensionSize + kMinPayloadSize > basicPacketSize) {
-		return basicPacketSize;
+		return sizeLessPadding;
 	}
 
-	return basicPacketSize - extensionSize;
+	return sizeLessPadding - extensionSize;
 }
 
 } // namespace
@@ -169,10 +192,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 			const auto naluDataPtr = parser.currData();
 			const auto naluDataSize = parser.currDataSize();
 
+			uint8_t padding = getPadding(simulcast, twcc);
 			RtpExtension extension = buildExtension(simulcast, twcc, track, naluType == NaluType::KeyFrame, 0);
 
 			auto basicPacketSize = RtpPacket::kMaxPayloadSize - mediaProtectionOverhead - 12 /* RTP headers */;
-			auto packetSize = adjustPacketSize(basicPacketSize, extension);
+			auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
 
 			if (packetSize >= naluDataSize) {
 				// https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
@@ -181,13 +205,13 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 				auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
 				result.push_back(extension.empty()
 									 ? std::make_shared<RtpPacket>(
-										   track, marker, rollover, sequence, frameTimestamp, 0, std::move(payload))
+										   track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
 									 : std::make_shared<RtpPacket>(track,
 																   marker,
 																   rollover,
 																   sequence,
 																   frameTimestamp,
-																   0,
+																   padding,
 																   std::move(extension),
 																   std::move(payload)));
 			} else {
@@ -203,11 +227,12 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 					const auto [rollover, sequence] = packetSource->getNextSequence();
 
 					if (packetNumber > 0) {
+						padding = getPadding(simulcast, twcc);
 						extension =
 							buildExtension(simulcast, twcc, track, naluType == NaluType::KeyFrame, packetNumber);
 					}
 
-					packetSize = adjustPacketSize(basicPacketSize, extension) - 2 /*  FU_A headers */;
+					packetSize = adjustPacketSize(basicPacketSize, padding, extension) - 2 /*  FU_A headers */;
 					if (packetNumber == 0 && packetSize >= dataSize) {
 						// The frame now fits in one packet, but a FU-A cannot
 						// have both start and end
@@ -232,15 +257,19 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 					const auto writeNow = std::min(dataSize, packetSize);
 					writer.write(dataPtr, writeNow);
 
+					if (isEnd) {
+						padding = 0;
+					}
+
 					result.push_back(extension.empty()
 										 ? std::make_shared<RtpPacket>(
-											   track, marker, rollover, sequence, frameTimestamp, 0, std::move(payload))
+											   track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
 										 : std::make_shared<RtpPacket>(track,
 																	   marker,
 																	   rollover,
 																	   sequence,
 																	   frameTimestamp,
-																	   0,
+																	   padding,
 																	   std::move(extension),
 																	   std::move(payload)));
 

@@ -9,6 +9,8 @@ namespace srtc
 #define SRTC_LOG_I 1
 #define SRTC_LOG_E 9
 
+#define SRTC_LOG_Z 1000
+
 void setLogLevel(int level);
 
 void log(int level, const char* tag, const char* format...) __attribute__((format(printf, 3, 4)));

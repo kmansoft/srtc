@@ -74,6 +74,7 @@ struct PacketStatus {
 	int64_t sent_time_micros;
 	int64_t received_time_micros;
 
+	uint16_t padding_size;
 	uint16_t payload_size;
 	uint16_t generated_size;
 	uint16_t encrypted_size;
@@ -96,7 +97,8 @@ public:
 	PacketStatusHistory();
 	~PacketStatusHistory();
 
-	void saveOutgoingPacket(uint16_t seq, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
+	void saveOutgoingPacket(
+		uint16_t seq, size_t paddingSize, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
@@ -110,13 +112,27 @@ public:
 													 unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats);
 
+	enum class TrendlineEstimate
+	{
+		kNormal,
+		kOveruse,
+		kUnderuse
+	};
+
+	[[nodiscard]] bool shouldStopProbing() const;
+
 private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
 	Filter<float> mRttMillisFilter;
+	float mInstantPacketLossPercent;
 	Filter<float> mPacketsLostPercentFilter;
 	Filter<float> mBandwidthActualFilter;
+	TrendlineEstimate mInstantTrendlineEstimate;
+	TrendlineEstimate mSmoothedTrendlineEstimate;
+	int64_t mOverusingSinceMicros;
+	uint16_t mOverusingCount;
 
 	struct LastPacketInfo {
 		uint16_t seq;

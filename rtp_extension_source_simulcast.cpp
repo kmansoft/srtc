@@ -69,7 +69,12 @@ void RtpExtensionSourceSimulcast::clear()
     mCurGoogleVLA.resize(0);
 }
 
-bool RtpExtensionSourceSimulcast::wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber)
+uint8_t RtpExtensionSourceSimulcast::padding() const
+{
+	return 0;
+}
+
+bool RtpExtensionSourceSimulcast::wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) const
 {
     return !mCurGoogleVLA.empty();
 }
@@ -84,7 +89,7 @@ void RtpExtensionSourceSimulcast::add(RtpExtensionBuilder& builder,
     builder.addBinaryValue(mVideoExtGoogleVLA, mCurGoogleVLA);
 }
 
-void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track)
+void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const
 {
     const auto layer = track->getSimulcastLayer();
 

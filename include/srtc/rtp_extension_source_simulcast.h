@@ -38,14 +38,16 @@ public:
     void prepare(const std::shared_ptr<Track>& track, const std::vector<std::shared_ptr<SimulcastLayer>>& layerList);
     void clear();
 
-    [[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) override;
+	uint8_t padding() const override;
+
+    [[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) const override;
 
     void add(RtpExtensionBuilder& builder,
              const std::shared_ptr<Track>& track,
              bool isKeyFrame,
              int packetNumber) override;
 
-    void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track);
+    void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const;
 
 private:
     const uint8_t mVideoExtMediaId;

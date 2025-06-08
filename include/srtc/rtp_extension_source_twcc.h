@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/rtp_extension_source.h"
+#include "srtc/scheduler.h"
 #include "srtc/temp_buffer.h"
 #include "srtc/util.h"
 
@@ -26,17 +27,25 @@ class SdpOffer;
 class SdpAnswer;
 class RtpPacket;
 class RtpPacket;
+class RealScheduler;
 
 class RtpExtensionSourceTWCC : public RtpExtensionSource
 {
 public:
-	RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC, uint8_t nAudioExtTWCC);
+	RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
+						   uint8_t nAudioExtTWCC,
+						   const std::shared_ptr<RealScheduler>& scheduler);
 	~RtpExtensionSourceTWCC() override;
 
 	static std::shared_ptr<RtpExtensionSourceTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
-														   const std::shared_ptr<SdpAnswer>& answer);
+														   const std::shared_ptr<SdpAnswer>& answer,
+														   const std::shared_ptr<RealScheduler>& scheduler);
 
-	[[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) override;
+	void onPeerConnected();
+
+	[[nodiscard]] uint8_t padding() const override;
+
+	[[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) const override;
 
 	void add(RtpExtensionBuilder& builder,
 			 const std::shared_ptr<Track>& track,
@@ -70,6 +79,18 @@ private:
 	FixedTempBuffer<TempPacket> mTempPacketBuffer;
 
 	[[nodiscard]] uint8_t getExtensionId(const std::shared_ptr<Track>& track) const;
+
+	// Probing
+	bool mIsConnected;
+	bool mIsProbing;
+
+	std::weak_ptr<Task> mTaskStartProbing;
+	std::weak_ptr<Task> mTaskEndProbing;
+
+	void onStartProbing();
+	void onEndProbing();
+
+	ScopedScheduler mScheduler;
 };
 
 } // namespace srtc
