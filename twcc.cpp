@@ -24,8 +24,8 @@ static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be 
 
 // TODO - measure and come up with real value
 constexpr auto kSlopeThreshold = 0.1;
-constexpr auto kOverusingSinceMicros = 1 * 1000 * 1000u;	// One second
-constexpr auto kOverusingCount = 5;
+constexpr auto kOverusingSinceMicros = 2 * 1000 * 1000u;	// Two seconds
+constexpr auto kOverusingCount = 10;
 
 template <class T>
 std::optional<double> calculateSlope(const std::vector<T>& list)
@@ -475,7 +475,7 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 		return false;
 	}
 
-	LOG(SRTC_LOG_Z, ">>> Trend slope = %.4f", slope.value());
+	LOG(SRTC_LOG_V, "Slope = %.4f", slope.value());
 
 	if (slope.value() >= kSlopeThreshold) {
 		// Overuse, make sure it's not a random one time event

@@ -1,5 +1,8 @@
 #include "srtc/rtcp_packet.h"
 #include "srtc/track.h"
+#include "srtc/logging.h"
+
+#define LOG(level, ...) srtc::log(level, "RtcpPacket", __VA_ARGS__)
 
 namespace srtc
 {
@@ -77,6 +80,7 @@ std::list<std::shared_ptr<RtcpPacket>> RtcpPacket::fromUdpPacket(const srtc::Byt
 						  static_cast<uint32_t>(ptr[6]) << 8 | static_cast<uint32_t>(ptr[7]);
 
 		if (ptr + len > end) {
+			LOG(SRTC_LOG_E, "RTCP packet too small");
 			break;
 		}
 

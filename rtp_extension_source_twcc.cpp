@@ -357,7 +357,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	mHeaderHistory->save(header);
 	mPacketHistory->update(header);
 
-	// If we are probing, and it causes increased delays or high packet loss, stop
+	// If we are probing, and it starts causing increased delays or high packet loss, stop
 	if (mIsProbing && mPacketHistory->shouldStopProbing()) {
 		LOG(SRTC_LOG_Z, "Stopping probing because of increasing inter delays or packet loss");
 		Task::cancelHelper(mTaskEndProbing);
