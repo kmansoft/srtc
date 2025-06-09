@@ -157,10 +157,17 @@ RtpPacket::Output RtpPacket::generate() const
 	// Write padding
 	writePadding(writer, mPaddingSize);
 
+#if 0
 	if (mPaddingSize > 0) {
-		std::printf("***** Packet with padding: payload size = %zu, padding size = %u\n",
-			mPayload.size(), mPaddingSize);
+		std::printf("***** Packet with padding: payload size = %zu, ext size = %zu, "
+					"padding size = %u, total size = %zu, last byte of payload = %u\n",
+					mPayload.size(),
+					mExtension.size(),
+					mPaddingSize,
+					buf.size(),
+					mPayload.data()[mPayload.size() - 1]);
 	}
+#endif
 
 	return { std::move(buf), mRollover };
 }

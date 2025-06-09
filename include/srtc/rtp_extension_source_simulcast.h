@@ -19,46 +19,48 @@ class RtpExtensionBuilder;
 class RtpExtensionSourceSimulcast : public RtpExtensionSource
 {
 public:
-    RtpExtensionSourceSimulcast(uint8_t nVideoExtMediaId,
-                                uint8_t nVideoExtStreamId,
-                                uint8_t nVideoExtRepairedStreamId,
-                                uint8_t nVideoExtGoogleVLA);
-    ~RtpExtensionSourceSimulcast() override;
+	RtpExtensionSourceSimulcast(uint8_t nVideoExtMediaId,
+								uint8_t nVideoExtStreamId,
+								uint8_t nVideoExtRepairedStreamId,
+								uint8_t nVideoExtGoogleVLA);
+	~RtpExtensionSourceSimulcast() override;
 
-    static std::shared_ptr<RtpExtensionSourceSimulcast> factory(bool isVideoSimulcast,
-                                                                uint8_t nVideoExtMediaId,
-                                                                uint8_t nVideoExtStreamId,
-                                                                uint8_t nVideoExtRepairedStreamId,
-                                                                uint8_t nVideoExtGoogleVLA);
+	static std::shared_ptr<RtpExtensionSourceSimulcast> factory(bool isVideoSimulcast,
+																uint8_t nVideoExtMediaId,
+																uint8_t nVideoExtStreamId,
+																uint8_t nVideoExtRepairedStreamId,
+																uint8_t nVideoExtGoogleVLA);
 
-    [[nodiscard]] bool shouldAdd(const std::shared_ptr<Track>& track,
-                                 const std::shared_ptr<Packetizer>& packetizer,
-                                 const ByteBuffer& frame);
+	[[nodiscard]] bool shouldAdd(const std::shared_ptr<Track>& track,
+								 const std::shared_ptr<Packetizer>& packetizer,
+								 const ByteBuffer& frame);
 
-    void prepare(const std::shared_ptr<Track>& track, const std::vector<std::shared_ptr<SimulcastLayer>>& layerList);
-    void clear();
+	void prepare(const std::shared_ptr<Track>& track, const std::vector<std::shared_ptr<SimulcastLayer>>& layerList);
+	void clear();
 
-	uint8_t padding() const override;
+	[[nodiscard]] uint8_t getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize) override;
 
-    [[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) const override;
+	[[nodiscard]] bool wantsExtension(const std::shared_ptr<Track>& track,
+									  bool isKeyFrame,
+									  int packetNumber) const override;
 
-    void add(RtpExtensionBuilder& builder,
-             const std::shared_ptr<Track>& track,
-             bool isKeyFrame,
-             int packetNumber) override;
+	void addExtension(RtpExtensionBuilder& builder,
+					  const std::shared_ptr<Track>& track,
+					  bool isKeyFrame,
+					  int packetNumber) override;
 
-    void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const;
+	void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const;
 
 private:
-    const uint8_t mVideoExtMediaId;
-    const uint8_t mVideoExtStreamId;
-    const uint8_t mVideoExtRepairedStreamId;
-    const uint8_t mVideoExtGoogleVLA;
-    const bool mIsExtensionsValid;
+	const uint8_t mVideoExtMediaId;
+	const uint8_t mVideoExtStreamId;
+	const uint8_t mVideoExtRepairedStreamId;
+	const uint8_t mVideoExtGoogleVLA;
+	const bool mIsExtensionsValid;
 
-    std::string mCurMediaId;
-    std::string mCurLayerName;
-    ByteBuffer mCurGoogleVLA;
+	std::string mCurMediaId;
+	std::string mCurLayerName;
+	ByteBuffer mCurGoogleVLA;
 };
 
 } // namespace srtc

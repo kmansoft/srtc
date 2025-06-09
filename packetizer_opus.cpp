@@ -38,9 +38,9 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
 	}
 
 	RtpExtension extension;
-	if (twcc && twcc->wants(track, false, 0)) {
+	if (twcc && twcc->wantsExtension(track, false, 0)) {
 		RtpExtensionBuilder builder;
-		twcc->add(builder, track, false, 0);
+		twcc->addExtension(builder, track, false, 0);
 		extension = builder.build();
 	}
 

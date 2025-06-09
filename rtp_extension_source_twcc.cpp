@@ -91,26 +91,40 @@ void RtpExtensionSourceTWCC::onPeerConnected()
 	}
 }
 
-uint8_t RtpExtensionSourceTWCC::padding() const
+uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize)
 {
 	if (mIsProbing) {
-		// Add 10% to outgoing packets
-		return 120;
+		if (remainingDataSize < 400) {
+			// Don't bother with small packets
+			return 0;
+		}
+
+		const auto mediaType = track->getMediaType();
+		if (mediaType == MediaType::Video) {
+			// Video gets packetized, we can always add 10% to outgoing packets
+			mProbingPacketCount += 1;
+			return 120;
+		} else if (mediaType == MediaType::Audio) {
+			// Audio doesn't create split packets, we have to stay within the MTU
+			if (remainingDataSize < 1060) {
+				return remainingDataSize / 10;
+			}
+		}
 	}
 	return 0;
 }
 
-bool RtpExtensionSourceTWCC::wants(const std::shared_ptr<Track>& track,
-								   [[maybe_unused]] bool isKeyFrame,
-								   [[maybe_unused]] int packetNumber) const
+bool RtpExtensionSourceTWCC::wantsExtension(const std::shared_ptr<Track>& track,
+											[[maybe_unused]] bool isKeyFrame,
+											[[maybe_unused]] int packetNumber) const
 {
 	return getExtensionId(track) != 0;
 }
 
-void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
-								 const std::shared_ptr<Track>& track,
-								 [[maybe_unused]] bool isKeyFrame,
-								 [[maybe_unused]] int packetNumber)
+void RtpExtensionSourceTWCC::addExtension(RtpExtensionBuilder& builder,
+										  const std::shared_ptr<Track>& track,
+										  [[maybe_unused]] bool isKeyFrame,
+										  [[maybe_unused]] int packetNumber)
 {
 	// Because of pacing, we don't assign a sequence number here, we do it before generating. But we still want to
 	// write a placeholder so that packet size measurement works correctly.
@@ -143,9 +157,11 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
 		return;
 	}
 
+	const auto track = packet->getTrack();
 	const auto paddingSize = packet->getPaddingSize();
 	const auto payloadSize = packet->getPayloadSize();
-	mPacketHistory->saveOutgoingPacket(seq, paddingSize, payloadSize, generatedSize, encryptedSize);
+
+	mPacketHistory->saveOutgoingPacket(seq, track, paddingSize, payloadSize, generatedSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
@@ -426,7 +442,8 @@ void RtpExtensionSourceTWCC::onStartProbing()
 {
 	LOG(SRTC_LOG_Z, ">>> Start probing");
 
-	// DEBUG mIsProbing = true;
+	mIsProbing = true;
+	mProbingPacketCount = true;
 
 	// End this probing period
 	mTaskEndProbing = mScheduler.submit(kProbeDuration, __FILE__, __LINE__, [this] { onEndProbing(); });
@@ -437,7 +454,7 @@ void RtpExtensionSourceTWCC::onStartProbing()
 
 void RtpExtensionSourceTWCC::onEndProbing()
 {
-	LOG(SRTC_LOG_Z, ">>> End probing");
+	LOG(SRTC_LOG_Z, ">>> End probing, %u packets", mProbingPacketCount);
 
 	mIsProbing = false;
 }

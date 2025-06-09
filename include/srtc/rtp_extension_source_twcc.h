@@ -43,14 +43,16 @@ public:
 
 	void onPeerConnected();
 
-	[[nodiscard]] uint8_t padding() const override;
+	[[nodiscard]] uint8_t getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize) override;
 
-	[[nodiscard]] bool wants(const std::shared_ptr<Track>& track, bool isKeyFrame, int packetNumber) const override;
+	[[nodiscard]] bool wantsExtension(const std::shared_ptr<Track>& track,
+									  bool isKeyFrame,
+									  int packetNumber) const override;
 
-	void add(RtpExtensionBuilder& builder,
-			 const std::shared_ptr<Track>& track,
-			 bool isKeyFrame,
-			 int packetNumber) override;
+	void addExtension(RtpExtensionBuilder& builder,
+					  const std::shared_ptr<Track>& track,
+					  bool isKeyFrame,
+					  int packetNumber) override;
 
 	void onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
 	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t generatedSize, size_t encryptedSize);
@@ -83,6 +85,7 @@ private:
 	// Probing
 	bool mIsConnected;
 	bool mIsProbing;
+	unsigned int mProbingPacketCount;
 
 	std::weak_ptr<Task> mTaskStartProbing;
 	std::weak_ptr<Task> mTaskEndProbing;

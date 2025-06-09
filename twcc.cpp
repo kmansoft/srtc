@@ -1,5 +1,6 @@
 #include "srtc/twcc.h"
 #include "srtc/logging.h"
+#include "srtc/track.h"
 
 #include <algorithm>
 #include <cassert>
@@ -14,18 +15,24 @@ constexpr auto kMaxPacketCount = 2048u;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 constexpr auto kMaxRecentEnoughMicros = 3u * 1000u * 1000u;
 
-constexpr auto kActualMinPackets = 30u;
-constexpr auto kActualMinMicros = 1u * 1000u * 1000u;
+constexpr auto kActualCalculateMinPackets = 30u;
+constexpr auto kActualCalculateMinMicros = 1000u * 1000u;
 
-constexpr auto kTrendMinPackets = 15u;
-constexpr auto kTrendMinMicros = 100u * 1000u;
+constexpr auto kTrendCalculateMinPackets = 15u;
+constexpr auto kTrendCalculateMinMicros = 100u * 1000u;
 
 static_assert((kMaxPacketCount & kMaxPacketMask) == 0, "kMaxPacketCount must be a power of 2");
 
 // TODO - measure and come up with real value
 constexpr auto kSlopeThreshold = 0.1;
-constexpr auto kOverusingSinceMicros = 2 * 1000 * 1000u;	// Two seconds
+constexpr auto kOverusingSinceMicros = 2 * 1000 * 1000u; // Two seconds
 constexpr auto kOverusingCount = 10;
+
+constexpr auto kProbeCalculateMinPackets = 30u;
+constexpr auto kProbeCalculateMinMicros = 500u * 1000u;
+
+constexpr auto kProbeMinPacketCount = 10u;
+constexpr auto kProbeMinDurationMicros = 800 * 1000u;
 
 template <class T>
 std::optional<double> calculateSlope(const std::vector<T>& list)
@@ -142,13 +149,19 @@ PacketStatusHistory::PacketStatusHistory()
 	, mSmoothedTrendlineEstimate(TrendlineEstimate::kNormal)
 	, mOverusingSinceMicros(-1)
 	, mOverusingCount(0)
+	, mProbeBitsPerSecond(0)
+	, mProbeUpdatedWhen(0)
 {
 }
 
 PacketStatusHistory::~PacketStatusHistory() = default;
 
-void PacketStatusHistory::saveOutgoingPacket(
-	uint16_t seq, size_t paddingSize, size_t payloadSize, size_t generatedSize, size_t encryptedSize)
+void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
+											 const std::shared_ptr<Track>& track,
+											 size_t paddingSize,
+											 size_t payloadSize,
+											 size_t generatedSize,
+											 size_t encryptedSize)
 {
 	PacketStatus* curr;
 
@@ -177,6 +190,7 @@ void PacketStatusHistory::saveOutgoingPacket(
 	curr->generated_size = static_cast<uint16_t>(generatedSize);
 	curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
 	curr->sent_time_micros = getSystemTimeMicros();
+	curr->media_type = track->getMediaType();
 }
 
 PacketStatus* PacketStatusHistory::get(uint16_t seq) const
@@ -237,16 +251,21 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 	}
 
 	// Actual bandwidth
-	if (mLastMaxForBandwidthActual.isEnough(max, kActualMinPackets, kActualMinMicros)) {
-		// Time to update
+	if (mLastMaxForBandwidthActual.isEnough(max, kActualCalculateMinPackets, kActualCalculateMinMicros)) {
 		if (calculateBandwidthActual(now, max)) {
 			mLastMaxForBandwidthActual.update(max);
 		}
 	}
 
+	// Probe bandwidth
+	if (mLastMaxForBandwidthProbe.isEnough(max, kProbeCalculateMinPackets, kProbeCalculateMinMicros)) {
+		if (calcualteBandwidthProbe(now, max)) {
+			mLastMaxForBandwidthProbe.update(max);
+		}
+	}
+
 	// Bandwidth trend
-	if (mLastMaxForBandwidthTrend.isEnough(max, kTrendMinPackets, kTrendMinMicros)) {
-		// Update
+	if (mLastMaxForBandwidthTrend.isEnough(max, kTrendCalculateMinPackets, kTrendCalculateMinMicros)) {
 		if (calculateBandwidthTrend(now, max)) {
 			mLastMaxForBandwidthTrend.update(max);
 		}
@@ -314,9 +333,12 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 
 	// Suggested bandwidth
 	stats.bandwidth_suggested_kbit_per_second = stats.bandwidth_actual_kbit_per_second;
-	if (stats.packets_lost_percent >= 10.0f) {
-		// Experiencing high packet loss
+	if (stats.packets_lost_percent >= 10.0f || mSmoothedTrendlineEstimate == TrendlineEstimate::kOveruse) {
+		// High packet loss or overuse from trendline analysis
 		stats.bandwidth_suggested_kbit_per_second *= 0.9f;
+	} else if (mProbeBitsPerSecond / 1024.0f > stats.bandwidth_suggested_kbit_per_second) {
+		// We ran a probe and got a higher value
+		stats.bandwidth_suggested_kbit_per_second = mProbeBitsPerSecond / 1024.0f;
 	}
 }
 
@@ -333,7 +355,7 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	}
 
 	const auto total = getPacketCount();
-	if (total < kActualMinPackets) {
+	if (total < kActualCalculateMinPackets) {
 		return false;
 	}
 
@@ -370,10 +392,10 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 		const auto ptr = base + index;
 
 		if (ptr->received_time_present) {
-			mActualItemBuf.emplace_back(ptr->received_time_micros, ptr->generated_size);
+			mActualItemBuf.emplace_back(ptr->received_time_micros, ptr->payload_size);
 
-			if (max->received_time_micros - ptr->received_time_micros >= kActualMinMicros &&
-				mActualItemBuf.size() >= kActualMinPackets) {
+			if (max->received_time_micros - ptr->received_time_micros >= kActualCalculateMinMicros &&
+				mActualItemBuf.size() >= kActualCalculateMinPackets) {
 				break;
 			}
 		}
@@ -384,7 +406,7 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 		seq -= 1;
 	}
 
-	if (mActualItemBuf.size() < kActualMinPackets) {
+	if (mActualItemBuf.size() < kActualCalculateMinPackets) {
 		return false;
 	}
 
@@ -398,19 +420,122 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	// Calculate duration
 	const auto durationMicros =
 		mActualItemBuf.front().received_time_micros - mActualItemBuf.back().received_time_micros;
-	if (durationMicros < kActualMinMicros) {
+	if (durationMicros < kActualCalculateMinMicros) {
 		return false;
 	}
 
 	// Calculate total size
 	size_t totalSize = 0;
 	for (const auto& item : mActualItemBuf) {
-		totalSize += item.size;
+		totalSize += item.payload_size;
 	}
 
 	const auto actualBitsPerSecond =
 		(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
 	mBandwidthActualFilter.update(actualBitsPerSecond, now);
+
+	return true;
+}
+
+bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max)
+{
+	const auto base = mHistory.get();
+	if (base == nullptr) {
+		return false;
+	}
+
+	const auto total = getPacketCount();
+	if (total < kProbeCalculateMinPackets) {
+		return false;
+	}
+
+	// Find max span of packets with probe
+	PacketStatus* endPtr = nullptr;
+	PacketStatus* startPtr = nullptr;
+	uint32_t totalCount = 0, paddingPresentCount = 0;
+	uint32_t paddingAbsentRunCount = 0;
+
+	for (uint16_t seq = mMaxSeq;;) {
+		const auto index = seq & kMaxPacketMask;
+		const auto ptr = base + index;
+
+		if (ptr->padding_size > 0) {
+			if (endPtr == nullptr) {
+				endPtr = ptr;
+			}
+			totalCount += 1;
+			paddingPresentCount += 1;
+			paddingAbsentRunCount = 0;
+		} else if (endPtr != nullptr) {
+			if (ptr->media_type != MediaType::Audio) {
+				// Audio packets may not be able to add padding
+				totalCount += 1;
+				paddingAbsentRunCount += 1;
+			}
+		}
+
+		if (endPtr != nullptr && ptr->padding_size > 0) {
+			if (paddingPresentCount >= kProbeMinPacketCount && paddingPresentCount >= totalCount * 8 / 10) {
+				if (endPtr->received_time_micros - ptr->received_time_micros >= kProbeMinDurationMicros) {
+					startPtr = ptr;
+				}
+			}
+
+			if (startPtr != nullptr) {
+				if (paddingAbsentRunCount >= 10) {
+					break;
+				}
+			}
+		}
+
+		if (seq == mMinSeq) {
+			break;
+		}
+		seq -= 1;
+	}
+
+	if (startPtr == nullptr || endPtr == nullptr) {
+		return false;
+	}
+
+	// Calculate bandwidth use and count of the span we found
+	unsigned int spanTotalCount = 0, spanPaddingCount = 0;
+	size_t spanDataSize = 0;
+	for (uint16_t seq = endPtr->seq;;) {
+		const auto index = seq & kMaxPacketMask;
+		const auto ptr = base + index;
+
+		spanTotalCount += 1;
+		if (ptr->padding_size > 0) {
+			spanPaddingCount += 1;
+		}
+		spanDataSize += ptr->payload_size + ptr->padding_size;
+
+		if (seq == startPtr->seq) {
+			break;
+		}
+		seq -= 1;
+	}
+
+	const auto spanDurationMicros = endPtr->received_time_micros - startPtr->received_time_micros;
+
+	const auto probeBitsPerSecond =
+		(static_cast<float>(spanDataSize) * 8.0f * 1000000.0f) / static_cast<float>(spanDurationMicros);
+
+	LOG(SRTC_LOG_Z,
+		"Probing packets: min = %u, max = %u, "
+		"span total = %u, span probing = %u, duration = %" PRIu64 " us, "
+		"data size = %zu, bw = %.2f kbit/s",
+		startPtr->seq,
+		endPtr->seq,
+		spanTotalCount,
+		spanPaddingCount,
+		spanDurationMicros,
+		spanDataSize,
+		probeBitsPerSecond / 1024.0f);
+
+	mProbeBitsPerSecond = probeBitsPerSecond;
+	mProbeUpdatedWhen = endPtr->sent_time_micros;
 
 	return true;
 }
@@ -450,8 +575,8 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 
 					mTrendItemBuf.emplace_back(static_cast<double>(sent_millis), inter_delta_millis);
 
-					if (max->received_time_micros - curr_ptr->received_time_micros >= kTrendMinMicros &&
-						mTrendItemBuf.size() >= kTrendMinPackets) {
+					if (max->received_time_micros - curr_ptr->received_time_micros >= kTrendCalculateMinMicros &&
+						mTrendItemBuf.size() >= kTrendCalculateMinPackets) {
 						break;
 					}
 				}
@@ -464,7 +589,7 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 		curr_seq -= 1;
 	}
 
-	if (mTrendItemBuf.size() < kTrendMinPackets) {
+	if (mTrendItemBuf.size() < kTrendCalculateMinPackets) {
 		return false;
 	}
 
@@ -488,6 +613,7 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 		mInstantTrendlineEstimate = TrendlineEstimate::kOveruse;
 		if (now - mOverusingSinceMicros >= kOverusingSinceMicros && mOverusingCount >= kOverusingCount) {
 			mSmoothedTrendlineEstimate = TrendlineEstimate::kOveruse;
+			mProbeBitsPerSecond = 0.0f;
 		}
 	} else if (slope.value() <= -kSlopeThreshold) {
 		// Underuse
