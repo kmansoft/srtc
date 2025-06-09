@@ -13,7 +13,8 @@ Features:
 - SDP offer generation and SDP response parsing.
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
-- Pacing and basic bandwidth estimation using the TWCC extension (ongoing work).
+- Pacing.
+- Basic bandwidth estimation using the TWCC extension and probing.
 - Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
 - Command line demo has been tested with Pion and Amazon IVS.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
