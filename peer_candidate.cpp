@@ -224,7 +224,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 																	 mVideoExtStreamId,
 																	 mVideoExtRepairedStreamId,
 																	 mVideoExtGoogleVLA))
-	, mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer))
+	, mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
 	, mLastSendTime(std::chrono::steady_clock::time_point::min())
 	, mLastReceiveTime(std::chrono::steady_clock::time_point::min())
 	, mScheduler(scheduler)
@@ -940,6 +940,10 @@ void PeerCandidate::emitOnIceSelected()
 void PeerCandidate::emitOnConnected()
 {
 	mListener->onCandidateConnected(this);
+
+	if (mExtensionSourceTWCC) {
+		mExtensionSourceTWCC->onPeerConnected();
+	}
 }
 
 void PeerCandidate::emitOnFailedToConnect(const Error& error)

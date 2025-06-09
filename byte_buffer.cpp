@@ -123,11 +123,11 @@ void ByteBuffer::append(const ByteBuffer& buf)
     }
 }
 
-void ByteBuffer::padding(size_t size)
+void ByteBuffer::padding(uint8_t c, size_t size)
 {
     ensureCapacity(mLen + size);
 
-    std::memset(mBuf + mLen, 0, size);
+    std::memset(mBuf + mLen, c, size);
     mLen += size;
 }
 
@@ -188,6 +188,11 @@ void ByteWriter::write(const ByteBuffer& value)
 void ByteWriter::write(const uint8_t* value, size_t size)
 {
     mBuf.append(value, size);
+}
+
+void ByteWriter::padding(uint8_t c, size_t size)
+{
+	mBuf.padding(c, size);
 }
 
 void ByteWriter::writeU8(uint8_t value)

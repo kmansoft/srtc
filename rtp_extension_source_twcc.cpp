@@ -10,6 +10,7 @@
 #include "srtc/twcc.h"
 
 #include <cassert>
+#include <chrono>
 #include <cstring>
 #include <memory>
 
@@ -28,24 +29,34 @@ bool isReceivedWithTime(uint8_t status)
 	return status == srtc::twcc::kSTATUS_RECEIVED_SMALL_DELTA || status == srtc::twcc::kSTATUS_RECEIVED_LARGE_DELTA;
 }
 
+constexpr std::chrono::milliseconds kStartProbingTimeout = std::chrono::milliseconds(10 * 1000);
+constexpr std::chrono::milliseconds kPeriodicProbingTimeout = std::chrono::milliseconds(5 * 1000);
+constexpr std::chrono::milliseconds kProbeDuration = std::chrono::milliseconds(1000);
+
 } // namespace
 
 namespace srtc
 {
 
-RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC, uint8_t nAudioExtTWCC)
+RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
+											   uint8_t nAudioExtTWCC,
+											   const std::shared_ptr<RealScheduler>& scheduler)
 	: mVideoExtTWCC(nVideoExtTWCC)
 	, mAudioExtTWCC(nAudioExtTWCC)
 	, mNextPacketSEQ(1)
 	, mPacketHistory(std::make_shared<twcc::PacketStatusHistory>())
 	, mHeaderHistory(std::make_shared<twcc::FeedbackHeaderHistory>())
+	, mIsConnected(false)
+	, mIsProbing(false)
+	, mScheduler(scheduler)
 {
 }
 
 RtpExtensionSourceTWCC::~RtpExtensionSourceTWCC() = default;
 
 std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const std::shared_ptr<SdpOffer>& offer,
-																		const std::shared_ptr<SdpAnswer>& answer)
+																		const std::shared_ptr<SdpAnswer>& answer,
+																		const std::shared_ptr<RealScheduler>& scheduler)
 {
 	const auto& config = offer->getConfig();
 	if (!config.enable_bwe) {
@@ -68,20 +79,51 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
 		}
 	}
 
-	return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC);
+	return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC, scheduler);
 }
 
-bool RtpExtensionSourceTWCC::wants(const std::shared_ptr<Track>& track,
-								   [[maybe_unused]] bool isKeyFrame,
-								   [[maybe_unused]] int packetNumber)
+void RtpExtensionSourceTWCC::onPeerConnected()
+{
+	if (!mIsConnected) {
+		mIsConnected = true;
+		mTaskStartProbing = mScheduler.submit(kStartProbingTimeout, __FILE__, __LINE__, [this] { onStartProbing(); });
+	}
+}
+
+uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize)
+{
+	if (mIsProbing) {
+		if (remainingDataSize < 400) {
+			// Don't bother with small packets
+			return 0;
+		}
+
+		const auto mediaType = track->getMediaType();
+		if (mediaType == MediaType::Video) {
+			// Video gets packetized, we can always add 10% to outgoing packets
+			mProbingPacketCount += 1;
+			return 120;
+		} else if (mediaType == MediaType::Audio) {
+			// Audio doesn't create split packets, we have to stay within the MTU
+			if (remainingDataSize < 1060) {
+				return remainingDataSize / 10;
+			}
+		}
+	}
+	return 0;
+}
+
+bool RtpExtensionSourceTWCC::wantsExtension(const std::shared_ptr<Track>& track,
+											[[maybe_unused]] bool isKeyFrame,
+											[[maybe_unused]] int packetNumber) const
 {
 	return getExtensionId(track) != 0;
 }
 
-void RtpExtensionSourceTWCC::add(RtpExtensionBuilder& builder,
-								 const std::shared_ptr<Track>& track,
-								 [[maybe_unused]] bool isKeyFrame,
-								 [[maybe_unused]] int packetNumber)
+void RtpExtensionSourceTWCC::addExtension(RtpExtensionBuilder& builder,
+										  const std::shared_ptr<Track>& track,
+										  [[maybe_unused]] bool isKeyFrame,
+										  [[maybe_unused]] int packetNumber)
 {
 	// Because of pacing, we don't assign a sequence number here, we do it before generating. But we still want to
 	// write a placeholder so that packet size measurement works correctly.
@@ -114,8 +156,11 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
 		return;
 	}
 
+	const auto track = packet->getTrack();
+	const auto paddingSize = packet->getPaddingSize();
 	const auto payloadSize = packet->getPayloadSize();
-	mPacketHistory->saveOutgoingPacket(seq, payloadSize, generatedSize, encryptedSize);
+
+	mPacketHistory->saveOutgoingPacket(seq, track, paddingSize, payloadSize, generatedSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
@@ -326,6 +371,13 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 
 	mHeaderHistory->save(header);
 	mPacketHistory->update(header);
+
+	// If we are probing, and it starts causing increased delays or high packet loss, stop
+	if (mIsProbing && mPacketHistory->shouldStopProbing()) {
+		LOG(SRTC_LOG_Z, "Stopping probing because of increasing inter delays or packet loss");
+		Task::cancelHelper(mTaskEndProbing);
+		mIsProbing = false;
+	}
 }
 
 bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const
@@ -383,6 +435,27 @@ uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& tra
 		return mAudioExtTWCC;
 	}
 	return 0;
+}
+
+void RtpExtensionSourceTWCC::onStartProbing()
+{
+	LOG(SRTC_LOG_V, "Start probing");
+
+	mIsProbing = true;
+	mProbingPacketCount = true;
+
+	// End this probing period
+	mTaskEndProbing = mScheduler.submit(kProbeDuration, __FILE__, __LINE__, [this] { onEndProbing(); });
+
+	// Start the next one
+	mTaskStartProbing = mScheduler.submit(kPeriodicProbingTimeout, __FILE__, __LINE__, [this] { onStartProbing(); });
+}
+
+void RtpExtensionSourceTWCC::onEndProbing()
+{
+	LOG(SRTC_LOG_V, "End probing, %u packets", mProbingPacketCount);
+
+	mIsProbing = false;
 }
 
 } // namespace srtc

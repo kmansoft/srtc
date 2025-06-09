@@ -7,12 +7,14 @@
 #include <optional>
 #include <vector>
 
+#include "srtc/srtc.h"
 #include "srtc/temp_buffer.h"
 #include "srtc/util.h"
 
 namespace srtc
 {
 class RtpPacket;
+class Track;
 }
 
 // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-
@@ -74,6 +76,7 @@ struct PacketStatus {
 	int64_t sent_time_micros;
 	int64_t received_time_micros;
 
+	uint16_t padding_size;
 	uint16_t payload_size;
 	uint16_t generated_size;
 	uint16_t encrypted_size;
@@ -81,6 +84,7 @@ struct PacketStatus {
 	uint16_t seq;
 	uint16_t nack_count;
 
+	MediaType media_type;
 	uint8_t reported_status;
 
 	bool reported_as_not_received;
@@ -96,7 +100,12 @@ public:
 	PacketStatusHistory();
 	~PacketStatusHistory();
 
-	void saveOutgoingPacket(uint16_t seq, size_t payloadSize, size_t generatedSize, size_t encryptedSize);
+	void saveOutgoingPacket(uint16_t seq,
+							const std::shared_ptr<Track>& track,
+							size_t paddingSize,
+							size_t payloadSize,
+							size_t generatedSize,
+							size_t encryptedSize);
 
 	// may return nullptr
 	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
@@ -110,13 +119,27 @@ public:
 													 unsigned int defaultValue) const;
 	void updatePublishConnectionStats(PublishConnectionStats& stats);
 
+	enum class TrendlineEstimate {
+		kNormal,
+		kOveruse,
+		kUnderuse
+	};
+
+	[[nodiscard]] bool shouldStopProbing() const;
+
 private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
 	std::unique_ptr<PacketStatus[]> mHistory;
 	Filter<float> mRttMillisFilter;
+	float mInstantPacketLossPercent;
 	Filter<float> mPacketsLostPercentFilter;
 	Filter<float> mBandwidthActualFilter;
+	TrendlineEstimate mInstantTrendlineEstimate;
+	TrendlineEstimate mSmoothedTrendlineEstimate;
+	int64_t mOverusingSinceMicros;
+	uint16_t mOverusingCount;
+	float mProbeBitsPerSecond;
 
 	struct LastPacketInfo {
 		uint16_t seq;
@@ -142,15 +165,16 @@ private:
 	};
 
 	LastPacketInfo mLastMaxForBandwidthActual;
+	LastPacketInfo mLastMaxForBandwidthProbe;
 	LastPacketInfo mLastMaxForBandwidthTrend;
 
 	struct ActualItem {
 		uint64_t received_time_micros;
-		uint16_t size;
+		uint16_t payload_size;
 
-		ActualItem(uint64_t received_time_micros, uint16_t size)
+		ActualItem(uint64_t received_time_micros, uint16_t payload_size)
 			: received_time_micros(received_time_micros)
-			, size(size)
+			, payload_size(payload_size)
 		{
 		}
 	};
@@ -178,6 +202,7 @@ private:
 	std::vector<TrendItem> mTrendItemBuf;
 
 	bool calculateBandwidthActual(int64_t now, PacketStatus* max);
+	bool calcualteBandwidthProbe(int64_t now, PacketStatus* max);
 	bool calculateBandwidthTrend(int64_t now, PacketStatus* max);
 
 	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;

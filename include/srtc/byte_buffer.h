@@ -32,7 +32,7 @@ public:
     void reserve(size_t size);
     void append(const uint8_t* src, size_t size);
     void append(const ByteBuffer& buf);
-    void padding(size_t size);
+    void padding(uint8_t c, size_t size);
 
     [[nodiscard]] uint8_t* data() const;
     [[nodiscard]] size_t size() const;
@@ -59,6 +59,7 @@ public:
 
     void write(const uint8_t* value, size_t size);
     void write(const ByteBuffer& value);
+	void padding(uint8_t c, size_t size);
 
     void writeU8(uint8_t value);
     void writeU16(uint16_t value);
