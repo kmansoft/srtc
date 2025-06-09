@@ -140,7 +140,6 @@ private:
 	int64_t mOverusingSinceMicros;
 	uint16_t mOverusingCount;
 	float mProbeBitsPerSecond;
-	int64_t mProbeUpdatedWhen;
 
 	struct LastPacketInfo {
 		uint16_t seq;

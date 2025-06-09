@@ -150,7 +150,6 @@ PacketStatusHistory::PacketStatusHistory()
 	, mOverusingSinceMicros(-1)
 	, mOverusingCount(0)
 	, mProbeBitsPerSecond(0)
-	, mProbeUpdatedWhen(0)
 {
 }
 
@@ -522,7 +521,7 @@ bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max
 	const auto probeBitsPerSecond =
 		(static_cast<float>(spanDataSize) * 8.0f * 1000000.0f) / static_cast<float>(spanDurationMicros);
 
-	LOG(SRTC_LOG_Z,
+	LOG(SRTC_LOG_V,
 		"Probing packets: min = %u, max = %u, "
 		"span total = %u, span probing = %u, duration = %" PRIu64 " us, "
 		"data size = %zu, bw = %.2f kbit/s",
@@ -535,7 +534,6 @@ bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max
 		probeBitsPerSecond / 1024.0f);
 
 	mProbeBitsPerSecond = probeBitsPerSecond;
-	mProbeUpdatedWhen = endPtr->sent_time_micros;
 
 	return true;
 }

@@ -86,7 +86,6 @@ void RtpExtensionSourceTWCC::onPeerConnected()
 {
 	if (!mIsConnected) {
 		mIsConnected = true;
-
 		mTaskStartProbing = mScheduler.submit(kStartProbingTimeout, __FILE__, __LINE__, [this] { onStartProbing(); });
 	}
 }
@@ -440,7 +439,7 @@ uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& tra
 
 void RtpExtensionSourceTWCC::onStartProbing()
 {
-	LOG(SRTC_LOG_Z, ">>> Start probing");
+	LOG(SRTC_LOG_V, "Start probing");
 
 	mIsProbing = true;
 	mProbingPacketCount = true;
@@ -454,7 +453,7 @@ void RtpExtensionSourceTWCC::onStartProbing()
 
 void RtpExtensionSourceTWCC::onEndProbing()
 {
-	LOG(SRTC_LOG_Z, ">>> End probing, %u packets", mProbingPacketCount);
+	LOG(SRTC_LOG_V, "End probing, %u packets", mProbingPacketCount);
 
 	mIsProbing = false;
 }
