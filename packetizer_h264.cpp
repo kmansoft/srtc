@@ -264,10 +264,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 					const auto writeNow = std::min(dataSize, packetSize);
 					writer.write(dataPtr, writeNow);
 
-					if (isEnd && writeNow < padding + 100) {
-						// padding = 0;
-					}
-
 					result.push_back(
 						extension.empty()
 							? std::make_shared<RtpPacket>(
