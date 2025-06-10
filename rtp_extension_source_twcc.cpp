@@ -93,9 +93,8 @@ void RtpExtensionSourceTWCC::onPeerConnected()
 uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize)
 {
 	if (mIsProbing) {
-		if (remainingDataSize < 400) {
-			// Don't bother with small packets
-			return 0;
+		if (remainingDataSize < 500) {
+			return 50;
 		}
 
 		const auto mediaType = track->getMediaType();
@@ -106,6 +105,7 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
 		} else if (mediaType == MediaType::Audio) {
 			// Audio doesn't create split packets, we have to stay within the MTU
 			if (remainingDataSize < 1060) {
+				mProbingPacketCount += 1;
 				return remainingDataSize / 10;
 			}
 		}
@@ -442,7 +442,7 @@ void RtpExtensionSourceTWCC::onStartProbing()
 	LOG(SRTC_LOG_V, "Start probing");
 
 	mIsProbing = true;
-	mProbingPacketCount = true;
+	mProbingPacketCount = 0;
 
 	// End this probing period
 	mTaskEndProbing = mScheduler.submit(kProbeDuration, __FILE__, __LINE__, [this] { onEndProbing(); });
