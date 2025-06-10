@@ -3,7 +3,7 @@ module main
 go 1.23.2
 
 require (
-	github.com/pion/interceptor v0.1.39
+	github.com/pion/interceptor v0.1.40
 	github.com/pion/webrtc/v4 v4.1.1
 )
 
