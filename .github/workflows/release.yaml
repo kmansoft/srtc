@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'ver-*'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: RelWithDebInfo
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4 libcurl4-openssl-dev libssl-dev ninja-build
+
+      - name: Configure CMake
+        run: |
+          cmake \
+            -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -GNinja
+
+      - name: Build
+        run: |
+          cmake --build ${{github.workspace}}/build --target srtc_cmdline_demo
+
+      - name: Package
+        run: |
+          mkdir -p release
+          cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
+          cd release
+          strip srtc_cmdline_demo
+          tar -czvf srtc_cmdline_demo-linux.tar.gz srtc_cmdline_demo
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: srtc_cmdline_demo-linux
+          path: release/srtc_cmdline_demo-linux.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install openssl curl ninja
+
+      - name: Configure CMake
+        run: |
+          cmake \
+            -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) \
+            -GNinja
+
+      - name: Build
+        run: |
+          cmake --build ${{ github.workspace }}/build --target srtc_cmdline_demo
+
+      - name: Package
+        run: |
+          mkdir -p release
+          cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
+          cd release
+          strip srtc_cmdline_demo
+          tar -czvf srtc_cmdline_demo-macos.tar.gz srtc_cmdline_demo
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: srtc_cmdline_demo-macos
+          path: release/srtc_cmdline_demo-macos.tar.gz
+
+  video-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package
+        run: |
+          mkdir -p release
+          cp ${{ github.workspace }}/*.h264 release/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: video-files
+          path: release
+
+  create-release:
+    needs: [ build-linux, build-macos, video-files ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            artifacts/srtc_cmdline_demo-linux/srtc_cmdline_demo-linux.tar.gz
+            artifacts/srtc_cmdline_demo-macos/srtc_cmdline_demo-macos.tar.gz
+            artifacts/video-files/sintel.h264
+            artifacts/video-files/sintel_with_slices.h264
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts for manual workflow
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v3
+        with:
+          name: all-binaries
+          path: artifacts/ 

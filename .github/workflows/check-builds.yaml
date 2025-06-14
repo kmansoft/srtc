@@ -42,17 +42,17 @@ jobs:
     - name: Configure CMake for gcc
       run: |
         cmake \
-          -B ${{github.workspace}}/build-gcc \
+          -B ${{ github.workspace }}/build-gcc \
           -DCMAKE_C_COMPILER=/usr/bin/gcc \
           -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
           -GNinja
 
     - name: Build
       run: |
         cmake \
-          --build ${{github.workspace}}/build-gcc \
-          --config ${{env.BUILD_TYPE}} \
+          --build ${{ github.workspace }}/build-gcc \
+          --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
           --target srtc_cmdline_demo
@@ -64,17 +64,17 @@ jobs:
     - name: Configure CMake for clang
       run: |
         cmake \
-          -B ${{github.workspace}}/build-clang \
+          -B ${{ github.workspace }}/build-clang \
           -DCMAKE_C_COMPILER=/usr/bin/clang \
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
           -GNinja
 
     - name: Build
       run: |
         cmake \
-          --build ${{github.workspace}}/build-clang \
-          --config ${{env.BUILD_TYPE}} \
+          --build ${{ github.workspace }}/build-clang \
+          --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
           --target srtc_cmdline_demo
