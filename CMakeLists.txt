@@ -115,7 +115,7 @@ add_library(srtc
 if(APPLE)
 	target_sources(srtc
         PRIVATE
-        include/srtc/event_loop_linux.h
+        include/srtc/event_loop_macos.h
         event_loop_macos.cpp
 	)
 elseif(UNIX)
@@ -157,6 +157,10 @@ endif()
 
 
 # OpenSSL
+
+if(APPLE)
+    set(OPENSSL_USE_STATIC_LIBS ON)
+endif()
 
 find_package(OpenSSL REQUIRED)
 
@@ -291,6 +295,7 @@ if(UNIX AND NOT ANDROID)
             srtc
             CURL::libcurl
     )
+
 endif()
 
 # Install
