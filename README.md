@@ -80,24 +80,30 @@ make
 Change back to the root (`cd ../`) and run the command line demo. Use `--help` to see arguments.
 
 ```bash
-./build/cmdline_demo --help
+./build/srtc_cmdline_demo --help
 ```
 Should output:
 
 ```bash
-Usage: ./build/cmdline_demo [options]
+Usage: ./build/srtc_cmdline_demo [options]
 Options:
   -f, --file <path>    Path to H.264 file (default: sintel.h264)
-  -u, --url <url>      WHIP server URL (default: https://localhost:8080)
+  -u, --url <url>      WHIP server URL (default: http://localhost:8080/whip)
   -t, --token <token>  WHIP authorization token
   -l, --loop           Loop the file
+  -v, --verbose        Verbose logging from the srtc library
+  -q, --quiet          Suppress progress reporting
+  -s, --sdp            Print SDP offer and answer
+  -i, --info           Print input file info
+  -d, --drop           Drop some packets at random (test NCK and RTX handling)
+  -b, --bwe            Enable TWCC congestion control for bandwidth estimation
   -h, --help           Show this help message
 ```
 
 To broadcast to Amazon IVS:
 
 ```bash
-./build/cmdline_demo -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
+./build/srtc_cmdline_demo -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
 ```
 
 ### Running with Pion
@@ -109,7 +115,7 @@ Open a new web browser window to `http://localhost:8080`, you will see a web pag
 Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
 over the video area.
 
-Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/cmdline_demo`, making sure the
+Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/srtc_cmdline_demo`, making sure the
 current directory is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
 
 Switch back to the browser and click, after a second or two (keyframe delay) you should see the video being sent by `srtc`.

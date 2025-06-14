@@ -271,22 +271,22 @@ endif()
 
 if(UNIX AND NOT ANDROID)
 
-    add_executable(cmdline_demo
-            cmdline_demo.cpp
+    add_executable(srtc_cmdline_demo
+            srtc_cmdline_demo.cpp
             include/srtc/rtcp_defs.h
     )
 
-    add_dependencies(cmdline_demo srtc)
+    add_dependencies(srtc_cmdline_demo srtc)
 
     find_package(CURL REQUIRED)
 
-    target_include_directories(cmdline_demo
+    target_include_directories(srtc_cmdline_demo
             PRIVATE
             ${CURL_INCLUDE_DIRS}
             )
 
     target_link_libraries(
-            cmdline_demo
+            srtc_cmdline_demo
             PRIVATE
             srtc
             CURL::libcurl
