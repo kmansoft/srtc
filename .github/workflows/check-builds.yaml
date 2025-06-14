@@ -1,4 +1,4 @@
-name: CMake on a single platform
+name: Check builds
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   BUILD_TYPE: RelWithDebInfo
 
 jobs:
-  build:
+  build-linux:
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +32,7 @@ jobs:
       run: |
         sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev ninja-build
 
-        if [ "${{ matrix.os }}" == "ubuntu-24.04" ]
+        if [ "${{ matrix.os }}" = "ubuntu-24.04" ]
         then
           sudo apt-get install -y libcurl4t64
         else
@@ -42,20 +42,20 @@ jobs:
     - name: Configure CMake for gcc
       run: |
         cmake \
-          -B ${{github.workspace}}/build-gcc \
+          -B ${{ github.workspace }}/build-gcc \
           -DCMAKE_C_COMPILER=/usr/bin/gcc \
           -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
           -GNinja
 
     - name: Build
       run: |
         cmake \
-          --build ${{github.workspace}}/build-gcc \
-          --config ${{env.BUILD_TYPE}} \
+          --build ${{ github.workspace }}/build-gcc \
+          --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target cmdline_demo
+          --target srtc_cmdline_demo
 
     - name: Test
       run: |
@@ -64,21 +64,48 @@ jobs:
     - name: Configure CMake for clang
       run: |
         cmake \
-          -B ${{github.workspace}}/build-clang \
+          -B ${{ github.workspace }}/build-clang \
           -DCMAKE_C_COMPILER=/usr/bin/clang \
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
           -GNinja
 
     - name: Build
       run: |
         cmake \
-          --build ${{github.workspace}}/build-clang \
-          --config ${{env.BUILD_TYPE}} \
+          --build ${{ github.workspace }}/build-clang \
+          --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target cmdline_demo
+          --target srtc_cmdline_demo
 
     - name: Test
       run: |
         ${{github.workspace}}/build-clang/srtc_test
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install openssl curl ninja
+
+      - name: Configure CMake
+        run: |
+          cmake \
+            -B ${{github.workspace}}/build \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) \
+            -GNinja
+
+      - name: Build
+        run: |
+          cmake \
+            --build ${{github.workspace}}/build \
+            --config ${{env.BUILD_TYPE}} \
+            --target srtc \
+            --target srtc_test \
+            --target srtc_cmdline_demo

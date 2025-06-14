@@ -338,7 +338,7 @@ void printUsage(const char* programName)
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  -i, --info           Print input file info" << std::endl;
 	std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
-	std::cout << "  -b, --bwe            Enable Google's TWCC congestion control for bandwidth estimation" << std::endl;
+	std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
