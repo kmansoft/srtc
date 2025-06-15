@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # For better compatibility
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
           path: release/srtc_cmdline_demo-linux.tar.gz
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-15 # For better compatibility
 
     steps:
       - uses: actions/checkout@v4
