@@ -407,23 +407,6 @@ void PeerConnection::setConnectionState(ConnectionState state)
 		if (mConnectionState == ConnectionState::Failed) {
 			mIsQuit = true;
 			mEventLoop->interrupt();
-		} else if (mConnectionState == ConnectionState::Connected) {
-			const auto trackList = collectTracksLocked();
-			for (const auto& trackItem : trackList) {
-				trackItem->getStats()->clear();
-
-				trackItem->getRtpPacketSource()->clear();
-				trackItem->getRtxPacketSource()->clear();
-				trackItem->getRtcpPacketSource()->clear();
-			}
-
-			Task::cancelHelper(mTaskSenderReports);
-			mTaskSenderReports =
-				mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
-
-			Task::cancelHelper(mTaskConnectionStats);
-			mTaskConnectionStats =
-				mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 		}
 	}
 
@@ -514,6 +497,25 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 	mConnectingCandidateList.clear();
 
 	mLoopScheduler->dump();
+
+	std::lock_guard lock(mMutex);
+
+	const auto trackList = collectTracksLocked();
+	for (const auto& trackItem : trackList) {
+		trackItem->getStats()->clear();
+
+		trackItem->getRtpPacketSource()->clear();
+		trackItem->getRtxPacketSource()->clear();
+		trackItem->getRtcpPacketSource()->clear();
+	}
+
+	Task::cancelHelper(mTaskSenderReports);
+	mTaskSenderReports =
+		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+
+	Task::cancelHelper(mTaskConnectionStats);
+	mTaskConnectionStats =
+		mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 }
 
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)

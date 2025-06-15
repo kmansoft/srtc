@@ -996,7 +996,7 @@ void PeerCandidate::onConnectionLostTimeout()
 
 	emitOnConnecting();
 
-	LOG(SRTC_LOG_V, "Sending a restore connection STUN request #%u", mUniqueId);
+	LOG(SRTC_LOG_V, "Starting STUN requests to restore the connection #%u", mUniqueId);
 
 	// Connecting should take a limited amount of time
 	Task::cancelHelper(mTaskConnectTimeout);
@@ -1011,12 +1011,13 @@ void PeerCandidate::onConnectionLostTimeout()
 
 void PeerCandidate::sendConnectionRestoreRequest()
 {
-	Task::cancelHelper(mTaskConnectionRestoreTimeout);
+	LOG(SRTC_LOG_V, "Sending a STUN request to restore the connection #%u", mUniqueId);
 
 	const auto request = make_stun_message_binding_request(
 		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "connection restore", false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 
+	Task::cancelHelper(mTaskConnectionRestoreTimeout);
 	mTaskConnectionRestoreTimeout =
 		mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] { sendConnectionRestoreRequest(); });
 }
