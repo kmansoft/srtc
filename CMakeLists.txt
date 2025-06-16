@@ -293,7 +293,6 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
     add_executable(srtc_cmdline_demo
             srtc_cmdline_demo.cpp
-            include/srtc/rtcp_defs.h
     )
 
     add_dependencies(srtc_cmdline_demo srtc)
@@ -303,9 +302,14 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
                 srtc_cmdline_demo
                 PRIVATE
                 srtc
+                winmm
         )
     else()
         find_package(CURL REQUIRED)
+
+        target_sources(srtc_cmdline_demo
+                srtc_cmdline_demo_http_curl.cpp
+        )
 
         target_include_directories(srtc_cmdline_demo
                 PRIVATE
