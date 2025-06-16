@@ -17,7 +17,7 @@ public:
     explicit Socket(const anyaddr& addr);
     ~Socket();
 
-    [[nodiscard]] int fd() const;
+    [[nodiscard]] SocketHandle fd() const;
 
     struct ReceivedData {
         ByteBuffer buf;
@@ -39,7 +39,7 @@ public:
 
 private:
     const anyaddr mAddr;
-    const int mFd;
+    const SocketHandle mFd;
     const std::unique_ptr<uint8_t[]> mReceiveBuffer;
 };
 

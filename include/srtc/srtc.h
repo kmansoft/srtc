@@ -15,6 +15,9 @@ namespace srtc
 
 #ifdef _WIN32
 typedef SSIZE_T ssize_t;
+typedef SOCKET SocketHandle;
+#else
+typedef int SocketHandle;
 #endif
 
 enum class Codec {

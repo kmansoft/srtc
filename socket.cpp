@@ -17,7 +17,7 @@
 namespace
 {
 
-int createSocket(const srtc::anyaddr& addr)
+srtc::SocketHandle createSocket(const srtc::anyaddr& addr)
 {
     if (addr.ss.ss_family == AF_INET6) {
         return socket(AF_INET6, SOCK_DGRAM, 0);
@@ -59,7 +59,7 @@ Socket::~Socket()
     }
 }
 
-int Socket::fd() const
+SocketHandle Socket::fd() const
 {
     return mFd;
 }
