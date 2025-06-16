@@ -308,6 +308,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
         find_package(CURL REQUIRED)
 
         target_sources(srtc_cmdline_demo
+                PRIVATE
                 srtc_cmdline_demo_http_curl.cpp
         )
 
