@@ -53,7 +53,7 @@ std::string to_string(const anyaddr& addr);
 
 #if defined(__clang__) || defined(__GNUC__)
 
-#if __has_attribute && __has_attribute(guarded_by)
+#if defined __has_attribute && __has_attribute(guarded_by)
 #define SRTC_GUARDED_BY(mutex) __attribute__((guarded_by(mutex)))
 #else
 #define SRTC_GUARDED_BY(mutex)

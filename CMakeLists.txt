@@ -167,7 +167,7 @@ endif()
 
 # OpenSSL
 
-if(APPLE)
+if(APPLE OR WIN32)
     set(OPENSSL_USE_STATIC_LIBS ON)
 endif()
 
