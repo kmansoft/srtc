@@ -373,8 +373,6 @@ int main(int argc, char* argv[])
 		std::cout << "*** Cannot get current working directory" << std::endl;
 		exit(1);
 	}
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
 #endif
 
 	std::cout << "*** Current working directory: " << cwd << std::endl;

@@ -6,6 +6,17 @@
 #include <memory>
 #include <string>
 
+namespace {
+	bool gInitCurlDone = false;
+
+	void initCurl() {
+		if (!gInitCurlDone) {
+			gInitCurlDone = true;
+			curl_global_init(CURL_GLOBAL_DEFAULT);
+		}
+	}
+}
+
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
 {
 	const auto total_size = size * nmemb;
@@ -18,6 +29,8 @@ std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std
 
 std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
 {
+	initCurl();
+
 	const auto curl = curl_easy_init();
 	if (!curl) {
 		std::cout << "Error: cannot create a curl object" << std::endl;
