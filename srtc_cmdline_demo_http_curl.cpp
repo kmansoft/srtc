@@ -1,6 +1,11 @@
 #include <curl/curl.h>
 #include <curl/easy.h>
 
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <string>
+
 std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
 {
 	const auto curl = curl_easy_init();

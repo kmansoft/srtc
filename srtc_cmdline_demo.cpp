@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <string>
 
 #ifdef _WIN32
 #define NOMINMAX
