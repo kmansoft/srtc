@@ -98,16 +98,6 @@ uint32_t BitReader::readUnsignedExpGolomb()
 
 // WHIP
 
-std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
-{
-	const auto total_size = size * nmemb;
-	if (total_size) {
-		out->append(in, total_size);
-		return total_size;
-	}
-	return 0;
-}
-
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
 	switch (state) {

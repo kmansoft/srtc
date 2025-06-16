@@ -6,6 +6,16 @@
 #include <memory>
 #include <string>
 
+std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
+{
+	const auto total_size = size * nmemb;
+	if (total_size) {
+		out->append(in, total_size);
+		return total_size;
+	}
+	return 0;
+}
+
 std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
 {
 	const auto curl = curl_easy_init();
