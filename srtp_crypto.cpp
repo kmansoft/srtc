@@ -19,6 +19,12 @@
 #include <openssl/hmac.h>
 #include <openssl/srtp.h>
 
+#ifdef _WIN32
+#include <WinSock2.h>
+#else
+#include <arpa/inet.h>
+#endif
+
 namespace
 {
 
