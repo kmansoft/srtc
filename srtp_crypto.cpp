@@ -12,8 +12,6 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/srtp_util.h"
 
-#include <arpa/inet.h>
-
 #include <cassert>
 #include <cstring>
 

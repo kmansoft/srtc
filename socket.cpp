@@ -2,8 +2,13 @@
 #include "srtc/logging.h"
 #include "srtc/util.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <fcntl.h>
 #include <unistd.h>
+#endif
 
 #include <cstring>
 
@@ -33,15 +38,24 @@ Socket::Socket(const anyaddr& addr)
     , mFd(createSocket(addr))
     , mReceiveBuffer(std::make_unique<uint8_t[]>(kReceiveBufferSize))
 {
+#ifdef _WIN32
+    u_long mode = 1u;
+    ioctlsocket(mFd, FIONBIO, &mode);
+#else
     auto socketFlags = fcntl(mFd, F_GETFL, 0);
     socketFlags |= O_NONBLOCK;
     fcntl(mFd, F_SETFL, socketFlags);
+#endif
 }
 
 Socket::~Socket()
 {
     if (mFd >= 0) {
+#ifdef _WIN32
+        closesocket(mFd);
+#else
         close(mFd);
+#endif
     }
 }
 
@@ -59,7 +73,13 @@ int Socket::fd() const
         socklen_t fromLen = sizeof(from);
 
         const auto r = recvfrom(
-            mFd, mReceiveBuffer.get(), kReceiveBufferSize, 0, reinterpret_cast<struct sockaddr*>(&from), &fromLen);
+            mFd,
+#ifdef _WIN32
+            reinterpret_cast<char*>(mReceiveBuffer.get()),
+#else
+            mReceiveBuffer.get(),
+#endif
+            kReceiveBufferSize, 0, reinterpret_cast<struct sockaddr*>(&from), &fromLen);
         if (r > 0) {
             if (mAddr == from) {
                 ByteBuffer buf = { mReceiveBuffer.get(), static_cast<size_t>(r) };
@@ -81,7 +101,11 @@ ssize_t Socket::send(const ByteBuffer& buf)
 ssize_t Socket::send(const void* ptr, size_t len)
 {
     const auto r = ::sendto(mFd,
+#ifdef _WIN32
+                            reinterpret_cast<const char*>(ptr),
+#else
                             ptr,
+#endif
                             len,
                             0,
                             (struct sockaddr*)&mAddr,

@@ -13,8 +13,6 @@
 
 #include <mutex>
 
-#include <arpa/inet.h>
-
 #include <openssl/srtp.h>
 #include <openssl/ssl.h>
 
@@ -176,7 +174,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
     return true;
 }
 
-SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, uint16_t profileId)
+SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId)
     : mCrypto(crypto)
     , mProfileId(profileId)
 {

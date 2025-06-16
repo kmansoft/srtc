@@ -77,6 +77,36 @@ bool operator==(const anyaddr& addr1, const anyaddr& addr2)
 
 void getNtpTime(NtpTime& ntp)
 {
+#ifdef _WIN32
+	FILETIME ft;
+	ULARGE_INTEGER uli;
+	uint64_t total_100ns;
+	uint64_t ntp_seconds;
+	uint64_t remaining_100ns;
+
+	// Get current system time as FILETIME
+	GetSystemTimeAsFileTime(&ft);
+
+	// Convert FILETIME to 64-bit integer
+	uli.LowPart = ft.dwLowDateTime;
+	uli.HighPart = ft.dwHighDateTime;
+	total_100ns = uli.QuadPart;
+
+	// Convert to NTP epoch (Jan 1, 1900)
+	// Difference between Windows epoch (1601) and NTP epoch (1900) = 301 years
+	// 301 years * 365.2425 days/year * 24 hours/day * 3600 seconds/hour * 10^7 (100ns units)
+	total_100ns += 94354848000000000ULL;
+
+	// Extract seconds
+	ntp_seconds = total_100ns / 10000000ULL;
+	ntp.seconds = (uint32_t)ntp_seconds;
+
+	// Extract fractional part
+	remaining_100ns = total_100ns % 10000000ULL;
+	// Convert to NTP fraction format (2^32 units per second)
+	// fraction = (remaining_100ns * 2^32) / 10^7
+	ntp.fraction = (uint32_t)((remaining_100ns * 4294967296ULL) / 10000000ULL);
+#else
 	// Get current time
 	struct timespec current_time = {};
 	clock_gettime(CLOCK_REALTIME, &current_time);
@@ -93,14 +123,21 @@ void getNtpTime(NtpTime& ntp)
 	// Convert nanoseconds to NTP fraction format (2^-32 seconds)
 	// 2^32 / 10^9 = 4.294967296
 	ntp.fraction = static_cast<uint32_t>(static_cast<double>(current_time.tv_nsec) * 4.294967296);
+#endif
 }
 
 int64_t getSystemTimeMicros()
 {
 	// Get current time
+#ifdef _WIN32
+	const auto sinceEpoch = std::chrono::steady_clock::now().time_since_epoch();
+	const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(sinceEpoch);
+	return micros.count();
+#else
 	struct timespec ts = {};
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return static_cast<int64_t>(ts.tv_sec) * 1000000l + ts.tv_nsec / 1000l;
+#endif
 }
 
 template <class T>

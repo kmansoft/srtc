@@ -1,10 +1,21 @@
 #pragma once
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
+
 #include <thread>
+#include <string>
 
 namespace srtc
 {
+
+#ifdef _WIN32
+typedef SSIZE_T ssize_t;
+#endif
 
 enum class Codec {
     None = 0,
@@ -40,7 +51,9 @@ struct PublishConnectionStats {
 
 std::string to_string(const anyaddr& addr);
 
-#if defined __has_attribute && __has_attribute(guarded_by)
+#if defined(__clang__) || defined(__GNUC__)
+
+#if __has_attribute && __has_attribute(guarded_by)
 #define SRTC_GUARDED_BY(mutex) __attribute__((guarded_by(mutex)))
 #else
 #define SRTC_GUARDED_BY(mutex)
@@ -62,6 +75,15 @@ std::string to_string(const anyaddr& addr);
 #define SRTC_SHARED_LOCKS_REQUIRED(...) __attribute__((shared_locks_required(__VA_ARGS__)))
 #else
 #define SRTC_SHARED_LOCKS_REQUIRED(...)
+#endif
+
+#else
+
+#define SRTC_GUARDED_BY(mutex)
+#define SRTC_LOCKS_EXCLUDED(...)
+#define SRTC_EXCLUSIVE_LOCKS_REQUIRED(...)
+#define SRTC_SHARED_LOCKS_REQUIRED(...)
+
 #endif
 
 } // namespace srtc

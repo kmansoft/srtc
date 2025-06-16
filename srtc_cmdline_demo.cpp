@@ -4,16 +4,21 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 
-#include <curl/curl.h>
-#include <curl/easy.h>
-
 #include <iomanip>
 #include <iostream>
 #include <memory>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#else
+#include <curl/curl.h>
+#include <curl/easy.h>
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 // Program options
 
@@ -187,16 +192,33 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 		exit(1);
 	}
 
+	const auto sz = static_cast<size_t>(statbuf.st_size);
+
+	srtc::ByteBuffer buf(sz);
+	buf.resize(sz);
+
+#ifdef _WIN32
+	const auto h = CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (h == INVALID_HANDLE_VALUE) {
+		std::cout << "*** Cannot open input file " << fileName << std::endl;
+		exit(1);
+	}
+
+	DWORD bytesRead = {};
+	if (!ReadFile(h, buf.data(), sz, &bytesRead, NULL) || bytesRead != sz) {
+		std::cout << "*** Cannot read input file " << fileName << std::endl;
+		exit(1);
+	}
+
+	CloseHandle(h);
+#else
 	const auto h = open(fileName.c_str(), O_RDONLY);
 	if (h < 0) {
 		std::cout << "*** Cannot open input file " << fileName << std::endl;
 		exit(1);
 	}
 
-	const auto sz = static_cast<size_t>(statbuf.st_size);
-
-	srtc::ByteBuffer buf(sz);
-	buf.resize(sz);
 
 	if (read(h, buf.data(), sz) != sz) {
 		std::cout << "*** Cannot read input file " << fileName << std::endl;
@@ -204,6 +226,7 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 	}
 
 	close(h);
+#endif
 
 	return std::move(buf);
 }
@@ -399,15 +422,22 @@ int main(int argc, char* argv[])
 	std::cout << "*** Using H.264 file: " << gInputFile << std::endl;
 	std::cout << "*** Using WHIP URL: " << gWhipUrl << std::endl;
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-
 	using namespace srtc;
 
 	char cwd[1024];
+#ifdef _WIN32
+	if (!GetCurrentDirectoryA(sizeof(cwd), cwd)) {
+		std::cout << "*** Cannot get current working directory" << std::endl;
+		exit(1);
+	}
+#else
 	if (!getcwd(cwd, sizeof(cwd))) {
 		std::cout << "*** Cannot get current working directory" << std::endl;
 		exit(1);
 	}
+
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+#endif
 
 	std::cout << "*** Current working directory: " << cwd << std::endl;
 
@@ -463,10 +493,18 @@ int main(int argc, char* argv[])
 	});
 
 	// Offer
-	const OfferConfig offerConfig = {
-		.cname = "foo", .enable_rtx = true, .enable_bwe = gEnableBWE, .debug_drop_packets = gDropPackets
-	};
-	const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
+	OfferConfig offerConfig = { };
+	offerConfig.cname = "foo";
+	offerConfig.enable_rtx = true;
+	offerConfig.enable_bwe = gEnableBWE;
+	offerConfig.debug_drop_packets = gDropPackets;
+
+	PubVideoCodec videoCodec;
+	videoCodec.codec = Codec::H264;
+	videoCodec.profile_level_id = 0x42e01f;
+
+	PubVideoConfig videoConfig = {};
+	videoConfig.codec_list.push_back(videoCodec);
 
 	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, std::nullopt);
 	const auto [offerString, offerError] = offer->generate();

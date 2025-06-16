@@ -7,6 +7,7 @@ if(POLICY CMP0135)
 endif()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
+option(SRTC_BUILD_CMDLINE "Build the command line demo" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -128,12 +129,20 @@ endif()
 
 target_include_directories(srtc PUBLIC "./include")
 
-target_compile_options(srtc
-        PRIVATE
-        "-ffunction-sections"
-        "-Wall"
-        "-Werror"
-)
+if(UNIX)
+    target_compile_options(srtc
+            PRIVATE
+            "-ffunction-sections"
+            "-Wall"
+            "-Werror"
+    )
+endif()
+if(WIN32)
+    target_compile_options(srtc
+            PRIVATE
+            "-DNOMINMAX"
+    )
+endif()
 
 target_link_libraries(
         srtc
@@ -267,13 +276,20 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             OpenSSL::SSL
     )
 
+    if(WIN32)
+        target_link_libraries(
+                srtc_test
+                ws2_32
+        )
+    endif()
+
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
 endif()
 
 # Command line demo
 
-if(UNIX AND NOT ANDROID)
+if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
     add_executable(srtc_cmdline_demo
             srtc_cmdline_demo.cpp
@@ -282,19 +298,27 @@ if(UNIX AND NOT ANDROID)
 
     add_dependencies(srtc_cmdline_demo srtc)
 
-    find_package(CURL REQUIRED)
+    if(WIN32)
+        target_link_libraries(
+                srtc_cmdline_demo
+                PRIVATE
+                srtc
+        )
+    else()
+        find_package(CURL REQUIRED)
 
-    target_include_directories(srtc_cmdline_demo
-            PRIVATE
-            ${CURL_INCLUDE_DIRS}
-            )
+        target_include_directories(srtc_cmdline_demo
+                PRIVATE
+                ${CURL_INCLUDE_DIRS}
+                )
 
-    target_link_libraries(
-            srtc_cmdline_demo
-            PRIVATE
-            srtc
-            CURL::libcurl
-    )
+        target_link_libraries(
+                srtc_cmdline_demo
+                PRIVATE
+                srtc
+                CURL::libcurl
+        )
+    endif()
 
 endif()
 

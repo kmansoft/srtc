@@ -28,11 +28,13 @@ void initLibSRTP()
 {
 	std::call_once(gInitFlag, [] {
 		srtp_init();
-
-		struct timespec t = {};
-		clock_gettime(CLOCK_REALTIME, &t);
-		srand48(t.tv_nsec);
 	});
+}
+
+uint32_t randomU32() {
+	uint32_t value;
+	RAND_bytes((unsigned char*)&value, sizeof(value));
+	return value;
 }
 
 } // namespace
@@ -177,7 +179,7 @@ TEST(SrtpCrypto, RtpSend)
 		}
 
 		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
-			const auto payloadSize = 5 + lrand48() % 1000;
+			const auto payloadSize = 5 + randomU32() % 1000;
 			srtc::ByteBuffer payload(payloadSize);
 			RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
 			payload.resize(payloadSize);
@@ -192,8 +194,8 @@ TEST(SrtpCrypto, RtpSend)
 
 			if ((repeatIndex % 2) == 1) {
 				// Extension
-				const auto extensionId = static_cast<uint16_t>(1 + lrand48() % 2000);
-				const auto extensionLen = static_cast<size_t>(1 + lrand48() % 200);
+				const auto extensionId = static_cast<uint16_t>(1 + randomU32() % 2000);
+				const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
 				srtc::ByteBuffer extensionData(extensionLen);
 				extensionData.resize(extensionLen);
 				RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
@@ -203,7 +205,7 @@ TEST(SrtpCrypto, RtpSend)
 
 			uint8_t padding = 0;
 			if ((repeatIndex % 5) == 1) {
-				padding = 1 + static_cast<uint8_t>(lrand48() % 128);
+				padding = 1 + static_cast<uint8_t>(randomU32() % 128);
 			}
 
 			const auto packet = std::make_shared<srtc::RtpPacket>(
@@ -336,7 +338,7 @@ TEST(SrtpCrypto, RtcpSend)
 		uint32_t sequence = 1;
 
 		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
-			const auto payloadSize = 5 + lrand48() % 1000;
+			const auto payloadSize = 5 + randomU32() % 1000;
 			srtc::ByteBuffer payload(payloadSize);
 			RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
 			payload.resize(payloadSize);
@@ -470,7 +472,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
 
 		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
 			// Packet 1
-			const auto payloadSize1 = 5 + lrand48() % 200;
+			const auto payloadSize1 = 5 + randomU32() % 200;
 			srtc::ByteBuffer payload1(payloadSize1);
 			RAND_bytes(payload1.data(), static_cast<int>(payload1.capacity()));
 			payload1.resize(payloadSize1);
@@ -478,7 +480,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
 			const auto packet1 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x01, 0x22, std::move(payload1));
 
 			// Packet 2
-			const auto payloadSize2 = 5 + lrand48() % 200;
+			const auto payloadSize2 = 5 + randomU32() % 200;
 			srtc::ByteBuffer payload2(payloadSize2);
 			RAND_bytes(payload2.data(), static_cast<int>(payload2.capacity()));
 			payload2.resize(payloadSize2);
@@ -620,7 +622,7 @@ TEST(SrtpCrypto, RtcpReceive)
 			srtc::ByteBuffer sourcePacket;
 			srtc::ByteWriter sourceWriter(sourcePacket);
 
-			const auto sourcePacketDataSizeDiv4 = 1 + lrand48() % 16;
+			const auto sourcePacketDataSizeDiv4 = 1 + randomU32() % 16;
 
 			// Verison = 2, Padding, and RC
 			sourceWriter.writeU8(0x80);
@@ -764,7 +766,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 			srtc::ByteBuffer sourcePacket1;
 			srtc::ByteWriter sourceWriter1(sourcePacket1);
 
-			const auto sourcePacket1DataSizeDiv4 = 1 + lrand48() % 16;
+			const auto sourcePacket1DataSizeDiv4 = 1 + randomU32() % 16;
 
 			// Verison = 2, Padding, and RC
 			sourceWriter1.writeU8(0x80);
@@ -786,7 +788,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 			srtc::ByteBuffer sourcePacket2;
 			srtc::ByteWriter sourceWriter2(sourcePacket2);
 
-			const auto sourcePacket2DataSizeDiv4 = 1 + lrand48() % 16;
+			const auto sourcePacket2DataSizeDiv4 = 1 + randomU32() % 16;
 
 			// Verison = 2, Padding, and RC
 			sourceWriter2.writeU8(0x80);
