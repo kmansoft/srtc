@@ -44,20 +44,20 @@ EventLoop_MacOS::~EventLoop_MacOS()
     close(mPipeWrite);
 }
 
-void EventLoop_MacOS::registerSocket(int socket, void* udata)
+void EventLoop_MacOS::registerSocket(const std::shared_ptr<Socket>& socket, void* udata)
 {
     struct kevent change = {};
-    EV_SET(&change, socket, EVFILT_READ, EV_ADD, 0, 0, udata);
+    EV_SET(&change, socket->handle(), EVFILT_READ, EV_ADD, 0, 0, udata);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
         LOG(SRTC_LOG_E, "Cannot add socket to kqueue");
     }
 }
 
-void EventLoop_MacOS::unregisterSocket(int socket)
+void EventLoop_MacOS::unregisterSocket(const std::shared_ptr<Socket>& socket)
 {
     struct kevent change = {};
-    EV_SET(&change, socket, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    EV_SET(&change, socket->handle(), EVFILT_READ, EV_DELETE, 0, 0, nullptr);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
         LOG(SRTC_LOG_E, "Cannot remove socket from kqueue");

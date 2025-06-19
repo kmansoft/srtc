@@ -119,6 +119,12 @@ if(APPLE)
         include/srtc/event_loop_macos.h
         event_loop_macos.cpp
 	)
+elseif(WIN32)
+    target_sources(srtc
+        PRIVATE
+        include/srtc/event_loop_win.h
+        event_loop_win.cpp
+    )
 elseif(UNIX)
     target_sources(srtc
         PRIVATE
@@ -298,6 +304,11 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
     add_dependencies(srtc_cmdline_demo srtc)
 
     if(WIN32)
+        target_sources(srtc_cmdline_demo
+                PRIVATE
+                srtc_cmdline_demo_http_win.cpp
+        )
+
         target_link_libraries(
                 srtc_cmdline_demo
                 PRIVATE

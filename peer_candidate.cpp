@@ -235,7 +235,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
 	initOpenSSL();
 
-	mEventLoop->registerSocket(mSocket->fd(), this);
+	mEventLoop->registerSocket(mSocket, this);
 
 	mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
 
@@ -250,7 +250,7 @@ PeerCandidate::~PeerCandidate()
 {
 	LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
-	mEventLoop->unregisterSocket(mSocket->fd());
+	mEventLoop->unregisterSocket(mSocket);
 
 	freeDTLS();
 }

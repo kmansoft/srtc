@@ -26,6 +26,17 @@ srtc::SocketHandle createSocket(const srtc::anyaddr& addr)
     return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
+#ifdef _WIN32
+HANDLE createEvent(SOCKET socket)
+{
+    const auto event = WSACreateEvent();
+
+    WSAEventSelect(socket, event, FD_READ);
+
+    return event;
+}
+#endif
+
 constexpr auto kReceiveBufferSize = 16 * 1024;
 
 } // namespace
@@ -35,34 +46,50 @@ namespace srtc
 
 Socket::Socket(const anyaddr& addr)
     : mAddr(addr)
-    , mFd(createSocket(addr))
+    , mHandle(createSocket(addr))
+#ifdef _WIN32
+    , mEvent(createEvent(mHandle))
+#endif
     , mReceiveBuffer(std::make_unique<uint8_t[]>(kReceiveBufferSize))
 {
 #ifdef _WIN32
     u_long mode = 1u;
-    ioctlsocket(mFd, FIONBIO, &mode);
+    ioctlsocket(mHandle, FIONBIO, &mode);
 #else
-    auto socketFlags = fcntl(mFd, F_GETFL, 0);
+    auto socketFlags = fcntl(mHandle, F_GETFL, 0);
     socketFlags |= O_NONBLOCK;
-    fcntl(mFd, F_SETFL, socketFlags);
+    fcntl(mHandle, F_SETFL, socketFlags);
 #endif
 }
 
 Socket::~Socket()
 {
-    if (mFd >= 0) {
 #ifdef _WIN32
-        closesocket(mFd);
-#else
-        close(mFd);
-#endif
+    if (mHandle != INVALID_SOCKET) {
+        closesocket(mHandle);
     }
+    if (mEvent != INVALID_HANDLE_VALUE) {
+        CloseHandle(mEvent);
+    }
+#else
+    if (mHandle >= 0) {
+        close(mHandle);
+    }
+#endif
 }
 
-SocketHandle Socket::fd() const
+SocketHandle Socket::handle() const
 {
-    return mFd;
+    return mHandle;
 }
+
+#ifdef _WIN32
+HANDLE Socket::event() const
+{
+    return mEvent;
+}
+#endif
+
 
 [[nodiscard]] std::list<Socket::ReceivedData> Socket::receive()
 {
@@ -73,7 +100,7 @@ SocketHandle Socket::fd() const
         socklen_t fromLen = sizeof(from);
 
         const auto r = recvfrom(
-            mFd,
+            mHandle,
 #ifdef _WIN32
             reinterpret_cast<char*>(mReceiveBuffer.get()),
 #else
@@ -100,7 +127,7 @@ ssize_t Socket::send(const ByteBuffer& buf)
 
 ssize_t Socket::send(const void* ptr, size_t len)
 {
-    const auto r = ::sendto(mFd,
+    const auto r = sendto(mHandle,
 #ifdef _WIN32
                             reinterpret_cast<const char*>(ptr),
 #else
