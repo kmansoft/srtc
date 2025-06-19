@@ -115,7 +115,7 @@ jobs:
           ${{github.workspace}}/build/srtc_test
 
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4
@@ -124,10 +124,11 @@ jobs:
         run: |
           choco install nasm ninja
 
+      - name: Enable MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure CMake
         run: |
-          "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\VsDevCmd.bat"
-
           cmake `
             -B ${{github.workspace}}/build `
             -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
