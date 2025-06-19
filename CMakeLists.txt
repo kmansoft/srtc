@@ -157,18 +157,7 @@ if(WIN32)
             PRIVATE
             "-DNOMINMAX"
     )
-    target_link_options(srtc
-            PRIVATE
-    )
 endif()
-
-target_link_libraries(
-        srtc
-        PRIVATE
-        stun
-)
-
-# Android specific
 
 if(ANDROID)
     target_compile_options(srtc PRIVATE
@@ -182,11 +171,17 @@ if(ANDROID)
             )
 endif()
 
+target_link_libraries(
+        srtc
+        PRIVATE
+        stun
+)
+
 # OpenSSL
 
 if(WIN32)
     # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
-    # so we build it ourselves (somewhere else) and upload to a server, and fetch from there.
+    # so we build it ourselves somewhere else and upload to a server, then fetch from there.
     set(OPENSSL_USE_STATIC_LIBS ON)
     set(OPENSSL_VERSION "3.5.0")
     set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
@@ -266,8 +261,6 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
                 -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
         )
     endif()
-
-    message(STATUS "LIBSRTP_CMAKE_ARGS = ${LIBSRTP_CMAKE_ARGS}")
 
     ExternalProject_Add(
             srtp
