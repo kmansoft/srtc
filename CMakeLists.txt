@@ -197,7 +197,8 @@ if(WIN32)
         file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
         file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
     endif()
-elseif(APPLE)
+endif()
+if(APPLE)
     # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
     set(OPENSSL_USE_STATIC_LIBS ON)
 endif()
@@ -252,6 +253,11 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
             )
 
+    if(WIN32)
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
+        )
+    endif()
     if(ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
