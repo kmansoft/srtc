@@ -216,8 +216,6 @@ target_link_directories(srtc PUBLIC
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
 
-message(STATUS "CMAKE_CROSSCOMPILING = ${CMAKE_CROSSCOMPILING}")
-
 if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
 
     # Google Test
