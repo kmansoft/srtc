@@ -131,6 +131,7 @@ jobs:
           cmake `
             -B ${{github.workspace}}/build `
             -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+            -DOPENSSL_ROOT_DIR="C:\\Program Files\\OpenSSL" `
             -GNinja
 
       - name: Build
