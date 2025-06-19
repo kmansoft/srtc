@@ -200,6 +200,7 @@ if(WIN32)
         execute_process(COMMAND "${CMAKE_COMMAND}"
                 "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
                 "-DOPENSSL_SMALL=ON"
+                "-DBORINGSSL_TESTS=OFF"
                 "-GNinja"
                 "-S" "${BORINGSSL_SOURCE_DIR}"
                 "-B" "${BORINGSSL_BUILD_DIR}"
