@@ -140,6 +140,7 @@ jobs:
             --build ${{github.workspace}}/build `
             --config ${{env.BUILD_TYPE}} `
             --target srtc `
+            --target srtc_test `
             --target srtc_cmdline_demo
 
       - name: Test
