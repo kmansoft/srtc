@@ -124,7 +124,7 @@ jobs:
         run: |
           choco install openssl ninja
 
-          dir "C:/Program Files"
+          dir "C:\\Program Files\\OpenSSL"
 
       - name: Configure CMake
         run: |
