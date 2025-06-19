@@ -114,3 +114,32 @@ jobs:
         run: |
           ${{github.workspace}}/build/srtc_test
 
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          choco install openssl curl ninja
+
+      - name: Configure CMake
+        run: |
+          cmake \
+            -B ${{github.workspace}}/build \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+            -GNinja
+
+      - name: Build
+        run: |
+          cmake \
+            --build ${{github.workspace}}/build \
+            --config ${{env.BUILD_TYPE}} \
+            --target srtc \
+            --target srtc_test \
+            --target srtc_cmdline_demo
+
+      - name: Test
+        run: |
+          ${{github.workspace}}/build/srtc_test.exe
