@@ -5,6 +5,9 @@ project("srtc")
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
 option(SRTC_BUILD_CMDLINE "Build the command line demo" ON)
@@ -18,7 +21,13 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 include(ExternalProject)
 include(FetchContent)
 
-# srtc
+# Static link runtime on Windows, unless building tests (link errors)
+
+if(WIN32 AND NOT SRTC_BUILD_TESTS)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# The main srtc library
 
 add_library(srtc
         include/srtc/byte_buffer.h
@@ -148,6 +157,9 @@ if(WIN32)
             PRIVATE
             "-DNOMINMAX"
     )
+    target_link_options(srtc
+            PRIVATE
+    )
 endif()
 
 target_link_libraries(
@@ -209,10 +221,12 @@ add_subdirectory(stun)
 add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE
-        "stun")
+        "stun"
+)
 
 target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/stun")
+        "${CMAKE_BINARY_DIR}/stun"
+)
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
 
@@ -238,12 +252,6 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
             )
 
-    if(WIN32)
-        list(APPEND LIBSRTP_CMAKE_ARGS
-            -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
-            -DOPENSSL_USE_STATIC_LIBS=${OPENSSL_USE_STATIC_LIBS}
-        )
-    endif()
     if(ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
@@ -252,7 +260,6 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
                 -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
         )
     endif()
-
 
     message(STATUS "LIBSRTP_CMAKE_ARGS = ${LIBSRTP_CMAKE_ARGS}")
 

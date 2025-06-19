@@ -10,3 +10,4 @@ go.sum
 build
 out
 deps
+CMakeSettings.json
