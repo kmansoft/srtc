@@ -170,49 +170,19 @@ if(ANDROID)
             )
 endif()
 
-# OpenSSL / BoringSSL
-
-set(BORINGSSL_GIT_URL "https://boringssl.googlesource.com/boringssl")
+# OpenSSL
 
 if(WIN32)
-    # Cloning our own copy of BoringSSL is more reliable than installing OpenSSL with Chocolatey
-    # which can install under different paths, and then there are no static libraries, which we want.
-    # BoringSSL defaults to static libraries, we don't even have to configure it.
+    # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
+    # so we build it ourselves (somewhere else) and upload to a server, and fetch from there.
+    set(OPENSSL_USE_STATIC_LIBS ON)
+    set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0")
 
-    set(FETCHCONTENT_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/build-${CMAKE_BUILD_TYPE}")
-
-    FetchContent_Declare(boringssl
-            GIT_REPOSITORY "${BORINGSSL_GIT_URL}"
-            GIT_TAG "origin/main"
-            GIT_SHALLOW ON
-    )
-
-    FetchContent_GetProperties(boringssl)
-    if(NOT boringssl_POPULATED)
-        FetchContent_MakeAvailable(boringssl)
+    if(NOT EXISTS "${OPENSSL_ROOT_DIR}")
+        set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0.zip")
+        file(DOWNLOAD "https://kman.mobi/download/openssl-bin-3.5.0.zip" "${OPENSSL_ZIP_FILE}")
+        file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
     endif()
-
-    set(BORINGSSL_SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/boringssl-src")
-    set(BORINGSSL_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/boringssl-build")
-    set(BORINGSSL_INSTALL_DIR "${BORINGSSL_SOURCE_DIR}/install")
-
-    if(NOT EXISTS "${BORINGSSL_INSTALL_DIR}")
-        execute_process(COMMAND "${CMAKE_COMMAND}"
-                "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-                "-DOPENSSL_SMALL=ON"
-                "-DBORINGSSL_TESTS=OFF"
-                "-GNinja"
-                "-S" "${BORINGSSL_SOURCE_DIR}"
-                "-B" "${BORINGSSL_BUILD_DIR}"
-            )
-        execute_process(COMMAND "${CMAKE_COMMAND}"
-                "--build"
-                "${BORINGSSL_BUILD_DIR}"
-                "--target" "crypto" "ssl" "install"
-            )
-    endif()
-
-    set(OPENSSL_ROOT_DIR "${BORINGSSL_INSTALL_DIR}")
 elseif(APPLE)
     # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
     set(OPENSSL_USE_STATIC_LIBS ON)
@@ -266,14 +236,23 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
             )
 
+    if(WIN32)
+        list(APPEND LIBSRTP_CMAKE_ARGS
+            -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
+            -DOPENSSL_USE_STATIC_LIBS=${OPENSSL_USE_STATIC_LIBS}
+        )
+    endif()
     if(ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
                 -DANDROID_ABI=${ANDROID_ABI}
                 -DANDROID_PLATFORM=android-29
                 -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
-                )
+        )
     endif()
+
+
+    message(STATUS "LIBSRTP_CMAKE_ARGS = ${LIBSRTP_CMAKE_ARGS}")
 
     ExternalProject_Add(
             srtp
