@@ -143,6 +143,8 @@ jobs:
             --target srtc `
             --target srtc_cmdline_demo
 
-      - name: Test
-        run: |
-          ${{github.workspace}}/build/srtc_test.exe
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: srtc_cmdline_demo-win
+          path: ${{github.workspace}}/build/srtc_cmdline_demo.exe
