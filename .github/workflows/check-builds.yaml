@@ -132,7 +132,6 @@ jobs:
           cmake `
             -B ${{github.workspace}}/build `
             -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
-            -DSRTC_BUILD_TESTS=OFF `
             -GNinja
 
       - name: Build
