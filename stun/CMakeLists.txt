@@ -27,9 +27,11 @@ target_compile_definitions(stun
     HAVE_OPENSSL=1
 )
 
-target_compile_options(stun
-    PRIVATE
-    "-ffunction-sections")
+if(UNIX)
+    target_compile_options(stun
+        PRIVATE
+        "-ffunction-sections")
+endif()
 
 find_package(OpenSSL REQUIRED)
 

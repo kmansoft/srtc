@@ -170,10 +170,50 @@ if(ANDROID)
             )
 endif()
 
+# OpenSSL / BoringSSL
 
-# OpenSSL
+set(BORINGSSL_GIT_URL "https://boringssl.googlesource.com/boringssl")
 
-if(APPLE OR WIN32)
+if(WIN32)
+    # Cloning our own copy of BoringSSL is more reliable than installing OpenSSL with Chocolatey
+    # which can install under different paths, and then there are no static libraries, which we want.
+    # BoringSSL defaults to static libraries, we don't even have to configure it.
+
+    set(FETCHCONTENT_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/build-${CMAKE_BUILD_TYPE}")
+
+    FetchContent_Declare(boringssl
+            GIT_REPOSITORY "${BORINGSSL_GIT_URL}"
+            GIT_TAG "origin/main"
+            GIT_SHALLOW ON
+    )
+
+    FetchContent_GetProperties(boringssl)
+    if(NOT boringssl_POPULATED)
+        FetchContent_MakeAvailable(boringssl)
+    endif()
+
+    set(BORINGSSL_SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/boringssl-src")
+    set(BORINGSSL_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/boringssl-build")
+    set(BORINGSSL_INSTALL_DIR "${BORINGSSL_SOURCE_DIR}/install")
+
+    if(NOT EXISTS "${BORINGSSL_INSTALL_DIR}")
+        execute_process(COMMAND "${CMAKE_COMMAND}"
+                "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+                "-DOPENSSL_SMALL=ON"
+                "-GNinja"
+                "-S" "${BORINGSSL_SOURCE_DIR}"
+                "-B" "${BORINGSSL_BUILD_DIR}"
+            )
+        execute_process(COMMAND "${CMAKE_COMMAND}"
+                "--build"
+                "${BORINGSSL_BUILD_DIR}"
+                "--target" "crypto" "ssl" "install"
+            )
+    endif()
+
+    set(OPENSSL_ROOT_DIR "${BORINGSSL_INSTALL_DIR}")
+elseif(APPLE)
+    # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
     set(OPENSSL_USE_STATIC_LIBS ON)
 endif()
 
