@@ -176,12 +176,13 @@ if(WIN32)
     # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
     # so we build it ourselves (somewhere else) and upload to a server, and fetch from there.
     set(OPENSSL_USE_STATIC_LIBS ON)
-    set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0")
+    set(OPENSSL_VERSION "3.5.0")
+    set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
 
     if(NOT EXISTS "${OPENSSL_ROOT_DIR}")
         message(STATUS "Downloading OpenSSL binaries...")
-        set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0.zip")
-        file(DOWNLOAD "https://kman.mobi/download/openssl-bin-3.5.0.zip" "${OPENSSL_ZIP_FILE}")
+        set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
+        file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
         file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
     endif()
 elseif(APPLE)
@@ -214,6 +215,8 @@ target_link_directories(srtc PUBLIC
         "${CMAKE_BINARY_DIR}/stun")
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
+
+message(STATUS "CMAKE_CROSSCOMPILING = ${CMAKE_CROSSCOMPILING}")
 
 if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
 
