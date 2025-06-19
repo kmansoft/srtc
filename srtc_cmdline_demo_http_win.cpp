@@ -3,11 +3,11 @@
 #include <winhttp.h>
 #pragma comment(lib, "winhttp.lib")
 
-#include <string>
-#include <iostream>
-#include <cstdint>
-#include <locale>
 #include <codecvt>
+#include <cstdint>
+#include <iostream>
+#include <locale>
+#include <string>
 
 namespace
 {
@@ -125,14 +125,20 @@ std::string perform_whip(const std::string& offer, const std::string& url, const
 
 	LPCWSTR accept[] = { L"application/sdp", nullptr };
 
-	const InternetHandle hRequest = { WinHttpOpenRequest(hConnect.mHandle, L"POST", path.data(),
-		NULL, WINHTTP_NO_REFERER, accept, urlobj.is_secure ? WINHTTP_FLAG_SECURE : 0 )};
+	const InternetHandle hRequest = { WinHttpOpenRequest(hConnect.mHandle,
+														 L"POST",
+														 path.data(),
+														 NULL,
+														 WINHTTP_NO_REFERER,
+														 accept,
+														 urlobj.is_secure ? WINHTTP_FLAG_SECURE : 0) };
 	if (!hRequest.mHandle) {
 		std::cout << "Error: cannot create request for " << url << std::endl;
 		exit(1);
 	}
 
-	const auto headers = StringToWString("Authorization: Bearer " + token + "\r\n" + "Content-Type: application/sdp\r\n");
+	const auto headers =
+		StringToWString("Authorization: Bearer " + token + "\r\n" + "Content-Type: application/sdp\r\n");
 
 	// Send request with POST data
 	if (!WinHttpSendRequest(
@@ -144,6 +150,25 @@ std::string perform_whip(const std::string& offer, const std::string& url, const
 	// Receive response
 	if (!WinHttpReceiveResponse(hRequest.mHandle, NULL)) {
 		std::cout << "Error: cannot receive response from " << url << std::endl;
+		exit(1);
+	}
+
+	// Check status code
+	DWORD dwStatusCode = 0;
+	DWORD dwStatusCodeSize = sizeof(dwStatusCode);
+
+	if (!WinHttpQueryHeaders(hRequest.mHandle,
+							 WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+							 WINHTTP_HEADER_NAME_BY_INDEX,
+							 &dwStatusCode,
+							 &dwStatusCodeSize,
+							 WINHTTP_NO_HEADER_INDEX)) {
+		std::cout << "Error: cannot receive status code from " << url << std::endl;
+		exit(1);
+	}
+
+	if (dwStatusCode < 200 || dwStatusCode >= 400) {
+		std::cout << "Error: status code " << dwStatusCode << std::endl;
 		exit(1);
 	}
 
