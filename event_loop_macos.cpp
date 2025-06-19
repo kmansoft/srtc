@@ -1,6 +1,6 @@
 #include "srtc/event_loop_macos.h"
-
 #include "srtc/logging.h"
+#include "srtc/socket.h"
 
 #include <sys/event.h>
 #include <sys/types.h>
