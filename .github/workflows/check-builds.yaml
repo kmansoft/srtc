@@ -109,3 +109,8 @@ jobs:
             --target srtc \
             --target srtc_test \
             --target srtc_cmdline_demo
+
+      - name: Test
+        run: |
+          ${{github.workspace}}/build/srtc_test
+
