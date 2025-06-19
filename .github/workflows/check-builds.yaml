@@ -122,9 +122,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          choco install nasm ninja
+          choco install ninja
 
-      - name: Enable MSVC
+      - name: Use the MSVC compiler
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure CMake
@@ -141,7 +141,12 @@ jobs:
             --build ${{github.workspace}}/build `
             --config ${{env.BUILD_TYPE}} `
             --target srtc `
+            --target srtc_test \
             --target srtc_cmdline_demo
+
+      - name: Test
+        run: |
+          ${{github.workspace}}/build/srtc_test.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -179,6 +179,7 @@ if(WIN32)
     set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0")
 
     if(NOT EXISTS "${OPENSSL_ROOT_DIR}")
+        message(STATUS "Downloading OpenSSL binaries...")
         set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-3.5.0.zip")
         file(DOWNLOAD "https://kman.mobi/download/openssl-bin-3.5.0.zip" "${OPENSSL_ZIP_FILE}")
         file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
