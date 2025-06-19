@@ -132,7 +132,6 @@ jobs:
           cmake `
             -B ${{github.workspace}}/build `
             -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
-            -DSRTC_BUILD_TESTS=OFF `
             -GNinja
 
       - name: Build
@@ -141,10 +140,10 @@ jobs:
             --build ${{github.workspace}}/build `
             --config ${{env.BUILD_TYPE}} `
             --target srtc `
+            --target srtc_test `
             --target srtc_cmdline_demo
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: srtc_cmdline_demo-win
-          path: ${{github.workspace}}/build/srtc_cmdline_demo.exe
+      - name: Test
+        run: |
+          ${{github.workspace}}/build/srtc_test.exe
+
