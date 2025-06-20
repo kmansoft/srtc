@@ -30,6 +30,7 @@ endif()
 # The main srtc library
 
 add_library(srtc
+        # Headers
         include/srtc/byte_buffer.h
         include/srtc/error.h
         include/srtc/event_loop.h
@@ -76,69 +77,70 @@ add_library(srtc
         include/srtc/util.h
         include/srtc/x509_certificate.h
         include/srtc/x509_hash.h
-        byte_buffer.cpp
-        error.cpp
-        extension_map.cpp
-        h264.cpp
-        ice_agent.cpp
-        logging.cpp
-        packetizer.cpp
-        packetizer_h264.cpp
-        packetizer_opus.cpp
-        peer_candidate.cpp
-        peer_connection.cpp
-        random_generator.cpp
-        replay_protection.cpp
-        replay_protection.cpp
-        rtcp_packet.cpp
-        rtcp_packet_source.cpp
-        rtp_extension.cpp
-        rtp_extension_builder.cpp
-        rtp_extension_source_simulcast.cpp
-        rtp_extension_source_twcc.cpp
-        rtp_extension_source.cpp
-        rtp_packet.cpp
-        rtp_packet_source.cpp
-        rtp_std_extensions.cpp
-        rtp_time_source.cpp
-        sdp_answer.cpp
-        sdp_offer.cpp
-        scheduler.cpp
-        send_history.cpp
-        send_pacer.cpp
-        simulcast_layer.cpp
-        socket.cpp
-        srtc.cpp
-        srtp_connection.cpp
-        srtp_crypto.cpp
-        srtp_hmac_sha1.cpp
-        srtp_openssl.cpp
-        srtp_util.cpp
-        track.cpp
-        track_selector.cpp
-        track_stats.cpp
-        twcc.cpp
-        util.cpp
-        x509_certificate.cpp
-        x509_hash.cpp)
+        # Sources
+        src/byte_buffer.cpp
+        src/error.cpp
+        src/extension_map.cpp
+        src/h264.cpp
+        src/ice_agent.cpp
+        src/logging.cpp
+        src/packetizer.cpp
+        src/packetizer_h264.cpp
+        src/packetizer_opus.cpp
+        src/peer_candidate.cpp
+        src/peer_connection.cpp
+        src/random_generator.cpp
+        src/replay_protection.cpp
+        src/replay_protection.cpp
+        src/rtcp_packet.cpp
+        src/rtcp_packet_source.cpp
+        src/rtp_extension.cpp
+        src/rtp_extension_builder.cpp
+        src/rtp_extension_source_simulcast.cpp
+        src/rtp_extension_source_twcc.cpp
+        src/rtp_extension_source.cpp
+        src/rtp_packet.cpp
+        src/rtp_packet_source.cpp
+        src/rtp_std_extensions.cpp
+        src/rtp_time_source.cpp
+        src/sdp_answer.cpp
+        src/sdp_offer.cpp
+        src/scheduler.cpp
+        src/send_history.cpp
+        src/send_pacer.cpp
+        src/simulcast_layer.cpp
+        src/socket.cpp
+        src/srtc.cpp
+        src/srtp_connection.cpp
+        src/srtp_crypto.cpp
+        src/srtp_hmac_sha1.cpp
+        src/srtp_openssl.cpp
+        src/srtp_util.cpp
+        src/track.cpp
+        src/track_selector.cpp
+        src/track_stats.cpp
+        src/twcc.cpp
+        src/util.cpp
+        src/x509_certificate.cpp
+        src/x509_hash.cpp)
 
 if(APPLE)
 	target_sources(srtc
         PRIVATE
         include/srtc/event_loop_macos.h
-        event_loop_macos.cpp
+        src/event_loop_macos.cpp
 	)
 elseif(WIN32)
     target_sources(srtc
         PRIVATE
         include/srtc/event_loop_win.h
-        event_loop_win.cpp
+        src/event_loop_win.cpp
     )
 elseif(UNIX)
     target_sources(srtc
         PRIVATE
         include/srtc/event_loop_linux.h
-        event_loop_linux.cpp
+        src/event_loop_linux.cpp
     )
 endif()
 
@@ -212,12 +214,12 @@ target_link_libraries(srtc
 
 # STUN
 
-add_subdirectory(stun)
+add_subdirectory(src/stun)
 
 add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE
-        "stun"
+        src/stun
 )
 
 target_link_directories(srtc PUBLIC
@@ -280,10 +282,10 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
     add_executable(
             srtc_test
             EXCLUDE_FROM_ALL
-            test_google_vla.cpp
-            test_replay_protection.cpp
-            test_srtp_key_derivation.cpp
-            test_srtp_crypto.cpp
+            src/test_google_vla.cpp
+            src/test_replay_protection.cpp
+            src/test_srtp_key_derivation.cpp
+            src/test_srtp_crypto.cpp
     )
 
     target_include_directories(
@@ -326,7 +328,7 @@ endif()
 if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
     add_executable(srtc_cmdline_demo
-            srtc_cmdline_demo.cpp
+            src/srtc_cmdline_demo.cpp
     )
 
     add_dependencies(srtc_cmdline_demo srtc)
@@ -334,7 +336,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
     if(WIN32)
         target_sources(srtc_cmdline_demo
                 PRIVATE
-                srtc_cmdline_demo_http_win.cpp
+                src/srtc_cmdline_demo_http_win.cpp
         )
 
         target_link_libraries(
@@ -348,13 +350,13 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
         target_sources(srtc_cmdline_demo
                 PRIVATE
-                srtc_cmdline_demo_http_curl.cpp
+                src/srtc_cmdline_demo_http_curl.cpp
         )
 
         target_include_directories(srtc_cmdline_demo
                 PRIVATE
                 ${CURL_INCLUDE_DIRS}
-                )
+        )
 
         target_link_libraries(
                 srtc_cmdline_demo
