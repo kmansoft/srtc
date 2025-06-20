@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  BUILD_TYPE: RelWithDebInfo
+  BUILD_TYPE: Release
 
 jobs:
   build-linux:
@@ -37,7 +37,7 @@ jobs:
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
           cd release
-          strip srtc_cmdline_demo
+          strip srtc_cmdline_demo || true
           tar -czvf srtc_cmdline_demo-linux.tar.gz srtc_cmdline_demo
 
       - name: Upload artifacts
@@ -73,7 +73,7 @@ jobs:
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
           cd release
-          strip srtc_cmdline_demo
+          strip srtc_cmdline_demo || true
           tar -czvf srtc_cmdline_demo-macos.tar.gz srtc_cmdline_demo
 
       - name: Upload artifacts
@@ -87,10 +87,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          choco install ninja
 
       - name: Use the MSVC compiler
         uses: ilammy/msvc-dev-cmd@v1
@@ -107,7 +103,6 @@ jobs:
         run: |
           cmake `
             --build ${{github.workspace}}/build `
-            --config ${{env.BUILD_TYPE}} `
             --target srtc `
             --target srtc_cmdline_demo
 
