@@ -18,7 +18,7 @@ Features:
 - Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
 - Command line demo has been tested with Pion and Amazon IVS.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
-- Works on Linux, Android, MacOS, and should work on iOS too.
+- Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
 ### Envisioned use case 
 
@@ -57,9 +57,9 @@ overall connection state.
 
 ### A command line demo / sample
 
-Tested on Linux and MacOS with Pion.
+Tested on Linux, MacOS, Windows with Pion and Amazon IVS.
 
-If not using the default `.h264` file, you can convert an `.mp4` to raw H.264 with FFMPEG. Make sure to use the `baseline` profile.
+If not using the provided `.h264` files, you can convert an `.mp4` to raw H.264 with FFMPEG. Make sure to use the `baseline` profile.
 
 ```bash
 ffmpeg -i /path/to/a.mp4 -c:v libx264 -profile:v baseline -level 3.0 -preset medium -an -f h264 out.h264
@@ -74,14 +74,15 @@ cmake . -B build
 Change into the build directory and run:
 
 ```bash
-make
+cmake --build .
 ```
 
-Change back to the root (`cd ../`) and run the command line demo. Use `--help` to see arguments.
+Change back to the root (`cd ..`) and run the command line demo. Use `--help` to see arguments.
 
 ```bash
-./build/srtc_cmdline_demo --help
+./build/srtc_cmdline_demo[.exe] --help
 ```
+
 Should output:
 
 ```bash
@@ -100,16 +101,16 @@ Options:
   -h, --help           Show this help message
 ```
 
-To broadcast to Amazon IVS:
+#### To broadcast to Amazon IVS:
 
 ```bash
 ./build/srtc_cmdline_demo -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
 ```
 
-### Running with Pion
+#### Testing with Pion
 
-Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh`. This will start the Pion
-WebRTC server.
+Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh` or `go run .`.
+This will start the Pion  WebRTC server.
 
 Open a new web browser window to `http://localhost:8080`, you will see a web page with controls for publishing and subscribing.
 Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
