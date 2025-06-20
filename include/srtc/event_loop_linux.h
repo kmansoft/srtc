@@ -11,8 +11,8 @@ public:
     EventLoop_Linux();
     ~EventLoop_Linux() override;
 
-    void registerSocket(int socket, void* udata) override;
-    void unregisterSocket(int socket) override;
+    void registerSocket(const std::shared_ptr<Socket>& socket, void* udata) override;
+    void unregisterSocket(const std::shared_ptr<Socket>& socket) override;
 
     void wait(std::vector<void*>& udataList, int timeoutMillis) override;
 

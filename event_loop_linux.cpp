@@ -1,5 +1,6 @@
 #include "srtc/event_loop_linux.h"
 #include "srtc/logging.h"
+#include "srtc/socket.h"
 
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -33,17 +34,17 @@ EventLoop_Linux::~EventLoop_Linux()
     close(mEventHandle);
 }
 
-void EventLoop_Linux::registerSocket(int socket, void* udata)
+void EventLoop_Linux::registerSocket(const std::shared_ptr<Socket>& socket, void* udata)
 {
     struct epoll_event ev = {};
     ev.events = EPOLLIN;
     ev.data.ptr = udata;
-    epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, socket, &ev);
+    epoll_ctl(mEpollHandle, EPOLL_CTL_ADD, socket->handle(), &ev);
 }
 
-void EventLoop_Linux::unregisterSocket(int socket)
+void EventLoop_Linux::unregisterSocket(const std::shared_ptr<Socket>& socket)
 {
-    epoll_ctl(mEpollHandle, EPOLL_CTL_DEL, socket, nullptr);
+    epoll_ctl(mEpollHandle, EPOLL_CTL_DEL, socket->handle(), nullptr);
 }
 
 void EventLoop_Linux::wait(std::vector<void*>& udataList, int timeoutMillis)

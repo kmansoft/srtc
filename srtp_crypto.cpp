@@ -12,14 +12,18 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/srtp_util.h"
 
-#include <arpa/inet.h>
-
 #include <cassert>
 #include <cstring>
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/srtp.h>
+
+#ifdef _WIN32
+#include <WinSock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 namespace
 {

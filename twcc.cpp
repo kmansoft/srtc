@@ -380,7 +380,7 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	}
 
 	mInstantPacketLossPercent = std::clamp<float>(
-		100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
+		100.0f * static_cast<float>(std::max<float>(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
 	mPacketsLostPercentFilter.update(mInstantPacketLossPercent, now);
 
 	// Calculate actual bandwidth

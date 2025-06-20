@@ -36,11 +36,11 @@ public:
     bool unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output);
 
     // Implementation
-    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, uint16_t profileId);
+    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);
 
 private:
     const std::shared_ptr<SrtpCrypto> mCrypto;
-    const uint16_t mProfileId;
+    const unsigned long mProfileId;
 
     struct ChannelKey {
         uint32_t ssrc;

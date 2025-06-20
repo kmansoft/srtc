@@ -36,6 +36,13 @@
  * file under either the MPL or the LGPL.
  */
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <wincrypt.h>
+#undef X509_NAME
+#undef X509_EXTENSIONS
+#endif
+
 #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif

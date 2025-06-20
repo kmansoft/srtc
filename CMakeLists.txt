@@ -5,8 +5,12 @@ project("srtc")
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
+option(SRTC_BUILD_CMDLINE "Build the command line demo" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -17,7 +21,13 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 include(ExternalProject)
 include(FetchContent)
 
-# srtc
+# Static link runtime on Windows, unless building tests (link errors)
+
+if(WIN32 AND NOT SRTC_BUILD_TESTS)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# The main srtc library
 
 add_library(srtc
         include/srtc/byte_buffer.h
@@ -118,6 +128,12 @@ if(APPLE)
         include/srtc/event_loop_macos.h
         event_loop_macos.cpp
 	)
+elseif(WIN32)
+    target_sources(srtc
+        PRIVATE
+        include/srtc/event_loop_win.h
+        event_loop_win.cpp
+    )
 elseif(UNIX)
     target_sources(srtc
         PRIVATE
@@ -128,20 +144,20 @@ endif()
 
 target_include_directories(srtc PUBLIC "./include")
 
-target_compile_options(srtc
-        PRIVATE
-        "-ffunction-sections"
-        "-Wall"
-        "-Werror"
-)
-
-target_link_libraries(
-        srtc
-        PRIVATE
-        stun
-)
-
-# Android specific
+if(UNIX)
+    target_compile_options(srtc
+            PRIVATE
+            "-ffunction-sections"
+            "-Wall"
+            "-Werror"
+    )
+endif()
+if(WIN32)
+    target_compile_options(srtc
+            PRIVATE
+            "-DNOMINMAX"
+    )
+endif()
 
 if(ANDROID)
     target_compile_options(srtc PRIVATE
@@ -155,10 +171,30 @@ if(ANDROID)
             )
 endif()
 
+target_link_libraries(
+        srtc
+        PRIVATE
+        stun
+)
 
 # OpenSSL
 
+if(WIN32)
+    # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
+    # so we build it ourselves somewhere else and upload to a server, then fetch from there.
+    set(OPENSSL_USE_STATIC_LIBS ON)
+    set(OPENSSL_VERSION "3.5.0")
+    set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
+
+    if(NOT EXISTS "${OPENSSL_ROOT_DIR}")
+        message(STATUS "Downloading OpenSSL binaries...")
+        set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
+        file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
+        file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
+    endif()
+endif()
 if(APPLE)
+    # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
     set(OPENSSL_USE_STATIC_LIBS ON)
 endif()
 
@@ -181,10 +217,12 @@ add_subdirectory(stun)
 add_dependencies(srtc stun)
 
 target_include_directories(srtc PRIVATE
-        "stun")
+        "stun"
+)
 
 target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/stun")
+        "${CMAKE_BINARY_DIR}/stun"
+)
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
 
@@ -210,13 +248,18 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
             )
 
+    if(WIN32)
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
+        )
+    endif()
     if(ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
                 -DANDROID_ABI=${ANDROID_ABI}
                 -DANDROID_PLATFORM=android-29
                 -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
-                )
+        )
     endif()
 
     ExternalProject_Add(
@@ -267,34 +310,59 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             OpenSSL::SSL
     )
 
+    if(WIN32)
+        target_link_libraries(
+                srtc_test
+                ws2_32
+        )
+    endif()
+
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
 endif()
 
 # Command line demo
 
-if(UNIX AND NOT ANDROID)
+if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
     add_executable(srtc_cmdline_demo
             srtc_cmdline_demo.cpp
-            include/srtc/rtcp_defs.h
     )
 
     add_dependencies(srtc_cmdline_demo srtc)
 
-    find_package(CURL REQUIRED)
+    if(WIN32)
+        target_sources(srtc_cmdline_demo
+                PRIVATE
+                srtc_cmdline_demo_http_win.cpp
+        )
 
-    target_include_directories(srtc_cmdline_demo
-            PRIVATE
-            ${CURL_INCLUDE_DIRS}
-            )
+        target_link_libraries(
+                srtc_cmdline_demo
+                PRIVATE
+                srtc
+                winmm
+        )
+    else()
+        find_package(CURL REQUIRED)
 
-    target_link_libraries(
-            srtc_cmdline_demo
-            PRIVATE
-            srtc
-            CURL::libcurl
-    )
+        target_sources(srtc_cmdline_demo
+                PRIVATE
+                srtc_cmdline_demo_http_curl.cpp
+        )
+
+        target_include_directories(srtc_cmdline_demo
+                PRIVATE
+                ${CURL_INCLUDE_DIRS}
+                )
+
+        target_link_libraries(
+                srtc_cmdline_demo
+                PRIVATE
+                srtc
+                CURL::libcurl
+        )
+    endif()
 
 endif()
 

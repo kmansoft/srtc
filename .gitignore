@@ -2,8 +2,12 @@ cmake-build-*
 cmake-vs-build-*
 .idea
 .vscode
+.vs
 CMakePresets.json
 *.mp4
 token.txt
 go.sum
 build
+out
+deps
+CMakeSettings.json

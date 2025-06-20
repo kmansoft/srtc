@@ -1,8 +1,16 @@
-#include "srtc/peer_candidate.h"
+#ifdef _WIN32
+#include "srtc/srtc.h"
+#include <wincrypt.h>
+#undef X509_NAME
+#undef X509_EXTENSIONS
+#undef PKCS7_SIGNER_INFO
+#endif
+
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
 #include "srtc/logging.h"
 #include "srtc/packetizer.h"
+#include "srtc/peer_candidate.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_extension_builder.h"
@@ -235,7 +243,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
 	initOpenSSL();
 
-	mEventLoop->registerSocket(mSocket->fd(), this);
+	mEventLoop->registerSocket(mSocket, this);
 
 	mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
 
@@ -250,7 +258,7 @@ PeerCandidate::~PeerCandidate()
 {
 	LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
-	mEventLoop->unregisterSocket(mSocket->fd());
+	mEventLoop->unregisterSocket(mSocket);
 
 	freeDTLS();
 }
@@ -1044,7 +1052,7 @@ void PeerCandidate::onKeepAliveTimeout()
 	LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
 
 	const auto request = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive" , false);
+		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive", false);
 	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 }
 

@@ -4,16 +4,23 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 
-#include <curl/curl.h>
-#include <curl/easy.h>
-
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <string>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
+
+// In another file
+
+std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token);
 
 // Program options
 
@@ -91,76 +98,6 @@ uint32_t BitReader::readUnsignedExpGolomb()
 
 // WHIP
 
-std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
-{
-	const auto total_size = size * nmemb;
-	if (total_size) {
-		out->append(in, total_size);
-		return total_size;
-	}
-	return 0;
-}
-
-std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
-{
-	const auto curl = curl_easy_init();
-	if (!curl) {
-		std::cout << "Error: cannot create a curl object" << std::endl;
-		exit(1);
-	}
-
-	// Set the URL
-	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-
-	// Set the request type to POST
-	curl_easy_setopt(curl, CURLOPT_POST, 1L);
-
-	// Set the POST data
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, offer.c_str());
-
-	// follow redirects
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-	curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-
-	// Set the content type header to application/json
-	struct curl_slist* headers = nullptr;
-	headers = curl_slist_append(headers, "Content-Type: application/sdp");
-
-	// Authorization header
-	const auto authHeader = "Authorization: Bearer " + token;
-	headers = curl_slist_append(headers, authHeader.c_str());
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-	// Redirect in case someone hacks the code to publish to IVS
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-	curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-
-	// Set up reading the response
-	std::string answer;
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, string_write_callback);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &answer);
-
-	// Perform the request
-	const auto res = curl_easy_perform(curl);
-	if (res != CURLE_OK) {
-		std::cerr << "Error: curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-		exit(1);
-	} else {
-		long response_code;
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-		if (response_code > 201) {
-			std::cout << "Error: WHIP response code: " << response_code << std::endl;
-			exit(1);
-		}
-	}
-
-	// Clean up
-	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
-
-	return answer;
-}
-
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
 	switch (state) {
@@ -187,16 +124,33 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 		exit(1);
 	}
 
+	const auto sz = static_cast<size_t>(statbuf.st_size);
+
+	srtc::ByteBuffer buf(sz);
+	buf.resize(sz);
+
+#ifdef _WIN32
+	const auto h = CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (h == INVALID_HANDLE_VALUE) {
+		std::cout << "*** Cannot open input file " << fileName << std::endl;
+		exit(1);
+	}
+
+	DWORD bytesRead = {};
+	if (!ReadFile(h, buf.data(), sz, &bytesRead, NULL) || bytesRead != sz) {
+		std::cout << "*** Cannot read input file " << fileName << std::endl;
+		exit(1);
+	}
+
+	CloseHandle(h);
+#else
 	const auto h = open(fileName.c_str(), O_RDONLY);
 	if (h < 0) {
 		std::cout << "*** Cannot open input file " << fileName << std::endl;
 		exit(1);
 	}
 
-	const auto sz = static_cast<size_t>(statbuf.st_size);
-
-	srtc::ByteBuffer buf(sz);
-	buf.resize(sz);
 
 	if (read(h, buf.data(), sz) != sz) {
 		std::cout << "*** Cannot read input file " << fileName << std::endl;
@@ -204,6 +158,7 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 	}
 
 	close(h);
+#endif
 
 	return std::move(buf);
 }
@@ -289,7 +244,13 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
 						frame.clear();
 					}
 					frameCount += 1;
+#ifdef _WIN32
+					timeBeginPeriod(1);
+					Sleep(40);
+					timeEndPeriod(1);
+#else
 					usleep(1000 * 40); // 25 fps
+#endif
 				}
 				frame.append(parser.currNalu(), parser.currNaluSize());
 				naluCount += 1;
@@ -399,15 +360,20 @@ int main(int argc, char* argv[])
 	std::cout << "*** Using H.264 file: " << gInputFile << std::endl;
 	std::cout << "*** Using WHIP URL: " << gWhipUrl << std::endl;
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-
 	using namespace srtc;
 
 	char cwd[1024];
+#ifdef _WIN32
+	if (!GetCurrentDirectoryA(sizeof(cwd), cwd)) {
+		std::cout << "*** Cannot get current working directory" << std::endl;
+		exit(1);
+	}
+#else
 	if (!getcwd(cwd, sizeof(cwd))) {
 		std::cout << "*** Cannot get current working directory" << std::endl;
 		exit(1);
 	}
+#endif
 
 	std::cout << "*** Current working directory: " << cwd << std::endl;
 
@@ -463,10 +429,18 @@ int main(int argc, char* argv[])
 	});
 
 	// Offer
-	const OfferConfig offerConfig = {
-		.cname = "foo", .enable_rtx = true, .enable_bwe = gEnableBWE, .debug_drop_packets = gDropPackets
-	};
-	const PubVideoConfig videoConfig = { .codec_list = { { .codec = Codec::H264, .profile_level_id = 0x42e01f } } };
+	OfferConfig offerConfig = { };
+	offerConfig.cname = "foo";
+	offerConfig.enable_rtx = true;
+	offerConfig.enable_bwe = gEnableBWE;
+	offerConfig.debug_drop_packets = gDropPackets;
+
+	PubVideoCodec videoCodec;
+	videoCodec.codec = Codec::H264;
+	videoCodec.profile_level_id = 0x42e01f;
+
+	PubVideoConfig videoConfig = {};
+	videoConfig.codec_list.push_back(videoCodec);
 
 	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, std::nullopt);
 	const auto [offerString, offerError] = offer->generate();
