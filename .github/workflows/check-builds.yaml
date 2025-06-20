@@ -120,10 +120,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          choco install ninja
-
       - name: Use the MSVC compiler
         uses: ilammy/msvc-dev-cmd@v1
 

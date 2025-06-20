@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  BUILD_TYPE: RelWithDebInfo
+  BUILD_TYPE: Release
 
 jobs:
   build-linux:
@@ -37,7 +37,7 @@ jobs:
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
           cd release
-          strip srtc_cmdline_demo
+          strip srtc_cmdline_demo || true
           tar -czvf srtc_cmdline_demo-linux.tar.gz srtc_cmdline_demo
 
       - name: Upload artifacts
@@ -73,7 +73,7 @@ jobs:
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
           cd release
-          strip srtc_cmdline_demo
+          strip srtc_cmdline_demo || true
           tar -czvf srtc_cmdline_demo-macos.tar.gz srtc_cmdline_demo
 
       - name: Upload artifacts
@@ -81,6 +81,43 @@ jobs:
         with:
           name: srtc_cmdline_demo-macos
           path: release/srtc_cmdline_demo-macos.tar.gz
+
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the MSVC compiler
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake `
+            -B ${{github.workspace}}/build `
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+            -DSRTC_BUILD_TESTS=OFF `
+            -GNinja
+
+      - name: Build
+        run: |
+          cmake `
+            --build ${{github.workspace}}/build `
+            --target srtc `
+            --target srtc_cmdline_demo
+
+      - name: Package
+        run: |
+          mkdir -p release
+          cp ${{ github.workspace }}/build/srtc_cmdline_demo.exe release/
+          cd release
+          7z a -tzip srtc_cmdline_demo-windows.zip srtc_cmdline_demo.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: srtc_cmdline_demo-windows
+          path: release/srtc_cmdline_demo-windows.zip
 
   video-files:
     runs-on: ubuntu-latest
@@ -100,7 +137,7 @@ jobs:
           path: release
 
   create-release:
-    needs: [ build-linux, build-macos, video-files ]
+    needs: [ build-linux, build-macos, build-windows, video-files ]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -119,6 +156,7 @@ jobs:
           files: |
             artifacts/srtc_cmdline_demo-linux/srtc_cmdline_demo-linux.tar.gz
             artifacts/srtc_cmdline_demo-macos/srtc_cmdline_demo-macos.tar.gz
+            artifacts/srtc_cmdline_demo-windows/srtc_cmdline_demo-windows.zip
             artifacts/video-files/sintel.h264
             artifacts/video-files/sintel_with_slices.h264
           draft: false
