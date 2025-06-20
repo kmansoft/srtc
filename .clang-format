@@ -14,4 +14,4 @@ BreakConstructorInitializers: BeforeComma
 IndentAccessModifiers: false
 AccessModifierOffset: -4
 Cpp11BracedListStyle: false
-BreakTemplateDeclarations: true
+BreakTemplateDeclarations: Yes
