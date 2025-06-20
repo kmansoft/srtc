@@ -116,10 +116,10 @@ Open a new web browser window to `http://localhost:8080`, you will see a web pag
 Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
 over the video area.
 
-Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/srtc_cmdline_demo`, making sure the
+Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/srtc_cmdline_demo[.exe]`, making sure the
 current directory is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
 
-Switch back to the browser and click, after a second or two (keyframe delay) you should see the video being sent by `srtc`.
+Switch back to the browser, after a second or two (keyframe delay) you should see the video being sent by `srtc`.
 
 ### An Android demo / sample
 
@@ -129,8 +129,7 @@ https://github.com/kmansoft/srtc-android-demo
 
 Note that the code in this library is not Android specific, only the demo app is.
 
-Android was chosen for the demo because it's an easy way to capture video and audio and encode them to
-H264 and Opus. Sorry I'm not familiar with how to capture and encode media on desktop Linux.
+This demo also captures the camera and microphone and publishes them as H264 and Opus to Pion or Amazon IVS.
 
 For the interface between Android code and the srtc library, please see `jni_peer_connection.h / .cpp` in that project.
 
@@ -158,7 +157,11 @@ This library is my side project.
 
 - I'd lke to implement support for Simulcast (multiple video layers on the same peer connection). This is done.
 
-- Google's Transport Wide Congestion Control. This is partially done and will continue to improve.
+- Google's Transport Wide Congestion Control. This is mostly done and will continue to improve.
+
+- Windows port. This is done.
+
+- Releases. This is done.
 
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
