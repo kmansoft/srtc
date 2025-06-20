@@ -100,15 +100,18 @@ std::wstring StringToWString(const std::string& str)
 	return converter.from_bytes(str);
 }
 
+std::string WStringToString(const std::wstring& str)
+{
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+	return converter.to_bytes(str);
+}
+
 } // namespace
 
 std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
 {
 	Url urlobj;
 	parseUrl(urlobj, url);
-
-	const auto server = StringToWString(urlobj.server);
-	const auto path = StringToWString(urlobj.path);
 
 	const InternetHandle hSession = { WinHttpOpen(
 		L"srtc", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0) };
@@ -117,78 +120,130 @@ std::string perform_whip(const std::string& offer, const std::string& url, const
 		exit(1);
 	}
 
-	const InternetHandle hConnect = { WinHttpConnect(hSession.mHandle, server.data(), urlobj.port, 0) };
-	if (!hConnect.mHandle) {
-		std::cout << "Error: cannot connect to " << urlobj.server << std::endl;
-		exit(1);
-	}
+	unsigned int redirectCount = 0;
 
-	LPCWSTR accept[] = { L"application/sdp", nullptr };
+	DWORD dwRedirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+	WinHttpSetOption(hSession.mHandle, WINHTTP_OPTION_REDIRECT_POLICY, &dwRedirectPolicy, sizeof(dwRedirectPolicy));
 
-	const InternetHandle hRequest = { WinHttpOpenRequest(hConnect.mHandle,
-														 L"POST",
-														 path.data(),
-														 NULL,
-														 WINHTTP_NO_REFERER,
-														 accept,
-														 urlobj.is_secure ? WINHTTP_FLAG_SECURE : 0) };
-	if (!hRequest.mHandle) {
-		std::cout << "Error: cannot create request for " << url << std::endl;
-		exit(1);
-	}
-
-	const auto headers =
-		StringToWString("Authorization: Bearer " + token + "\r\n" + "Content-Type: application/sdp\r\n");
-
-	// Send request with POST data
-	if (!WinHttpSendRequest(
-			hRequest.mHandle, headers.data(), headers.size(), (LPVOID)offer.data(), offer.size(), offer.size(), 0)) {
-		std::cout << "Error: cannot send request to " << url << std::endl;
-		exit(1);
-	}
-
-	// Receive response
-	if (!WinHttpReceiveResponse(hRequest.mHandle, NULL)) {
-		std::cout << "Error: cannot receive response from " << url << std::endl;
-		exit(1);
-	}
-
-	// Check status code
-	DWORD dwStatusCode = 0;
-	DWORD dwStatusCodeSize = sizeof(dwStatusCode);
-
-	if (!WinHttpQueryHeaders(hRequest.mHandle,
-							 WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-							 WINHTTP_HEADER_NAME_BY_INDEX,
-							 &dwStatusCode,
-							 &dwStatusCodeSize,
-							 WINHTTP_NO_HEADER_INDEX)) {
-		std::cout << "Error: cannot receive status code from " << url << std::endl;
-		exit(1);
-	}
-
-	if (dwStatusCode < 200 || dwStatusCode >= 400) {
-		std::cout << "Error: status code " << dwStatusCode << std::endl;
-		exit(1);
-	}
-
-	// And read it
-	std::string answer;
 	while (true) {
-		DWORD dwSize = 0;
-		if (!WinHttpQueryDataAvailable(hRequest.mHandle, &dwSize) || dwSize == 0) {
-			break;
+		const auto server = StringToWString(urlobj.server);
+		const auto path = StringToWString(urlobj.path);
+
+		// Connect to the server
+		const InternetHandle hConnect = { WinHttpConnect(hSession.mHandle, server.data(), urlobj.port, 0) };
+		if (!hConnect.mHandle) {
+			std::cout << "Error: cannot connect to " << urlobj.server << std::endl;
+			exit(1);
 		}
 
-		std::unique_ptr<uint8_t[]> buf(new uint8_t[dwSize]);
+		LPCWSTR accept[] = { L"application/sdp", nullptr };
 
-		DWORD dwRead = 0;
-		if (!WinHttpReadData(hRequest.mHandle, (LPVOID)buf.get(), dwSize, &dwRead) || dwRead == 0) {
-			break;
+		const InternetHandle hRequest = { WinHttpOpenRequest(hConnect.mHandle,
+															 L"POST",
+															 path.data(),
+															 NULL,
+															 WINHTTP_NO_REFERER,
+															 accept,
+															 urlobj.is_secure ? WINHTTP_FLAG_SECURE : 0) };
+		if (!hRequest.mHandle) {
+			std::cout << "Error: cannot create request for " << url << std::endl;
+			exit(1);
 		}
 
-		answer.append(reinterpret_cast<const char*>(buf.get()), dwRead);
+		const auto headers =
+			StringToWString("Authorization: Bearer " + token + "\r\n" + "Content-Type: application/sdp\r\n");
+
+		// Send request with POST data
+		if (!WinHttpSendRequest(hRequest.mHandle,
+								headers.data(),
+								headers.size(),
+								(LPVOID)offer.data(),
+								offer.size(),
+								offer.size(),
+								0)) {
+			std::cout << "Error: cannot send request to " << url << std::endl;
+			exit(1);
+		}
+
+		// Receive response
+		if (!WinHttpReceiveResponse(hRequest.mHandle, NULL)) {
+			std::cout << "Error: cannot receive response from " << url << std::endl;
+			exit(1);
+		}
+
+		// Check status code
+		DWORD dwStatusCode = 0;
+		DWORD dwStatusCodeSize = sizeof(dwStatusCode);
+
+		if (!WinHttpQueryHeaders(hRequest.mHandle,
+								 WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+								 WINHTTP_HEADER_NAME_BY_INDEX,
+								 &dwStatusCode,
+								 &dwStatusCodeSize,
+								 WINHTTP_NO_HEADER_INDEX)) {
+			std::cout << "Error: cannot receive status code from " << url << std::endl;
+			exit(1);
+		}
+
+		if (dwStatusCode == 200 || dwStatusCode == 201) {
+			// We received a response
+			std::string answer;
+			while (true) {
+				DWORD dwSize = 0;
+				if (!WinHttpQueryDataAvailable(hRequest.mHandle, &dwSize) || dwSize == 0) {
+					break;
+				}
+
+				std::unique_ptr<uint8_t[]> buf(new uint8_t[dwSize]);
+
+				DWORD dwRead = 0;
+				if (!WinHttpReadData(hRequest.mHandle, (LPVOID)buf.get(), dwSize, &dwRead) || dwRead == 0) {
+					break;
+				}
+
+				answer.append(reinterpret_cast<const char*>(buf.get()), dwRead);
+			}
+
+			if (answer.empty()) {
+				std::cout << "Error: received empty SDP" << std::endl;
+				exit(1);
+			}
+
+			return answer;
+		} else if (dwStatusCode == 301 || dwStatusCode == 302 || dwStatusCode == 307) {
+			// We received a redirect, follow it
+			if (++redirectCount >= 10) {
+				std::cout << "Error: too many redirects" << std::endl;
+				exit(1);
+			}
+
+			DWORD dwSize = 4096;
+			std::unique_ptr<wchar_t[]> buf(new wchar_t[dwSize]);
+
+			if (!WinHttpQueryHeaders(hRequest.mHandle,
+									 WINHTTP_QUERY_LOCATION,
+									 WINHTTP_HEADER_NAME_BY_INDEX,
+									 buf.get(),
+									 &dwSize,
+									 WINHTTP_NO_HEADER_INDEX) ||
+				dwSize == 0) {
+				std::cout << "Error: no location header present on a redirect" << std::endl;
+				exit(1);
+			}
+
+			const auto location = WStringToString(std::wstring(buf.get(), dwSize));
+			if (location.find("://") != std::string::npos) {
+				parseUrl(urlobj, location);
+			} else if (!location.empty() && location[0] == '/') {
+				urlobj.path = location;
+			} else {
+				std::cout << "Error: invalid location header " << location << std::endl;
+				exit(1);
+			}
+		} else {
+			// Something we don't understand
+			std::cout << "Error: invalid status code " << dwStatusCode << std::endl;
+			exit(1);
+		}
 	}
-
-	return answer;
 }
