@@ -521,16 +521,16 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 					// Keep-alive
 					LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
 
-					mLastReceiveTime = std::chrono::steady_clock::now();
-
-					updateConnectionLostTimeout();
-
 					if (mDtlsState == DtlsState::Completed) {
+						// We are connected again
+						mLastReceiveTime = std::chrono::steady_clock::now();
+						updateConnectionLostTimeout();
+
+						Task::cancelHelper(mTaskConnectTimeout);
+						Task::cancelHelper(mTaskConnectionRestoreTimeout);
+
 						emitOnConnected();
 					}
-
-					Task::cancelHelper(mTaskConnectTimeout);
-					Task::cancelHelper(mTaskConnectionRestoreTimeout);
 				} else {
 					// Initial connection
 					LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
