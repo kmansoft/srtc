@@ -17,10 +17,12 @@
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_std_extensions.h"
+#include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/send_pacer.h"
 #include "srtc/send_rtp_history.h"
+#include "srtc/sender_reports_history.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
@@ -233,6 +235,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 																	 mVideoExtRepairedStreamId,
 																	 mVideoExtGoogleVLA))
 	, mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
+	, mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
+	, mRttFilter(0.2f)
 	, mLastSendTime(std::chrono::steady_clock::time_point::min())
 	, mLastReceiveTime(std::chrono::steady_clock::time_point::min())
 	, mScheduler(scheduler)
@@ -277,6 +281,35 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 	mFrameSendQueue.push_back(std::move(frame));
 }
 
+void PeerCandidate::sendSenderReport(const std::shared_ptr<Track>& track)
+{
+	const auto ssrc = track->getSSRC();
+
+	ByteBuffer payload;
+	ByteWriter w(payload);
+
+	// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+
+	NtpTime ntp = {};
+	getNtpTime(ntp);
+
+	const auto timeSource = track->getRtpTimeSource();
+	const auto rtpTime = timeSource->getCurrTimestamp();
+
+	w.writeU32(ntp.seconds);
+	w.writeU32(ntp.fraction);
+	w.writeU32(rtpTime);
+
+	const auto stats = track->getStats();
+	w.writeU32(stats->getSentPackets());
+	w.writeU32(stats->getSentBytes());
+
+	const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+	sendRtcpPacket(track, packet);
+
+	mSenderReportsHistory->save(ssrc, ntp);
+}
+
 void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
 {
 	if (mSrtpConnection) {
@@ -293,6 +326,10 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
+	if (mRttFilter.getTimestamp() >= getSystemTimeMicros() - 5 * 1000 * 1000) {
+		stats.rtt_ms = mRttFilter.value();
+	}
+
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
 	}
@@ -688,23 +725,15 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			const auto lastSR = rtcpReader.readU32();
 			const auto delaySinceLastSR = rtcpReader.readU32();
 
-			(void)ssrc;
-			(void)lastSR;
-			(void)delaySinceLastSR;
+			(void) lost;
+			(void) highestReceived;
+			(void) jitter;
 
-			std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
-						ssrc,
-						lastSR,
-						delaySinceLastSR,
-						highestReceived);
-
-			const auto lostFraction = static_cast<uint8_t>(lost >> 24);
-			const auto lostPackets = static_cast<uint32_t>(lost & 0xFFFFFFu);
-
-			(void)highestReceived;
-			(void)jitter;
-			(void)lostFraction;
-			(void)lostPackets;
+			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
+			if (rtt) {
+				LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
+				mRttFilter.update(rtt.value(), getSystemTimeMicros());
+			}
 		}
 	} else if (rtcpPT == 205) {
 		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2

@@ -6,6 +6,7 @@
 #include "srtc/scheduler.h"
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
+#include "srtc/util.h"
 
 #include <list>
 #include <memory>
@@ -34,6 +35,7 @@ class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
 class SendPacer;
+class SenderReportsHistory;
 
 struct PublishConnectionStats;
 
@@ -62,6 +64,7 @@ public:
 	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
     void run();
 
+	void sendSenderReport(const std::shared_ptr<Track>& track);
 	void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
@@ -95,6 +98,9 @@ private:
     const uint8_t mVideoExtGoogleVLA;
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
+	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
+
+	Filter<float> mRttFilter;
 
     std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;

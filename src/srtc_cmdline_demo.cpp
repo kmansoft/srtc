@@ -130,8 +130,8 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 	buf.resize(sz);
 
 #ifdef _WIN32
-	const auto h = CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
-		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	const auto h =
+		CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h == INVALID_HANDLE_VALUE) {
 		std::cout << "*** Cannot open input file " << fileName << std::endl;
 		exit(1);
@@ -150,7 +150,6 @@ srtc::ByteBuffer readInputFile(const std::string& fileName)
 		std::cout << "*** Cannot open input file " << fileName << std::endl;
 		exit(1);
 	}
-
 
 	if (read(h, buf.data(), sz) != sz) {
 		std::cout << "*** Cannot read input file " << fileName << std::endl;
@@ -424,12 +423,12 @@ int main(int argc, char* argv[])
 		std::cout << "*** PeerConnection stats: sent " << stats.packet_count << " packets, " << stats.byte_count
 				  << " bytes, act " << std::setprecision(6) << stats.bandwidth_actual_kbit_per_second << " kb/s, sugg "
 				  << std::setprecision(6) << stats.bandwidth_suggested_kbit_per_second << " kb/s, "
-				  << std::setprecision(3) << stats.packets_lost_percent << "% packet loss, " << stats.rtt_ms
-				  << " ms rtt" << std::endl;
+				  << std::setprecision(3) << stats.packets_lost_percent << "% packet loss, " << std::setprecision(4)
+				  << stats.rtt_ms << " ms rtt" << std::endl;
 	});
 
 	// Offer
-	OfferConfig offerConfig = { };
+	OfferConfig offerConfig = {};
 	offerConfig.cname = "foo";
 	offerConfig.enable_rtx = true;
 	offerConfig.enable_bwe = gEnableBWE;

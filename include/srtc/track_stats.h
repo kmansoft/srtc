@@ -22,13 +22,9 @@ public:
     void incrementSentPackets(uint32_t increment);
     void incrementSentBytes(uint32_t increment);
 
-	void setSenderReport(const RtcpSenderReport& senderReport);
-
 private:
     uint32_t mSentPackets;
     uint32_t mSentBytes;
-
-	std::optional<RtcpSenderReport> mSenderReport;
 };
 
 } // namespace srtc
