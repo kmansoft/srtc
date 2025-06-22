@@ -8,7 +8,7 @@
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
-#include "srtc/send_history.h"
+#include "srtc/send_rtp_history.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"

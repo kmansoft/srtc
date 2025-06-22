@@ -16,7 +16,7 @@ namespace srtc
 
 class SrtpConnection;
 class Socket;
-class SendHistory;
+class SendRtpHistory;
 class RtpPacket;
 class RtpExtensionSourceTWCC;
 class Track;
@@ -29,7 +29,7 @@ public:
 	SendPacer(const struct OfferConfig& offerConfig,
 			  const std::shared_ptr<SrtpConnection>& srtp,
 			  const std::shared_ptr<Socket>& socket,
-			  const std::shared_ptr<SendHistory>& history,
+			  const std::shared_ptr<SendRtpHistory>& history,
 			  const std::shared_ptr<RtpExtensionSourceTWCC>& twcc,
 			  const std::function<void()>& onSend);
 	~SendPacer();
@@ -49,7 +49,7 @@ private:
 	const struct OfferConfig mOfferConfig;
 	const std::shared_ptr<SrtpConnection> mSrtp;
 	const std::shared_ptr<Socket> mSocket;
-	const std::shared_ptr<SendHistory> mHistory;
+	const std::shared_ptr<SendRtpHistory> mHistory;
 	const std::shared_ptr<RtpExtensionSourceTWCC> mTWCC;
 	const std::function<void()> mOnSend;
 

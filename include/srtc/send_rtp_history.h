@@ -11,11 +11,11 @@ namespace srtc
 
 class RtpPacket;
 
-class SendHistory
+class SendRtpHistory
 {
 public:
-    SendHistory();
-    ~SendHistory();
+	SendRtpHistory();
+    ~SendRtpHistory();
 
     void save(const std::shared_ptr<RtpPacket>& packet);
 

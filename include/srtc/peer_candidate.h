@@ -27,7 +27,7 @@ class Packetizer;
 class SdpOffer;
 class SdpAnswer;
 class IceAgent;
-class SendHistory;
+class SendRtpHistory;
 class SrtpConnection;
 class RtcpPacket;
 class EventLoop;
@@ -87,7 +87,7 @@ private:
     const std::shared_ptr<Socket> mSocket;
     const std::shared_ptr<IceAgent> mIceAgent;
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
-    const std::shared_ptr<SendHistory> mSendHistory;
+    const std::shared_ptr<SendRtpHistory> mSendRtpHistory;
     const uint32_t mUniqueId;
     const uint8_t mVideoExtMediaId;
     const uint8_t mVideoExtStreamId;

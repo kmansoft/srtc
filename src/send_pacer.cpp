@@ -2,7 +2,7 @@
 #include "srtc/logging.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_packet.h"
-#include "srtc/send_history.h"
+#include "srtc/send_rtp_history.h"
 #include "srtc/socket.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
@@ -18,7 +18,7 @@ namespace srtc
 SendPacer::SendPacer(const struct OfferConfig& offerConfig,
 					 const std::shared_ptr<SrtpConnection>& srtp,
 					 const std::shared_ptr<Socket>& socket,
-					 const std::shared_ptr<SendHistory>& history,
+					 const std::shared_ptr<SendRtpHistory>& history,
 					 const std::shared_ptr<RtpExtensionSourceTWCC>& twcc,
 					 const std::function<void()>& onSend)
 	: mOfferConfig(offerConfig)

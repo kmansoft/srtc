@@ -19,8 +19,8 @@
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
-#include "srtc/send_history.h"
 #include "srtc/send_pacer.h"
+#include "srtc/send_rtp_history.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
@@ -221,7 +221,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 	, mSocket(std::make_shared<Socket>(host.addr))
 	, mIceAgent(std::make_shared<IceAgent>())
 	, mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
-	, mSendHistory(std::make_shared<SendHistory>())
+	, mSendRtpHistory(std::make_shared<SendRtpHistory>())
 	, mUniqueId(++gNextUniqueId)
 	, mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
 	, mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
@@ -593,7 +593,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 							std::make_shared<SendPacer>(mOffer->getConfig(),
 														mSrtpConnection,
 														mSocket,
-														mSendHistory,
+														mSendRtpHistory,
 														mExtensionSourceTWCC,
 														[this]() { mLastSendTime = std::chrono::steady_clock::now(); });
 						mDtlsState = DtlsState::Completed;
@@ -754,7 +754,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 		}
 
 		for (const auto seq : missingSeqList) {
-			const auto packet = mSendHistory->find(ssrc, seq);
+			const auto packet = mSendRtpHistory->find(ssrc, seq);
 
 			// Record in TWCC
 			if (packet && mExtensionSourceTWCC) {
