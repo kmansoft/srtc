@@ -1,5 +1,5 @@
-#include "srtc/send_history.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/send_rtp_history.h"
 
 namespace
 {
@@ -11,11 +11,11 @@ constexpr auto kMaxHistory = 512;
 namespace srtc
 {
 
-SendHistory::SendHistory() = default;
+SendRtpHistory::SendRtpHistory() = default;
 
-SendHistory::~SendHistory() = default;
+SendRtpHistory::~SendRtpHistory() = default;
 
-void SendHistory::save(const std::shared_ptr<RtpPacket>& packet)
+void SendRtpHistory::save(const std::shared_ptr<RtpPacket>& packet)
 {
     const auto ssrc = packet->getSSRC();
 
@@ -33,7 +33,7 @@ void SendHistory::save(const std::shared_ptr<RtpPacket>& packet)
     item.packetMap.insert_or_assign(packet->getSequence(), packet);
 }
 
-std::shared_ptr<RtpPacket> SendHistory::find(uint32_t ssrc, uint16_t sequence) const
+std::shared_ptr<RtpPacket> SendRtpHistory::find(uint32_t ssrc, uint16_t sequence) const
 {
     if (const auto i1 = mTrackMap.find(ssrc); i1 != mTrackMap.end()) {
         const auto& packetMap = i1->second.packetMap;

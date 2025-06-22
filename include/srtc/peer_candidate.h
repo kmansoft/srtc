@@ -6,6 +6,7 @@
 #include "srtc/scheduler.h"
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
+#include "srtc/util.h"
 
 #include <list>
 #include <memory>
@@ -27,13 +28,14 @@ class Packetizer;
 class SdpOffer;
 class SdpAnswer;
 class IceAgent;
-class SendHistory;
+class SendRtpHistory;
 class SrtpConnection;
 class RtcpPacket;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
 class SendPacer;
+class SenderReportsHistory;
 
 struct PublishConnectionStats;
 
@@ -62,6 +64,7 @@ public:
 	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
     void run();
 
+	void sendSenderReport(const std::shared_ptr<Track>& track);
 	void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
@@ -87,7 +90,7 @@ private:
     const std::shared_ptr<Socket> mSocket;
     const std::shared_ptr<IceAgent> mIceAgent;
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
-    const std::shared_ptr<SendHistory> mSendHistory;
+    const std::shared_ptr<SendRtpHistory> mSendRtpHistory;
     const uint32_t mUniqueId;
     const uint8_t mVideoExtMediaId;
     const uint8_t mVideoExtStreamId;
@@ -95,6 +98,9 @@ private:
     const uint8_t mVideoExtGoogleVLA;
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
+	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
+
+	Filter<float> mRttFilter;
 
     std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;

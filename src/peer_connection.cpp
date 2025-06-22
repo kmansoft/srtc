@@ -8,11 +8,10 @@
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
-#include "srtc/send_history.h"
+#include "srtc/send_rtp_history.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include "stunmessage.h"
@@ -548,35 +547,13 @@ void PeerConnection::sendSenderReports()
 	mTaskSenderReports =
 		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
-	std::lock_guard lock(mMutex);
+	if (mSelectedCandidate) {
+		std::lock_guard lock(mMutex);
 
-	if (mConnectionState == ConnectionState::Connected) {
-		const auto trackList = collectTracksLocked();
-		for (const auto& trackItem : trackList) {
-			ByteBuffer payload;
-			ByteWriter w(payload);
-
-			// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
-
-			NtpTime ntp = {};
-			getNtpTime(ntp);
-
-			const auto timeSource = trackItem->getRtpTimeSource();
-			const auto rtpTime = timeSource->getCurrTimestamp();
-
-			w.writeU32(ntp.seconds);
-			w.writeU32(ntp.fraction);
-			w.writeU32(rtpTime);
-
-			const auto stats = trackItem->getStats();
-			w.writeU32(stats->getSentPackets());
-			w.writeU32(stats->getSentBytes());
-
-			const auto packet =
-				std::make_shared<RtcpPacket>(trackItem->getSSRC(), 0, RtcpPacket::kSenderReport, std::move(payload));
-			if (mSelectedCandidate) {
-				mSelectedCandidate->sendRtcpPacket(trackItem, packet);
-				stats->setSenderReport({ ntp, rtpTime });
+		if (mConnectionState == ConnectionState::Connected) {
+			const auto trackList = collectTracksLocked();
+			for (const auto& trackItem : trackList) {
+				mSelectedCandidate->sendSenderReport(trackItem);
 			}
 		}
 	}
@@ -591,6 +568,13 @@ void PeerConnection::sendConnectionStats()
 	PublishConnectionStats connectionStats = {};
 
 	{
+		connectionStats.packet_count = 0;
+		connectionStats.byte_count = 0;
+		connectionStats.packets_lost_percent = -1.0f;
+		connectionStats.rtt_ms = -1.0f;
+		connectionStats.bandwidth_actual_kbit_per_second = -1.0f;
+		connectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
+
 		std::lock_guard lock(mMutex);
 		if (mConnectionState != ConnectionState::Connected) {
 			return;

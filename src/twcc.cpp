@@ -141,7 +141,6 @@ void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
 PacketStatusHistory::PacketStatusHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
-	, mRttMillisFilter(0.2f)
 	, mInstantPacketLossPercent(0.0f)
 	, mPacketsLostPercentFilter(0.2f)
 	, mBandwidthActualFilter(0.2f)
@@ -223,12 +222,6 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 	const auto now = getSystemTimeMicros();
 	const auto base = mHistory.get();
 
-	// Update the RTT
-	if (((mMaxSeq - max->seq) & 0xFFFFu) <= 100) {
-		const auto rttMillis = static_cast<float>(now - max->sent_time_micros) / 1000.f;
-		mRttMillisFilter.update(rttMillis, now);
-	}
-
 	// Calculate which packets have not been received
 	for (uint16_t seq = max->seq;;) {
 		const auto index = seq & kMaxPacketMask;
@@ -302,10 +295,6 @@ unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
 void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
 {
 	if (!mHistory) {
-		stats.packets_lost_percent = 0.0f;
-		stats.rtt_ms = 0.0f;
-		stats.bandwidth_actual_kbit_per_second = 0;
-		stats.bandwidth_suggested_kbit_per_second = 0;
 		return;
 	}
 
@@ -313,21 +302,11 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 
 	if (now - mPacketsLostPercentFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
 		stats.packets_lost_percent = mPacketsLostPercentFilter.value();
-	} else {
-		stats.packets_lost_percent = 0.0f;
-	}
-
-	if (now - mRttMillisFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
-		stats.rtt_ms = mRttMillisFilter.value();
-	} else {
-		stats.rtt_ms = 0.0f;
 	}
 
 	// Actual bandwidth
 	if (now - mBandwidthActualFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
 		stats.bandwidth_actual_kbit_per_second = mBandwidthActualFilter.value() / 1024.0f;
-	} else {
-		stats.bandwidth_actual_kbit_per_second = 0.0f;
 	}
 
 	// Suggested bandwidth
