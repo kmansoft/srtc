@@ -130,28 +130,43 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set a handler for when a new remote track starts
 	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) { //nolint: revive
-		for {
-			pkt, _, err := track.ReadRTP()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					fmt.Printf("***** EOF reading from publish peer connection\n")
-					peerConnection = nil
-					break
-				} else {
-					panic(err)
+		go func() {
+			for {
+				_, _, err := receiver.ReadRTCP()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						fmt.Printf("***** EOF reading RTCP from publish peer connection\n")
+						break
+					} else {
+						panic(err)
+					}
 				}
 			}
+		}() 
 
-			if track.Kind() == webrtc.RTPCodecTypeVideo {
-				if err = videoTrack.WriteRTP(pkt); err != nil {
-					panic(err)
+		go func() {
+			for {
+				pkt, _, err := track.ReadRTP()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						fmt.Printf("***** EOF reading RTP from publish peer connection\n")
+						break
+					} else {
+						panic(err)
+					}
 				}
-			} else if track.Kind() == webrtc.RTPCodecTypeAudio {
-				if err = audioTrack.WriteRTP(pkt); err != nil {
-					panic(err)
+
+				if track.Kind() == webrtc.RTPCodecTypeVideo {
+					if err = videoTrack.WriteRTP(pkt); err != nil {
+						panic(err)
+					}
+				} else if track.Kind() == webrtc.RTPCodecTypeAudio {
+					if err = audioTrack.WriteRTP(pkt); err != nil {
+						panic(err)
+					}
 				}
 			}
-		}
+		}()
 	})
 
 	// Send answer via HTTP Response

@@ -692,8 +692,11 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			(void)lastSR;
 			(void)delaySinceLastSR;
 
-			// std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
-			// 			ssrc, lastSR, delaySinceLastSR, highestReceived);
+			std::printf("RTCP receiver report: ssrc = %u, last_sr = %u, delay = %u, highest = %u\n",
+						ssrc,
+						lastSR,
+						delaySinceLastSR,
+						highestReceived);
 
 			const auto lostFraction = static_cast<uint8_t>(lost >> 24);
 			const auto lostPackets = static_cast<uint32_t>(lost & 0xFFFFFFu);
