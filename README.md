@@ -5,19 +5,17 @@ This is srtc, a "simple" WebRTC library (publish side only so far).
 Features:
 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
-- Portable code in "conservative" C++
-- Conservative means it's C++ 17, and does not use exceptions or RTTI.
+- Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
 - Supports H264 (any profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
 - Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension.
 - SDP offer generation and SDP response parsing.
+- ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Retransmits of packets reported lost by the receiver, which uses RTX if supported.
 - Support for IPv4 and IPv6.
 - Pacing.
 - Basic bandwidth estimation using the TWCC extension and probing.
-- Android demo and Mac demo have been tested with Pion and Amazon IVS (Interactive Video Service).
-- Command line demo has been tested with Pion and Amazon IVS.
-- ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
+- Tested with Pion and Amazon IVS (Interactive Video Service).
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
 ### Envisioned use case 
@@ -109,8 +107,8 @@ Options:
 
 #### Testing with Pion
 
-Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh` or `go run .`.
-This will start the Pion  WebRTC server.
+Open a new terminal window, change the directory to `pion-webrtc-examples-whip-whep` and execute `run.sh` or `go run .` to
+start the Pion  WebRTC server.
 
 Open a new web browser window to `http://localhost:8080`, you will see a web page with controls for publishing and subscribing.
 Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
@@ -162,6 +160,8 @@ This library is my side project.
 - Windows port. This is done.
 
 - Releases. This is done.
+
+- Start implementing subscribing. A very large piece of work. Not started yet.
 
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
