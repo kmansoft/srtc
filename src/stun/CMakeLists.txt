@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("stun")
 
-add_library(stun STATIC
+add_library(srtc_stun STATIC
         constants.h
         debug.c
         debug.h
@@ -22,20 +22,20 @@ add_library(stun STATIC
         win32_common.h
 )
 
-target_compile_definitions(stun
+target_compile_definitions(srtc_stun
     PRIVATE
     HAVE_OPENSSL=1
 )
 
 if(UNIX)
-    target_compile_options(stun
+    target_compile_options(srtc_stun
         PRIVATE
         "-ffunction-sections")
 endif()
 
 find_package(OpenSSL REQUIRED)
 
-target_include_directories(stun
+target_include_directories(srtc_stun
     PRIVATE
     ${OPENSSL_INCLUDE_DIR}
 )

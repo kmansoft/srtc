@@ -178,7 +178,7 @@ endif()
 target_link_libraries(
         srtc
         PRIVATE
-        stun
+        srtc_stun
 )
 
 # OpenSSL
@@ -218,7 +218,7 @@ target_link_libraries(srtc
 
 add_subdirectory(src/stun)
 
-add_dependencies(srtc stun)
+add_dependencies(srtc srtc_stun)
 
 target_include_directories(srtc PRIVATE
         src/stun
