@@ -45,6 +45,8 @@
 
 #include "debug.h"
 
+namespace stun
+{
 
 static int debug_enabled = 0;
 
@@ -96,7 +98,7 @@ void stun_debug_bytes (const char *prefix, const void *data, size_t len)
   if (!debug_enabled)
     return;
 
-  bytes = malloc (prefix_len + 2 + (len * 2) + 1);
+  bytes = (char*) malloc (prefix_len + 2 + (len * 2) + 1);
   bytes[0] = 0;
   strcpy (bytes, prefix);
   strcpy (bytes + prefix_len, "0x");
@@ -122,3 +124,4 @@ void stun_set_debug_handler (StunDebugHandler _handler)
   handler = _handler;
 }
 
+}

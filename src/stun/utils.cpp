@@ -48,6 +48,9 @@
 
 #include "utils.h"
 
+namespace stun
+{
+
 size_t stun_padding (size_t l)
 {
   return (4 - (l & 3)) & 3;
@@ -130,3 +133,6 @@ StunMessageReturn stun_xor_address (const StunMessage *msg,
       return STUN_MESSAGE_RETURN_UNSUPPORTED_ADDRESS;
   }
 }
+
+}
+

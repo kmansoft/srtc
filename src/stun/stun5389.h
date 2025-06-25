@@ -50,9 +50,8 @@
 
 #include "stunmessage.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace stun
+{
 
 /*
  * Computes the FINGERPRINT checksum of a STUN message.
@@ -68,8 +67,6 @@ uint32_t stun_fingerprint (const uint8_t *msg, size_t len,
 StunMessageReturn stun_message_append_software (StunMessage *msg,
     const char *software);
 
-#ifdef __cplusplus
-}; // extern "C"
-#endif
+}
 
 #endif /* _STUN_5389_H */

@@ -57,6 +57,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+namespace stun
+{
+
 bool stun_message_init (StunMessage *msg, StunClass c, StunMethod m,
     const StunTransactionId id)
 {
@@ -210,7 +213,7 @@ StunMessageReturn
 stun_message_find_string (const StunMessage *msg, StunAttribute type,
     char *buf, size_t buflen)
 {
-  const unsigned char *ptr;
+  const void *ptr;
   uint16_t len = 0;
 
   ptr = stun_message_find (msg, type, &len);
@@ -233,7 +236,7 @@ stun_message_find_addr (const StunMessage *msg, StunAttribute type,
   const uint8_t *ptr;
   uint16_t len = 0;
 
-  ptr = stun_message_find (msg, type, &len);
+  ptr = (const uint8_t*) stun_message_find (msg, type, &len);
   if (ptr == NULL)
     return STUN_MESSAGE_RETURN_NOT_FOUND;
 
@@ -313,20 +316,20 @@ StunMessageReturn
 stun_message_find_error (const StunMessage *msg, int *code)
 {
   uint16_t alen = 0;
-  const uint8_t *ptr = stun_message_find (msg, STUN_ATTRIBUTE_ERROR_CODE, &alen);
-  uint8_t class, number;
+  const uint8_t *ptr = (const uint8_t*) stun_message_find (msg, STUN_ATTRIBUTE_ERROR_CODE, &alen);
+  uint8_t clazz, number;
 
   if (ptr == NULL)
     return STUN_MESSAGE_RETURN_NOT_FOUND;
   if (alen < 4)
     return STUN_MESSAGE_RETURN_INVALID;
 
-  class = ptr[2] & 0x7;
+  clazz = ptr[2] & 0x7;
   number = ptr[3];
-  if ((class < 3) || (class > 6) || (number > 99))
+  if ((clazz < 3) || (clazz > 6) || (number > 99))
     return STUN_MESSAGE_RETURN_INVALID;
 
-  *code = (class * 100) + number;
+  *code = (clazz * 100) + number;
   return STUN_MESSAGE_RETURN_SUCCESS;
 }
 
@@ -351,15 +354,15 @@ stun_message_append (StunMessage *msg, StunAttribute type, size_t length)
 
 
   a = msg->buffer + mlen;
-  a = stun_setw (a, type);
+  a = (uint8_t*) stun_setw (a, type);
   if (false /* msg->agent &&
       (msg->agent->usage_flags & STUN_AGENT_USAGE_NO_ALIGNED_ATTRIBUTES)*/)
   {
-    a = stun_setw (a, length);
+    a = (uint8_t*) stun_setw (a, length);
   } else {
     /* NOTE: If cookie is not present, we need to force the attribute length
      * to a multiple of 4 for compatibility with old RFC3489 */
-    a = stun_setw (a, stun_message_has_cookie (msg) ? length : stun_align (length));
+    a = (uint8_t*) stun_setw (a, stun_message_has_cookie (msg) ? length : stun_align (length));
 
     /* Add padding if needed. Avoid a zero-length memset() call. */
     if (stun_padding (length) > 0) {
@@ -473,7 +476,7 @@ stun_message_append_addr (StunMessage *msg, StunAttribute type,
       return STUN_MESSAGE_RETURN_UNSUPPORTED_ADDRESS;
   }
 
-  ptr = stun_message_append (msg, type, 4 + alen);
+  ptr = (uint8_t*) stun_message_append (msg, type, 4 + alen);
   if (ptr == NULL)
     return STUN_MESSAGE_RETURN_NOT_ENOUGH_SPACE;
 
@@ -535,7 +538,7 @@ stun_message_append_error (StunMessage *msg, StunError code)
   const char *str = stun_strerror (code);
   size_t len = strlen (str);
 
-  uint8_t *ptr = stun_message_append (msg, STUN_ATTRIBUTE_ERROR_CODE, 4 + len);
+  uint8_t *ptr = (uint8_t*) stun_message_append (msg, STUN_ATTRIBUTE_ERROR_CODE, 4 + len);
   if (ptr == NULL)
     return STUN_MESSAGE_RETURN_NOT_ENOUGH_SPACE;
 
@@ -763,4 +766,6 @@ const char *stun_strerror (StunError code)
   /* Maximum allowed error message length */
   //  assert (strlen (str) < 128);
   return str;
+}
+
 }

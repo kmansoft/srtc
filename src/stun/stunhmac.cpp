@@ -70,6 +70,9 @@ typedef struct _StunKeyBlob {
 #include <gnutls/crypto.h>
 #endif
 
+namespace stun
+{
+
 void stun_sha1 (const uint8_t *msg, size_t len, size_t msg_len, uint8_t *sha,
     const void *key, size_t keylen, int padding)
 {
@@ -161,7 +164,7 @@ void stun_sha1 (const uint8_t *msg, size_t len, size_t msg_len, uint8_t *sha,
   params[0] = OSSL_PARAM_construct_utf8_string("digest", sha1, 0);
   params[1] = OSSL_PARAM_construct_end();
 
-  TRY (EVP_MAC_init(ctx, key, keylen, params));
+  TRY (EVP_MAC_init(ctx, (const uint8_t*)key, keylen, params));
   TRY (EVP_MAC_update (ctx, msg, 2));
   TRY (EVP_MAC_update (ctx, (const unsigned char *)&fakelen, 2));
   TRY (EVP_MAC_update (ctx, msg + 4, len - 28));
@@ -342,4 +345,6 @@ void stun_hash_creds (const uint8_t *realm, size_t realm_len,
 void stun_make_transid (StunTransactionId id)
 {
   nice_RAND_nonce (id, 16);
+}
+
 }

@@ -53,9 +53,8 @@
 #include <netinet/in.h>
 #endif
 
-# ifdef __cplusplus
-extern "C" {
-# endif
+namespace stun
+{
 
 size_t stun_padding (size_t l);
 
@@ -72,8 +71,6 @@ StunMessageReturn stun_xor_address (const StunMessage *msg,
     uint32_t magic_cookie);
 
 
-# ifdef __cplusplus
 }
-# endif
 
 #endif /* STUN_UTILS_H */

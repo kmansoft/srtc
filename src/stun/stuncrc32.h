@@ -48,6 +48,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+namespace stun
+{
+
 typedef struct {
   uint8_t *buf;
   size_t len;
@@ -55,5 +58,7 @@ typedef struct {
 
 
 uint32_t stun_crc32 (const crc_data *data, size_t n, bool wlm2009_stupid_crc32_typo);
+
+}
 
 #endif /* _CRC32_H */

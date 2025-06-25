@@ -39,9 +39,8 @@
 
 #include "stunmessage.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace stun
+{
 
 /*
  * Computes the MESSAGE-INTEGRITY hash of a STUN message.
@@ -71,8 +70,6 @@ void stun_hash_creds(const uint8_t *realm, size_t realm_len,
  */
 void stun_make_transid(StunTransactionId id);
 
-#ifdef __cplusplus
-}; // extern "C"
-#endif
+}
 
 #endif /* _STUN_HMAC_H */

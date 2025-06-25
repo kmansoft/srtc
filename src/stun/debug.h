@@ -40,9 +40,8 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace stun
+{
 
 
 /**
@@ -95,8 +94,6 @@ void stun_debug (const char *fmt, ...);
 void stun_debug_bytes (const char *prefix, const void *data, size_t len);
 
 
-# ifdef __cplusplus
 }
-# endif
 
 #endif /* STUN_DEBUG_H */

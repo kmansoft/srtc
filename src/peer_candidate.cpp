@@ -76,23 +76,23 @@ uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t c
 	return (1 << 24) * type_preference + (1 << 8) * local_preference + (256 - component_id);
 }
 
-StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAgent>& agent,
-											  uint8_t* buf,
-											  size_t len,
-											  const std::shared_ptr<srtc::SdpOffer>& offer,
-											  const std::shared_ptr<srtc::SdpAnswer>& answer,
-											  const char* label,
-											  bool useCandidate)
+stun::StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAgent>& agent,
+													uint8_t* buf,
+													size_t len,
+													const std::shared_ptr<srtc::SdpOffer>& offer,
+													const std::shared_ptr<srtc::SdpAnswer>& answer,
+													const char* label,
+													bool useCandidate)
 {
-	StunMessage msg = {};
-	agent->initRequest(&msg, buf, len, STUN_BINDING);
+	stun::StunMessage msg = {};
+	agent->initRequest(&msg, buf, len, stun::STUN_BINDING);
 
 	if (useCandidate) {
-		stun_message_append_flag(&msg, STUN_ATTRIBUTE_USE_CANDIDATE);
+		stun_message_append_flag(&msg, stun::STUN_ATTRIBUTE_USE_CANDIDATE);
 	}
 
 	const uint32_t priority = make_stun_priority(200, 10, 1);
-	stun_message_append32(&msg, STUN_ATTRIBUTE_PRIORITY, priority);
+	stun::stun_message_append32(&msg, stun::STUN_ATTRIBUTE_PRIORITY, priority);
 
 	// https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
 	const auto offerUserName = offer->getIceUFrag();
@@ -105,19 +105,19 @@ StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAge
 	return msg;
 }
 
-StunMessage make_stun_message_binding_response(const std::shared_ptr<srtc::IceAgent>& agent,
-											   uint8_t* buf,
-											   size_t len,
-											   const std::shared_ptr<srtc::SdpOffer>& offer,
-											   const std::shared_ptr<srtc::SdpAnswer>& answer,
-											   const StunMessage& request,
-											   const srtc::anyaddr& address,
-											   socklen_t addressLen)
+stun::StunMessage make_stun_message_binding_response(const std::shared_ptr<srtc::IceAgent>& agent,
+													 uint8_t* buf,
+													 size_t len,
+													 const std::shared_ptr<srtc::SdpOffer>& offer,
+													 const std::shared_ptr<srtc::SdpAnswer>& answer,
+													 const stun::StunMessage& request,
+													 const srtc::anyaddr& address,
+													 socklen_t addressLen)
 {
-	StunMessage msg = {};
+	stun::StunMessage msg = {};
 	agent->initResponse(&msg, buf, len, &request);
 
-	stun_message_append_xor_addr(&msg, STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS, &address.ss, addressLen);
+	stun_message_append_xor_addr(&msg, stun::STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS, &address.ss, addressLen);
 
 	// https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
 	const auto icePassword = offer->getIcePassword();
@@ -510,17 +510,17 @@ void PeerCandidate::addSendRaw(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 {
-	StunMessage incomingMessage = {};
+	stun::StunMessage incomingMessage = {};
 	incomingMessage.buffer = data.buf.data();
 	incomingMessage.buffer_len = data.buf.size();
 
-	const auto stunMessageClass = stun_message_get_class(&incomingMessage);
-	const auto stunMessageMethod = stun_message_get_method(&incomingMessage);
+	const auto stunMessageClass = stun::stun_message_get_class(&incomingMessage);
+	const auto stunMessageMethod = stun::stun_message_get_method(&incomingMessage);
 
 	LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
 	LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
 
-	if (stunMessageClass == STUN_REQUEST && stunMessageMethod == STUN_BINDING) {
+	if (stunMessageClass == stun::STUN_REQUEST && stunMessageMethod == stun::STUN_BINDING) {
 		const auto offerUserName = mOffer->getIceUFrag();
 		const auto answerUserName = mAnswer->getIceUFrag();
 		const auto iceUserName = offerUserName + ":" + answerUserName;
@@ -535,18 +535,18 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 																	 incomingMessage,
 																	 data.addr,
 																	 data.addr_len);
-			addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&response) });
+			addSendRaw({ mIceMessageBuffer.get(), stun::stun_message_length(&response) });
 		} else {
 			LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
 		}
-	} else if (stunMessageClass == STUN_RESPONSE && stunMessageMethod == STUN_BINDING) {
+	} else if (stunMessageClass == stun::STUN_RESPONSE && stunMessageMethod == stun::STUN_BINDING) {
 		int errorCode = { 0 };
-		if (stun_message_find_error(&incomingMessage, &errorCode) == STUN_MESSAGE_RETURN_SUCCESS) {
+		if (stun::stun_message_find_error(&incomingMessage, &errorCode) == stun::STUN_MESSAGE_RETURN_SUCCESS) {
 			LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
 		}
 
 		uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-		stun_message_id(&incomingMessage, id);
+		stun::stun_message_id(&incomingMessage, id);
 
 		if (mIceAgent->forgetTransaction(id)) {
 			LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
@@ -725,9 +725,9 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			const auto lastSR = rtcpReader.readU32();
 			const auto delaySinceLastSR = rtcpReader.readU32();
 
-			(void) lost;
-			(void) highestReceived;
-			(void) jitter;
+			(void)lost;
+			(void)highestReceived;
+			(void)jitter;
 
 			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
 			if (rtt) {

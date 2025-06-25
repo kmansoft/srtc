@@ -43,6 +43,9 @@
 
 #include <windows.h>
 
+namespace stun
+{
+
 void nice_RAND_nonce (uint8_t *dst, int len)
 {
   HCRYPTPROV prov;
@@ -52,13 +55,20 @@ void nice_RAND_nonce (uint8_t *dst, int len)
   CryptReleaseContext (prov, 0);
 }
 
+}
+
 #elif defined(HAVE_OPENSSL)
 
 #include <openssl/rand.h>
 
+namespace stun
+{
+
 void nice_RAND_nonce (uint8_t *dst, int len)
 {
   RAND_bytes (dst, len);
+}
+
 }
 
 #elif defined(HAVE_GNUTLS)
@@ -67,9 +77,14 @@ void nice_RAND_nonce (uint8_t *dst, int len)
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
+namespace stun
+{
+
 void nice_RAND_nonce (uint8_t *dst, int len)
 {
   gnutls_rnd (GNUTLS_RND_NONCE, dst, len);
+}
+
 }
 
 #endif

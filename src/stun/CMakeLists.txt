@@ -4,20 +4,20 @@ project("stun")
 
 add_library(srtc_stun STATIC
         constants.h
-        debug.c
+        debug.cpp
         debug.h
-        rand.c
+        rand.cpp
         rand.h
         readme.txt
-        stun5389.c
+        stun5389.cpp
         stun5389.h
-        stuncrc32.c
+        stuncrc32.cpp
         stuncrc32.h
-        stunhmac.c
+        stunhmac.cpp
         stunhmac.h
-        stunmessage.c
+        stunmessage.cpp
         stunmessage.h
-        utils.c
+        utils.cpp
         utils.h
         win32_common.h
 )

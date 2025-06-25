@@ -53,6 +53,13 @@
 #include "stunmessage.h"
 
 
+#define next_utf8_char(p) (char *)((p) + \
+      utf8_skip_data[*(const unsigned char *)(p)])
+
+
+namespace stun
+{
+
 static const char utf8_skip_data[256] = {
   1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
   1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
@@ -64,9 +71,6 @@ static const char utf8_skip_data[256] = {
   3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,6,6,1,1
 };
 
-#define next_utf8_char(p) (char *)((p) + \
-      utf8_skip_data[*(const unsigned char *)(p)])
-
 uint32_t stun_fingerprint (const uint8_t *msg, size_t len,
     bool wlm2009_stupid_crc32_typo)
 {
@@ -75,11 +79,11 @@ uint32_t stun_fingerprint (const uint8_t *msg, size_t len,
 
   // assert (len >= 28u);
 
-  data[0].buf = (void *)msg;
+  data[0].buf = (uint8_t *)msg;
   data[0].len = 2;
   data[1].buf = (uint8_t *)&fakelen;
   data[1].len = 2;
-  data[2].buf = (void *)(msg + 4);
+  data[2].buf = (uint8_t *)(msg + 4);
   /* first 4 bytes done, last 8 bytes not summed */
   data[2].len = len - 12u;
 
@@ -112,4 +116,6 @@ StunMessageReturn stun_message_append_software (StunMessage *msg,
 
   return stun_message_append_bytes (msg, STUN_ATTRIBUTE_SOFTWARE, software,
       ptr - software);
+}
+
 }

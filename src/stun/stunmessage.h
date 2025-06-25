@@ -72,11 +72,11 @@
 
 #include "constants.h"
 
+namespace stun
+{
+
 typedef struct _StunMessage StunMessage;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * StunClass:
@@ -1016,8 +1016,6 @@ bool stun_optional (uint16_t t);
  */
 const char *stun_strerror (StunError code);
 
-#ifdef __cplusplus
 }
-#endif
 
 #endif /* _STUN_MESSAGE_H */
