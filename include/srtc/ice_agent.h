@@ -27,7 +27,7 @@ public:
 	bool initResponse(stun::StunMessage* msg, uint8_t* buffer, size_t buffer_len, const stun::StunMessage* request);
 	bool finishMessage(stun::StunMessage* msg, const std::optional<std::string>& username, const std::string& password);
 
-	bool forgetTransaction(stun::StunTransactionId id);
+	bool forgetTransaction(stun::StunTransactionId id, float& outRtt);
 
 	void forgetExpiredTransactions(const std::chrono::milliseconds& expiration);
 

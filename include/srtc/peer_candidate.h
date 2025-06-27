@@ -100,7 +100,8 @@ private:
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
 
-	Filter<float> mRttFilter;
+	Filter<float> mIceRttFilter;
+	Filter<float> mRtpRttFilter;
 
     std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;

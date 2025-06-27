@@ -236,7 +236,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 																	 mVideoExtGoogleVLA))
 	, mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
 	, mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
-	, mRttFilter(0.2f)
+	, mIceRttFilter(0.2f)
+	, mRtpRttFilter(0.2f)
 	, mLastSendTime(std::chrono::steady_clock::time_point::min())
 	, mLastReceiveTime(std::chrono::steady_clock::time_point::min())
 	, mScheduler(scheduler)
@@ -326,8 +327,15 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	if (mRttFilter.getTimestamp() >= getSystemTimeMicros() - 5 * 1000 * 1000) {
-		stats.rtt_ms = mRttFilter.value();
+	const auto kTimeoutMicros = 5 * 1000 * 1000;
+
+	const auto now = getSystemTimeMicros();
+	if (mRtpRttFilter.getTimestamp() >= now - kTimeoutMicros) {
+		// RTT from sender / receiver reports
+		stats.rtt_ms = mRtpRttFilter.value();
+	} else if (mIceRttFilter.getTimestamp() >= now - kTimeoutMicros) {
+		// RTT from STUN requests / responses
+		stats.rtt_ms = mIceRttFilter.value();
 	}
 
 	if (mExtensionSourceTWCC) {
@@ -548,12 +556,13 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 		uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
 		stun::stun_message_id(&incomingMessage, id);
 
-		if (mIceAgent->forgetTransaction(id)) {
-			LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request");
+		float rtt = 0.0f;
+		if (mIceAgent->forgetTransaction(id, rtt)) {
+			LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request, rtt = %.2f", rtt);
 
-			const auto icePassword = mAnswer->getIcePassword();
+			mIceRttFilter.update(rtt, getSystemTimeMicros());
 
-			if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, icePassword)) {
+			if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
 				if (mSentUseCandidate) {
 					// Keep-alive
 					LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
@@ -732,7 +741,7 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
 			if (rtt) {
 				LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-				mRttFilter.update(rtt.value(), getSystemTimeMicros());
+				mRtpRttFilter.update(rtt.value(), getSystemTimeMicros());
 			}
 		}
 	} else if (rtcpPT == 205) {

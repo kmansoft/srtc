@@ -114,10 +114,13 @@ bool IceAgent::finishMessage(stun::StunMessage* msg,
 	return true;
 }
 
-bool IceAgent::forgetTransaction(stun::StunTransactionId id)
+bool IceAgent::forgetTransaction(stun::StunTransactionId id, float& outRtt)
 {
 	for (auto it = mTransactionList.begin(); it != mTransactionList.end(); ++it) {
 		if (std::memcmp(it->id, id, sizeof(stun::StunTransactionId)) == 0) {
+			const auto micros =
+				std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->when);
+			outRtt = static_cast<float>(micros.count()) / 1000.0f;
 			mTransactionList.erase(it);
 			return true;
 		}
