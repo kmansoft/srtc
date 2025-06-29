@@ -1,6 +1,6 @@
 ### srtc - a "simple" WebRTC library
 
-This is srtc, a "simple" WebRTC library (publish side only so far).
+This is srtc, a "simple" WebRTC library (publish side only so far, the work to implement subscribe has started).
 
 Features:
 
@@ -18,11 +18,13 @@ Features:
 - Tested with Pion and Amazon IVS (Interactive Video Service).
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
-### Envisioned use case 
+### API design 
 
 Can be used for publishing media from a server side system i.e. where network bandwidth is good and where you
 want to run multiple (hundreds or perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's
 implementation is not a good choice due to its hunger for threads.
+
+Has a simple command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
 
 Media encoding is deliberately out of scope of this library. It expects the application to provide encoded media samples,
 but does take care of packetization.
@@ -161,7 +163,7 @@ This library is my side project.
 
 - Releases. This is done.
 
-- Start implementing subscribing. A very large piece of work. Not started yet.
+- Start implementing subscribing. A very large piece of work. Started.
 
 - Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
