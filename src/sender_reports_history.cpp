@@ -23,7 +23,7 @@ void SenderReportsHistory::save(uint32_t ssrc, const NtpTime& ntp)
 		item.reportList.pop_front();
 	}
 
-	item.reportList.emplace_back(ntp, getSystemTimeMicros());
+	item.reportList.emplace_back(ntp, std::chrono::steady_clock::now());
 }
 
 std::optional<float> SenderReportsHistory::calculateRtt(uint32_t ssrc, uint32_t lastSR, uint32_t delaySinceLastSR)
@@ -36,11 +36,14 @@ std::optional<float> SenderReportsHistory::calculateRtt(uint32_t ssrc, uint32_t 
 			const auto middle = (item.ntp.seconds) << 16 | (item.ntp.fraction >> 16);
 			if (middle == lastSR) {
 				const auto delaySinceLastSRMicros = static_cast<int64_t>(delaySinceLastSR) * 1000000 / 65536;
-				const auto now = getSystemTimeMicros();
-				const auto received_micros = item.sent_micros + delaySinceLastSRMicros;
+				const auto now = std::chrono::steady_clock::now();
+				const auto received = item.sent + std::chrono::microseconds(delaySinceLastSRMicros);
 
-				if (now >= received_micros) {
-					return (now - received_micros) / 1000.0f;
+				if (now >= received) {
+					// The 2 is so we get the actual back-and-forth (roundtrip) value
+					return 2 * 1 / 1000.0f *
+						   static_cast<float>(
+							   std::chrono::duration_cast<std::chrono::microseconds>(now - received).count());
 				}
 				break;
 			}

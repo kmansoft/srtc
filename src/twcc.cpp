@@ -13,7 +13,7 @@ namespace
 
 constexpr auto kMaxPacketCount = 2048u;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
-constexpr auto kMaxRecentEnoughMicros = 3u * 1000u * 1000u;
+constexpr auto kMaxRecentEnough = std::chrono::milliseconds(3000);
 
 constexpr auto kActualCalculateMinPackets = 30u;
 constexpr auto kActualCalculateMinMicros = 1000u * 1000u;
@@ -187,7 +187,7 @@ void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
 	curr->payload_size = static_cast<uint16_t>(payloadSize);
 	curr->generated_size = static_cast<uint16_t>(generatedSize);
 	curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
-	curr->sent_time_micros = getSystemTimeMicros();
+	curr->sent_time_micros = getStableTimeMicros();
 	curr->media_type = track->getMediaType();
 }
 
@@ -219,7 +219,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 		return;
 	}
 
-	const auto now = getSystemTimeMicros();
+	const auto now = getStableTimeMicros();
 	const auto base = mHistory.get();
 
 	// Calculate which packets have not been received
@@ -276,8 +276,8 @@ unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
 														float bandwidthScale,
 														unsigned int defaultValue) const
 {
-	const auto now = getSystemTimeMicros();
-	if (mHistory && now - mBandwidthActualFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
+	const auto now = std::chrono::steady_clock::now();
+	if (mHistory && now - mBandwidthActualFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		const auto bitsPerSecond = mBandwidthActualFilter.value();
 		if (bitsPerSecond >= 10000.0f) {
 			const auto bytesPerSecond = bitsPerSecond * bandwidthScale / 8.0f;
@@ -298,14 +298,14 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 		return;
 	}
 
-	const auto now = getSystemTimeMicros();
+	const auto now = std::chrono::steady_clock::time_point();
 
-	if (now - mPacketsLostPercentFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
+	if (now - mPacketsLostPercentFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		stats.packets_lost_percent = mPacketsLostPercentFilter.value();
 	}
 
 	// Actual bandwidth
-	if (now - mBandwidthActualFilter.getTimestamp() <= kMaxRecentEnoughMicros) {
+	if (now - mBandwidthActualFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		stats.bandwidth_actual_kbit_per_second = mBandwidthActualFilter.value() / 1024.0f;
 	}
 
@@ -359,8 +359,9 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	}
 
 	mInstantPacketLossPercent = std::clamp<float>(
-		100.0f * static_cast<float>(std::max<float>(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
-	mPacketsLostPercentFilter.update(mInstantPacketLossPercent, now);
+		100.0f * static_cast<float>(std::max(lost, nacked)) / static_cast<float>(total), 0.0f, 100.0f);
+
+	mPacketsLostPercentFilter.update(mInstantPacketLossPercent);
 
 	// Calculate actual bandwidth
 	mActualItemBuf.clear();
@@ -410,7 +411,7 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 
 	const auto actualBitsPerSecond =
 		(static_cast<float>(totalSize) * 8.0f * 1000000.0f) / static_cast<float>(durationMicros);
-	mBandwidthActualFilter.update(actualBitsPerSecond, now);
+	mBandwidthActualFilter.update(actualBitsPerSecond);
 
 	return true;
 }

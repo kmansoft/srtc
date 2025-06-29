@@ -327,13 +327,13 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	const auto kTimeoutMicros = 5 * 1000 * 1000;
+	const auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 
-	const auto now = getSystemTimeMicros();
-	if (mRtpRttFilter.getTimestamp() >= now - kTimeoutMicros) {
+	const auto now = std::chrono::steady_clock::now();
+	if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		// RTT from sender / receiver reports
 		stats.rtt_ms = mRtpRttFilter.value();
-	} else if (mIceRttFilter.getTimestamp() >= now - kTimeoutMicros) {
+	} else if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		// RTT from STUN requests / responses
 		stats.rtt_ms = mIceRttFilter.value();
 	}
@@ -560,7 +560,7 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 		if (mIceAgent->forgetTransaction(id, rtt)) {
 			LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request, rtt = %.2f", rtt);
 
-			mIceRttFilter.update(rtt, getSystemTimeMicros());
+			mIceRttFilter.update(rtt);
 
 			if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
 				if (mSentUseCandidate) {
@@ -741,7 +741,7 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
 			if (rtt) {
 				LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-				mRtpRttFilter.update(rtt.value(), getSystemTimeMicros());
+				mRtpRttFilter.update(rtt.value());
 			}
 		}
 	} else if (rtcpPT == 205) {

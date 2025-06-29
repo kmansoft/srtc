@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <chrono>
 
 namespace srtc
 {
@@ -25,7 +26,7 @@ struct NtpTime {
 
 void getNtpTime(NtpTime& ntp);
 
-int64_t getSystemTimeMicros();
+int64_t getStableTimeMicros();
 
 template <class T>
 class Filter
@@ -33,14 +34,15 @@ class Filter
 public:
 	explicit Filter(float factor);
 
-	void update(T value, int64_t timestamp);
+	void update(T value);
+	void update(T value, const std::chrono::steady_clock::time_point& now);
 	[[nodiscard]] T value() const;
-	[[nodiscard]] int64_t getTimestamp() const;
+	[[nodiscard]] std::chrono::steady_clock::time_point getWhenUpdated() const;
 
 private:
 	const float mFactor;
 	std::optional<T> mValue;
-	int64_t mTimestamp;
+	std::chrono::steady_clock::time_point mWhenUpdated;
 };
 
 } // namespace srtc

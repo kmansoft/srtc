@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <ctime>
+#include <chrono>
 
 namespace srtc
 {
@@ -126,7 +127,7 @@ void getNtpTime(NtpTime& ntp)
 #endif
 }
 
-int64_t getSystemTimeMicros()
+int64_t getStableTimeMicros()
 {
 	// Get current time
 #ifdef _WIN32
@@ -144,19 +145,25 @@ template <class T>
 Filter<T>::Filter(float factor)
 	: mFactor(factor)
 	, mValue(std::nullopt)
-	, mTimestamp(0)
+	, mWhenUpdated(std::chrono::steady_clock::time_point::min())
 {
 }
 
 template <class T>
-void Filter<T>::update(T value, int64_t timestamp)
+void Filter<T>::update(T value)
+{
+	update(value, std::chrono::steady_clock::now());
+}
+
+template <class T>
+void Filter<T>::update(T value, const std::chrono::steady_clock::time_point& now)
 {
 	if (mValue.has_value()) {
 		mValue = static_cast<T>(mValue.value() * (1 - mFactor) + value * mFactor);
 	} else {
 		mValue = value;
 	}
-	mTimestamp = timestamp;
+	mWhenUpdated = now;
 }
 
 template <class T>
@@ -169,9 +176,9 @@ T Filter<T>::value() const
 }
 
 template <class T>
-int64_t Filter<T>::getTimestamp() const
+std::chrono::steady_clock::time_point Filter<T>::getWhenUpdated() const
 {
-	return mTimestamp;
+	return mWhenUpdated;
 }
 
 template class Filter<float>;

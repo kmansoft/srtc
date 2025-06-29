@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 #include <list>
+#include <chrono>
 
 namespace srtc
 {
@@ -23,11 +24,11 @@ public:
 private:
 	struct Report {
 		const NtpTime ntp;
-		const int64_t sent_micros;
+		const std::chrono::steady_clock::time_point sent;
 
-		Report(const NtpTime& ntp, int64_t sent_micros)
+		Report(const NtpTime& ntp, std::chrono::steady_clock::time_point sent)
 			: ntp(ntp)
-			, sent_micros(sent_micros)
+			, sent(sent)
 		{
 		}
 	};
