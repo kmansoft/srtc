@@ -24,7 +24,7 @@
 
 static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
-static std::string gWhipToken = "none";
+static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintInfo = false;
@@ -93,8 +93,6 @@ uint32_t BitReader::readUnsignedExpGolomb()
 	uint32_t remainingBits = readBits(leadingZeros);
 	return (1 << leadingZeros) - 1 + remainingBits;
 }
-
-// WHIP
 
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
@@ -328,7 +326,7 @@ int main(int argc, char* argv[])
 			}
 		} else if (arg == "-t" || arg == "--token") {
 			if (i + 1 < argc) {
-				gWhipToken = argv[++i];
+				gAuthToken = argv[++i];
 			} else {
 				std::cerr << "Error: -t/--token requires a token value" << std::endl;
 				return 1;
@@ -450,7 +448,7 @@ int main(int argc, char* argv[])
 	}
 
 	// WHIP
-	const auto answerString = perform_whip_whep(offerString, gWhipUrl, gWhipToken);
+	const auto answerString = perform_whip_whep(offerString, gWhipUrl, gAuthToken);
 	if (gPrintSDP) {
 		std::cout << "----- SDP answer -----\n" << answerString << std::endl;
 	}

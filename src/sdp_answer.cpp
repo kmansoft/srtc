@@ -286,7 +286,8 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 namespace srtc
 {
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
+std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction direction,
+															  const std::shared_ptr<SdpOffer>& offer,
 															  const std::string& answer,
 															  const std::shared_ptr<TrackSelector>& selector)
 {
@@ -553,7 +554,8 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
 		videoSingleTrack.reset();
 	}
 
-	std::shared_ptr<SdpAnswer> sdpAnswer(new SdpAnswer(iceUFrag,
+	std::shared_ptr<SdpAnswer> sdpAnswer(new SdpAnswer(direction,
+													   iceUFrag,
 													   icePassword,
 													   hostList,
 													   videoSingleTrack,
@@ -567,7 +569,8 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_
 	return { sdpAnswer, Error::OK };
 }
 
-SdpAnswer::SdpAnswer(const std::string& iceUFrag,
+SdpAnswer::SdpAnswer(Direction direction,
+					 const std::string& iceUFrag,
 					 const std::string& icePassword,
 					 const std::vector<Host>& hostList,
 					 const std::shared_ptr<Track>& videoSingleTrack,
@@ -577,7 +580,8 @@ SdpAnswer::SdpAnswer(const std::string& iceUFrag,
 					 const ExtensionMap& audioExtensionMap,
 					 bool isSetupActive,
 					 const X509Hash& certHash)
-	: mIceUFrag(iceUFrag)
+	: mDirection(direction)
+	, mIceUFrag(iceUFrag)
 	, mIcePassword(icePassword)
 	, mHostList(hostList)
 	, mVideoSingleTrack(videoSingleTrack)
@@ -591,6 +595,11 @@ SdpAnswer::SdpAnswer(const std::string& iceUFrag,
 }
 
 SdpAnswer::~SdpAnswer() = default;
+
+Direction SdpAnswer::getDirection() const
+{
+	return mDirection;
+}
 
 std::string SdpAnswer::getIceUFrag() const
 {

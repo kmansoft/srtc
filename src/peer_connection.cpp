@@ -96,6 +96,34 @@ std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const PubOfferCo
 	return std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio));
 }
 
+std::shared_ptr<SdpOffer> PeerConnection::createSubscribeSdpOffer(const SubOfferConfig& pubConfig,
+																  const std::optional<SubVideoConfig>& videoConfig,
+																  const std::optional<SubAudioConfig>& audioConfig)
+{
+	SdpOffer::Config config;
+	config.cname = pubConfig.cname;
+
+	std::optional<SdpOffer::VideoConfig> video;
+	if (videoConfig) {
+		video = SdpOffer::VideoConfig{};
+
+		for (const auto& codec : videoConfig->codec_list) {
+			video->codec_list.emplace_back(codec.codec, codec.profile_level_id);
+		}
+	}
+
+	std::optional<SdpOffer::AudioConfig> audio;
+	if (audioConfig) {
+		audio = SdpOffer::AudioConfig{};
+
+		for (const auto& codec : audioConfig->codec_list) {
+			audio->codec_list.emplace_back(codec.codec, codec.minptime, codec.stereo);
+		}
+	}
+
+	return std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Subscribe, config, video, audio));
+}
+
 Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 {
 	std::lock_guard lock(mMutex);
@@ -114,7 +142,13 @@ Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishSdpAnswer(
 	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
 {
-	return SdpAnswer::parse(offer, answer, selector);
+	return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
+}
+
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeSdpAnswer(
+	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
+{
+	return SdpAnswer::parse(Direction::Subscribe, offer, answer, selector);
 }
 
 Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
@@ -134,6 +168,10 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 	mAudioTrack = answer->getAudioTrack();
 
 	if (mSdpOffer && mSdpAnswer) {
+		if (mSdpOffer->getDirection() != mSdpAnswer->getDirection()) {
+			return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
+		}
+
 		// Packetizers
 		if (mVideoSingleTrack) {
 			const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);

@@ -371,6 +371,48 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
         )
     endif()
 
+    # Subscribe
+
+    add_executable(srtc_subscribe
+            tools/srtc_subscribe.cpp
+            tools/http_whip_whep.h
+    )
+
+    add_dependencies(srtc_subscribe srtc)
+
+    if(WIN32)
+        target_sources(srtc_subscribe
+                PRIVATE
+                tools/http_whip_whep_win.cpp
+        )
+
+        target_link_libraries(
+                srtc_subscribe
+                PRIVATE
+                srtc
+                winmm
+        )
+    else()
+        find_package(CURL REQUIRED)
+
+        target_sources(srtc_subscribe
+                PRIVATE
+                tools/http_whip_whep_curl.cpp
+        )
+
+        target_include_directories(srtc_subscribe
+                PRIVATE
+                ${CURL_INCLUDE_DIRS}
+        )
+
+        target_link_libraries(
+                srtc_subscribe
+                PRIVATE
+                srtc
+                CURL::libcurl
+        )
+    endif()
+
 endif()
 
 # Install

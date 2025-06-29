@@ -23,13 +23,15 @@ class SdpAnswer
 private:
     friend PeerConnection;
 
-    static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::shared_ptr<SdpOffer>& offer,
+    static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(Direction direction,
+															  const std::shared_ptr<SdpOffer>& offer,
                                                               const std::string& answer,
                                                               const std::shared_ptr<TrackSelector>& selector);
 
 public:
     ~SdpAnswer();
 
+	[[nodiscard]] Direction getDirection() const;
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::vector<Host> getHostList() const;
@@ -45,6 +47,7 @@ public:
     [[nodiscard]] const X509Hash& getCertificateHash() const;
 
 private:
+	const Direction mDirection;
     const std::string mIceUFrag;
     const std::string mIcePassword;
     const std::vector<Host> mHostList;
@@ -56,7 +59,8 @@ private:
     const bool mIsSetupActive;
     const X509Hash mCertHash;
 
-    SdpAnswer(const std::string& iceUFrag,
+    SdpAnswer(Direction direction,
+			  const std::string& iceUFrag,
               const std::string& icePassword,
               const std::vector<Host>& hostList,
               const std::shared_ptr<Track>& videoSingleTrack,
