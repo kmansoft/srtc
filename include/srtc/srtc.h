@@ -33,6 +33,11 @@ enum class MediaType {
     Audio = 2
 };
 
+enum Direction {
+	Publish = 0,
+	Subscribe = 1
+};
+
 union anyaddr {
     struct sockaddr_storage ss;
     struct sockaddr_in sin_ipv4;

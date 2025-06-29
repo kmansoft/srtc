@@ -426,13 +426,13 @@ int main(int argc, char* argv[])
 	});
 
 	// Offer
-	OfferConfig offerConfig = {};
+	PubOfferConfig offerConfig = {};
 	offerConfig.cname = "foo";
 	offerConfig.enable_rtx = true;
 	offerConfig.enable_bwe = gEnableBWE;
 	offerConfig.debug_drop_packets = gDropPackets;
 
-	PubVideoCodec videoCodec;
+	PubVideoCodec videoCodec = {};
 	videoCodec.codec = Codec::H264;
 	videoCodec.profile_level_id = 0x42e01f;
 

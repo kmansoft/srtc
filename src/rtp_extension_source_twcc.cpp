@@ -7,7 +7,7 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
-#include "srtc/twcc.h"
+#include "srtc/twcc_publish.h"
 
 #include <cassert>
 #include <chrono>
@@ -58,7 +58,7 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
 																		const std::shared_ptr<SdpAnswer>& answer,
 																		const std::shared_ptr<RealScheduler>& scheduler)
 {
-	const auto& config = offer->getConfig();
+	const auto& config = offer->getPubConfig();
 	if (!config.enable_bwe) {
 		return {};
 	}

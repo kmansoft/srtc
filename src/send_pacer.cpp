@@ -15,7 +15,7 @@
 namespace srtc
 {
 
-SendPacer::SendPacer(const struct OfferConfig& offerConfig,
+SendPacer::SendPacer(const PubOfferConfig& offerConfig,
 					 const std::shared_ptr<SrtpConnection>& srtp,
 					 const std::shared_ptr<Socket>& socket,
 					 const std::shared_ptr<SendRtpHistory>& history,

@@ -636,7 +636,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 					if (srtpError.isOk()) {
 						mSrtpConnection = srtpConnection;
 						mSendPacer =
-							std::make_shared<SendPacer>(mOffer->getConfig(),
+							std::make_shared<SendPacer>(mOffer->getPubConfig(),
 														mSrtpConnection,
 														mSocket,
 														mSendRtpHistory,

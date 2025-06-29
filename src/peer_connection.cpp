@@ -61,11 +61,39 @@ PeerConnection::~PeerConnection()
 	}
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const OfferConfig& config,
+std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const PubOfferConfig& pubConfig,
 																const std::optional<PubVideoConfig>& videoConfig,
 																const std::optional<PubAudioConfig>& audioConfig)
 {
-	return std::shared_ptr<SdpOffer>(new SdpOffer(config, videoConfig, audioConfig));
+	SdpOffer::Config config;
+	config.cname = pubConfig.cname;
+	config.enable_rtx = pubConfig.enable_rtx;
+	config.enable_bwe = pubConfig.enable_bwe;
+	config.debug_drop_packets = pubConfig.debug_drop_packets;
+
+	std::optional<SdpOffer::VideoConfig> video;
+	if (videoConfig) {
+		video = SdpOffer::VideoConfig{};
+
+		for (const auto& codec : videoConfig->codec_list) {
+			video->codec_list.emplace_back(codec.codec, codec.profile_level_id);
+		}
+		for (const auto& layer : videoConfig->simulcast_layer_list) {
+			video->simulcast_layer_list.emplace_back(
+				layer.name, layer.width, layer.height, layer.frames_per_second, layer.kilobits_per_second);
+		}
+	}
+
+	std::optional<SdpOffer::AudioConfig> audio;
+	if (audioConfig) {
+		audio = SdpOffer::AudioConfig{};
+
+		for (const auto& codec : audioConfig->codec_list) {
+			audio->codec_list.emplace_back(codec.codec, codec.minptime, codec.stereo);
+		}
+	}
+
+	return std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio));
 }
 
 Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)

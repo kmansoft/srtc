@@ -4,6 +4,7 @@
 #include "srtc/error.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
+#include "srtc/subscribe_config.h"
 #include "srtc/scheduler.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/srtc.h"
@@ -33,14 +34,22 @@ public:
     PeerConnection();
     ~PeerConnection();
 
-    std::shared_ptr<SdpOffer> createPublishSdpOffer(const OfferConfig& config,
-                                                    const std::optional<PubVideoConfig>& videoConfig,
-                                                    const std::optional<PubAudioConfig>& audioConfig);
+	// SDP offer
+	std::shared_ptr<SdpOffer> createPublishSdpOffer(const PubOfferConfig& pubConfig,
+													const std::optional<PubVideoConfig>& videoConfig,
+													const std::optional<PubAudioConfig>& audioConfig);
+	std::shared_ptr<SdpOffer> createSubscribeSdpOffer(const SubOfferConfig& config,
+													const std::optional<SubVideoConfig>& videoConfig,
+													const std::optional<SubAudioConfig>& audioConfig);
     Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
 
-    std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
-                                                                       const std::string& answer,
-                                                                       const std::shared_ptr<TrackSelector>& selector);
+	// SDP answer
+	std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
+																	   const std::string& answer,
+																	   const std::shared_ptr<TrackSelector>& selector);
+	std::pair<std::shared_ptr<SdpAnswer>, Error> parseSubscribeSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
+																		 const std::string& answer,
+																		 const std::shared_ptr<TrackSelector>& selector);
     Error setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
     std::shared_ptr<SdpOffer> getSdpOffer() const;

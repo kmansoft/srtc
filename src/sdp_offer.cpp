@@ -42,10 +42,12 @@ std::string list_to_string(uint32_t start, uint32_t end)
 namespace srtc
 {
 
-SdpOffer::SdpOffer(const OfferConfig& config,
-                   const std::optional<PubVideoConfig>& videoConfig,
-                   const std::optional<PubAudioConfig>& audioConfig)
+SdpOffer::SdpOffer(Direction direction,
+				   const Config& config,
+                   const std::optional<VideoConfig>& videoConfig,
+                   const std::optional<AudioConfig>& audioConfig)
     : mRandomGenerator(0, 0x7ffffffe)
+	, mDirection(direction)
     , mConfig(config)
     , mVideoConfig(videoConfig)
     , mAudioConfig(audioConfig)
@@ -62,9 +64,21 @@ SdpOffer::SdpOffer(const OfferConfig& config,
 {
 }
 
-const OfferConfig& SdpOffer::getConfig() const
+Direction SdpOffer::getDirection() const
 {
-    return mConfig;
+	return mDirection;
+}
+
+PubOfferConfig SdpOffer::getPubConfig() const
+{
+	PubOfferConfig config = {};
+
+	config.cname = mConfig.cname;
+	config.enable_rtx = mConfig.enable_rtx;
+	config.enable_bwe = mConfig.enable_bwe;
+	config.debug_drop_packets = mConfig.debug_drop_packets;
+
+    return config;
 }
 
 std::pair<std::string, Error> SdpOffer::generate()
@@ -111,7 +125,14 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
 
-        ss << "a=sendonly" << std::endl;
+		if (mDirection == Direction::Publish) {
+			ss << "a=sendonly" << std::endl;
+		} else if (mDirection == Direction::Subscribe) {
+			ss << "a=recvonly" << std::endl;
+		} else {
+			assert(false);
+		}
+
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
@@ -139,8 +160,8 @@ std::pair<std::string, Error> SdpOffer::generate()
         }
 
         const auto& layerList = mVideoConfig->simulcast_layer_list;
-        if (layerList.empty()) {
-            // No simulcast
+        if (layerList.empty() || mDirection == Direction::Subscribe) {
+            // No simulcast or subscribe
             if (mConfig.enable_bwe) {
                 ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
             }
@@ -224,7 +245,15 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
 
-        ss << "a=sendonly" << std::endl;
+		if (mDirection == Direction::Publish) {
+			ss << "a=sendonly" << std::endl;
+		} else if (mDirection == Direction::Subscribe) {
+			ss << "a=recvonly" << std::endl;
+		} else {
+			assert(false);
+		}
+
+
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
