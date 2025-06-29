@@ -55,7 +55,7 @@ The peer connection will maintain connectivity using STUN probe requests if no m
 re-establish connectivity if there is no data received from the server. If the re-connection fails, so will the
 overall connection state.
 
-### A command line demo / sample
+### A command line tool for publishing
 
 Tested on Linux, MacOS, Windows with Pion and Amazon IVS.
 
@@ -80,13 +80,13 @@ cmake --build .
 Change back to the root (`cd ..`) and run the command line demo. Use `--help` to see arguments.
 
 ```bash
-./build/srtc_cmdline_demo[.exe] --help
+./build/srtc_publish[.exe] --help
 ```
 
 Should output:
 
 ```bash
-Usage: ./build/srtc_cmdline_demo [options]
+Usage: ./build/srtc_publish [options]
 Options:
   -f, --file <path>    Path to H.264 file (default: sintel.h264)
   -u, --url <url>      WHIP server URL (default: http://localhost:8080/whip)
@@ -104,7 +104,7 @@ Options:
 #### To broadcast to Amazon IVS:
 
 ```bash
-./build/srtc_cmdline_demo -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
+./build/srtc_publish -f /path/to/out.h264 -u https://global.whip.live-video.net -t [YOUR STAGE TOKEN]
 ```
 
 #### Testing with Pion
@@ -116,7 +116,7 @@ Open a new web browser window to `http://localhost:8080`, you will see a web pag
 Click "Subscribe", you should see "Checking" / "Connected" in the status area below and there should be a progress wheel
 over the video area.
 
-Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/srtc_cmdline_demo[.exe]`, making sure the
+Now switch back to the terminal window where you built `srtc` and run `<your-cmake-dir>/srtc_publish[.exe]`, making sure the
 current directory is the `srtc` directory. This will load a video file and send it to Pion using WHIP.
 
 Switch back to the browser, after a second or two (keyframe delay) you should see the video being sent by `srtc`.
