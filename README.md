@@ -20,18 +20,18 @@ Features:
 
 ### API design 
 
-Can be used for publishing media from a server side system i.e. where network bandwidth is good and where you
-want to run multiple (hundreds or perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's
-implementation is not a good choice due to its hunger for threads.
+Efficient. Can be used for publishing media from a server side system i.e. where you want to run multiple (hundreds or
+perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's implementation is not a good choice
+due to its hunger for threads.
 
 Has a simple command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
 
 Media encoding is deliberately out of scope of this library. It expects the application to provide encoded media samples,
 but does take care of packetization.
 
-The API is deliberately not compatible with Google's, but close. The Google WebRTC library is inteded for browsers, and
-therefore its API has to match that defined for JavaScript and cannot be changed. I decided that it's not necessary to
-follow the JavaScript API.
+The API is deliberately not compatible with Google's, but the concepts are similar. The Google WebRTC library is inteded
+for browsers, and therefore its API has to match the API defined for JavaScript and cannot be changed. I decided that it's
+not necessary to follow the JavaScript API.
 
 ### Basic use
 
