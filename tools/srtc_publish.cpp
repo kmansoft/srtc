@@ -4,6 +4,8 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 
+#include "http_whip_whep.h"
+
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -17,10 +19,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
-
-// In another file
-
-std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token);
 
 // Program options
 
@@ -452,7 +450,7 @@ int main(int argc, char* argv[])
 	}
 
 	// WHIP
-	const auto answerString = perform_whip(offerString, gWhipUrl, gWhipToken);
+	const auto answerString = perform_whip_whep(offerString, gWhipUrl, gWhipToken);
 	if (gPrintSDP) {
 		std::cout << "----- SDP answer -----\n" << answerString << std::endl;
 	}

@@ -325,24 +325,27 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
     gtest_discover_tests(srtc_test)
 endif()
 
-# Command line demo
+# Tools
 
 if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
-    add_executable(srtc_cmdline_demo
-            src/srtc_cmdline_demo.cpp
+    # Publish
+
+    add_executable(srtc_publish
+            tools/srtc_publish.cpp
+            tools/http_whip_whep.h
     )
 
-    add_dependencies(srtc_cmdline_demo srtc)
+    add_dependencies(srtc_publish srtc)
 
     if(WIN32)
-        target_sources(srtc_cmdline_demo
+        target_sources(srtc_publish
                 PRIVATE
-                src/srtc_cmdline_demo_http_win.cpp
+                tools/http_whip_whep_win.cpp
         )
 
         target_link_libraries(
-                srtc_cmdline_demo
+                srtc_publish
                 PRIVATE
                 srtc
                 winmm
@@ -350,18 +353,18 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
     else()
         find_package(CURL REQUIRED)
 
-        target_sources(srtc_cmdline_demo
+        target_sources(srtc_publish
                 PRIVATE
-                src/srtc_cmdline_demo_http_curl.cpp
+                tools/http_whip_whep_curl.cpp
         )
 
-        target_include_directories(srtc_cmdline_demo
+        target_include_directories(srtc_publish
                 PRIVATE
                 ${CURL_INCLUDE_DIRS}
         )
 
         target_link_libraries(
-                srtc_cmdline_demo
+                srtc_publish
                 PRIVATE
                 srtc
                 CURL::libcurl

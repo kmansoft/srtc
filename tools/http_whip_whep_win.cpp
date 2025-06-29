@@ -108,7 +108,7 @@ std::string WStringToString(const std::wstring& str)
 
 } // namespace
 
-std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
+std::string perform_whip_whep(const std::string& offer, const std::string& url, const std::string& token)
 {
 	Url urlobj;
 	parseUrl(urlobj, url);

@@ -27,7 +27,7 @@ std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std
 	return 0;
 }
 
-std::string perform_whip(const std::string& offer, const std::string& url, const std::string& token)
+std::string perform_whip_whep(const std::string& offer, const std::string& url, const std::string& token)
 {
 	initCurl();
 

@@ -55,7 +55,7 @@ jobs:
           --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target srtc_cmdline_demo
+          --target srtc_publish
 
     - name: Test
       run: |
@@ -77,7 +77,7 @@ jobs:
           --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target srtc_cmdline_demo
+          --target srtc_publish
 
     - name: Test
       run: |
@@ -108,7 +108,7 @@ jobs:
             --config ${{env.BUILD_TYPE}} \
             --target srtc \
             --target srtc_test \
-            --target srtc_cmdline_demo
+            --target srtc_publish
 
       - name: Test
         run: |
@@ -137,7 +137,7 @@ jobs:
             --config ${{env.BUILD_TYPE}} `
             --target srtc `
             --target srtc_test `
-            --target srtc_cmdline_demo
+            --target srtc_publish
 
       - name: Test
         run: |

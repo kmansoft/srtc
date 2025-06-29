@@ -30,21 +30,21 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build ${{github.workspace}}/build --target srtc_cmdline_demo
+          cmake --build ${{github.workspace}}/build --target srtc_publish
 
       - name: Package
         run: |
           mkdir -p release
-          cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
+          cp ${{ github.workspace }}/build/srtc_publish release/
           cd release
-          strip srtc_cmdline_demo || true
-          tar -czvf srtc_cmdline_demo-linux.tar.gz srtc_cmdline_demo
+          strip srtc_publish || true
+          tar -czvf srtc_publish-linux.tar.gz srtc_publish
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: srtc_cmdline_demo-linux
-          path: release/srtc_cmdline_demo-linux.tar.gz
+          name: srtc_publish-linux
+          path: release/srtc_publish-linux.tar.gz
 
   build-macos:
     runs-on: macos-15 # For better compatibility
@@ -66,21 +66,21 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build ${{ github.workspace }}/build --target srtc_cmdline_demo
+          cmake --build ${{ github.workspace }}/build --target srtc_publish
 
       - name: Package
         run: |
           mkdir -p release
-          cp ${{ github.workspace }}/build/srtc_cmdline_demo release/
+          cp ${{ github.workspace }}/build/srtc_publish release/
           cd release
-          strip srtc_cmdline_demo || true
-          tar -czvf srtc_cmdline_demo-macos.tar.gz srtc_cmdline_demo
+          strip srtc_publish || true
+          tar -czvf srtc_publish-macos.tar.gz srtc_publish
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: srtc_cmdline_demo-macos
-          path: release/srtc_cmdline_demo-macos.tar.gz
+          name: srtc_publish-macos
+          path: release/srtc_publish-macos.tar.gz
 
   build-windows:
     runs-on: windows-2022
@@ -104,20 +104,20 @@ jobs:
           cmake `
             --build ${{github.workspace}}/build `
             --target srtc `
-            --target srtc_cmdline_demo
+            --target srtc_publish
 
       - name: Package
         run: |
           mkdir -p release
-          cp ${{ github.workspace }}/build/srtc_cmdline_demo.exe release/
+          cp ${{ github.workspace }}/build/srtc_publish.exe release/
           cd release
-          7z a -tzip srtc_cmdline_demo-windows.zip srtc_cmdline_demo.exe
+          7z a -tzip srtc_publish-windows.zip srtc_publish.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: srtc_cmdline_demo-windows
-          path: release/srtc_cmdline_demo-windows.zip
+          name: srtc_publish-windows
+          path: release/srtc_publish-windows.zip
 
   video-files:
     runs-on: ubuntu-latest
@@ -154,9 +154,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            artifacts/srtc_cmdline_demo-linux/srtc_cmdline_demo-linux.tar.gz
-            artifacts/srtc_cmdline_demo-macos/srtc_cmdline_demo-macos.tar.gz
-            artifacts/srtc_cmdline_demo-windows/srtc_cmdline_demo-windows.zip
+            artifacts/srtc_publish-linux/srtc_publish-linux.tar.gz
+            artifacts/srtc_publish-macos/srtc_publish-macos.tar.gz
+            artifacts/srtc_publish-windows/srtc_publish-windows.zip
             artifacts/video-files/sintel.h264
             artifacts/video-files/sintel_with_slices.h264
           draft: false
