@@ -152,7 +152,7 @@ TEST(KeyDerivation, TestSimpleInbound)
 
     // Now try ours
     srtc::CryptoBytes outputLabel5;
-    ASSERT_TRUE(srtc::KeyDerivation::generate(masterKey, masterSalt, 5, outputLabel5, 12));
+    ASSERT_TRUE(srtc::KeyDerivation::generate(masterKey, masterSalt, srtc::KeyDerivation::kLabelRtcpSalt, outputLabel5, 12));
 
     const auto outputLabel5Str = toHex(outputLabel5);
     std::cout << outputLabel5Str << std::endl;

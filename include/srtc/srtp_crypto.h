@@ -28,7 +28,7 @@ public:
     [[nodiscard]] size_t getMediaProtectionOverhead() const;
 
     [[nodiscard]] bool protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
-	[[nodiscard]] bool unprotectReceiveMedia(const ByteBuffer& packet, ByteBuffer& plain);
+	[[nodiscard]] bool unprotectReceiveMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
 
     [[nodiscard]] bool protectSendControl(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
     [[nodiscard]] bool unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& plain);
@@ -43,8 +43,10 @@ public:
     };
 
     SrtpCrypto(uint16_t profileId,
-               // Send RTP
-               const CryptoVectors& sendRtp,
+			   // Send RTP
+			   const CryptoVectors& sendRtp,
+			   // Receive RTP
+			   const CryptoVectors& receiveRtp,
                // Send RTCP
                const CryptoVectors& sendRtcp,
                // Receive RTCP
@@ -53,6 +55,9 @@ public:
 private:
     [[nodiscard]] bool protectSendMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
     [[nodiscard]] bool protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
+
+	[[nodiscard]] bool unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
+	[[nodiscard]] bool unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
 
     [[nodiscard]] bool protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
     [[nodiscard]] bool protectSendControlCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
@@ -63,7 +68,8 @@ private:
     [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 
     const uint16_t mProfileId;
-    const CryptoVectors mSendRtp;
+	const CryptoVectors mSendRtp;
+	const CryptoVectors mReceiveRtp;
     const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
 
