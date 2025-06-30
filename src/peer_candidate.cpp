@@ -648,10 +648,11 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 						const auto cipher = SSL_get_cipher(mDtlsSsl);
 						const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
 						LOG(SRTC_LOG_V,
-							"Connected to %s with cipher %s, profile %s",
+							"Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
 							addr.c_str(),
 							cipher,
-							profile->name);
+							profile->name,
+							mIceRttFilter.value());
 
 						Task::cancelHelper(mTaskConnectTimeout);
 						emitOnConnected();
