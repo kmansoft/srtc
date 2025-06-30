@@ -32,7 +32,7 @@ class PeerConnection final : public PeerCandidateListener
 {
 public:
     PeerConnection();
-    ~PeerConnection();
+    ~PeerConnection() override;
 
 	// SDP offer
 	std::shared_ptr<SdpOffer> createPublishSdpOffer(const PubOfferConfig& pubConfig,
@@ -59,6 +59,7 @@ public:
     std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
     std::shared_ptr<Track> getAudioTrack() const;
 
+	// Connection state
     enum class ConnectionState {
         Inactive = 0,
         Connecting = 1,
@@ -69,9 +70,11 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
+	// Publish stats
     using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
     void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
 
+	// Publishing media
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
     Error publishVideoSingleFrame(ByteBuffer&& buf);
 
@@ -79,6 +82,9 @@ public:
     Error publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf);
 
     Error publishAudioFrame(ByteBuffer&& buf);
+
+	// Closing
+	void close();
 
 private:
     mutable std::mutex mMutex;

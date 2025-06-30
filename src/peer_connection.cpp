@@ -44,21 +44,7 @@ PeerConnection::PeerConnection()
 
 PeerConnection::~PeerConnection()
 {
-	std::thread waitForThread;
-
-	{
-		std::lock_guard lock(mMutex);
-
-		if (mIsStarted) {
-			mIsQuit = true;
-			mEventLoop->interrupt();
-			waitForThread = std::move(mThread);
-		}
-	}
-
-	if (waitForThread.joinable()) {
-		waitForThread.join();
-	}
+	close();
 }
 
 std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const PubOfferConfig& pubConfig,
@@ -363,6 +349,25 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 	mEventLoop->interrupt();
 
 	return Error::OK;
+}
+
+void PeerConnection::close()
+{
+	std::thread waitForThread;
+
+	{
+		std::lock_guard lock(mMutex);
+
+		if (mIsStarted) {
+			mIsQuit = true;
+			mEventLoop->interrupt();
+			waitForThread = std::move(mThread);
+		}
+	}
+
+	if (waitForThread.joinable()) {
+		waitForThread.join();
+	}
 }
 
 void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,

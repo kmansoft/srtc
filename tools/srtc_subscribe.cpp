@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <csignal>
 #endif
 
 // Program options
@@ -26,6 +27,29 @@ static std::string gWhepUrl = "http://localhost:8080/whep";
 static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
+
+// Signals
+
+static bool gSigInterrupt = false;
+static bool gSigTerminate = false;
+
+#ifdef _WIN32
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType) {
+	if (fdwCtrlType == CTRL_C_EVENT) {
+		gSigInterrupt = true;
+	}
+	return FALSE;
+}
+#endif
+
+void signalHandler(int signal)
+{
+	if (signal == SIGINT) {
+		gSigInterrupt = true;
+	} else if (signal == SIGTERM) {
+		gSigTerminate = true;
+	}
+}
 
 // State
 
@@ -213,8 +237,32 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	// Set handlers for ctrl+c and term
+#ifdef _WIN32
+	SetConsoleCtrlHandler(CtrlHandler, TRUE);
+#else
+	signal(SIGINT, signalHandler);
+#endif
+	signal(SIGTERM, signalHandler);
+
+	// Run loop
+	while (true) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		if (gSigInterrupt) {
+			std::cout << "Ctrl+C pressed, exiting..." << std::endl;
+			break;
+		}
+		if (gSigTerminate) {
+			std::cout << "Termination requested, exiting..." << std::endl;
+			break;
+		}
+	}
+
 	// Wait a little and exit
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds (100));
+
+	peerConnection->close();
 
 	return 0;
 }

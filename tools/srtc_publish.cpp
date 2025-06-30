@@ -482,7 +482,9 @@ int main(int argc, char* argv[])
 	playVideoFile(peerConnection, inputFileData);
 
 	// Wait a little and exit
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds (100));
+
+	peerConnection->close();
 
 	return 0;
 }
