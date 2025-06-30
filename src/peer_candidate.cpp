@@ -318,7 +318,7 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 
 		const auto packetData = packet->generate();
 
-		if (mSrtpConnection->protectOutgoingControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+		if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
 			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
 			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
 		}
@@ -699,7 +699,7 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
 	if (is_rtcp_message(buf) && mSrtpConnection) {
 		ByteBuffer output;
-		if (mSrtpConnection->unprotectIncomingControl(buf, output)) {
+		if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
 			LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
 
 			const auto list = RtcpPacket::fromUdpPacket(output);
@@ -818,7 +818,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 					packetData = packet->generate();
 				}
 
-				if (mSrtpConnection->protectOutgoingMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
+				if (mSrtpConnection->protectSendMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
 					// And send
 					const auto sentSize = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
 					LOG(SRTC_LOG_V,

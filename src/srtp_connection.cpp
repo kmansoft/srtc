@@ -116,7 +116,7 @@ size_t SrtpConnection::getMediaProtectionOverhead() const
 	return mCrypto->getMediaProtectionOverhead();
 }
 
-bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output)
+bool SrtpConnection::protectSendControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4) {
 		// 4 byte header
@@ -125,24 +125,24 @@ bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData, uint32
 		return false;
 	}
 
-	if (!mCrypto->protectSendRtcp(packetData, sequence, output)) {
+	if (!mCrypto->protectSendControl(packetData, sequence, output)) {
 		return false;
 	}
 
 	return true;
 }
 
-bool SrtpConnection::protectOutgoingMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output)
+bool SrtpConnection::protectSendMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4 + 4) {
 		LOG(SRTC_LOG_E, "Outgoing RTP packet is too small");
 		return false;
 	}
 
-	return mCrypto->protectSendRtp(packetData, rollover, output);
+	return mCrypto->protectSendMedia(packetData, rollover, output);
 }
 
-bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output)
+bool SrtpConnection::unprotectReceiveControl(const ByteBuffer& packetData, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4 + 4) {
 		// 4 byte header
@@ -166,7 +166,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
 		return false;
 	}
 
-	if (!mCrypto->unprotectReceiveRtcp(packetData, output)) {
+	if (!mCrypto->unprotectReceiveControl(packetData, output)) {
 		return false;
 	}
 

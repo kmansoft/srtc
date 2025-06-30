@@ -122,24 +122,24 @@ size_t SrtpCrypto::getMediaProtectionOverhead() const
     }
 }
 
-bool SrtpCrypto::protectSendRtp(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     encrypted.resize(0);
 
     switch (mProfileId) {
     case SRTP_AEAD_AES_256_GCM:
     case SRTP_AEAD_AES_128_GCM:
-        return protectSendRtpGCM(packet, rolloverCount, encrypted);
+        return protectSendMediaGCM(packet, rolloverCount, encrypted);
     case SRTP_AES128_CM_SHA1_80:
     case SRTP_AES128_CM_SHA1_32:
-        return protectSendRtpCM(packet, rolloverCount, encrypted);
+        return protectSendMediaCM(packet, rolloverCount, encrypted);
     default:
         assert(false);
         return false;
     }
 }
 
-bool SrtpCrypto::protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -233,7 +233,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtpCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -340,24 +340,24 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtcp(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendControl(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     encrypted.resize(0);
 
     switch (mProfileId) {
     case SRTP_AEAD_AES_256_GCM:
     case SRTP_AEAD_AES_128_GCM:
-        return protectSendRtcpGCM(packet, seq, encrypted);
+        return protectSendControlGCM(packet, seq, encrypted);
     case SRTP_AES128_CM_SHA1_80:
     case SRTP_AES128_CM_SHA1_32:
-        return protectSendRtcpCM(packet, seq, encrypted);
+        return protectSendControlCM(packet, seq, encrypted);
     default:
         assert(false);
         return false;
     }
 }
 
-bool SrtpCrypto::protectSendRtcpGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     const auto ctx = mSendCipherCtx;
     if (!ctx) {
@@ -450,7 +450,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::protectSendRtcpCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
+bool SrtpCrypto::protectSendControlCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
@@ -537,24 +537,24 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::unprotectReceiveRtcp(const ByteBuffer& packet, ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& plain)
 {
     plain.resize(0);
 
     switch (mProfileId) {
     case SRTP_AEAD_AES_256_GCM:
     case SRTP_AEAD_AES_128_GCM:
-        return unprotectReceiveRtcpGCM(packet, plain);
+        return unprotectReceiveControlGCM(packet, plain);
     case SRTP_AES128_CM_SHA1_80:
     case SRTP_AES128_CM_SHA1_32:
-        return unprotectReceiveRtcpCM(packet, plain);
+        return unprotectReceiveControlCM(packet, plain);
     default:
         assert(false);
         return false;
     }
 }
 
-bool SrtpCrypto::unprotectReceiveRtcpGCM(const ByteBuffer& packet, ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer& plain)
 {
     const auto encryptedSize = packet.size();
     if (encryptedSize <= 4 + 4 + 16 + 4) {
@@ -669,7 +669,7 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::unprotectReceiveRtcpCM(const ByteBuffer& packet, ByteBuffer& plain)
+bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer& plain)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
@@ -771,6 +771,11 @@ fail:
         return true;
     }
     return false;
+}
+
+bool SrtpCrypto::secureEquals(const void* a, const void* b, size_t size)
+{
+	return CRYPTO_memcmp(a, b, size) == 0;
 }
 
 SrtpCrypto::SrtpCrypto(uint16_t profileId,

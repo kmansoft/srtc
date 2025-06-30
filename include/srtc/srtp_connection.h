@@ -27,13 +27,13 @@ public:
     [[nodiscard]] size_t getMediaProtectionOverhead() const;
 
     // Returns false on error
-    bool protectOutgoingControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output);
+    bool protectSendControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output);
 
     // Returns false on error
-    bool protectOutgoingMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output);
+    bool protectSendMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output);
 
     // Returns false on error
-    bool unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output);
+    bool unprotectReceiveControl(const ByteBuffer& packetData, ByteBuffer& output);
 
     // Implementation
     SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);

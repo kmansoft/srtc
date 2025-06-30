@@ -138,7 +138,7 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
 	// Generate
 	const auto packetData = packet->generate();
 	ByteBuffer protectedData;
-	if (mSrtp->protectOutgoingMedia(packetData.buf, packetData.rollover, protectedData)) {
+	if (mSrtp->protectSendMedia(packetData.buf, packetData.rollover, protectedData)) {
 		// Keep stats
 		stats->incrementSentPackets(1);
 		stats->incrementSentBytes(protectedData.size());

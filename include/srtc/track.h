@@ -39,6 +39,7 @@ public:
     };
 
     Track(int trackId,
+		  Direction direction,
           MediaType mediaType,
           const std::string& mediaId,
           uint32_t ssrc,
@@ -53,6 +54,7 @@ public:
           bool hasPli);
 
     [[nodiscard]] int getTrackId() const;
+	[[nodiscard]] Direction getDirection() const;
     [[nodiscard]] MediaType getMediaType() const;
     [[nodiscard]] std::string getMediaId() const;
     [[nodiscard]] int getPayloadId() const;
@@ -77,6 +79,7 @@ public:
 
 private:
     const int mTrackId;
+	const Direction mDirection;
     const MediaType mMediaType;
     const std::string mMediaId;
     const uint32_t mSSRC;

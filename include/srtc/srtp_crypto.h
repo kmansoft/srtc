@@ -27,10 +27,13 @@ public:
 
     [[nodiscard]] size_t getMediaProtectionOverhead() const;
 
-    [[nodiscard]] bool protectSendRtp(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
+	[[nodiscard]] bool unprotectReceiveMedia(const ByteBuffer& packet, ByteBuffer& plain);
 
-    [[nodiscard]] bool protectSendRtcp(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
-    [[nodiscard]] bool unprotectReceiveRtcp(const ByteBuffer& packet, ByteBuffer& plain);
+    [[nodiscard]] bool protectSendControl(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
+    [[nodiscard]] bool unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& plain);
+
+	static bool secureEquals(const void* a, const void* b, size_t size);
 
     // Implementation
     struct CryptoVectors {
@@ -48,14 +51,14 @@ public:
                const CryptoVectors& receiveRtcp);
 
 private:
-    [[nodiscard]] bool protectSendRtpGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
-    [[nodiscard]] bool protectSendRtpCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
 
-    [[nodiscard]] bool protectSendRtcpGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
-    [[nodiscard]] bool protectSendRtcpCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
+    [[nodiscard]] bool protectSendControlCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
 
-    [[nodiscard]] bool unprotectReceiveRtcpGCM(const ByteBuffer& packet, ByteBuffer& plain);
-    [[nodiscard]] bool unprotectReceiveRtcpCM(const ByteBuffer& packet, ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer& plain);
 
     [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 

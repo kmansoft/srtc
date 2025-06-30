@@ -168,7 +168,8 @@ struct ParseMediaState {
 
 	[[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
 
-	[[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(uint32_t ssrc,
+	[[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(srtc::Direction direction,
+														   uint32_t ssrc,
 														   uint32_t rtxSsrc,
 														   const std::shared_ptr<srtc::TrackSelector>& selector) const;
 
@@ -216,7 +217,8 @@ ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const
 	return nullptr;
 }
 
-std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
+std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direction,
+														  uint32_t ssrc,
 														  uint32_t rtxSsrc,
 														  const std::shared_ptr<srtc::TrackSelector>& selector) const
 {
@@ -230,6 +232,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(uint32_t ssrc,
 		if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None &&
 			payloadState.codec != srtc::Codec::Rtx) {
 			const auto track = std::make_shared<srtc::Track>(id,
+															 direction,
 															 mediaType,
 															 mediaId,
 															 layerList.empty() ? ssrc : 0,
@@ -263,6 +266,7 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 	for (const auto& layer : layerList) {
 		const auto ssrc = offer->getVideoSimulastSSRC(layer.name);
 		const auto track = std::make_shared<srtc::Track>(id,
+														 offer->getDirection(),
 														 mediaType,
 														 mediaId,
 														 ssrc.first,
@@ -541,8 +545,10 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 		return { {}, { Error::Code::InvalidData, "No media tracks" } };
 	}
 
-	auto videoSingleTrack = mediaStateVideo.selectTrack(offer->getVideoSSRC(), offer->getRtxVideoSSRC(), selector);
-	const auto audioTrack = mediaStateAudio.selectTrack(offer->getAudioSSRC(), offer->getRtxAudioSSRC(), selector);
+	auto videoSingleTrack =
+		mediaStateVideo.selectTrack(direction, offer->getVideoSSRC(), offer->getRtxVideoSSRC(), selector);
+	const auto audioTrack =
+		mediaStateAudio.selectTrack(direction, offer->getAudioSSRC(), offer->getRtxAudioSSRC(), selector);
 
 	if (!videoSingleTrack && !audioTrack) {
 		return { nullptr, { Error::Code::InvalidData, "No media tracks" } };

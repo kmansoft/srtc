@@ -8,6 +8,7 @@ namespace srtc
 {
 
 Track::Track(int trackId,
+			 Direction direction,
              MediaType mediaType,
              const std::string& mediaId,
              uint32_t ssrtc,
@@ -21,6 +22,7 @@ Track::Track(int trackId,
              bool hasNack,
              bool hasPli)
     : mTrackId(trackId)
+	, mDirection(direction)
     , mMediaType(mediaType)
     , mMediaId(mediaId)
     , mSSRC(ssrtc)

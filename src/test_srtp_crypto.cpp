@@ -26,12 +26,11 @@ std::once_flag gInitFlag;
 
 void initLibSRTP()
 {
-	std::call_once(gInitFlag, [] {
-		srtp_init();
-	});
+	std::call_once(gInitFlag, [] { srtp_init(); });
 }
 
-uint32_t randomU32() {
+uint32_t randomU32()
+{
 	uint32_t value;
 	RAND_bytes((unsigned char*)&value, sizeof(value));
 	return value;
@@ -39,11 +38,11 @@ uint32_t randomU32() {
 
 } // namespace
 
-// RTP send
+// RTP send and receive
 
-TEST(SrtpCrypto, RtpSend)
+TEST(SrtpCrypto, RtpSendRtpReceive)
 {
-	std::cout << "SrtpCrypto RtpSend" << std::endl;
+	std::cout << "SrtpCrypto RtpSend RtpReceive" << std::endl;
 
 	initLibSRTP();
 	srtc::initOpenSSL();
@@ -140,8 +139,20 @@ TEST(SrtpCrypto, RtpSend)
 
 		std::optional<uint16_t> prevSequence;
 
-		const auto track = std::make_shared<srtc::Track>(
-			0, srtc::MediaType::Video, "0", ssrc, 96, 0, 0, srtc::Codec::H264, nullptr, nullptr, 90000, false, false);
+		const auto track = std::make_shared<srtc::Track>(0,
+														 srtc::Direction::Publish,
+														 srtc::MediaType::Video,
+														 "0",
+														 ssrc,
+														 96,
+														 0,
+														 0,
+														 srtc::Codec::H264,
+														 nullptr,
+														 nullptr,
+														 90000,
+														 false,
+														 false);
 
 		{
 			// Edge case 1: empty payload with an extension, not valid in our library
@@ -156,7 +167,7 @@ TEST(SrtpCrypto, RtpSend)
 			const auto output = packet->generate();
 
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_FALSE(crypto->protectSendRtp(output.buf, output.rollover, protectedSrtcCrypto));
+			ASSERT_FALSE(crypto->protectSendMedia(output.buf, output.rollover, protectedSrtcCrypto));
 		}
 
 		{
@@ -175,7 +186,7 @@ TEST(SrtpCrypto, RtpSend)
 			const auto output = packet->generate();
 
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtp(output.buf, output.rollover, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendMedia(output.buf, output.rollover, protectedSrtcCrypto));
 		}
 
 		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
@@ -223,15 +234,27 @@ TEST(SrtpCrypto, RtpSend)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtp(source.buf, source.rollover, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendMedia(source.buf, source.rollover, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
 
-			for (size_t i = 0; i < protectedSize; i += 1) {
+			for (size_t i = 0; i < protectedLibSrtp.size(); i += 1) {
 				ASSERT_EQ(protectedLibSrtp.data()[i], protectedSrtcCrypto.data()[i])
 					<< " diff at offset " << i << " of " << protectedLibSrtp.size() << srtpProfileName << std::endl;
 			}
+
+			// Decrypt using our own crypto
+//			srtc::ByteBuffer unprotectedSrtcCrypto;
+//			ASSERT_TRUE(crypto->unprotectReceiveMedia(protectedSrtcCrypto, unprotectedSrtcCrypto));
+//
+//			// Validate
+//			ASSERT_EQ(source.buf.size(), unprotectedSrtcCrypto.size());
+//
+//			for (size_t i = 0; i < unprotectedSrtcCrypto.size(); i += 1) {
+//				ASSERT_EQ(source.buf.data()[i], unprotectedSrtcCrypto.data()[i])
+//					<< " diff at offset " << i << " of " << unprotectedSrtcCrypto.size() << srtpProfileName << std::endl;
+//			}
 
 			// Advance
 			sequence += 1;
@@ -356,7 +379,7 @@ TEST(SrtpCrypto, RtcpSend)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtcp(source, sequence, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendControl(source, sequence, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
@@ -505,7 +528,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtcp(source, sequence, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendControl(source, sequence, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
@@ -652,7 +675,7 @@ TEST(SrtpCrypto, RtcpReceive)
 
 			// Decrypt using our crypto
 			srtc::ByteBuffer decryptedPacket;
-			const auto decryptedResult = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
+			const auto decryptedResult = crypto->unprotectReceiveControl(encryptedPacket, decryptedPacket);
 			ASSERT_TRUE(decryptedResult);
 
 			// The packet should be equal to the source
@@ -823,7 +846,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 
 			// Decrypt using our crypto
 			srtc::ByteBuffer decryptedPacket;
-			const auto decryptedResult = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
+			const auto decryptedResult = crypto->unprotectReceiveControl(encryptedPacket, decryptedPacket);
 			ASSERT_TRUE(decryptedResult);
 
 			// The packet should be equal to the source
