@@ -10,7 +10,7 @@ if(POLICY CMP0091)
 endif()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
-option(SRTC_BUILD_CMDLINE "Build the command line demo" ON)
+option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -330,7 +330,7 @@ endif()
 
 # Tools
 
-if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
+if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     # Publish
 
