@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <csignal>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -18,7 +19,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <csignal>
 #endif
 
 // Program options
@@ -32,15 +32,6 @@ static bool gPrintSDP = false;
 
 static bool gSigInterrupt = false;
 static bool gSigTerminate = false;
-
-#ifdef _WIN32
-BOOL WINAPI CtrlHandler(DWORD fdwCtrlType) {
-	if (fdwCtrlType == CTRL_C_EVENT) {
-		gSigInterrupt = true;
-	}
-	return FALSE;
-}
-#endif
 
 void signalHandler(int signal)
 {
@@ -238,11 +229,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Set handlers for ctrl+c and term
-#ifdef _WIN32
-	SetConsoleCtrlHandler(CtrlHandler, TRUE);
-#else
 	signal(SIGINT, signalHandler);
-#endif
 	signal(SIGTERM, signalHandler);
 
 	// Run loop
