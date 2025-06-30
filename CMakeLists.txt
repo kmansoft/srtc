@@ -37,6 +37,7 @@ add_library(srtc
         include/srtc/extension_map.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
+        include/srtc/jitter_buffer.h
         include/srtc/logging.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
@@ -84,6 +85,7 @@ add_library(srtc
         src/extension_map.cpp
         src/h264.cpp
         src/ice_agent.cpp
+        src/jitter_buffer.cpp
         src/logging.cpp
         src/packetizer.cpp
         src/packetizer_h264.cpp
@@ -284,10 +286,11 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
     add_executable(
             srtc_test
             EXCLUDE_FROM_ALL
-            src/test_google_vla.cpp
-            src/test_replay_protection.cpp
-            src/test_srtp_key_derivation.cpp
-            src/test_srtp_crypto.cpp
+            test/test_google_vla.cpp
+            test/test_extended_value.cpp
+            test/test_replay_protection.cpp
+            test/test_srtp_key_derivation.cpp
+            test/test_srtp_crypto.cpp
     )
 
     target_include_directories(
