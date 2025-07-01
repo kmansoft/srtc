@@ -50,6 +50,7 @@ public:
 	[[nodiscard]] size_t getPayloadSize() const;
 	[[nodiscard]] uint16_t getSequence() const;
 	[[nodiscard]] uint32_t getSSRC() const;
+	[[nodiscard]] const ByteBuffer& getPayload() const;
 
 	// The extension is mutable
 	void setExtension(RtpExtension&& extension);
@@ -62,7 +63,8 @@ public:
 	[[nodiscard]] Output generate() const;
 	[[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
-	static std::shared_ptr<RtpPacket> fromUdpPacket(const srtc::ByteBuffer& data);
+	static std::shared_ptr<RtpPacket> fromUdpPacket(const std::shared_ptr<Track>& track,
+													const srtc::ByteBuffer& data);
 
 private:
 	const std::shared_ptr<Track> mTrack;

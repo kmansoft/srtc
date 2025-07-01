@@ -43,9 +43,9 @@ public:
           MediaType mediaType,
           const std::string& mediaId,
           uint32_t ssrc,
-          int payloadId,
+		  uint8_t payloadId,
           uint32_t rtxSsrc,
-          int rtxPayloadId,
+		  uint8_t rtxPayloadId,
           Codec codec,
           const std::shared_ptr<CodecOptions>& codecOptions,
           const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -57,8 +57,8 @@ public:
 	[[nodiscard]] Direction getDirection() const;
     [[nodiscard]] MediaType getMediaType() const;
     [[nodiscard]] std::string getMediaId() const;
-    [[nodiscard]] int getPayloadId() const;
-    [[nodiscard]] int getRtxPayloadId() const;
+    [[nodiscard]] uint8_t getPayloadId() const;
+    [[nodiscard]] uint8_t getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
     [[nodiscard]] std::shared_ptr<CodecOptions> getCodecOptions() const;
     [[nodiscard]] bool isSimulcast() const;
@@ -83,9 +83,9 @@ private:
     const MediaType mMediaType;
     const std::string mMediaId;
     const uint32_t mSSRC;
-    const int mPayloadId;
+    const uint8_t mPayloadId;
     const uint32_t mRtxSSRC;
-    const int mRtxPayloadId;
+    const uint8_t mRtxPayloadId;
     const Codec mCodec;
     const std::shared_ptr<CodecOptions> mCodecOptions;
     const std::shared_ptr<SimulcastLayer> mSimulcastLayer;

@@ -12,9 +12,9 @@ Track::Track(int trackId,
              MediaType mediaType,
              const std::string& mediaId,
              uint32_t ssrtc,
-             int payloadId,
+			 uint8_t payloadId,
              uint32_t rtxSsrc,
-             int rtxPayloadId,
+			 uint8_t rtxPayloadId,
              Codec codec,
              const std::shared_ptr<Track::CodecOptions>& codecOptions,
              const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -48,6 +48,11 @@ int Track::getTrackId() const
     return mTrackId;
 }
 
+Direction Track::getDirection() const
+{
+	return mDirection;
+}
+
 MediaType Track::getMediaType() const
 {
     return mMediaType;
@@ -58,12 +63,12 @@ std::string Track::getMediaId() const
     return mMediaId;
 }
 
-int Track::getPayloadId() const
+uint8_t Track::getPayloadId() const
 {
     return mPayloadId;
 }
 
-int Track::getRtxPayloadId() const
+uint8_t Track::getRtxPayloadId() const
 {
     return mRtxPayloadId;
 }

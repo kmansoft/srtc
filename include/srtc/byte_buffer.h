@@ -83,12 +83,16 @@ public:
     ByteReader(const uint8_t* buf, size_t size);
 
     [[nodiscard]] size_t size() const;
-    [[nodiscard]] size_t current() const;
+    [[nodiscard]] size_t position() const;
     [[nodiscard]] size_t remaining() const;
 
     [[nodiscard]] uint8_t readU8();
     [[nodiscard]] uint16_t readU16();
     [[nodiscard]] uint32_t readU32();
+
+	[[nodiscard]] ByteBuffer readByteBuffer(size_t size);
+
+	void read(uint8_t* buf, size_t size);
 
     void skip(size_t size);
 

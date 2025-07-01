@@ -35,21 +35,25 @@ public:
 	~PeerConnection() override;
 
 	// SDP offer
-	std::pair<std::shared_ptr<SdpOffer>, Error> createPublishOffer(const PubOfferConfig& pubConfig,
-																	  const std::optional<PubVideoConfig>& videoConfig,
-																	  const std::optional<PubAudioConfig>& audioConfig);
-	std::pair<std::shared_ptr<SdpOffer>, Error> createSubscribeOffer(const SubOfferConfig& config,
-																		const std::optional<SubVideoConfig>& videoConfig,
-																		const std::optional<SubAudioConfig>& audioConfig);
+	using OfferAndError = std::pair<std::shared_ptr<SdpOffer>, Error>;
+
+	OfferAndError createPublishOffer(const PubOfferConfig& pubConfig,
+									 const std::optional<PubVideoConfig>& videoConfig,
+									 const std::optional<PubAudioConfig>& audioConfig);
+	OfferAndError createSubscribeOffer(const SubOfferConfig& config,
+									   const std::optional<SubVideoConfig>& videoConfig,
+									   const std::optional<SubAudioConfig>& audioConfig);
 	Error setOffer(const std::shared_ptr<SdpOffer>& offer);
 
 	// SDP answer
-	std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishAnswer(const std::shared_ptr<SdpOffer>& offer,
-																	   const std::string& answer,
-																	   const std::shared_ptr<TrackSelector>& selector);
-	std::pair<std::shared_ptr<SdpAnswer>, Error> parseSubscribeAnswer(const std::shared_ptr<SdpOffer>& offer,
-																		 const std::string& answer,
-																		 const std::shared_ptr<TrackSelector>& selector);
+	using AnswerAndError = std::pair<std::shared_ptr<SdpAnswer>, Error>;
+
+	AnswerAndError parsePublishAnswer(const std::shared_ptr<SdpOffer>& offer,
+									  const std::string& answer,
+									  const std::shared_ptr<TrackSelector>& selector);
+	AnswerAndError parseSubscribeAnswer(const std::shared_ptr<SdpOffer>& offer,
+										const std::string& answer,
+										const std::shared_ptr<TrackSelector>& selector);
 	Error setAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
 	std::shared_ptr<SdpOffer> getOffer() const;

@@ -141,7 +141,7 @@ std::vector<std::string> split_list(const std::string& line)
 }
 
 struct ParsePayloadState {
-	int payloadId = { -1 };
+	uint8_t payloadId = { 0 };
 	srtc::Codec codec = { srtc::Codec::None };
 	std::shared_ptr<srtc::Track::CodecOptions> codecOptions;
 	uint32_t clockRate = { 0 };

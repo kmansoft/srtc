@@ -289,6 +289,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             test/test_google_vla.cpp
             test/test_extended_value.cpp
             test/test_replay_protection.cpp
+            test/test_rtp_packet.cpp
             test/test_srtp_key_derivation.cpp
             test/test_srtp_crypto.cpp
     )
