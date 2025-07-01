@@ -71,8 +71,10 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
 			video->codec_list.emplace_back(codec.codec, codec.profile_level_id);
 		}
 		for (const auto& layer : videoConfig->simulcast_layer_list) {
-			video->simulcast_layer_list.emplace_back(
-				layer.name, layer.width, layer.height, layer.frames_per_second, layer.kilobits_per_second);
+			const srtc::SimulcastLayer simulcastLayer = {
+				layer.name, layer.width, layer.height, layer.frames_per_second, layer.kilobits_per_second
+			};
+			video->simulcast_layer_list.push_back(simulcastLayer);
 		}
 	}
 
