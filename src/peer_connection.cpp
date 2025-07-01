@@ -34,8 +34,9 @@ constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
 namespace srtc
 {
 
-PeerConnection::PeerConnection()
-	: mEventLoop(EventLoop::factory())
+PeerConnection::PeerConnection(Direction direction)
+	: mDirection(direction)
+	, mEventLoop(EventLoop::factory())
 {
 	std::call_once(gInitFlag, [] {
 		// Just in case we need something
@@ -47,10 +48,14 @@ PeerConnection::~PeerConnection()
 	close();
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const PubOfferConfig& pubConfig,
-																const std::optional<PubVideoConfig>& videoConfig,
-																const std::optional<PubAudioConfig>& audioConfig)
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(const PubOfferConfig& pubConfig,
+																			   const std::optional<PubVideoConfig>& videoConfig,
+																			   const std::optional<PubAudioConfig>& audioConfig)
 {
+	if (mDirection != Direction::Publish) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
+	}
+
 	SdpOffer::Config config;
 	config.cname = pubConfig.cname;
 	config.enable_rtx = pubConfig.enable_rtx;
@@ -79,13 +84,17 @@ std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const PubOfferCo
 		}
 	}
 
-	return std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio));
+	return { std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio)), Error::OK };
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::createSubscribeSdpOffer(const SubOfferConfig& pubConfig,
-																  const std::optional<SubVideoConfig>& videoConfig,
-																  const std::optional<SubAudioConfig>& audioConfig)
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer(const SubOfferConfig& pubConfig,
+																				 const std::optional<SubVideoConfig>& videoConfig,
+																				 const std::optional<SubAudioConfig>& audioConfig)
 {
+	if (mDirection != Direction::Subscribe) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
+	}
+
 	SdpOffer::Config config;
 	config.cname = pubConfig.cname;
 
@@ -107,11 +116,15 @@ std::shared_ptr<SdpOffer> PeerConnection::createSubscribeSdpOffer(const SubOffer
 		}
 	}
 
-	return std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Subscribe, config, video, audio));
+	return { std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Subscribe, config, video, audio)), Error::OK };
 }
 
-Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
+Error PeerConnection::setOffer(const std::shared_ptr<SdpOffer>& offer)
 {
+	if (mDirection != offer->getDirection()) {
+		return { Error::Code::InvalidData, "Wrong publish / subscribe direction for the offer" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	assert(!mIsQuit);
@@ -125,19 +138,29 @@ Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 	return Error::OK;
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishSdpAnswer(
-	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(const std::shared_ptr<SdpOffer>& offer,
+																				const std::string& answer,
+																				const std::shared_ptr<TrackSelector>& selector)
 {
+	if (mDirection != Direction::Publish) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
+	}
+
 	return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeSdpAnswer(
-	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(const std::shared_ptr<SdpOffer>& offer,
+																				  const std::string& answer,
+																				  const std::shared_ptr<TrackSelector>& selector)
 {
+	if (mDirection != Direction::Subscribe) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
+	}
+
 	return SdpAnswer::parse(Direction::Subscribe, offer, answer, selector);
 }
 
-Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
+Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
 	std::lock_guard lock(mMutex);
 
@@ -196,13 +219,13 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 	return Error::OK;
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::getSdpOffer() const
+std::shared_ptr<SdpOffer> PeerConnection::getOffer() const
 {
 	std::lock_guard lock(mMutex);
 	return mSdpOffer;
 }
 
-std::shared_ptr<SdpAnswer> PeerConnection::getSdpAnswer() const
+std::shared_ptr<SdpAnswer> PeerConnection::getAnswer() const
 {
 	std::lock_guard lock(mMutex);
 	return mSdpAnswer;
@@ -210,19 +233,16 @@ std::shared_ptr<SdpAnswer> PeerConnection::getSdpAnswer() const
 
 std::shared_ptr<Track> PeerConnection::getVideoSingleTrack() const
 {
-	std::lock_guard lock(mMutex);
 	return mVideoSingleTrack;
 }
 
 std::vector<std::shared_ptr<Track>> PeerConnection::getVideoSimulcastTrackList() const
 {
-	std::lock_guard lock(mMutex);
 	return mVideoSimulcastTrackList;
 }
 
 std::shared_ptr<Track> PeerConnection::getAudioTrack() const
 {
-	std::lock_guard lock(mMutex);
 	return mAudioTrack;
 }
 
@@ -240,6 +260,10 @@ void PeerConnection::setPublishConnectionStatsListener(const PublishConnectionSt
 
 Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mVideoSingleTrack == nullptr) {
@@ -257,6 +281,10 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& 
 
 Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
@@ -278,11 +306,15 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 
 Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
-	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
-								   mVideoSimulcastLayerList.end(),
-								   [&layerName](const auto& layer) { return layer.ridName == layerName; });
+	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(), [&layerName](const auto& layer) {
+		return layer.ridName == layerName;
+	});
 	if (iter == mVideoSimulcastLayerList.end()) {
 		return { Error::Code::InvalidData, "There is no video layer named " + layerName };
 	}
@@ -303,15 +335,19 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
 
 Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
 		return Error::OK;
 	}
 
-	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
-								   mVideoSimulcastLayerList.end(),
-								   [&layerName](const auto& layer) { return layer.ridName == layerName; });
+	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(), [&layerName](const auto& layer) {
+		return layer.ridName == layerName;
+	});
 	if (iter == mVideoSimulcastLayerList.end()) {
 		return { Error::Code::InvalidData, "There is no video layer named " + layerName };
 	}
@@ -332,6 +368,10 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, B
 
 Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
@@ -370,8 +410,7 @@ void PeerConnection::close()
 	}
 }
 
-void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-											 const std::shared_ptr<SdpAnswer> answer)
+void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer, const std::shared_ptr<SdpAnswer> answer)
 {
 	// Loop scheduler
 	mLoopScheduler = std::make_shared<LoopScheduler>();
@@ -429,8 +468,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 		// Frames to send
 		if (mSelectedCandidate) {
 			for (auto& item : frameSendQueue) {
-				mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
-					item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
+				mSelectedCandidate->addSendFrame(
+					PeerCandidate::FrameToSend{ item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
 			}
 		}
 
@@ -527,7 +566,7 @@ void PeerConnection::startConnecting()
 	}
 }
 
-std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksLocked() const
+std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
 {
 	std::vector<std::shared_ptr<Track>> list;
 
@@ -568,9 +607,7 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 
 	mLoopScheduler->dump();
 
-	std::lock_guard lock(mMutex);
-
-	const auto trackList = collectTracksLocked();
+	const auto trackList = collectTracks();
 	for (const auto& trackItem : trackList) {
 		trackItem->getStats()->clear();
 
@@ -580,12 +617,10 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 	}
 
 	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports =
-		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
 	Task::cancelHelper(mTaskConnectionStats);
-	mTaskConnectionStats =
-		mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
+	mTaskConnectionStats = mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 }
 
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
@@ -615,14 +650,13 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 void PeerConnection::sendSenderReports()
 {
 	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports =
-		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
 	if (mSelectedCandidate) {
 		std::lock_guard lock(mMutex);
 
 		if (mConnectionState == ConnectionState::Connected) {
-			const auto trackList = collectTracksLocked();
+			const auto trackList = collectTracks();
 			for (const auto& trackItem : trackList) {
 				mSelectedCandidate->sendSenderReport(trackItem);
 			}
@@ -633,8 +667,7 @@ void PeerConnection::sendSenderReports()
 void PeerConnection::sendConnectionStats()
 {
 	Task::cancelHelper(mTaskConnectionStats);
-	mTaskConnectionStats =
-		mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
+	mTaskConnectionStats = mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 
 	PublishConnectionStats connectionStats = {};
 
@@ -647,11 +680,11 @@ void PeerConnection::sendConnectionStats()
 		connectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
 
 		std::lock_guard lock(mMutex);
-		if (mConnectionState != ConnectionState::Connected) {
+		if (mConnectionState == ConnectionState::Connected) {
 			return;
 		}
 
-		const auto trackList = collectTracksLocked();
+		const auto trackList = collectTracks();
 		for (const auto& trackItem : trackList) {
 			const auto stats = trackItem->getStats();
 			connectionStats.packet_count += stats->getSentPackets();

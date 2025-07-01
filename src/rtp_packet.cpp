@@ -220,4 +220,19 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 	return { std::move(buf), rtxRollover };
 }
 
+std::shared_ptr<RtpPacket> fromUdpPacket(const srtc::ByteBuffer& data)
+{
+	ByteReader reader(data);
+
+	if (reader.remaining() < 4 + 4 + 4) {
+		return {};
+	}
+
+//	const auto header = reader.readU16();
+//	const auto seq = reader.readU16();
+//	const auto timestamp = reader.readU32();
+
+	return {};
+}
+
 } // namespace srtc

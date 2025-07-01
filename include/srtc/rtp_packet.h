@@ -62,6 +62,8 @@ public:
 	[[nodiscard]] Output generate() const;
 	[[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
+	static std::shared_ptr<RtpPacket> fromUdpPacket(const srtc::ByteBuffer& data);
+
 private:
 	const std::shared_ptr<Track> mTrack;
 	const uint32_t mSSRC;

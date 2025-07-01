@@ -8,7 +8,7 @@ BreakBeforeBraces: Linux
 BinPackParameters: OnePerLine
 BinPackArguments: false
 FixNamespaceComments: true
-ColumnLimit: 120
+ColumnLimit: 140
 PackConstructorInitializers: Never
 BreakConstructorInitializers: BeforeComma
 IndentAccessModifiers: false

@@ -389,7 +389,7 @@ int main(int argc, char* argv[])
 	// Peer connection
 	auto connectedReported = false;
 	const auto ms0 = std::chrono::steady_clock::now();
-	const auto peerConnection = std::make_shared<PeerConnection>();
+	const auto peerConnection = std::make_shared<PeerConnection>(Direction::Publish);
 
 	peerConnection->setConnectionStateListener(
 		[ms0, &connectedReported, &connectionStateMutex, &connectionState, &connectionStateCond](
@@ -437,10 +437,15 @@ int main(int argc, char* argv[])
 	PubVideoConfig videoConfig = {};
 	videoConfig.codec_list.push_back(videoCodec);
 
-	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, std::nullopt);
-	const auto [offerString, offerError] = offer->generate();
-	if (offerError.isError()) {
-		std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;
+	const auto [offer, offerCreateError] = peerConnection->createPublishOffer(offerConfig, videoConfig, std::nullopt);
+	if (offerCreateError.isError()) {
+		std::cout << "Error: cannot create offer: " << offerCreateError.mMessage << std::endl;
+		exit(1);
+	}
+
+	const auto [offerString, offerStringError] = offer->generate();
+	if (offerStringError.isError()) {
+		std::cout << "Error: cannot generate offer: " << offerStringError.mMessage << std::endl;
 		exit(1);
 	}
 	if (gPrintSDP) {
@@ -454,15 +459,15 @@ int main(int argc, char* argv[])
 	}
 
 	// Answer
-	const auto [answer, answerError] = peerConnection->parsePublishSdpAnswer(offer, answerString, nullptr);
+	const auto [answer, answerError] = peerConnection->parsePublishAnswer(offer, answerString, nullptr);
 	if (answerError.isError()) {
 		std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
 		exit(1);
 	}
 
 	// Connect the peer connection
-	peerConnection->setSdpOffer(offer);
-	peerConnection->setSdpAnswer(answer);
+	peerConnection->setOffer(offer);
+	peerConnection->setAnswer(answer);
 
 	// Wait for connection to either be connected or fail
 	{
