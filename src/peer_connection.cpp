@@ -48,9 +48,10 @@ PeerConnection::~PeerConnection()
 	close();
 }
 
-std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(const PubOfferConfig& pubConfig,
-																			   const std::optional<PubVideoConfig>& videoConfig,
-																			   const std::optional<PubAudioConfig>& audioConfig)
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
+	const PubOfferConfig& pubConfig,
+	const std::optional<PubVideoConfig>& videoConfig,
+	const std::optional<PubAudioConfig>& audioConfig)
 {
 	if (mDirection != Direction::Publish) {
 		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
@@ -87,9 +88,10 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(c
 	return { std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio)), Error::OK };
 }
 
-std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer(const SubOfferConfig& pubConfig,
-																				 const std::optional<SubVideoConfig>& videoConfig,
-																				 const std::optional<SubAudioConfig>& audioConfig)
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer(
+	const SubOfferConfig& pubConfig,
+	const std::optional<SubVideoConfig>& videoConfig,
+	const std::optional<SubAudioConfig>& audioConfig)
 {
 	if (mDirection != Direction::Subscribe) {
 		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
@@ -138,9 +140,8 @@ Error PeerConnection::setOffer(const std::shared_ptr<SdpOffer>& offer)
 	return Error::OK;
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(const std::shared_ptr<SdpOffer>& offer,
-																				const std::string& answer,
-																				const std::shared_ptr<TrackSelector>& selector)
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(
+	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
 {
 	if (mDirection != Direction::Publish) {
 		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
@@ -149,9 +150,8 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(
 	return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(const std::shared_ptr<SdpOffer>& offer,
-																				  const std::string& answer,
-																				  const std::shared_ptr<TrackSelector>& selector)
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(
+	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
 {
 	if (mDirection != Direction::Subscribe) {
 		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
@@ -312,9 +312,9 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
 
 	std::lock_guard lock(mMutex);
 
-	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(), [&layerName](const auto& layer) {
-		return layer.ridName == layerName;
-	});
+	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
+								   mVideoSimulcastLayerList.end(),
+								   [&layerName](const auto& layer) { return layer.ridName == layerName; });
 	if (iter == mVideoSimulcastLayerList.end()) {
 		return { Error::Code::InvalidData, "There is no video layer named " + layerName };
 	}
@@ -345,9 +345,9 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, B
 		return Error::OK;
 	}
 
-	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(), mVideoSimulcastLayerList.end(), [&layerName](const auto& layer) {
-		return layer.ridName == layerName;
-	});
+	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
+								   mVideoSimulcastLayerList.end(),
+								   [&layerName](const auto& layer) { return layer.ridName == layerName; });
 	if (iter == mVideoSimulcastLayerList.end()) {
 		return { Error::Code::InvalidData, "There is no video layer named " + layerName };
 	}
@@ -410,7 +410,8 @@ void PeerConnection::close()
 	}
 }
 
-void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer, const std::shared_ptr<SdpAnswer> answer)
+void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
+											 const std::shared_ptr<SdpAnswer> answer)
 {
 	// Loop scheduler
 	mLoopScheduler = std::make_shared<LoopScheduler>();
@@ -468,8 +469,8 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 		// Frames to send
 		if (mSelectedCandidate) {
 			for (auto& item : frameSendQueue) {
-				mSelectedCandidate->addSendFrame(
-					PeerCandidate::FrameToSend{ item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
+				mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
+					item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
 			}
 		}
 
@@ -535,6 +536,9 @@ void PeerConnection::startConnecting()
 
 	mFrameSendQueue.clear();
 
+	// We will need the track list
+	const auto trackList = collectTracks();
+
 	// Interleave IPv4 and IPv6 candidates
 	std::vector<Host> hostList4;
 	std::vector<Host> hostList6;
@@ -551,14 +555,26 @@ void PeerConnection::startConnecting()
 	for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
 		if (i < hostList4.size()) {
 			const auto host = hostList4[i];
-			const auto candidate = std::make_shared<PeerCandidate>(
-				this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
+			const auto candidate = std::make_shared<PeerCandidate>(this,
+																   trackList,
+																   mSdpOffer,
+																   mSdpAnswer,
+																   mLoopScheduler,
+																   host,
+																   mEventLoop,
+																   std::chrono::milliseconds(connectDelay));
 			mConnectingCandidateList.push_back(candidate);
 		}
 		if (i < hostList6.size()) {
 			const auto host = hostList6[i];
-			const auto candidate = std::make_shared<PeerCandidate>(
-				this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
+			const auto candidate = std::make_shared<PeerCandidate>(this,
+																   trackList,
+																   mSdpOffer,
+																   mSdpAnswer,
+																   mLoopScheduler,
+																   host,
+																   mEventLoop,
+																   std::chrono::milliseconds(connectDelay));
 			mConnectingCandidateList.push_back(candidate);
 		}
 
@@ -617,10 +633,12 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 	}
 
 	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	mTaskSenderReports =
+		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
 	Task::cancelHelper(mTaskConnectionStats);
-	mTaskConnectionStats = mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
+	mTaskConnectionStats =
+		mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 }
 
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
@@ -650,7 +668,8 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 void PeerConnection::sendSenderReports()
 {
 	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports = mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	mTaskSenderReports =
+		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
 
 	if (mSelectedCandidate) {
 		std::lock_guard lock(mMutex);
@@ -667,7 +686,8 @@ void PeerConnection::sendSenderReports()
 void PeerConnection::sendConnectionStats()
 {
 	Task::cancelHelper(mTaskConnectionStats);
-	mTaskConnectionStats = mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
+	mTaskConnectionStats =
+		mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 
 	PublishConnectionStats connectionStats = {};
 

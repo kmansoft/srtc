@@ -43,6 +43,7 @@ class PeerCandidate final
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
+				  const std::vector<std::shared_ptr<Track>>& trackList,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
                   const std::shared_ptr<RealScheduler>& scheduler,
@@ -76,13 +77,19 @@ private:
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
     void onReceivedRtcMessage(ByteBuffer&& buf);
-    void onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& packet);
 
-    void onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
-    void onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
+	void onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet);
+	void onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet);
+
+    void onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
+
     void forgetExpiredStunRequests();
 
+	std::shared_ptr<Track> findReceivedMediaPacketTrack(ByteBuffer& packet);
+
     PeerCandidateListener* const mListener;
+	const std::vector<std::shared_ptr<Track>> mTrackList;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
     const Host mHost;

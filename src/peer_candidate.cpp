@@ -209,6 +209,7 @@ namespace srtc
 {
 
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
+							 const std::vector<std::shared_ptr<Track>>& trackList,
 							 const std::shared_ptr<SdpOffer>& offer,
 							 const std::shared_ptr<SdpAnswer>& answer,
 							 const std::shared_ptr<RealScheduler>& scheduler,
@@ -216,6 +217,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 							 const std::shared_ptr<EventLoop>& eventLoop,
 							 const Scheduler::Delay& startDelay)
 	: mListener(listener)
+	, mTrackList(trackList)
 	, mOffer(offer)
 	, mAnswer(answer)
 	, mHost(host)
@@ -698,20 +700,41 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
-	if (is_rtcp_message(buf) && mSrtpConnection) {
-		ByteBuffer output;
-		if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
-			LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+	if (mSrtpConnection) {
+		if (is_rtcp_message(buf)) {
+			ByteBuffer output;
+			if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
+				LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
 
-			const auto list = RtcpPacket::fromUdpPacket(output);
-			for (const auto& packet : list) {
-				onReceivedRtcpPacket(packet);
+				const auto list = RtcpPacket::fromUdpPacket(output);
+				for (const auto& packet : list) {
+					onReceivedControlPacket(packet);
+				}
+			}
+		} else {
+			ByteBuffer output;
+			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
+				LOG(SRTC_LOG_Z, "RTP unprotect: size = %zd", output.size());
+
+				auto track = findReceivedMediaPacketTrack(output);
+
+				if (!track) {
+					track = findReceivedMediaPacketTrack(buf);
+				}
+
+				if (track) {
+					const auto packet = RtpPacket::fromUdpPacket(track, output);
+					if (packet) {
+						LOG(SRTC_LOG_Z, "RTP media packet: ssrc = %" PRIu32 ", pt = %u, size = %zu",
+							packet->getSSRC(), packet->getPayloadId(), packet->getPayloadSize());
+					}
+				}
 			}
 		}
 	}
 }
 
-void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
+void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
@@ -757,12 +780,12 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 			case 1:
 				// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
 				// NACKs
-				onReceivedRtcMessage_205_1(rtcpSSRC_1, rtcpReader);
+				onReceivedControlMessage_205_1(rtcpSSRC_1, rtcpReader);
 				break;
 			case 15:
 				// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
 				// Google'e Transport-Wide Congension Control
-				onReceivedRtcMessage_205_15(rtcpSSRC_1, rtcpReader);
+				onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
 				break;
 			default:
 				LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
@@ -772,7 +795,13 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 	}
 }
 
-void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
+{
+	mLastReceiveTime = std::chrono::steady_clock::now();
+	updateConnectionLostTimeout();
+}
+
+void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
 {
 	while (rtcpReader.remaining() >= 4) {
 		const auto pid = rtcpReader.readU16();
@@ -843,7 +872,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 	}
 }
 
-void PeerCandidate::onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
 {
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
@@ -856,6 +885,28 @@ void PeerCandidate::forgetExpiredStunRequests()
 
 	mTaskExpireStunRequests =
 		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+}
+
+std::shared_ptr<Track> PeerCandidate::findReceivedMediaPacketTrack(ByteBuffer& packet)
+{
+	if (packet.size() < 12) {
+		return {};
+	}
+
+	const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packet.data() + 8));
+	const auto pt = ntohs(*reinterpret_cast<const uint16_t*>(packet.data())) & 0x7Fu;
+
+	for (const auto& track : mTrackList) {
+		if (track->getSSRC() == ssrc && track->getPayloadId() == pt) {
+			return track;
+		}
+
+		if (track->getRtxSSRC() == ssrc && track->getRtxPayloadId() == pt) {
+			return track;
+		}
+	}
+
+	return {};
 }
 
 // Custom BIO for DGRAM
