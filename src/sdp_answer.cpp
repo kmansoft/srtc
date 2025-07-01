@@ -15,7 +15,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
+
 #include <arpa/inet.h>
+
 #endif
 
 #include <cassert>
@@ -162,6 +164,9 @@ struct ParseMediaState {
 	size_t payloadStateSize = { 0u };
 	std::unique_ptr<ParsePayloadState[]> payloadStateList;
 
+	uint32_t ssrc = { 0u };
+	uint32_t rtxSsrc = { 0u };
+
 	void addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList, const std::string& ridName);
 
 	void setPayloadList(const std::vector<uint8_t>& list);
@@ -169,8 +174,6 @@ struct ParseMediaState {
 	[[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
 
 	[[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(srtc::Direction direction,
-														   uint32_t ssrc,
-														   uint32_t rtxSsrc,
 														   const std::shared_ptr<srtc::TrackSelector>& selector) const;
 
 	[[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(
@@ -218,8 +221,6 @@ ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const
 }
 
 std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direction,
-														  uint32_t ssrc,
-														  uint32_t rtxSsrc,
 														  const std::shared_ptr<srtc::TrackSelector>& selector) const
 {
 	if (id < 0) {
@@ -231,13 +232,16 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
 		const auto& payloadState = payloadStateList[i];
 		if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None &&
 			payloadState.codec != srtc::Codec::Rtx) {
+			const auto trackSsrc = layerList.empty() ? ssrc : 0;
+			const auto trackRtxSsrc = layerList.empty() && payloadState.rtxPayloadId != 0 ? rtxSsrc : 0;
+
 			const auto track = std::make_shared<srtc::Track>(id,
 															 direction,
 															 mediaType,
 															 mediaId,
-															 layerList.empty() ? ssrc : 0,
+															 trackSsrc,
 															 payloadState.payloadId,
-															 layerList.empty() ? rtxSsrc : 0,
+															 trackRtxSsrc,
 															 payloadState.rtxPayloadId,
 															 payloadState.codec,
 															 payloadState.codecOptions,
@@ -264,14 +268,14 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 	std::vector<std::shared_ptr<srtc::Track>> result;
 
 	for (const auto& layer : layerList) {
-		const auto ssrc = offer->getVideoSimulastSSRC(layer.name);
+		const auto layerSsrc = offer->getVideoSimulastSSRC(layer.name);
 		const auto track = std::make_shared<srtc::Track>(id,
 														 offer->getDirection(),
 														 mediaType,
 														 mediaId,
-														 ssrc.first,
+														 layerSsrc.first,
 														 singleTrack->getPayloadId(),
-														 ssrc.second,
+														 layerSsrc.second,
 														 singleTrack->getRtxPayloadId(),
 														 singleTrack->getCodec(),
 														 singleTrack->getCodecOptions(),
@@ -304,6 +308,14 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 	ParseMediaState mediaStateVideo, mediaStateAudio;
 	mediaStateVideo.mediaType = MediaType::Video;
 	mediaStateAudio.mediaType = MediaType::Audio;
+
+	if (direction == Direction::Publish) {
+		mediaStateVideo.ssrc = offer->getVideoSSRC();
+		mediaStateVideo.rtxSsrc = offer->getRtxVideoSSRC();
+
+		mediaStateAudio.ssrc = offer->getAudioSSRC();
+		mediaStateAudio.rtxSsrc = offer->getRtxAudioSSRC();
+	}
 
 	ParseMediaState* mediaStateCurr = nullptr;
 
@@ -545,10 +557,8 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 		return { {}, { Error::Code::InvalidData, "No media tracks" } };
 	}
 
-	auto videoSingleTrack =
-		mediaStateVideo.selectTrack(direction, offer->getVideoSSRC(), offer->getRtxVideoSSRC(), selector);
-	const auto audioTrack =
-		mediaStateAudio.selectTrack(direction, offer->getAudioSSRC(), offer->getRtxAudioSSRC(), selector);
+	auto videoSingleTrack = mediaStateVideo.selectTrack(direction, selector);
+	const auto audioTrack = mediaStateAudio.selectTrack(direction, selector);
 
 	if (!videoSingleTrack && !audioTrack) {
 		return { nullptr, { Error::Code::InvalidData, "No media tracks" } };
