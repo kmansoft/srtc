@@ -284,45 +284,35 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 	mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendSenderReport(const std::shared_ptr<Track>& track)
+void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	const auto ssrc = track->getSSRC();
+	for (const auto& track : trackList) {
+		if (track->getDirection() == Direction::Publish) {
+			const auto ssrc = track->getSSRC();
 
-	ByteBuffer payload;
-	ByteWriter w(payload);
+			ByteBuffer payload;
+			ByteWriter w(payload);
 
-	// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+			// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
 
-	NtpTime ntp = {};
-	getNtpTime(ntp);
+			NtpTime ntp = {};
+			getNtpTime(ntp);
 
-	const auto timeSource = track->getRtpTimeSource();
-	const auto rtpTime = timeSource->getCurrTimestamp();
+			const auto timeSource = track->getRtpTimeSource();
+			const auto rtpTime = timeSource->getCurrTimestamp();
 
-	w.writeU32(ntp.seconds);
-	w.writeU32(ntp.fraction);
-	w.writeU32(rtpTime);
+			w.writeU32(ntp.seconds);
+			w.writeU32(ntp.fraction);
+			w.writeU32(rtpTime);
 
-	const auto stats = track->getStats();
-	w.writeU32(stats->getSentPackets());
-	w.writeU32(stats->getSentBytes());
+			const auto stats = track->getStats();
+			w.writeU32(stats->getSentPackets());
+			w.writeU32(stats->getSentBytes());
 
-	const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
-	sendRtcpPacket(track, packet);
+			const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+			sendRtcpPacket(track, packet);
 
-	mSenderReportsHistory->save(ssrc, ntp);
-}
-
-void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
-{
-	if (mSrtpConnection) {
-		const auto rtcpSource = track->getRtcpPacketSource();
-
-		const auto packetData = packet->generate();
-
-		if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
-			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
-			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+			mSenderReportsHistory->save(ssrc, ntp);
 		}
 	}
 }
@@ -725,8 +715,11 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 				if (track) {
 					const auto packet = RtpPacket::fromUdpPacket(track, output);
 					if (packet) {
-						LOG(SRTC_LOG_Z, "RTP media packet: ssrc = %" PRIu32 ", pt = %u, size = %zu",
-							packet->getSSRC(), packet->getPayloadId(), packet->getPayloadSize());
+						LOG(SRTC_LOG_Z,
+							"RTP media packet: ssrc = %" PRIu32 ", pt = %u, size = %zu",
+							packet->getSSRC(),
+							packet->getPayloadId(),
+							packet->getPayloadSize());
 					}
 				}
 			}
@@ -885,6 +878,20 @@ void PeerCandidate::forgetExpiredStunRequests()
 
 	mTaskExpireStunRequests =
 		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+}
+
+void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
+{
+	if (mSrtpConnection) {
+		const auto rtcpSource = track->getRtcpPacketSource();
+
+		const auto packetData = packet->generate();
+
+		if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
+			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+		}
+	}
 }
 
 std::shared_ptr<Track> PeerCandidate::findReceivedMediaPacketTrack(ByteBuffer& packet)

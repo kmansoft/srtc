@@ -678,9 +678,7 @@ void PeerConnection::sendSenderReports()
 
 		if (mConnectionState == ConnectionState::Connected) {
 			const auto trackList = collectTracks();
-			for (const auto& trackItem : trackList) {
-				mSelectedCandidate->sendSenderReport(trackItem);
-			}
+			mSelectedCandidate->sendSenderReports(trackList);
 		}
 	}
 }
