@@ -346,6 +346,9 @@ SdpAnswerParser::SdpAnswerParser(Direction direction, const std::shared_ptr<SdpO
 	: direction(direction)
 	, offer(offer)
 {
+	mediaStateVideo.mediaType = MediaType::Video;
+	mediaStateAudio.mediaType = MediaType::Audio;
+
 	if (direction == Direction::Publish) {
 		mediaStateVideo.ssrc = offer->getVideoSSRC();
 		mediaStateVideo.rtxSsrc = offer->getRtxVideoSSRC();
