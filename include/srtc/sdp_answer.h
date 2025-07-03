@@ -17,11 +17,13 @@ class SdpOffer;
 class Track;
 class PeerConnection;
 class TrackSelector;
+class SdpAnswerParser;
 
 class SdpAnswer
 {
 private:
     friend PeerConnection;
+	friend SdpAnswerParser;
 
     static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(Direction direction,
 															  const std::shared_ptr<SdpOffer>& offer,

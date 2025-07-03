@@ -33,7 +33,7 @@ enum class MediaType {
     Audio = 2
 };
 
-enum Direction {
+enum class Direction {
 	Publish = 0,
 	Subscribe = 1
 };
