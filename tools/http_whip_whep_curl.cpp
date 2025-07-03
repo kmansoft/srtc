@@ -87,5 +87,8 @@ std::string perform_whip_whep(const std::string& offer, const std::string& url, 
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
 
+	// Remove \r chars
+	answer.erase(std::remove(answer.begin(), answer.end(), '\r'), answer.end());
+
 	return answer;
 }
