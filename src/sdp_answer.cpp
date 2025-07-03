@@ -99,14 +99,14 @@ void parse_map(const std::string& line, std::unordered_map<std::string, std::str
 	}
 }
 
-int parse_int(const std::string& s, int radix = 10)
+std::optional<int> parse_int(const std::string& s, int radix = 10)
 {
 	char* endptr = nullptr;
 	long l = std::strtol(s.c_str(), &endptr, radix);
 	if (endptr == s.c_str() + s.size()) {
 		return static_cast<int>(l);
 	}
-	return -1;
+	return {};
 }
 
 srtc::Codec parse_codec(const std::string& s)
@@ -166,6 +166,7 @@ struct ParseMediaState {
 
 	uint32_t ssrc = { 0u };
 	uint32_t rtxSsrc = { 0u };
+	std::vector<uint32_t> ssrcList;
 
 	void addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList, const std::string& ridName);
 
@@ -227,12 +228,20 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
 		return nullptr;
 	}
 
+	auto ssrcMedia = ssrc;
+	if (ssrcMedia == 0 && !ssrcList.empty()) {
+		ssrcMedia = ssrcList.front();
+	}
+	if (ssrcMedia <= 0) {
+		return nullptr;
+	}
+
 	std::vector<std::shared_ptr<srtc::Track>> list;
 	for (size_t i = 0u; i < payloadStateSize; i += 1) {
 		const auto& payloadState = payloadStateList[i];
 		if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None &&
 			payloadState.codec != srtc::Codec::Rtx) {
-			const auto trackSsrc = layerList.empty() ? ssrc : 0;
+			const auto trackSsrc = layerList.empty() ? ssrcMedia : 0;
 			const auto trackRtxSsrc = layerList.empty() && payloadState.rtxPayloadId != 0 ? rtxSsrc : 0;
 
 			const auto track = std::make_shared<srtc::Track>(id,
@@ -363,9 +372,9 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 					}
 				} else if (key == "extmap") {
 					const auto id = parse_int(value);
-					if (id >= 0 && id <= 255) {
+					if (id.has_value() && id >= 0 && id <= 255) {
 						if (props.size() == 1 && mediaStateCurr) {
-							mediaStateCurr->extensionMap.add(static_cast<uint8_t>(id), props[0]);
+							mediaStateCurr->extensionMap.add(static_cast<uint8_t>(id.value()), props[0]);
 						}
 					}
 				} else if (key == "mid") {
@@ -376,7 +385,8 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 				} else if (key == "rtpmap") {
 					// a=rtpmap:100 H264/90000
 					// a=rtpmap:99 opus/48000/2
-					if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId)) {
+					if (const auto payloadId = parse_int(value);
+						payloadId.has_value() && is_valid_payload_id(payloadId.value())) {
 						if (props.size() == 1 && mediaStateCurr) {
 							const auto posSlash = props[0].find('/');
 							if (posSlash != std::string::npos) {
@@ -387,12 +397,13 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 									if (posSlash2 != std::string::npos) {
 										clockRateString.resize(posSlash2);
 									}
-									if (const auto clockRate = parse_int(clockRateString); clockRate >= 10000) {
-										const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+									if (const auto clockRate = parse_int(clockRateString);
+										clockRate.has_value() && clockRate >= 10000) {
+										const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
 										if (payloadState) {
 											payloadState->codec = codec;
-											payloadState->clockRate = clockRate;
-											payloadState->payloadId = payloadId;
+											payloadState->clockRate = clockRate.value();
+											payloadState->payloadId = payloadId.value();
 										}
 									}
 								}
@@ -401,26 +412,28 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 					}
 				} else if (key == "fmtp") {
 					// a=fmtp:100 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
-					if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId) && mediaStateCurr) {
+					if (const auto payloadId = parse_int(value);
+						payloadId.has_value() && is_valid_payload_id(payloadId.value()) && mediaStateCurr) {
 						if (props.size() == 1) {
 							std::unordered_map<std::string, std::string> map;
 							parse_map(props[0], map);
 
 							if (const auto iter1 = map.find("apt"); iter1 != map.end()) {
-								const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+								const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
 								if (payloadState && payloadState->codec == Codec::Rtx) {
-									const auto referencedPayloadId = parse_int(iter1->second);
-									if (is_valid_payload_id(referencedPayloadId)) {
+									if (const auto referencedPayloadId = parse_int(iter1->second);
+										referencedPayloadId.has_value() &&
+										is_valid_payload_id(referencedPayloadId.value())) {
 										const auto referencedPayloadState =
-											mediaStateCurr->getPayloadState(referencedPayloadId);
+											mediaStateCurr->getPayloadState(referencedPayloadId.value());
 										if (referencedPayloadState) {
-											referencedPayloadState->rtxPayloadId = payloadId;
+											referencedPayloadState->rtxPayloadId = payloadId.value();
 										}
 									}
 								}
 							}
 
-							const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+							const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
 							if (payloadState) {
 								int profileLevelId = 0;
 								int minptime = 0;
@@ -428,28 +441,35 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 
 								if (mediaStateCurr == &mediaStateVideo) {
 									if (const auto iter2 = map.find("profile-level-id"); iter2 != map.end()) {
-										profileLevelId = parse_int(iter2->second, 16);
+										if (const auto parsed = parse_int(iter2->second, 16); parsed.has_value()) {
+											profileLevelId = parsed.value();
+										}
 									}
 								} else if (mediaStateCurr == &mediaStateAudio) {
 									if (const auto iter2 = map.find("minptime"); iter2 != map.end()) {
-										minptime = parse_int(iter2->second);
+										if (const auto parsed = parse_int(iter2->second); parsed.has_value()) {
+											minptime = parsed.value();
+										}
 									}
 									if (const auto iter3 = map.find("stereo"); iter3 != map.end()) {
-										stereo = parse_int(iter3->second) != 0;
+										if (const auto parsed = parse_int(iter3->second); parsed.has_value()) {
+											stereo = parsed.value() != 0;
+										}
 									}
 								}
 
 								if (profileLevelId != 0 || minptime != 0 || stereo) {
 									payloadState->codecOptions =
-										std::make_shared<srtc::Track::CodecOptions>(profileLevelId, minptime, stereo);
+										std::make_shared<Track::CodecOptions>(profileLevelId, minptime, stereo);
 								}
 							}
 						}
 					}
 				} else if (key == "rtcp-fb") {
 					// a=rtcp-fb:98 nack pli
-					if (const auto payloadId = parse_int(value); is_valid_payload_id(payloadId) && mediaStateCurr) {
-						const auto payloadState = mediaStateCurr->getPayloadState(payloadId);
+					if (const auto payloadId = parse_int(value);
+						payloadId.has_value() && is_valid_payload_id(payloadId.value()) && mediaStateCurr) {
+						const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
 						if (payloadState) {
 							for (size_t i = 0u; i < props.size(); i += 1) {
 								const auto& token = props[i];
@@ -485,7 +505,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 					// a=candidate:182981660 1 udp 2130706431 99.181.107.72 443 typ host
 					if (props.size() >= 7) {
 						if (props[0] == "1" && props[1] == "udp" && props[5] == "typ" && props[6] == "host") {
-							if (const auto port = parse_int(props[4]); port > 0 && port < 63536) {
+							if (const auto port = parse_int(props[4]); port.has_value() && port > 0 && port < 63536) {
 								Host host{};
 
 								const auto& addrStr = props[3];
@@ -495,7 +515,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 												return host.addr == it.addr;
 											}) == hostList.end()) {
 											host.addr.ss.ss_family = AF_INET;
-											host.addr.sin_ipv4.sin_port = htons(port);
+											host.addr.sin_ipv4.sin_port = htons(port.value());
 											hostList.push_back(host);
 										}
 									}
@@ -505,12 +525,32 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 												return host.addr == it.addr;
 											}) == hostList.end()) {
 											host.addr.ss.ss_family = AF_INET6;
-											host.addr.sin_ipv6.sin6_port = htons(port);
+											host.addr.sin_ipv6.sin6_port = htons(port.value());
 											hostList.push_back(host);
 										}
 									}
 								}
 							}
+						}
+					}
+				} else if (key == "ssrc-group") {
+					// RTX
+					if (value == "FID" && props.size() == 2) {
+						const auto ssrcMedia = parse_int(props[0]);
+						const auto ssrcRtx = parse_int(props[1]);
+						if (mediaStateCurr && ssrcMedia.has_value() && ssrcRtx.has_value()) {
+							mediaStateCurr->ssrc = ssrcMedia.value();
+							mediaStateCurr->rtxSsrc = ssrcRtx.value();
+						}
+					}
+				} else if (key == "ssrc") {
+					const auto ssrcMedia = parse_int(value);
+					if (mediaStateCurr && ssrcMedia.has_value()) {
+						if (std::find_if(mediaStateCurr->ssrcList.begin(),
+										 mediaStateCurr->ssrcList.end(),
+										 [ssrcMedia](uint32_t ssrc) { return ssrc == ssrcMedia; }) ==
+							mediaStateCurr->ssrcList.end()) {
+							mediaStateCurr->ssrcList.push_back(ssrcMedia.value());
 						}
 					}
 				}
@@ -529,14 +569,15 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
 				}
 
 				if (mediaStateCurr) {
-					if (const auto id = parse_int(props[0]); id >= 0) {
-						mediaStateCurr->id = id;
+					if (const auto id = parse_int(props[0]); id.has_value() && id >= 0) {
+						mediaStateCurr->id = id.value();
 					}
 
 					std::vector<uint8_t> payloadIdList;
 					for (size_t i = 2u; i < props.size(); i += 1) {
-						if (const auto payloadId = parse_int(props[i]); is_valid_payload_id(payloadId)) {
-							payloadIdList.push_back(payloadId);
+						if (const auto payloadId = parse_int(props[i]);
+							payloadId.has_value() && is_valid_payload_id(payloadId.value())) {
+							payloadIdList.push_back(payloadId.value());
 						}
 					}
 
