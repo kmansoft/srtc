@@ -226,8 +226,8 @@ target_include_directories(srtc PRIVATE
         src/stun
 )
 
-target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/stun"
+target_link_directories(srtc PRIVATE
+        "${CMAKE_BINARY_DIR}/src/stun"
 )
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
