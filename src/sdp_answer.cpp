@@ -109,7 +109,7 @@ std::optional<int> parse_int(const std::string& s, int radix = 10)
 	return {};
 }
 
-srtc::Codec parse_codec(const std::string& s)
+std::optional<srtc::Codec> parse_codec(const std::string& s)
 {
 	if (s == "H264") {
 		return srtc::Codec::H264;
@@ -118,7 +118,7 @@ srtc::Codec parse_codec(const std::string& s)
 	} else if (s == "rtx") {
 		return srtc::Codec::Rtx;
 	} else {
-		return srtc::Codec::None;
+		return {};
 	}
 }
 
@@ -144,7 +144,7 @@ std::vector<std::string> split_list(const std::string& line)
 
 struct ParsePayloadState {
 	uint8_t payloadId = { 0 };
-	srtc::Codec codec = { srtc::Codec::None };
+	std::optional<srtc::Codec> codec;
 	std::shared_ptr<srtc::Track::CodecOptions> codecOptions;
 	uint32_t clockRate = { 0 };
 	uint8_t rtxPayloadId = { 0 };
@@ -153,8 +153,8 @@ struct ParsePayloadState {
 };
 
 struct ParseMediaState {
-	int id = { -1 };
-	srtc::MediaType mediaType = { srtc::MediaType::None };
+	std::optional<int> id;
+	std::optional<srtc::MediaType> mediaType;
 	srtc::ExtensionMap extensionMap;
 	bool isSetupActive = { false };
 	std::string mediaId;
@@ -224,7 +224,10 @@ ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const
 std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direction,
 														  const std::shared_ptr<srtc::TrackSelector>& selector) const
 {
-	if (id < 0) {
+	if (!id.has_value()) {
+		return nullptr;
+	}
+	if (!mediaType.has_value()) {
 		return nullptr;
 	}
 
@@ -242,20 +245,19 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
 	std::vector<std::shared_ptr<srtc::Track>> list;
 	for (size_t i = 0u; i < payloadStateSize; i += 1) {
 		const auto& payloadState = payloadStateList[i];
-		if (payloadState.payloadId > 0 && payloadState.codec != srtc::Codec::None &&
-			payloadState.codec != srtc::Codec::Rtx) {
+		if (payloadState.payloadId > 0 && payloadState.codec.has_value() && payloadState.codec != srtc::Codec::Rtx) {
 			const auto trackSsrc = layerList.empty() ? ssrcMedia : 0;
 			const auto trackRtxSsrc = layerList.empty() && payloadState.rtxPayloadId != 0 ? rtxSsrc : 0;
 
-			const auto track = std::make_shared<srtc::Track>(id,
+			const auto track = std::make_shared<srtc::Track>(id.value(),
 															 direction,
-															 mediaType,
+															 mediaType.value(),
 															 mediaId,
 															 trackSsrc,
 															 payloadState.payloadId,
 															 trackRtxSsrc,
 															 payloadState.rtxPayloadId,
-															 payloadState.codec,
+															 payloadState.codec.value(),
 															 payloadState.codecOptions,
 															 nullptr,
 															 payloadState.clockRate,
@@ -269,7 +271,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
 		return nullptr;
 	}
 
-	const auto selected = selector == nullptr ? list[0] : selector->selectTrack(mediaType, list);
+	const auto selected = selector == nullptr ? list[0] : selector->selectTrack(mediaType.value(), list);
 	assert(selected != nullptr);
 	return selected;
 }
@@ -281,9 +283,9 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 
 	for (const auto& layer : layerList) {
 		const auto layerSsrc = offer->getVideoSimulastSSRC(layer.name);
-		const auto track = std::make_shared<srtc::Track>(id,
+		const auto track = std::make_shared<srtc::Track>(id.value(),
 														 offer->getDirection(),
-														 mediaType,
+														 mediaType.value(),
 														 mediaId,
 														 layerSsrc.first,
 														 singleTrack->getPayloadId(),
@@ -458,7 +460,7 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
 	}
 
 	if (mediaStateCurr) {
-		if (const auto id = parse_int(props[0]); id.has_value() && id >= 0) {
+		if (const auto id = parse_int(props[0]); id.has_value()) {
 			mediaStateCurr->id = id.value();
 		}
 
@@ -520,7 +522,7 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
 				const auto posSlash = props[0].find('/');
 				if (posSlash != std::string::npos) {
 					const auto codecString = props[0].substr(0, posSlash);
-					if (const auto codec = parse_codec(codecString); codec != Codec::None) {
+					if (const auto codec = parse_codec(codecString); codec.has_value()) {
 						auto clockRateString = props[0].substr(posSlash + 1);
 						const auto posSlash2 = clockRateString.find('/');
 						if (posSlash2 != std::string::npos) {

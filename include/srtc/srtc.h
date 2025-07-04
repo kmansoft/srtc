@@ -21,14 +21,12 @@ typedef int SocketHandle;
 #endif
 
 enum class Codec {
-    None = 0,
     H264 = 1,
     Opus = 100,
     Rtx = 200
 };
 
 enum class MediaType {
-    None = 0,
     Video = 1,
     Audio = 2
 };

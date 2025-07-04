@@ -38,7 +38,7 @@ public:
         }
     };
 
-    Track(int trackId,
+    Track(uint32_t trackId,
 		  Direction direction,
           MediaType mediaType,
           const std::string& mediaId,
@@ -53,7 +53,7 @@ public:
           bool hasNack,
           bool hasPli);
 
-    [[nodiscard]] int getTrackId() const;
+    [[nodiscard]] uint32_t getTrackId() const;
 	[[nodiscard]] Direction getDirection() const;
     [[nodiscard]] MediaType getMediaType() const;
     [[nodiscard]] std::string getMediaId() const;
@@ -78,7 +78,7 @@ public:
     [[nodiscard]] std::shared_ptr<TrackStats> getStats() const;
 
 private:
-    const int mTrackId;
+    const uint32_t mTrackId;
 	const Direction mDirection;
     const MediaType mMediaType;
     const std::string mMediaId;
