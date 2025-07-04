@@ -2,9 +2,7 @@
 #include <curl/easy.h>
 
 #include <algorithm>
-#include <iomanip>
 #include <iostream>
-#include <memory>
 #include <string>
 
 namespace
