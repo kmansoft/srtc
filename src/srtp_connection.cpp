@@ -111,6 +111,14 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection() = default;
 
+void SrtpConnection::onPeerConnected()
+{
+	// We may have missed some packets while not connected, so need to reset replay protection.
+	// Technically we only need this for the incoming map, but let's clear both for consistency.
+	mSrtpInMap.clear();
+	mSrtpOutMap.clear();
+}
+
 size_t SrtpConnection::getMediaProtectionOverhead() const
 {
 	return mCrypto->getMediaProtectionOverhead();
@@ -206,7 +214,10 @@ bool SrtpConnection::unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuf
 	}
 
 	if (!channelValue.replayProtection->canProceed(sequenceNumber)) {
-		LOG(SRTC_LOG_E, "Replay protection says we can't proceed with RTP packet seq = %u", sequenceNumber);
+		LOG(SRTC_LOG_E,
+			"Replay protection says we can't proceed with RTP packet ssrc = %" PRIu32 ", seq = %u",
+			ssrc,
+			sequenceNumber);
 		return false;
 	}
 

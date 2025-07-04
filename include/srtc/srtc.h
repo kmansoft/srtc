@@ -31,6 +31,8 @@ enum class MediaType {
     Audio = 2
 };
 
+std::string to_string(MediaType m);
+
 enum class Direction {
 	Publish = 0,
 	Subscribe = 1

@@ -7,7 +7,7 @@
 namespace srtc
 {
 
-Track::Track(int trackId,
+Track::Track(uint32_t trackId,
 			 Direction direction,
              MediaType mediaType,
              const std::string& mediaId,
@@ -43,7 +43,7 @@ Track::Track(int trackId,
 {
 }
 
-int Track::getTrackId() const
+uint32_t Track::getTrackId() const
 {
     return mTrackId;
 }

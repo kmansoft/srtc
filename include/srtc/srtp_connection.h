@@ -25,6 +25,8 @@ public:
 	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
 	~SrtpConnection();
 
+	void onPeerConnected();
+
 	[[nodiscard]] size_t getMediaProtectionOverhead() const;
 
 	// Returns false on error

@@ -704,20 +704,14 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 		} else {
 			ByteBuffer output;
 			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
-				LOG(SRTC_LOG_Z, "RTP unprotect: size = %zd", output.size());
-
-				auto track = findReceivedMediaPacketTrack(output);
-
-				if (!track) {
-					track = findReceivedMediaPacketTrack(buf);
-				}
-
-				if (track) {
+				if (const auto track = findReceivedMediaPacketTrack(output)) {
 					const auto packet = RtpPacket::fromUdpPacket(track, output);
 					if (packet) {
 						LOG(SRTC_LOG_Z,
-							"RTP media packet: ssrc = %" PRIu32 ", pt = %u, size = %zu",
+							"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
+							to_string(track->getMediaType()).c_str(),
 							packet->getSSRC(),
+							packet->getSequence(),
 							packet->getPayloadId(),
 							packet->getPayloadSize());
 					}
@@ -1048,6 +1042,8 @@ void PeerCandidate::emitOnIceSelected()
 void PeerCandidate::emitOnConnected()
 {
 	mListener->onCandidateConnected(this);
+
+	mSrtpConnection->onPeerConnected();
 
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->onPeerConnected();
