@@ -2,6 +2,7 @@
 #include "srtc/logging.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/track.h"
+#include "srtc/srtc.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -79,7 +80,7 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
 JitterBuffer::~JitterBuffer()
 {
 	if (mItemList) {
-		for (uint64_t seq = mMinSeq; seq <= mMaxSeq; seq += 1) {
+		for (uint64_t seq = mMinSeq; seq < mMaxSeq; seq += 1) {
 			const auto index = seq & (mCapacity - 1);
 			delete mItemList[index];
 		}
@@ -127,17 +128,25 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
 	if (mItemList == nullptr) {
 		// First packet
-		mMinSeq = mMaxSeq = seq_ext.value();
+		mMinSeq = seq_ext.value();
+		mMaxSeq = mMinSeq + 1;
 		mItemList = new Item*[mCapacity];
 		mBaseTime = std::chrono::steady_clock::now();
 		mBaseRtpTimestamp = rtp_timestamp_ext.value();
 
 		const auto item = new Item;
 		mItemList[seq_ext.value() & mCapacityMask] = item;
-	} else if (seq_ext.value() + mCapacity / 10 < mMinSeq || seq_ext.value() - mCapacity / 10 > mMaxSeq) {
-		// Out of range
+	} else if (seq_ext.value() + mCapacity / 10 < mMinSeq) {
+		// Out of range, much less than min
 		LOG(SRTC_LOG_E,
-			"The new packet's sequence number %" PRIu64 " (%" PRIx64 ") is out of range",
+			"The new packet's sequence number %" PRIu64 " (0x%" PRIx64 ") is too late",
+			seq_ext.value(),
+			seq_ext.value());
+		return;
+	} else if (seq_ext.value() - mCapacity / 10 > mMaxSeq) {
+		// Out of range, much greater than max
+		LOG(SRTC_LOG_E,
+			"The new packet's sequence number %" PRIu64 " (0x%" PRIx64 ") is too early",
 			seq_ext.value(),
 			seq_ext.value());
 		return;
@@ -152,8 +161,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
 	Item* item = nullptr;
 
-	if (seq_ext.value() < mMinSeq)
-	{
+	if (seq_ext.value() < mMinSeq) {
 		// Before min
 		if (mMaxSeq - seq_ext.value() > mCapacity) {
 			LOG(SRTC_LOG_E,
@@ -187,7 +195,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 		const auto index = seq_ext.value() & mCapacityMask;
 		item = new Item;
 		mItemList[index] = item;
-	} else if (seq_ext > mMaxSeq) {
+	} else if (seq_ext >= mMaxSeq) {
 		// Above max
 		if (seq_ext.value() - mMinSeq > mCapacity) {
 			LOG(SRTC_LOG_E,
@@ -197,7 +205,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 			return;
 		}
 
-		while (mMaxSeq < seq_ext.value() - 1) {
+		while (mMaxSeq <= seq_ext.value() - 1) {
 			mMaxSeq += 1;
 
 			const auto spacer = new Item;
@@ -216,7 +224,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 		}
 
 		mMaxSeq += 1;
-		assert(mMaxSeq == seq_ext.value());
+		assert(mMaxSeq - 1 == seq_ext.value());
 
 		const auto index = seq_ext.value() & mCapacityMask;
 		item = new Item;
@@ -239,6 +247,78 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 	item->rtp_timestamp_ext = rtp_timestamp_ext.value();
 
 	item->payload = std::move(payload);
+}
+
+int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
+{
+	if (!mItemList) {
+		return defaultTimeout;
+	}
+
+	const auto now = std::chrono::steady_clock::now();
+
+	// We add packets on the Max end and consume them from the Min end
+	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+		const auto index = seq & mCapacityMask;
+		const auto item = mItemList[index];
+		assert(item);
+
+		// Depacketization
+		if (item->received) {
+			return static_cast<int>(
+				std::chrono::duration_cast<std::chrono::milliseconds>(item->when_dequeue - now).count());
+		}
+
+		if (item->when_dequeue > now + std::chrono::milliseconds(defaultTimeout)) {
+			break;
+		}
+	}
+
+	return defaultTimeout;
+}
+
+std::list<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
+{
+	std::list<std::shared_ptr<EncodedFrame>> result;
+
+	if (!mItemList) {
+		return result;
+	}
+
+	const auto now = std::chrono::steady_clock::now();
+
+	// We add packets on the Max end and consume them from the Min end
+	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+		const auto index = seq & mCapacityMask;
+		const auto item = mItemList[index];
+		assert(item);
+
+		if (item->received) {
+			if (item->when_dequeue <= now) {
+				const auto frame = std::make_shared<EncodedFrame>();
+				frame->track = mTrack;
+				frame->seq_ext = item->seq_ext;
+				frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
+				frame->data = std::move(item->payload);
+
+				result.push_back(frame);
+
+				mItemList[index] = nullptr;
+				mMinSeq += 1;
+
+				delete item;
+			} else {
+				break;
+			}
+		} else {
+			mItemList[index] = nullptr;
+			mMinSeq += 1;
+
+			delete item;
+		}
+	}
+
+	return result;
 }
 
 } // namespace srtc

@@ -88,6 +88,10 @@ public:
 
 	Error publishAudioFrame(ByteBuffer&& buf);
 
+	// Subscribing
+	using SubscribeEncodedFrameListener = std::function<void(const std::shared_ptr<EncodedFrame>&)>;
+	void setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener);
+
 	// Closing
 	void close();
 
@@ -141,6 +145,9 @@ private:
 
 	std::list<FrameToSend> mFrameSendQueue;
 
+	// Jitter buffer processing
+	void processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer);
+
 	// PeerCandidateListener
 	void onCandidateHasDataToSend(PeerCandidate* candidate) override;
 	void onCandidateConnecting(PeerCandidate* candidate) override;
@@ -155,6 +162,7 @@ private:
 	std::mutex mListenerMutex;
 	ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
 	PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
+	SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
 
 	// Packetizers
 	std::shared_ptr<Packetizer> mVideoSinglePacketizer;

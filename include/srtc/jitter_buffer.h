@@ -1,13 +1,16 @@
 #pragma once
 
 #include "srtc/byte_buffer.h"
+#include "srtc/encoded_frame.h"
 
-#include <optional>
-#include <memory>
 #include <chrono>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <list>
 
-namespace srtc {
+namespace srtc
+{
 
 class Track;
 class RtpPacket;
@@ -41,7 +44,12 @@ public:
 
 	[[nodiscard]] std::shared_ptr<Track> getTrack() const;
 
+	// Adding received packets
 	void consume(const std::shared_ptr<RtpPacket>& packet);
+
+	// Processing
+	[[nodiscard]] int getTimeoutMillis(int defaultTimeout) const;
+	[[nodiscard]] std::list<std::shared_ptr<EncodedFrame>> dequeue();
 
 private:
 	struct Item {
@@ -52,7 +60,7 @@ private:
 		bool nack_needed = false;
 
 		uint64_t seq_ext = 0;
-		uint64_t rtp_timestamp_ext = 0;	// only when received
+		uint64_t rtp_timestamp_ext = 0; // only when received
 
 		ByteBuffer payload;
 	};
@@ -74,4 +82,4 @@ private:
 	uint64_t mBaseRtpTimestamp;
 };
 
-}
+} // namespace srtc

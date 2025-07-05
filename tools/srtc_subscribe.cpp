@@ -3,6 +3,8 @@
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
+#include "srtc/track.h"
+#include "srtc/encoded_frame.h"
 
 #include "http_whip_whep.h"
 
@@ -167,6 +169,13 @@ int main(int argc, char* argv[])
 			}
 			connectionStateCond.notify_one();
 		});
+
+	peerConnection->setSubscribeEncodedFrameListener([](const std::shared_ptr<EncodedFrame>& frame) {
+		std::printf(">>> De-Queued frame for %s: seq = %" PRIu64 ", size = %zu\n",
+					to_string(frame->track->getMediaType()).c_str(),
+					frame->seq_ext,
+					frame->data.size());
+	});
 
 	// Offer
 	SubOfferConfig offerConfig = {};

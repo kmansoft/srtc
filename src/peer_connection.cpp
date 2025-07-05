@@ -10,6 +10,7 @@
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/send_rtp_history.h"
+#include "srtc/srtc.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
@@ -398,6 +399,12 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 	return Error::OK;
 }
 
+void PeerConnection::setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener)
+{
+	std::lock_guard lock(mListenerMutex);
+	mSubscribeEncodedFrameListener = listener;
+}
+
 void PeerConnection::close()
 {
 	std::thread waitForThread;
@@ -436,11 +443,25 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 	// Our processing loop
 	while (true) {
 		// Epoll for incoming data
-		auto timeout = mLoopScheduler->getTimeoutMillis(1000);
+		constexpr auto kDefaultTimeoutMillis = 100;
+
+		auto timeout = mLoopScheduler->getTimeoutMillis(kDefaultTimeoutMillis);
 		if (mSelectedCandidate) {
-			const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(1000);
+			const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
 			if (timeout > selectedTimeout) {
 				timeout = selectedTimeout;
+			}
+		}
+		if (mJitterBufferVideo) {
+			const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
+			if (timeout < timeoutJitter) {
+				timeout = timeoutJitter;
+			}
+		}
+		if (mJitterBufferAudio) {
+			const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
+			if (timeout < timeoutJitter) {
+				timeout = timeoutJitter;
 			}
 		}
 
@@ -492,6 +513,14 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
 		if (mSelectedCandidate) {
 			mSelectedCandidate->run();
+		}
+
+		// Jitter buffer processing
+		if (const auto buffer = mJitterBufferVideo) {
+			processJitterBuffer(buffer);
+		}
+		if (const auto buffer = mJitterBufferAudio) {
+			processJitterBuffer(buffer);
 		}
 	}
 
@@ -591,6 +620,19 @@ void PeerConnection::startConnecting()
 	}
 }
 
+void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer)
+{
+	const auto list = buffer->dequeue();
+	if (!list.empty()) {
+		std::lock_guard lock(mListenerMutex);
+		if (mSubscribeEncodedFrameListener) {
+			for (const auto& frame : list) {
+				mSubscribeEncodedFrameListener(frame);
+			}
+		}
+	}
+}
+
 std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
 {
 	std::vector<std::shared_ptr<Track>> list;
@@ -673,7 +715,7 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 				mJitterBufferVideo = std::make_shared<JitterBuffer>(mVideoSingleTrack, 2048, length, nackDelay);
 			}
 			if (mAudioTrack) {
-				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, length, nackDelay);
+				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, std::chrono::milliseconds(30), nackDelay);
 			}
 		}
 	}
