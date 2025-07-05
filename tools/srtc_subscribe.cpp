@@ -6,6 +6,8 @@
 #include "srtc/track.h"
 #include "srtc/encoded_frame.h"
 
+#include "media_writer_ogg.h"
+
 #include "http_whip_whep.h"
 
 #include <iomanip>
@@ -29,6 +31,7 @@ static std::string gWhepUrl = "http://localhost:8080/whep";
 static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
+static std::string gOutputAudioFilename;
 
 // Signals
 
@@ -57,6 +60,7 @@ void printUsage(const char* programName)
 	std::cout << "  -v, --verbose        Verbose logging from the srtc library" << std::endl;
 	std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
+	std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -110,6 +114,13 @@ int main(int argc, char* argv[])
 			gQuiet = true;
 		} else if (arg == "-s" || arg == "--sdp") {
 			gPrintSDP = true;
+		} else if (arg == "--oa") {
+			if (i + 1 < argc) {
+				gOutputAudioFilename = argv[++i];
+			} else {
+				std::cerr << "Error: --oa requires a filename" << std::endl;
+				return 1;
+			}
 		} else {
 			std::cerr << "Unknown option: " << arg << std::endl;
 			printUsage(argv[0]);
@@ -135,6 +146,9 @@ int main(int argc, char* argv[])
 #endif
 
 	std::cout << "*** Current working directory: " << cwd << std::endl;
+
+	// Media writers
+	std::shared_ptr<MediaWriter> mediaWriterAudio;
 
 	// Peer connection state
 	std::mutex connectionStateMutex;
@@ -170,7 +184,13 @@ int main(int argc, char* argv[])
 			connectionStateCond.notify_one();
 		});
 
-	peerConnection->setSubscribeEncodedFrameListener([](const std::shared_ptr<EncodedFrame>& frame) {
+	peerConnection->setSubscribeEncodedFrameListener([&mediaWriterAudio](const std::shared_ptr<EncodedFrame>& frame) {
+		const auto mediaType = frame->track->getMediaType();
+		if (mediaType == srtc::MediaType::Audio) {
+			if (mediaWriterAudio) {
+				mediaWriterAudio->send(frame);
+			}
+		}
 	});
 
 	// Offer
@@ -218,6 +238,21 @@ int main(int argc, char* argv[])
 	if (answerError.isError()) {
 		std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
 		exit(1);
+	}
+
+	// Media writers
+	if (!gOutputAudioFilename.empty()) {
+		const auto track = answer->getAudioTrack();
+		if (!track) {
+			std::cout << "Saving audio output is requested, but there is no audio track" << std::endl;
+			exit(1);
+		} else if (track->getCodec() == srtc::Codec::Opus) {
+			mediaWriterAudio = std::make_shared<MediaWriterOgg>(gOutputAudioFilename, track);
+			mediaWriterAudio->start();
+		} else {
+			std::cout << "Saving audio output is requested, but the audio codec is not one we support" << std::endl;
+			exit(1);
+		}
 	}
 
 	// Connect the peer connection

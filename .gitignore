@@ -11,3 +11,4 @@ build
 out
 deps
 CMakeSettings.json
+output.*

@@ -377,12 +377,20 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     # Subscribe
 
+    add_subdirectory(tools/libogg)
+
     add_executable(srtc_subscribe
             tools/srtc_subscribe.cpp
             tools/http_whip_whep.h
+            tools/media_writer.h
+            tools/media_writer.cpp
+            tools/media_writer_ogg.h
+            tools/media_writer_ogg.cpp
     )
 
-    add_dependencies(srtc_subscribe srtc)
+    add_dependencies(srtc_subscribe srtc ogg)
+
+    target_link_libraries(srtc_subscribe PRIVATE ogg)
 
     if(WIN32)
         target_sources(srtc_subscribe
