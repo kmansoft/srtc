@@ -277,9 +277,9 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
 	return defaultTimeout;
 }
 
-std::list<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
+std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 {
-	std::list<std::shared_ptr<EncodedFrame>> result;
+	std::vector<std::shared_ptr<EncodedFrame>> result;
 
 	if (!mItemList) {
 		return result;
@@ -296,6 +296,7 @@ std::list<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 		if (item->received) {
 			if (item->when_dequeue <= now) {
 				const auto frame = std::make_shared<EncodedFrame>();
+
 				frame->track = mTrack;
 				frame->seq_ext = item->seq_ext;
 				frame->rtp_timestamp_ext = item->rtp_timestamp_ext;

@@ -776,7 +776,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
 
-	LOG(SRTC_LOG_Z,
+	LOG(SRTC_LOG_V,
 		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
 		to_string(packet->getTrack()->getMediaType()).c_str(),
 		packet->getSSRC(),

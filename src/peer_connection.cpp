@@ -715,7 +715,7 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 				mJitterBufferVideo = std::make_shared<JitterBuffer>(mVideoSingleTrack, 2048, length, nackDelay);
 			}
 			if (mAudioTrack) {
-				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, std::chrono::milliseconds(30), nackDelay);
+				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, length, nackDelay);
 			}
 		}
 	}

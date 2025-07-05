@@ -171,10 +171,6 @@ int main(int argc, char* argv[])
 		});
 
 	peerConnection->setSubscribeEncodedFrameListener([](const std::shared_ptr<EncodedFrame>& frame) {
-		std::printf(">>> De-Queued frame for %s: seq = %" PRIu64 ", size = %zu\n",
-					to_string(frame->track->getMediaType()).c_str(),
-					frame->seq_ext,
-					frame->data.size());
 	});
 
 	// Offer

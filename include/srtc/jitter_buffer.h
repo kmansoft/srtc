@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <list>
+#include <vector>
 
 namespace srtc
 {
@@ -49,7 +49,7 @@ public:
 
 	// Processing
 	[[nodiscard]] int getTimeoutMillis(int defaultTimeout) const;
-	[[nodiscard]] std::list<std::shared_ptr<EncodedFrame>> dequeue();
+	[[nodiscard]] std::vector<std::shared_ptr<EncodedFrame>> dequeue();
 
 private:
 	struct Item {
