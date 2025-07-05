@@ -69,6 +69,8 @@ public:
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
+	std::optional<float> getIceRtt() const;
+
 private:
     void startConnecting();
     void addSendRaw(ByteBuffer&& buf);
@@ -91,6 +93,7 @@ private:
 	std::shared_ptr<Track> findReceivedMediaPacketTrack(ByteBuffer& packet);
 
     PeerCandidateListener* const mListener;
+
 	const std::vector<std::shared_ptr<Track>> mTrackList;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;

@@ -61,14 +61,15 @@ std::string get_openssl_error()
 
 constexpr auto kIceMessageBufferSize = 2048;
 
-constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kConnectionLostTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::milliseconds(1000);
-constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
-constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
-constexpr std::chrono::milliseconds kConnectRepeatPeriod = std::chrono::milliseconds(100);
-constexpr std::chrono::milliseconds kConnectRepeatIncrement = std::chrono::milliseconds(100);
+constexpr auto kConnectTimeout = std::chrono::milliseconds(5000);
+constexpr auto kConnectionLostTimeout = std::chrono::milliseconds(5000);
+constexpr auto kExpireStunPeriod = std::chrono::milliseconds(1000);
+constexpr auto kExpireStunTimeout = std::chrono::milliseconds(5000);
+constexpr auto kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
+constexpr auto kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
+constexpr auto kConnectRepeatPeriod = std::chrono::milliseconds(100);
+constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
+constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -319,8 +320,6 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	const auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
-
 	const auto now = std::chrono::steady_clock::now();
 	if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		// RTT from sender / receiver reports
@@ -333,6 +332,16 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
 	}
+}
+
+std::optional<float> PeerCandidate::getIceRtt() const
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+		// RTT from STUN requests / responses
+		return mIceRttFilter.value();
+	}
+	return {};
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
@@ -764,6 +773,9 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 
 void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
+	mLastReceiveTime = std::chrono::steady_clock::now();
+	updateConnectionLostTimeout();
+
 	LOG(SRTC_LOG_Z,
 		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
 		to_string(packet->getTrack()->getMediaType()).c_str(),
@@ -772,8 +784,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 		packet->getPayloadId(),
 		packet->getPayloadSize());
 
-	mLastReceiveTime = std::chrono::steady_clock::now();
-	updateConnectionLostTimeout();
+	mListener->onCandidateReceivedMediaPacket(this, packet);
 }
 
 void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)

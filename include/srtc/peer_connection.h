@@ -9,6 +9,7 @@
 #include "srtc/srtc.h"
 #include "srtc/subscribe_config.h"
 #include "srtc/track_selector.h"
+#include "srtc/jitter_buffer.h"
 
 #include <functional>
 #include <list>
@@ -146,6 +147,7 @@ private:
 	void onCandidateIceSelected(PeerCandidate* candidate) override;
 	void onCandidateConnected(PeerCandidate* candidate) override;
 	void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
+	void onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet) override;
 
 	// Overall connection state and listener
 	ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
@@ -155,8 +157,12 @@ private:
 	PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
 
 	// Packetizers
-	std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
-	std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
+	std::shared_ptr<Packetizer> mVideoSinglePacketizer;
+	std::shared_ptr<Packetizer> mAudioPacketizer;
+
+	// Jitter buffers
+	std::shared_ptr<JitterBuffer> mJitterBufferVideo;
+	std::shared_ptr<JitterBuffer> mJitterBufferAudio;
 
 	// Sender reports
 	void sendSenderReports();

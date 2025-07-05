@@ -1,9 +1,20 @@
 #include "srtc/jitter_buffer.h"
+#include "srtc/logging.h"
+#include "srtc/rtp_packet.h"
+#include "srtc/track.h"
 
+#include <cassert>
+#include <cinttypes>
+#include <cstdint>
+#include <cstdio>
 #include <limits>
+
+#define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
 namespace srtc
 {
+
+// Extended Value
 
 template <typename T>
 ExtendedValue<T>::ExtendedValue()
@@ -45,6 +56,189 @@ std::optional<uint64_t> ExtendedValue<T>::extend(T src)
 template class ExtendedValue<uint16_t>;
 template class ExtendedValue<uint32_t>;
 
+// Jitter Buffer
+
+JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
+						   size_t capacity,
+						   std::chrono::milliseconds length,
+						   std::chrono::milliseconds nackDelay)
+	: mTrack(track)
+	, mCapacity(capacity)
+	, mCapacityMask(capacity - 1)
+	, mLength(length)
+	, mNackDelay(nackDelay)
+	, mItemList(nullptr)
+	, mMinSeq(0)
+	, mMaxSeq(0)
+	, mBaseTime(std::chrono::steady_clock::time_point::min())
+	, mBaseRtpTimestamp(0)
+{
+	assert((mCapacity & mCapacityMask) == 0 && "capacity should be a power of 2");
+}
+
+JitterBuffer::~JitterBuffer()
+{
+	if (mItemList) {
+		for (uint64_t seq = mMinSeq; seq <= mMaxSeq; seq += 1) {
+			const auto index = seq & (mCapacity - 1);
+			delete mItemList[index];
+		}
+
+		delete[] mItemList;
+	}
+}
+
+std::shared_ptr<Track> JitterBuffer::getTrack() const
+{
+	return mTrack;
+}
+
+void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
+{
+	assert(mTrack == packet->getTrack());
+
+	auto seq = packet->getSequence();
+	auto payload = packet->movePayload();
+
+	if (packet->getSSRC() == mTrack->getRtxSSRC() && packet->getPayloadId() == mTrack->getRtxPayloadId()) {
+		// Unwrap RTX
+		if (payload.size() < 2) {
+			LOG(SRTC_LOG_E, "RTX payload is less than 2 bytes, can't be");
+			return;
+		}
+
+		ByteReader reader(payload);
+		seq = reader.readU16();
+
+		payload = { payload.data() + 2, payload.size() - 2 };
+	}
+
+	// Extend
+	const auto seq_ext = mExtValueSeq.extend(seq);
+	if (!seq_ext) {
+		LOG(SRTC_LOG_E, "Cannot extend the sequence number");
+		return;
+	}
+	const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
+	if (!rtp_timestamp_ext) {
+		LOG(SRTC_LOG_E, "Cannot extend the rtp timestamp");
+		return;
+	}
+
+	if (mItemList == nullptr) {
+		// First packet
+		mMinSeq = mMaxSeq = seq_ext.value();
+		mItemList = new Item*[mCapacity];
+		mBaseTime = std::chrono::steady_clock::now();
+		mBaseRtpTimestamp = rtp_timestamp_ext.value();
+
+		const auto item = new Item;
+		mItemList[seq_ext.value() & mCapacityMask] = item;
+	} else if (seq_ext.value() + mCapacity / 10 < mMinSeq || seq_ext.value() - mCapacity / 10 > mMaxSeq) {
+		// Out of range
+		LOG(SRTC_LOG_E,
+			"The new packet's sequence number %" PRIu64 " (%" PRIx64 ") is out of range",
+			seq_ext.value(),
+			seq_ext.value());
+		return;
+	}
+
+	const auto now = std::chrono::steady_clock::now();
+	const auto rtp_timestamp_delta = rtp_timestamp_ext.value() - mBaseRtpTimestamp;
+	const auto time_delta = std::chrono::milliseconds(1000 * rtp_timestamp_delta / mTrack->getClockRate());
+	const auto packet_time = mBaseTime + time_delta;
+	const auto when_dequeue = packet_time + mLength;
+	const auto when_nack = now + mNackDelay;
+
+	Item* item = nullptr;
+
+	if (seq_ext.value() < mMinSeq)
+	{
+		// Before min
+		if (mMaxSeq - seq_ext.value() > mCapacity) {
+			LOG(SRTC_LOG_E,
+				"The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
+				seq_ext.value(),
+				seq_ext.value());
+			return;
+		}
+
+		while (seq_ext.value() + 1 < mMinSeq) {
+			mMinSeq -= 1;
+
+			const auto spacer = new Item;
+			spacer->when_received = std::chrono::steady_clock::time_point::min();
+			spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
+			spacer->when_nack = when_nack;
+
+			spacer->received = false;
+			spacer->nack_needed = true;
+
+			spacer->seq_ext = mMinSeq;
+			spacer->rtp_timestamp_ext = 0;
+
+			const auto index = spacer->seq_ext & mCapacityMask;
+			mItemList[index] = spacer;
+		}
+
+		mMinSeq -= 1;
+		assert(mMinSeq == seq_ext.value());
+
+		const auto index = seq_ext.value() & mCapacityMask;
+		item = new Item;
+		mItemList[index] = item;
+	} else if (seq_ext > mMaxSeq) {
+		// Above max
+		if (seq_ext.value() - mMinSeq > mCapacity) {
+			LOG(SRTC_LOG_E,
+				"The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
+				seq_ext.value(),
+				seq_ext.value());
+			return;
+		}
+
+		while (mMaxSeq < seq_ext.value() - 1) {
+			mMaxSeq += 1;
+
+			const auto spacer = new Item;
+			spacer->when_received = std::chrono::steady_clock::time_point::min();
+			spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
+			spacer->when_nack = when_nack;
+
+			spacer->received = false;
+			spacer->nack_needed = true;
+
+			spacer->seq_ext = mMaxSeq;
+			spacer->rtp_timestamp_ext = 0;
+
+			const auto index = spacer->seq_ext & mCapacityMask;
+			mItemList[index] = spacer;
+		}
+
+		mMaxSeq += 1;
+		assert(mMaxSeq == seq_ext.value());
+
+		const auto index = seq_ext.value() & mCapacityMask;
+		item = new Item;
+		mItemList[index] = item;
+	} else {
+		// Somewhere in the middle, we should already have an item there
+		const auto index = seq_ext.value() & mCapacityMask;
+		item = mItemList[index];
+		assert(item);
+	}
+
+	item->when_received = now;
+	item->when_dequeue = when_dequeue;
+	item->when_nack = when_nack;
+
+	item->received = true;
+	item->nack_needed = false;
+
+	item->seq_ext = seq_ext.value();
+	item->rtp_timestamp_ext = rtp_timestamp_ext.value();
+
+	item->payload = std::move(payload);
+}
+
 } // namespace srtc
-
-

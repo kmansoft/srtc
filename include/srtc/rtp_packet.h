@@ -50,7 +50,9 @@ public:
 	[[nodiscard]] size_t getPayloadSize() const;
 	[[nodiscard]] uint16_t getSequence() const;
 	[[nodiscard]] uint32_t getSSRC() const;
+	[[nodiscard]] uint32_t getTimestamp() const;
 	[[nodiscard]] const ByteBuffer& getPayload() const;
+	[[nodiscard]] ByteBuffer&& movePayload();
 
 	// The extension is mutable
 	void setExtension(RtpExtension&& extension);
@@ -75,7 +77,7 @@ private:
 	const uint16_t mSequence;
 	const uint32_t mTimestamp;
 	const uint8_t mPaddingSize;
-	const ByteBuffer mPayload;
+	ByteBuffer mPayload;
 	RtpExtension mExtension;
 };
 

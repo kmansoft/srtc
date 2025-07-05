@@ -176,9 +176,19 @@ uint32_t RtpPacket::getSSRC() const
 	return mSSRC;
 }
 
+uint32_t RtpPacket::getTimestamp() const
+{
+	return mTimestamp;
+}
+
 const ByteBuffer& RtpPacket::getPayload() const
 {
 	return mPayload;
+}
+
+ByteBuffer&& RtpPacket::movePayload()
+{
+	return std::move(mPayload);
 }
 
 void RtpPacket::setExtension(RtpExtension&& extension)

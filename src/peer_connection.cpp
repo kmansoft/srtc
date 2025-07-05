@@ -1,6 +1,7 @@
 #include "srtc/peer_connection.h"
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
+#include "srtc/jitter_buffer.h"
 #include "srtc/logging.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
@@ -183,32 +184,36 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 			return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
 		}
 
-		// Packetizers
-		if (mVideoSingleTrack) {
-			const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);
-			if (error.isError()) {
-				return error;
-			}
-			mVideoSinglePacketizer = packetizer;
-		} else if (!mVideoSimulcastTrackList.empty()) {
-			for (const auto& track : mVideoSimulcastTrackList) {
-				const auto simulcastLayer = track->getSimulcastLayer();
-
-				const auto [packetizer, error] = Packetizer::makePacketizer(track);
+		if (mDirection == Direction::Publish) {
+			// Packetizers
+			if (mVideoSingleTrack) {
+				const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);
 				if (error.isError()) {
 					return error;
 				}
+				mVideoSinglePacketizer = packetizer;
+			} else if (!mVideoSimulcastTrackList.empty()) {
+				for (const auto& track : mVideoSimulcastTrackList) {
+					const auto simulcastLayer = track->getSimulcastLayer();
 
-				mVideoSimulcastLayerList.emplace_back(simulcastLayer->name, track, packetizer);
-			}
-		}
+					const auto [packetizer, error] = Packetizer::makePacketizer(track);
+					if (error.isError()) {
+						return error;
+					}
 
-		if (mAudioTrack) {
-			const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack);
-			if (error.isError()) {
-				return error;
+					mVideoSimulcastLayerList.emplace_back(simulcastLayer->name, track, packetizer);
+				}
 			}
-			mAudioPacketizer = packetizer;
+
+			if (mAudioTrack) {
+				const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack);
+				if (error.isError()) {
+					return error;
+				}
+				mAudioPacketizer = packetizer;
+			}
+		} else if (mDirection == Direction::Subscribe) {
+			// Jitter buffers are created when we connect because we have to know the rtt
 		}
 
 		// We are started
@@ -262,11 +267,11 @@ void PeerConnection::setPublishConnectionStatsListener(const PublishConnectionSt
 
 Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
 {
+	std::lock_guard lock(mMutex);
+
 	if (mDirection != Direction::Publish) {
 		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
 	}
-
-	std::lock_guard lock(mMutex);
 
 	if (mVideoSingleTrack == nullptr) {
 		return { Error::Code::InvalidData, "There is no video track" };
@@ -494,9 +499,11 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 
 	setConnectionState(ConnectionState::Closed);
 
-	// Clear everything on this thread before quitting
+	// Clear everything on this thread before exiting
 	mConnectingCandidateList.clear();
 	mSelectedCandidate.reset();
+	mJitterBufferVideo.reset();
+	mJitterBufferAudio.reset();
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)
@@ -610,6 +617,9 @@ void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
 void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 {
 	setConnectionState(ConnectionState::Connecting);
+
+	mJitterBufferVideo = nullptr;
+	mJitterBufferAudio = nullptr;
 }
 
 void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
@@ -646,6 +656,27 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 {
 	setConnectionState(ConnectionState::Connected);
+
+	if (mDirection == Direction::Subscribe) {
+		const auto rtt = candidate->getIceRtt();
+		if (rtt.has_value()) {
+			// We should have the rtt from ice
+			auto length = std::chrono::milliseconds(lround(rtt.value()) + 10);
+			auto nackDelay = std::chrono::milliseconds(4);
+
+			if (rtt.value() >= 50.0f) {
+				length = std::chrono::milliseconds(lround(rtt.value()) + 25);
+				nackDelay = std::chrono::milliseconds(10);
+			}
+
+			if (mVideoSingleTrack) {
+				mJitterBufferVideo = std::make_shared<JitterBuffer>(mVideoSingleTrack, 2048, length, nackDelay);
+			}
+			if (mAudioTrack) {
+				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, length, nackDelay);
+			}
+		}
+	}
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
@@ -664,6 +695,24 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 	// We have tried all candidates and they all failed
 	if (mConnectingCandidateList.empty()) {
 		setConnectionState(ConnectionState::Failed);
+	}
+}
+
+void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet)
+{
+	if (mDirection == Direction::Subscribe) {
+		const auto track = packet->getTrack();
+		if (mVideoSingleTrack == track) {
+			if (const auto buffer = mJitterBufferVideo) {
+				assert(buffer->getTrack() == track);
+				buffer->consume(packet);
+			}
+		} else if (mAudioTrack == track) {
+			if (const auto buffer = mJitterBufferAudio) {
+				assert(buffer->getTrack() == track);
+				buffer->consume(packet);
+			}
+		}
 	}
 }
 
