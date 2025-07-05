@@ -690,9 +690,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
+	ByteBuffer output;
+
 	if (mSrtpConnection) {
 		if (is_rtcp_message(buf)) {
-			ByteBuffer output;
 			if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
 				LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
 
@@ -702,18 +703,13 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 				}
 			}
 		} else {
-			ByteBuffer output;
 			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
+				LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
+
 				if (const auto track = findReceivedMediaPacketTrack(output)) {
 					const auto packet = RtpPacket::fromUdpPacket(track, output);
 					if (packet) {
-						LOG(SRTC_LOG_Z,
-							"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
-							to_string(track->getMediaType()).c_str(),
-							packet->getSSRC(),
-							packet->getSequence(),
-							packet->getPayloadId(),
-							packet->getPayloadSize());
+						onReceivedMediaPacket(packet);
 					}
 				}
 			}
@@ -737,30 +733,14 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 	if (rtcpPT == 201) {
 		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
 		// Receiver Report
-		while (rtcpReader.remaining() >= 24) {
-			const auto ssrc = rtcpReader.readU32();
-			const auto lost = rtcpReader.readU32();
-			const auto highestReceived = rtcpReader.readU32();
-			const auto jitter = rtcpReader.readU32();
-			const auto lastSR = rtcpReader.readU32();
-			const auto delaySinceLastSR = rtcpReader.readU32();
-
-			(void)lost;
-			(void)highestReceived;
-			(void)jitter;
-
-			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
-			if (rtt) {
-				LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-				mRtpRttFilter.update(rtt.value());
-			}
-		}
+		onReceivedControlMessage_201(rtcpReader);
 	} else if (rtcpPT == 205) {
 		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
 		// RTPFB: Transport layer FB message
 		if (rtcpReader.remaining() >= 4) {
 			const auto rtcpFmt = rtcpRC;
 			const auto rtcpSSRC_1 = rtcpReader.readU32();
+
 			LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
 			switch (rtcpFmt) {
@@ -784,8 +764,38 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 
 void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
+	LOG(SRTC_LOG_Z,
+		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
+		to_string(packet->getTrack()->getMediaType()).c_str(),
+		packet->getSSRC(),
+		packet->getSequence(),
+		packet->getPayloadId(),
+		packet->getPayloadSize());
+
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
+}
+
+void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
+{
+	while (rtcpReader.remaining() >= 24) {
+		const auto ssrc = rtcpReader.readU32();
+		const auto lost = rtcpReader.readU32();
+		const auto highestReceived = rtcpReader.readU32();
+		const auto jitter = rtcpReader.readU32();
+		const auto lastSR = rtcpReader.readU32();
+		const auto delaySinceLastSR = rtcpReader.readU32();
+
+		(void)lost;
+		(void)highestReceived;
+		(void)jitter;
+
+		const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
+		if (rtt) {
+			LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
+			mRtpRttFilter.update(rtt.value());
+		}
+	}
 }
 
 void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
