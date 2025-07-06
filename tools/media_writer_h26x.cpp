@@ -26,11 +26,11 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 		// Open the file
 		mFile = fopen(mFilename.c_str(), "wb");
 		if (!mFile) {
-			perror("H264: Cannot open output file");
+			std::printf("H264x: Cannot open output file %s\n", mFilename.c_str());
 			return;
 		}
 
-		std::printf("H264: Opened output file %s\n", mFilename.c_str());
+		std::printf("H26x: Opened output file %s\n", mFilename.c_str());
 	}
 
 	srtc::ByteReader reader(frame->data);
@@ -39,8 +39,11 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 
 	if (type == 1 && !mIsSeenKeyFrame) {
 		return;
-	} else if (type == 5 || type == 7 || type == 8) {
-		mIsSeenKeyFrame = true;
+	} else if (!mIsSeenKeyFrame) {
+		if (type == 5 || type == 7 || type == 8) {
+			std::printf("H26x: Start writing output on a key frame\n");
+			mIsSeenKeyFrame = true;
+		}
 	}
 
 	static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };
