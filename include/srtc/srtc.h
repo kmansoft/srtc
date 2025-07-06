@@ -44,6 +44,8 @@ union anyaddr {
     struct sockaddr_in6 sin_ipv6;
 };
 
+std::string to_string(const anyaddr& addr);
+
 struct Host {
     union anyaddr addr;
 };
@@ -57,7 +59,12 @@ struct PublishConnectionStats {
 	float bandwidth_suggested_kbit_per_second;
 };
 
-std::string to_string(const anyaddr& addr);
+enum class PacketKind {
+	Standalone = 0,
+	Start = 1,
+	Middle = 2,
+	End = 3
+};
 
 #if defined(__clang__) || defined(__GNUC__)
 

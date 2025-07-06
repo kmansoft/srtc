@@ -1,8 +1,9 @@
 #include "srtc/jitter_buffer.h"
+#include "srtc/depacketizer.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_packet.h"
-#include "srtc/track.h"
 #include "srtc/srtc.h"
+#include "srtc/track.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -60,10 +61,12 @@ template class ExtendedValue<uint32_t>;
 // Jitter Buffer
 
 JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
+						   const std::shared_ptr<Depacketizer>& depacketizer,
 						   size_t capacity,
 						   std::chrono::milliseconds length,
 						   std::chrono::milliseconds nackDelay)
 	: mTrack(track)
+	, mDepacketizer(depacketizer)
 	, mCapacity(capacity)
 	, mCapacityMask(capacity - 1)
 	, mLength(length)
@@ -157,7 +160,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 	const auto time_delta = std::chrono::milliseconds(1000 * rtp_timestamp_delta / mTrack->getClockRate());
 	const auto packet_time = mBaseTime + time_delta;
 	const auto when_dequeue = packet_time + mLength;
-	const auto when_nack = now + mNackDelay;
+	const auto when_nack_request = now + mNackDelay;
 
 	Item* item = nullptr;
 
@@ -177,7 +180,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 			const auto spacer = new Item;
 			spacer->when_received = std::chrono::steady_clock::time_point::min();
 			spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
-			spacer->when_nack = when_nack;
+			spacer->when_nack_request = when_nack_request;
+			spacer->when_nack_abandon = when_dequeue;
 
 			spacer->received = false;
 			spacer->nack_needed = true;
@@ -211,7 +215,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 			const auto spacer = new Item;
 			spacer->when_received = std::chrono::steady_clock::time_point::min();
 			spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
-			spacer->when_nack = when_nack;
+			spacer->when_nack_request = when_nack_request;
+			spacer->when_nack_abandon = when_dequeue;
 
 			spacer->received = false;
 			spacer->nack_needed = true;
@@ -238,10 +243,13 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
 	item->when_received = now;
 	item->when_dequeue = when_dequeue;
-	item->when_nack = when_nack;
+	item->when_nack_request = when_nack_request;
+	item->when_nack_abandon = when_dequeue;
 
 	item->received = true;
 	item->nack_needed = false;
+
+	item->kind = mDepacketizer->getPacketKind(payload);
 
 	item->seq_ext = seq_ext.value();
 	item->rtp_timestamp_ext = rtp_timestamp_ext.value();
@@ -293,29 +301,41 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 		const auto item = mItemList[index];
 		assert(item);
 
-		if (item->received) {
-			if (item->when_dequeue <= now) {
+		if (item->received && item->when_dequeue <= now && item->kind == PacketKind::Standalone) {
+			// A standalone packet, which is ready to be extracted, possibly into multiple frames
+			auto list = mDepacketizer->extract(item->payload);
+
+			while (!list.empty()) {
 				const auto frame = std::make_shared<EncodedFrame>();
 
 				frame->track = mTrack;
 				frame->seq_ext = item->seq_ext;
 				frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-				frame->data = std::move(item->payload);
+				frame->data = std::move(list.front());
 
 				result.push_back(frame);
 
-				mItemList[index] = nullptr;
-				mMinSeq += 1;
-
-				delete item;
-			} else {
-				break;
+				list.pop_front();
 			}
-		} else {
+
 			mItemList[index] = nullptr;
 			mMinSeq += 1;
 
 			delete item;
+		} else if (item->received && (item->kind == PacketKind::Middle || item->kind == PacketKind::End)) {
+			// We cannot extract this - delete and keep going
+			mItemList[index] = nullptr;
+			mMinSeq += 1;
+
+			delete item;
+		} else if (item->when_nack_abandon <= now) {
+			// A nack that was never received - delete and keep going
+			mItemList[index] = nullptr;
+			mMinSeq += 1;
+
+			delete item;
+		} else {
+			break;
 		}
 	}
 

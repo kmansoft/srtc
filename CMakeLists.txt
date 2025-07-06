@@ -32,6 +32,9 @@ endif()
 add_library(srtc
         # Headers
         include/srtc/byte_buffer.h
+        include/srtc/depacketizer.h
+        include/srtc/depacketizer_h264.h
+        include/srtc/depacketizer_opus.h
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
@@ -81,6 +84,9 @@ add_library(srtc
         include/srtc/x509_hash.h
         # Sources
         src/byte_buffer.cpp
+        src/depacketizer.cpp
+        src/depacketizer_h264.cpp
+        src/depacketizer_opus.cpp
         src/error.cpp
         src/extension_map.cpp
         src/h264.cpp

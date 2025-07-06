@@ -15,6 +15,7 @@
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
+#include "srtc/depacketizer.h"
 
 #include "stunmessage.h"
 
@@ -188,7 +189,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 		if (mDirection == Direction::Publish) {
 			// Packetizers
 			if (mVideoSingleTrack) {
-				const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);
+				const auto [packetizer, error] = Packetizer::make(mVideoSingleTrack);
 				if (error.isError()) {
 					return error;
 				}
@@ -197,7 +198,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 				for (const auto& track : mVideoSimulcastTrackList) {
 					const auto simulcastLayer = track->getSimulcastLayer();
 
-					const auto [packetizer, error] = Packetizer::makePacketizer(track);
+					const auto [packetizer, error] = Packetizer::make(track);
 					if (error.isError()) {
 						return error;
 					}
@@ -207,7 +208,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 			}
 
 			if (mAudioTrack) {
-				const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack);
+				const auto [packetizer, error] = Packetizer::make(mAudioTrack);
 				if (error.isError()) {
 					return error;
 				}
@@ -711,11 +712,21 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 				nackDelay = std::chrono::milliseconds(10);
 			}
 
-			if (mVideoSingleTrack) {
-				mJitterBufferVideo = std::make_shared<JitterBuffer>(mVideoSingleTrack, 2048, length, nackDelay);
+			if (const auto track = mVideoSingleTrack) {
+				const auto [depacketizer, error] = Depacketizer::make(track);
+				if (error.isError()) {
+					LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
+				} else {
+					mJitterBufferVideo = std::make_shared<JitterBuffer>(track, depacketizer, 2048, length, nackDelay);
+				}
 			}
-			if (mAudioTrack) {
-				mJitterBufferAudio = std::make_shared<JitterBuffer>(mAudioTrack, 1024, length, nackDelay);
+			if (const auto track = mAudioTrack) {
+				const auto [depacketizer, error] = Depacketizer::make(track);
+				if (error.isError()) {
+					LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
+				} else {
+					mJitterBufferAudio = std::make_shared<JitterBuffer>(track, depacketizer, 1024, length, nackDelay);
+				}
 			}
 		}
 	}

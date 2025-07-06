@@ -16,10 +16,6 @@
 namespace
 {
 
-// https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
-
-constexpr uint8_t STAP_A = 24;
-constexpr uint8_t FU_A = 28;
 constexpr size_t kMinPayloadSize = 600;
 
 uint8_t getPadding(const std::shared_ptr<srtc::Track>& track,
@@ -166,7 +162,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 			// Update PPS
 			mPPS.assign(parser.currData(), parser.currDataSize());
 		} else if (naluType == NaluType::KeyFrame) {
-			// Send codec specific data first as a STAP-A
+			// Send codec-specific data first as a STAP-A
 			// https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
 			if (!mSPS.empty() && !mPPS.empty() && !addedParameters) {
 				const uint8_t nri = std::max(mSPS.data()[0] & 0x60, mPPS.data()[0] & 0x60);

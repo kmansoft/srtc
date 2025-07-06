@@ -4,10 +4,13 @@
 
 #include <cstdint>
 
-namespace srtc
+namespace srtc::h264
 {
-namespace h264
-{
+
+// https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
+
+constexpr uint8_t STAP_A = 24;
+constexpr uint8_t FU_A = 28;
 
 // T-REC-H.264-201304-S
 
@@ -45,5 +48,5 @@ private:
     size_t mSkip;
 };
 
-} // namespace h264
-} // namespace srtc
+} // namespace srtc::h264
+

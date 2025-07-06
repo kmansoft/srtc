@@ -2,6 +2,7 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/encoded_frame.h"
+#include "srtc/srtc.h"
 
 #include <chrono>
 #include <cstdint>
@@ -12,6 +13,7 @@
 namespace srtc
 {
 
+class Depacketizer;
 class Track;
 class RtpPacket;
 
@@ -36,6 +38,7 @@ class JitterBuffer
 {
 public:
 	JitterBuffer(const std::shared_ptr<Track>& track,
+				 const std::shared_ptr<Depacketizer>& depacketizer,
 				 size_t capacity,
 				 std::chrono::milliseconds length,
 				 std::chrono::milliseconds nackDelay);
@@ -55,9 +58,13 @@ private:
 	struct Item {
 		std::chrono::steady_clock::time_point when_received;
 		std::chrono::steady_clock::time_point when_dequeue;
-		std::chrono::steady_clock::time_point when_nack;
+		std::chrono::steady_clock::time_point when_nack_request;
+		std::chrono::steady_clock::time_point when_nack_abandon;
+
 		bool received = false;
 		bool nack_needed = false;
+
+		PacketKind kind = PacketKind::Standalone;
 
 		uint64_t seq_ext = 0;
 		uint64_t rtp_timestamp_ext = 0; // only when received
@@ -66,6 +73,7 @@ private:
 	};
 
 	const std::shared_ptr<Track> mTrack;
+	const std::shared_ptr<Depacketizer> mDepacketizer;
 	const size_t mCapacity;
 	const size_t mCapacityMask;
 	const std::chrono::milliseconds mLength;
