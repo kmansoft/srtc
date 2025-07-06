@@ -93,6 +93,7 @@ SubOfferConfig SdpOffer::getSubConfig() const
 
 	// Subscribe
 	config.pli_interval_millis = mConfig.pli_interval_millis;
+	config.debug_drop_packets = mConfig.debug_drop_packets;
 
 	return config;
 }

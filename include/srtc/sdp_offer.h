@@ -31,6 +31,7 @@ struct PubOfferConfig : OfferConfig {
 
 struct SubOfferConfig : OfferConfig {
 	uint16_t pli_interval_millis = 1;
+	bool debug_drop_packets = false;
 };
 
 class SdpOffer
@@ -39,10 +40,11 @@ private:
 	friend PeerConnection;
 
 	struct Config : OfferConfig {
+		// Common
+		bool debug_drop_packets = false;
 		// Publish
 		bool enable_rtx = true;
 		bool enable_bwe = false;
-		bool debug_drop_packets = false;
 		// Subscribe
 		uint16_t pli_interval_millis = 0;
 	};

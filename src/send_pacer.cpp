@@ -29,7 +29,7 @@ SendPacer::SendPacer(const PubOfferConfig& offerConfig,
 	, mOnSend(onSend)
 #ifdef NDEBUG
 #else
-	, mNoSendRandomGenerator(0, 99)
+	, mLosePacketsRandomGenerator(0, 99)
 #endif
 {
 }
@@ -158,7 +158,7 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
 		(void)mSocket->send(protectedData.data(), protectedData.size());
 #else
 		// In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-		const auto randomValue = mNoSendRandomGenerator.next();
+		const auto randomValue = mLosePacketsRandomGenerator.next();
 		if (mOfferConfig.debug_drop_packets && randomValue < 5 && track->getMediaType() == MediaType::Video) {
 			uint16_t twcc;
 			if (mTWCC && mTWCC->getFeedbackSeq(packet, twcc)) {

@@ -40,6 +40,10 @@ namespace srtc
 PeerConnection::PeerConnection(Direction direction)
 	: mDirection(direction)
 	, mEventLoop(EventLoop::factory())
+#ifdef NDEBUG
+#else
+	, mLosePacketsRandomGenerator(0, 99)
+#endif
 {
 	std::call_once(gInitFlag, [] {
 		// Just in case we need something
@@ -94,7 +98,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
 }
 
 std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer(
-	const SubOfferConfig& pubConfig,
+	const SubOfferConfig& subConfig,
 	const std::optional<SubVideoConfig>& videoConfig,
 	const std::optional<SubAudioConfig>& audioConfig)
 {
@@ -103,8 +107,9 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
 	}
 
 	SdpOffer::Config config;
-	config.cname = pubConfig.cname;
-	config.pli_interval_millis = pubConfig.pli_interval_millis;
+	config.cname = subConfig.cname;
+	config.pli_interval_millis = subConfig.pli_interval_millis;
+	config.debug_drop_packets = subConfig.debug_drop_packets;
 
 	std::optional<SdpOffer::VideoConfig> video;
 	if (videoConfig) {
@@ -756,6 +761,25 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 
 void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet)
 {
+#ifdef NDEBUG
+#else
+	const auto config = mSdpOffer->getSubConfig();
+	const auto randomValue = mLosePacketsRandomGenerator.next();
+
+	// In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
+	if (config.debug_drop_packets && randomValue < 5) {
+		const auto track = packet->getTrack();
+		if (track->getMediaType() == MediaType::Video) {
+			const auto ssrc = packet->getSSRC();
+			const auto seq = packet->getSequence();
+			if (!mLosePacketHistory.hasBeenLost(ssrc, seq)) {
+				mLosePacketHistory.saveLost(ssrc, seq);
+				return;
+			}
+		}
+	}
+#endif
+
 	if (mDirection == Direction::Subscribe) {
 		const auto track = packet->getTrack();
 		if (mVideoSingleTrack == track) {

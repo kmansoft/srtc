@@ -74,7 +74,7 @@ private:
 
 #ifdef NDEBUG
 #else
-	RandomGenerator<uint32_t> mNoSendRandomGenerator;
+	RandomGenerator<uint32_t> mLosePacketsRandomGenerator;
 #endif
 
 };

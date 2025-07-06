@@ -34,6 +34,7 @@ static bool gQuiet = false;
 static bool gPrintSDP = false;
 static std::string gOutputAudioFilename;
 static std::string gOutputVideoFilename;
+static bool gDropPackets = false;
 
 // Signals
 
@@ -64,6 +65,7 @@ void printUsage(const char* programName)
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
 	std::cout << "  --oa <filename>      Save video to a file (h264 format)" << std::endl;
+	std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -131,6 +133,8 @@ int main(int argc, char* argv[])
 				std::cerr << "Error: --ov requires a filename" << std::endl;
 				return 1;
 			}
+		} else if (arg == "-d" || arg == "--drop") {
+			gDropPackets = true;
 		} else {
 			std::cerr << "Unknown option: " << arg << std::endl;
 			printUsage(argv[0]);
@@ -194,6 +198,7 @@ int main(int argc, char* argv[])
 	// Offer
 	SubOfferConfig offerConfig = {};
 	offerConfig.cname = "foo";
+	offerConfig.debug_drop_packets = gDropPackets;
 
 	SubVideoCodec videoCodec = {};
 	videoCodec.codec = Codec::H264;

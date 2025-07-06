@@ -2,14 +2,15 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
+#include "srtc/jitter_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
+#include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/srtc.h"
 #include "srtc/subscribe_config.h"
 #include "srtc/track_selector.h"
-#include "srtc/jitter_buffer.h"
 
 #include <functional>
 #include <list>
@@ -32,7 +33,7 @@ class EventLoop;
 class PeerConnection final : public PeerCandidateListener
 {
 public:
-	PeerConnection(Direction direction);
+	explicit PeerConnection(Direction direction);
 	~PeerConnection() override;
 
 	// SDP offer
@@ -41,7 +42,7 @@ public:
 	OfferAndError createPublishOffer(const PubOfferConfig& pubConfig,
 									 const std::optional<PubVideoConfig>& videoConfig,
 									 const std::optional<PubAudioConfig>& audioConfig);
-	OfferAndError createSubscribeOffer(const SubOfferConfig& config,
+	OfferAndError createSubscribeOffer(const SubOfferConfig& subConfig,
 									   const std::optional<SubVideoConfig>& videoConfig,
 									   const std::optional<SubAudioConfig>& audioConfig);
 	Error setOffer(const std::shared_ptr<SdpOffer>& offer);
@@ -108,7 +109,9 @@ private:
 	std::shared_ptr<Track> mAudioTrack;
 
 	struct LayerInfo {
-		LayerInfo(const std::string& ridName, const std::shared_ptr<Track>& track, const std::shared_ptr<Packetizer>& packetizer)
+		LayerInfo(const std::string& ridName,
+				  const std::shared_ptr<Track>& track,
+				  const std::shared_ptr<Packetizer>& packetizer)
 			: ridName(ridName)
 			, track(track)
 			, packetizer(packetizer)
@@ -188,6 +191,47 @@ private:
 	std::shared_ptr<LoopScheduler> mLoopScheduler;
 	std::shared_ptr<PeerCandidate> mSelectedCandidate;
 	std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
+
+#ifdef NDEBUG
+#else
+	struct LosePacketsItem {
+		uint32_t ssrc;
+		uint16_t seq;
+
+		LosePacketsItem(uint32_t ssrc, uint16_t seq)
+			: ssrc(ssrc)
+			, seq(seq)
+		{
+		}
+	};
+
+	class LosePacketsHistory
+	{
+		std::list<LosePacketsItem> history;
+
+	public:
+		[[nodiscard]] bool hasBeenLost(uint32_t ssrc, uint16_t seq)
+		{
+			for (const auto& item : history) {
+				if (item.ssrc == ssrc && item.seq == seq) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		void saveLost(uint32_t ssrc, uint16_t seq)
+		{
+			while (history.size() > 256) {
+				history.pop_front();
+			}
+			history.emplace_back(ssrc, seq);
+		}
+	};
+
+	RandomGenerator<uint32_t> mLosePacketsRandomGenerator;
+	LosePacketsHistory mLosePacketHistory;
+#endif
 };
 
 } // namespace srtc

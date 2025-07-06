@@ -87,7 +87,7 @@ std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
 
 std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& packetList)
 {
-#ifndef _NDEBUG
+#ifndef NDEBUG
 	assert(!packetList.empty());
 	assert(getPacketKind(*packetList[0]) == PacketKind::Start);
 	for (size_t i = 1; i < packetList.size() - 1; i += 1) {
