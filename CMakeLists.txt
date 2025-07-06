@@ -390,6 +390,8 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
             tools/http_whip_whep.h
             tools/media_writer.h
             tools/media_writer.cpp
+            tools/media_writer_h26x.h
+            tools/media_writer_h26x.cpp
             tools/media_writer_ogg.h
             tools/media_writer_ogg.cpp
     )

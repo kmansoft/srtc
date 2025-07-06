@@ -6,6 +6,9 @@ MediaWriterOgg::MediaWriterOgg(const std::string& filename, const std::shared_pt
 	, mFile(nullptr)
 	, m_packetno(0)
 	, m_granulepos(0)
+	, m_os()
+	, m_og()
+	, m_op()
 	, m_outPacketCount(0)
 	, m_outPageCount(0)
 	, m_outByteCount(0)
@@ -25,7 +28,7 @@ MediaWriterOgg::~MediaWriterOgg()
 		fclose(mFile);
 		mFile = nullptr;
 
-		std::printf("OGG: Wrote %lu packets, %lu pages, %lu bytes to %s\n",
+		std::printf("OGG: Wrote %zu packets, %zu pages, %zu bytes to %s\n",
 					m_outPacketCount,
 					m_outPageCount,
 					m_outByteCount,
@@ -42,6 +45,7 @@ void MediaWriterOgg::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 		// Open the file
 		mFile = fopen(mFilename.c_str(), "wb");
 		if (!mFile) {
+			perror("OGG: Cannot open output file");
 			return;
 		}
 

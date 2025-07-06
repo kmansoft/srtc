@@ -26,7 +26,7 @@ private:
 	ogg_int64_t m_packetno;
 	ogg_int64_t m_granulepos;
 
-	unsigned long m_outPacketCount;
-	unsigned long m_outPageCount;
-	unsigned long m_outByteCount;
+	size_t m_outPacketCount;
+	size_t m_outPageCount;
+	size_t m_outByteCount;
 };

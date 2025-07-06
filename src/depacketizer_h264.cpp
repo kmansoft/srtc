@@ -67,7 +67,12 @@ std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
 					break;
 				}
 
-				list.emplace_back(packet.data() + reader.position(), size);
+				ByteBuffer  buf(packet.data() + reader.position(), size);
+
+				const auto dump = bin_to_hex(buf.data(), std::min<size_t>(16u, buf.size()));
+				std::printf("STAP_A frame: %5zu bytes, hex = %s\n", buf.size(), dump.c_str());
+
+				list.push_back(std::move(buf));
 
 				reader.skip(size);
 			}
@@ -116,7 +121,7 @@ std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& 
 	}
 
 	const auto dump = bin_to_hex(buf.data(), std::min<size_t>(16u, buf.size()));
-	std::printf("FU_A frame: %4zu bytes, hex = %s\n", buf.size(), dump.c_str());
+	std::printf("FU_A  frame: %5zu bytes, hex = %s\n", buf.size(), dump.c_str());
 
 	list.push_back(std::move(buf));
 

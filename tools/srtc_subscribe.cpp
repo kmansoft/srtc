@@ -7,6 +7,7 @@
 #include "srtc/encoded_frame.h"
 
 #include "media_writer_ogg.h"
+#include "media_writer_h26x.h"
 
 #include "http_whip_whep.h"
 
@@ -32,6 +33,7 @@ static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static std::string gOutputAudioFilename;
+static std::string gOutputVideoFilename;
 
 // Signals
 
@@ -61,6 +63,7 @@ void printUsage(const char* programName)
 	std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
+	std::cout << "  --oa <filename>      Save video to a file (h264 format)" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -121,6 +124,13 @@ int main(int argc, char* argv[])
 				std::cerr << "Error: --oa requires a filename" << std::endl;
 				return 1;
 			}
+		} else if (arg == "--ov") {
+			if (i + 1 < argc) {
+				gOutputVideoFilename = argv[++i];
+			} else {
+				std::cerr << "Error: --ov requires a filename" << std::endl;
+				return 1;
+			}
 		} else {
 			std::cerr << "Unknown option: " << arg << std::endl;
 			printUsage(argv[0]);
@@ -146,9 +156,6 @@ int main(int argc, char* argv[])
 #endif
 
 	std::cout << "*** Current working directory: " << cwd << std::endl;
-
-	// Media writers
-	std::shared_ptr<MediaWriter> mediaWriterAudio;
 
 	// Peer connection state
 	std::mutex connectionStateMutex;
@@ -183,15 +190,6 @@ int main(int argc, char* argv[])
 			}
 			connectionStateCond.notify_one();
 		});
-
-	peerConnection->setSubscribeEncodedFrameListener([&mediaWriterAudio](const std::shared_ptr<EncodedFrame>& frame) {
-		const auto mediaType = frame->track->getMediaType();
-		if (mediaType == srtc::MediaType::Audio) {
-			if (mediaWriterAudio) {
-				mediaWriterAudio->send(frame);
-			}
-		}
-	});
 
 	// Offer
 	SubOfferConfig offerConfig = {};
@@ -241,6 +239,9 @@ int main(int argc, char* argv[])
 	}
 
 	// Media writers
+	std::shared_ptr<MediaWriter> mediaWriterAudio;
+	std::shared_ptr<MediaWriter> mediaWriterVideo;
+
 	if (!gOutputAudioFilename.empty()) {
 		const auto track = answer->getAudioTrack();
 		if (!track) {
@@ -254,6 +255,33 @@ int main(int argc, char* argv[])
 			exit(1);
 		}
 	}
+
+	if (!gOutputAudioFilename.empty()) {
+		const auto track = answer->getVideoSingleTrack();
+		if (!track) {
+			std::cout << "Saving audio output is requested, but there is no video track" << std::endl;
+			exit(1);
+		} else if (track->getCodec() == srtc::Codec::H264) {
+			mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
+			mediaWriterVideo->start();
+		} else {
+			std::cout << "Saving video output is requested, but the video codec is not one we support" << std::endl;
+			exit(1);
+		}
+	}
+
+	peerConnection->setSubscribeEncodedFrameListener([mediaWriterAudio, mediaWriterVideo](const std::shared_ptr<EncodedFrame>& frame) {
+		const auto mediaType = frame->track->getMediaType();
+		if (mediaType == srtc::MediaType::Audio) {
+			if (mediaWriterAudio) {
+				mediaWriterAudio->send(frame);
+			}
+		} else if (mediaType == srtc::MediaType::Video) {
+			if (mediaWriterVideo) {
+				mediaWriterVideo->send(frame);
+			}
+		}
+	});
 
 	// Connect the peer connection
 	peerConnection->setOffer(offer);
