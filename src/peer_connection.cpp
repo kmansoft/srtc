@@ -1,4 +1,5 @@
 #include "srtc/peer_connection.h"
+#include "srtc/depacketizer.h"
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
 #include "srtc/jitter_buffer.h"
@@ -15,7 +16,6 @@
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
-#include "srtc/depacketizer.h"
 
 #include "stunmessage.h"
 
@@ -104,6 +104,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
 
 	SdpOffer::Config config;
 	config.cname = pubConfig.cname;
+	config.pli_interval_millis = pubConfig.pli_interval_millis;
 
 	std::optional<SdpOffer::VideoConfig> video;
 	if (videoConfig) {
@@ -729,6 +730,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 				}
 			}
 		}
+
+		sendPictureLossIndicator();
 	}
 }
 
@@ -823,4 +826,23 @@ void PeerConnection::sendConnectionStats()
 		mPublishConnectionStatsListener(connectionStats);
 	}
 }
+
+void PeerConnection::sendPictureLossIndicator()
+{
+	const auto config = mSdpOffer->getSubConfig();
+
+	Task::cancelHelper(mTaskPictureLossIndicator);
+	mTaskPictureLossIndicator = mLoopScheduler->submit(
+		std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] { sendConnectionStats(); });
+
+	if (mSelectedCandidate) {
+		std::lock_guard lock(mMutex);
+
+		if (mConnectionState == ConnectionState::Connected) {
+			const auto trackList = collectTracks();
+			mSelectedCandidate->sendPictureLossIndicators(trackList);
+		}
+	}
+}
+
 } // namespace srtc

@@ -66,6 +66,7 @@ public:
     void run();
 
 	void sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList);
+	void sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 

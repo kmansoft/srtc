@@ -289,45 +289,90 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 {
 	std::vector<std::shared_ptr<EncodedFrame>> result;
 
-	if (!mItemList) {
+	if (!mItemList || mMinSeq == mMaxSeq) {
 		return result;
 	}
 
 	const auto now = std::chrono::steady_clock::now();
 
 	// We add packets on the Max end and consume them from the Min end
-	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+	while (mMinSeq < mMaxSeq) {
+		const auto seq = mMinSeq;
 		const auto index = seq & mCapacityMask;
 		const auto item = mItemList[index];
 		assert(item);
 
-		if (item->received && item->when_dequeue <= now && item->kind == PacketKind::Standalone) {
-			// A standalone packet, which is ready to be extracted, possibly into multiple frames
-			auto list = mDepacketizer->extract(item->payload);
+		if (item->received && item->when_dequeue <= now) {
+			if (item->kind == PacketKind::Standalone) {
+				// A standalone packet, which is ready to be extracted, possibly into multiple frames
+				auto frameList = mDepacketizer->extract(item->payload);
 
-			while (!list.empty()) {
-				const auto frame = std::make_shared<EncodedFrame>();
+				while (!frameList.empty()) {
+					const auto frame = std::make_shared<EncodedFrame>();
 
-				frame->track = mTrack;
-				frame->seq_ext = item->seq_ext;
-				frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-				frame->data = std::move(list.front());
+					frame->track = mTrack;
+					frame->seq_ext = item->seq_ext;
+					frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
+					frame->data = std::move(frameList.front());
 
-				result.push_back(frame);
+					result.push_back(frame);
 
-				list.pop_front();
+					frameList.pop_front();
+				}
+
+				mItemList[index] = nullptr;
+				mMinSeq += 1;
+
+				delete item;
+			} else if (item->kind == PacketKind::Start) {
+				// Start of a multi-packet sequence
+				uint64_t maxSeq = 0;
+				if (findMultiPacketSequence(maxSeq)) {
+
+					std::vector<ByteBuffer*> bufList;
+					for (auto extract_seq = seq; extract_seq <= maxSeq; extract_seq += 1) {
+						const auto extract_index = extract_seq & mCapacityMask;
+						auto extract_item = mItemList[extract_index];
+						assert(extract_item);
+						bufList.push_back(&extract_item->payload);
+					}
+
+					// Extract, possibly into multiple frames (theoretical)
+					auto frameList = mDepacketizer->extract(bufList);
+
+					while (!frameList.empty()) {
+						const auto frame = std::make_shared<EncodedFrame>();
+
+						frame->track = mTrack;
+						frame->seq_ext = item->seq_ext;
+						frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
+						frame->data = std::move(frameList.front());
+
+						result.push_back(frame);
+
+						frameList.pop_front();
+					}
+
+					for (auto cleanup_seq = seq; cleanup_seq <= maxSeq; cleanup_seq += 1) {
+						const auto cleanup_index = cleanup_seq & mCapacityMask;
+						delete mItemList[cleanup_index];
+						mItemList[cleanup_index] = nullptr;
+					}
+
+					mMinSeq = maxSeq + 1;
+				} else {
+					mItemList[index] = nullptr;
+					mMinSeq += 1;
+
+					delete item;
+				}
+			} else {
+				// We cannot extract this - delete and keep going
+				mItemList[index] = nullptr;
+				mMinSeq += 1;
+
+				delete item;
 			}
-
-			mItemList[index] = nullptr;
-			mMinSeq += 1;
-
-			delete item;
-		} else if (item->received && (item->kind == PacketKind::Middle || item->kind == PacketKind::End)) {
-			// We cannot extract this - delete and keep going
-			mItemList[index] = nullptr;
-			mMinSeq += 1;
-
-			delete item;
 		} else if (item->when_nack_abandon <= now) {
 			// A nack that was never received - delete and keep going
 			mItemList[index] = nullptr;
@@ -340,6 +385,40 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 	}
 
 	return result;
+}
+
+bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
+{
+	auto index = (mMinSeq) & mCapacityMask;
+	auto item = mItemList[index];
+	assert(item);
+	assert(item->received);
+	assert(item->kind == PacketKind::Start);
+
+	for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
+		index = seq & mCapacityMask;
+		item = mItemList[index];
+		assert(item);
+
+		if (!item->received) {
+			break;
+		} else if (item->kind == PacketKind::End) {
+			outEnd = seq;
+			return true;
+		} else if (item->kind != PacketKind::Middle) {
+			for (auto delete_seq = mMinSeq; delete_seq <= seq; delete_seq += 1) {
+				const auto delete_index = delete_seq & mCapacityMask;
+				const auto delete_item = mItemList[delete_index];
+				delete delete_item;
+				mItemList[delete_index] = nullptr;
+			}
+
+			mMinSeq = seq + 1;
+			break;
+		}
+	}
+
+	return false;
 }
 
 } // namespace srtc

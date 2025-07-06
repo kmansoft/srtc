@@ -72,6 +72,8 @@ private:
 		ByteBuffer payload;
 	};
 
+	[[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
+
 	const std::shared_ptr<Track> mTrack;
 	const std::shared_ptr<Depacketizer> mDepacketizer;
 	const size_t mCapacity;

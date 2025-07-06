@@ -180,6 +180,10 @@ private:
 	void sendConnectionStats();
 	std::weak_ptr<Task> mTaskConnectionStats;
 
+	// Subscribe PLI
+	void sendPictureLossIndicator();
+	std::weak_ptr<Task> mTaskPictureLossIndicator;
+
 	// These are only used on the worker thread so don't need mutexes
 	std::shared_ptr<LoopScheduler> mLoopScheduler;
 	std::shared_ptr<PeerCandidate> mSelectedCandidate;

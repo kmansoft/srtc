@@ -1,6 +1,7 @@
 #include "srtc/depacketizer_h264.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/h264.h"
+#include "srtc/util.h"
 
 #include <cassert>
 
@@ -67,6 +68,7 @@ std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
 				}
 
 				list.emplace_back(packet.data() + reader.position(), size);
+
 				reader.skip(size);
 			}
 		} else {
@@ -89,7 +91,36 @@ std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& 
 	assert(getPacketKind(*packetList[packetList.size() - 1]) == PacketKind::End);
 #endif
 
-	return {};
+	std::list<ByteBuffer> list;
+
+	ByteBuffer buf;
+	ByteWriter w(buf);
+
+	for (const auto packet : packetList) {
+		ByteReader reader(*packet);
+
+		if (reader.remaining() > 2) {
+			const auto indicator = reader.readU8();
+			const auto header = reader.readU8();
+
+			const auto nri = indicator & 0x60;
+			const auto type = header & 0x1F;
+
+			if (buf.empty()) {
+				w.writeU8(nri | type);
+			}
+
+			const auto pos = reader.position();
+			w.write(packet->data() + pos, packet->size() - pos);
+		}
+	}
+
+	const auto dump = bin_to_hex(buf.data(), std::min<size_t>(16u, buf.size()));
+	std::printf("FU_A frame: %4zu bytes, hex = %s\n", buf.size(), dump.c_str());
+
+	list.push_back(std::move(buf));
+
+	return list;
 }
 
 } // namespace srtc

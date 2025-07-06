@@ -318,6 +318,23 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
 	}
 }
 
+void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
+{
+	for (const auto& track : trackList) {
+		if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+			const auto ssrc = track->getSSRC();
+
+			ByteBuffer payload;
+			ByteWriter w(payload);
+
+			w.writeU32(ssrc);
+
+			const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
+			sendRtcpPacket(track, packet);
+		}
+	}
+}
+
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	const auto now = std::chrono::steady_clock::now();

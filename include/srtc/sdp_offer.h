@@ -30,7 +30,7 @@ struct PubOfferConfig : OfferConfig {
 };
 
 struct SubOfferConfig : OfferConfig {
-	// nothing yet
+	uint16_t pli_interval_millis = 1;
 };
 
 class SdpOffer
@@ -44,6 +44,7 @@ private:
 		bool enable_bwe = false;
 		bool debug_drop_packets = false;
 		// Subscribe
+		uint16_t pli_interval_millis = 0;
 	};
 
 	struct VideoCodec {
@@ -90,6 +91,7 @@ public:
 	[[nodiscard]] Direction getDirection() const;
 
 	[[nodiscard]] PubOfferConfig getPubConfig() const;
+	[[nodiscard]] SubOfferConfig getSubConfig() const;
 
 	[[nodiscard]] std::pair<std::string, Error> generate();
 

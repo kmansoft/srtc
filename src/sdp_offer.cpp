@@ -73,12 +73,28 @@ PubOfferConfig SdpOffer::getPubConfig() const
 {
 	PubOfferConfig config = {};
 
+	// Common
 	config.cname = mConfig.cname;
+
+	// Publish
 	config.enable_rtx = mConfig.enable_rtx;
 	config.enable_bwe = mConfig.enable_bwe;
 	config.debug_drop_packets = mConfig.debug_drop_packets;
 
     return config;
+}
+
+SubOfferConfig SdpOffer::getSubConfig() const
+{
+	SubOfferConfig config = {};
+
+	// Common
+	config.cname = mConfig.cname;
+
+	// Subscribe
+	config.pli_interval_millis = mConfig.pli_interval_millis;
+
+	return config;
 }
 
 std::pair<std::string, Error> SdpOffer::generate()
