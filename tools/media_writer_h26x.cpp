@@ -6,7 +6,7 @@ MediaWriterH26x::MediaWriterH26x(const std::string& filename, const std::shared_
 	: MediaWriter(filename)
 	, mTrack(track)
 	, mFile(nullptr)
-	, mSeenKeyFrame(false)
+	, mIsSeenKeyFrame(false)
 {
 }
 
@@ -37,10 +37,10 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 	const auto value = reader.readU8();
 	const auto type = value & 0x1F;
 
-	if (type == 1 && !mSeenKeyFrame) {
+	if (type == 1 && !mIsSeenKeyFrame) {
 		return;
-	} else if (type == 7 || type == 8 || type == 5) {
-		mSeenKeyFrame = true;
+	} else if (type == 5 || type == 7 || type == 8) {
+		mIsSeenKeyFrame = true;
 	}
 
 	static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };

@@ -20,5 +20,5 @@ private:
 	FILE* mFile;
 	size_t m_outPacketCount;
 	size_t m_outByteCount;
-	bool mSeenKeyFrame;
+	bool mIsSeenKeyFrame;
 };
