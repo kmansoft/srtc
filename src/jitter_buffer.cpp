@@ -309,6 +309,11 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
 	std::optional<int> when_abandon;
 	std::optional<int> when_dequeue;
 
+	if (!mTrack->hasNack()) {
+		when_request = 2 * defaultTimeout;
+		when_abandon = 2 * defaultTimeout;
+	}
+
 	// We add packets on the Max end and consume them from the Min end
 	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
 		const auto index = seq & mCapacityMask;
@@ -480,7 +485,7 @@ std::vector<uint16_t> JitterBuffer::processNack()
 {
 	std::vector<uint16_t> result;
 
-	if (!mItemList || mMinSeq == mMaxSeq) {
+	if (!mItemList || mMinSeq == mMaxSeq || !mTrack->hasNack()) {
 		return result;
 	}
 
