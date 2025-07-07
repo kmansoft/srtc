@@ -461,31 +461,18 @@ void PeerConnection::networkThreadWorkerFunc()
 		if (mJitterBufferVideo) {
 			const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
 			if (timeout > timeoutJitter) {
-				// LOG(SRTC_LOG_Z, "Video jitter timeout = %d", timeoutJitter);
 				timeout = timeoutJitter;
 			}
 		}
 		if (mJitterBufferAudio) {
 			const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
 			if (timeout > timeoutJitter) {
-				// LOG(SRTC_LOG_Z, "Audio jitter timeout = %d", timeoutJitter);
 				timeout = timeoutJitter;
 			}
 		}
 
-		const auto now_ms_0 =
-			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-				.count();
-
 		std::vector<void*> udataList;
 		eventLoop->wait(udataList, timeout);
-
-		const auto now_ms_1 =
-			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-				.count();
-//		LOG(SRTC_LOG_Z, "Event Loop from %ld to %ld, duration = %d", now_ms_0, now_ms_1, timeout);
-		(void) now_ms_0;
-		(void) now_ms_1;
 
 		std::list<FrameToSend> frameSendQueue;
 
@@ -789,11 +776,6 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 	if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
 		if (config.debug_drop_packets && randomValue < 5) {
 			if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
-				const auto now = std::chrono::steady_clock::now();
-				const auto now_ms =
-					std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-
-				std::printf("***** Losing packet %u, now = %ld\n", packet->getSequence(), now_ms);
 				return;
 			}
 		}
