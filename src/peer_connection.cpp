@@ -228,7 +228,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 		mIsStarted = true;
 
 		// The network thread
-		mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
+		mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this);
 	}
 
 	return Error::OK;
@@ -431,8 +431,7 @@ void PeerConnection::close()
 	}
 }
 
-void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-											 const std::shared_ptr<SdpAnswer> answer)
+void PeerConnection::networkThreadWorkerFunc()
 {
 	// Loop scheduler
 	mLoopScheduler = std::make_shared<LoopScheduler>();
@@ -461,13 +460,13 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 		}
 		if (mJitterBufferVideo) {
 			const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
-			if (timeout < timeoutJitter) {
+			if (timeout > timeoutJitter) {
 				timeout = timeoutJitter;
 			}
 		}
 		if (mJitterBufferAudio) {
 			const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
-			if (timeout < timeoutJitter) {
+			if (timeout > timeoutJitter) {
 				timeout = timeoutJitter;
 			}
 		}
@@ -629,11 +628,18 @@ void PeerConnection::startConnecting()
 
 void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer)
 {
-	const auto list = buffer->dequeue();
-	if (!list.empty()) {
+	const auto nackList = buffer->processNack();
+	if (!nackList.empty()) {
+		if (mSelectedCandidate) {
+			mSelectedCandidate->sendNacks(buffer->getTrack(), nackList);
+		}
+	}
+
+	const auto frameList = buffer->processDeque();
+	if (!frameList.empty()) {
 		std::lock_guard lock(mListenerMutex);
 		if (mSubscribeEncodedFrameListener) {
-			for (const auto& frame : list) {
+			for (const auto& frame : frameList) {
 				mSubscribeEncodedFrameListener(frame);
 			}
 		}
@@ -767,13 +773,10 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 	const auto randomValue = mLosePacketsRandomGenerator.next();
 
 	// In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-	if (config.debug_drop_packets && randomValue < 5) {
-		const auto track = packet->getTrack();
-		if (track->getMediaType() == MediaType::Video) {
-			const auto ssrc = packet->getSSRC();
-			const auto seq = packet->getSequence();
-			if (!mLosePacketHistory.hasBeenLost(ssrc, seq)) {
-				mLosePacketHistory.saveLost(ssrc, seq);
+	if (packet->getTrack()->getMediaType() == MediaType::Video) {
+		if (config.debug_drop_packets && randomValue < 5) {
+			if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
+				std::printf("***** Losing packet %u\n", packet->getSequence());
 				return;
 			}
 		}

@@ -39,6 +39,17 @@ public:
 			  RtpExtension&& extension,
 			  ByteBuffer&& payload);
 
+	RtpPacket(const std::shared_ptr<Track>& track,
+			  uint32_t ssrc,
+			  uint8_t payloadId,
+			  bool marker,
+			  uint32_t rollover,
+			  uint16_t sequence,
+			  uint32_t timestamp,
+			  uint8_t padding,
+			  RtpExtension&& extension,
+			  ByteBuffer&& payload);
+
 	~RtpPacket();
 
 	[[nodiscard]] std::shared_ptr<Track> getTrack() const;

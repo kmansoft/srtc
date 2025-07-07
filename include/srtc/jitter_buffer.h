@@ -16,6 +16,7 @@ namespace srtc
 class Depacketizer;
 class Track;
 class RtpPacket;
+class RtcpPacket;
 
 // Extends sequential values to 64 bits on rollover, used for SEQ and RTP timestamps
 
@@ -52,7 +53,8 @@ public:
 
 	// Processing
 	[[nodiscard]] int getTimeoutMillis(int defaultTimeout) const;
-	[[nodiscard]] std::vector<std::shared_ptr<EncodedFrame>> dequeue();
+	[[nodiscard]] std::vector<std::shared_ptr<EncodedFrame>> processDeque();
+	[[nodiscard]] std::vector<uint16_t> processNack();
 
 private:
 	struct Item {

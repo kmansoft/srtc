@@ -261,7 +261,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (!gOutputAudioFilename.empty()) {
+	if (!gOutputVideoFilename.empty()) {
 		const auto track = answer->getVideoSingleTrack();
 		if (!track) {
 			std::cout << "Saving audio output is requested, but there is no video track" << std::endl;

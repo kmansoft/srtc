@@ -42,150 +42,151 @@ struct PublishConnectionStats;
 class PeerCandidate final
 {
 public:
-    PeerCandidate(PeerCandidateListener* listener,
+	PeerCandidate(PeerCandidateListener* listener,
 				  const std::vector<std::shared_ptr<Track>>& trackList,
-                  const std::shared_ptr<SdpOffer>& offer,
-                  const std::shared_ptr<SdpAnswer>& answer,
-                  const std::shared_ptr<RealScheduler>& scheduler,
-                  const Host& host,
-                  const std::shared_ptr<EventLoop>& eventLoop,
-                  const Scheduler::Delay& startDelay);
-    ~PeerCandidate();
+				  const std::shared_ptr<SdpOffer>& offer,
+				  const std::shared_ptr<SdpAnswer>& answer,
+				  const std::shared_ptr<RealScheduler>& scheduler,
+				  const Host& host,
+				  const std::shared_ptr<EventLoop>& eventLoop,
+				  const Scheduler::Delay& startDelay);
+	~PeerCandidate();
 
-    void receiveFromSocket();
+	void receiveFromSocket();
 
-    struct FrameToSend {
-        std::shared_ptr<Track> track;
-        std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;              // possibly empty
-        std::vector<ByteBuffer> csd; // possibly empty
-    };
-    void addSendFrame(FrameToSend&& frame);
+	struct FrameToSend {
+		std::shared_ptr<Track> track;
+		std::shared_ptr<Packetizer> packetizer;
+		ByteBuffer buf;				 // possibly empty
+		std::vector<ByteBuffer> csd; // possibly empty
+	};
+	void addSendFrame(FrameToSend&& frame);
 
 	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;
-    void run();
+	void run();
 
 	void sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList);
 	void sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList);
+	void sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList);
 
-    void updatePublishConnectionStats(PublishConnectionStats& stats) const;
+	void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
-	std::optional<float> getIceRtt() const;
+	[[nodiscard]] std::optional<float> getIceRtt() const;
 
 private:
-    void startConnecting();
-    void addSendRaw(ByteBuffer&& buf);
+	void startConnecting();
+	void addSendRaw(ByteBuffer&& buf);
 
-    void onReceivedStunMessage(const Socket::ReceivedData& data);
-    void onReceivedDtlsMessage(ByteBuffer&& buf);
-    void onReceivedRtcMessage(ByteBuffer&& buf);
+	void onReceivedStunMessage(const Socket::ReceivedData& data);
+	void onReceivedDtlsMessage(ByteBuffer&& buf);
+	void onReceivedRtcMessage(ByteBuffer&& buf);
 
 	void onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet);
 	void onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet);
 
 	void onReceivedControlMessage_201(ByteReader& rtcpReader);
-    void onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
-    void onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
+	void onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
+	void onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
 
-    void forgetExpiredStunRequests();
+	void forgetExpiredStunRequests();
 
 	void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
 
 	std::shared_ptr<Track> findReceivedMediaPacketTrack(ByteBuffer& packet);
 
-    PeerCandidateListener* const mListener;
+	PeerCandidateListener* const mListener;
 
 	const std::vector<std::shared_ptr<Track>> mTrackList;
-    const std::shared_ptr<SdpOffer> mOffer;
-    const std::shared_ptr<SdpAnswer> mAnswer;
-    const Host mHost;
-    const std::shared_ptr<EventLoop> mEventLoop;
-    const std::shared_ptr<Socket> mSocket;
-    const std::shared_ptr<IceAgent> mIceAgent;
-    const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
-    const std::shared_ptr<SendRtpHistory> mSendRtpHistory;
-    const uint32_t mUniqueId;
-    const uint8_t mVideoExtMediaId;
-    const uint8_t mVideoExtStreamId;
-    const uint8_t mVideoExtRepairedStreamId;
-    const uint8_t mVideoExtGoogleVLA;
-    const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
-    const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
+	const std::shared_ptr<SdpOffer> mOffer;
+	const std::shared_ptr<SdpAnswer> mAnswer;
+	const Host mHost;
+	const std::shared_ptr<EventLoop> mEventLoop;
+	const std::shared_ptr<Socket> mSocket;
+	const std::shared_ptr<IceAgent> mIceAgent;
+	const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
+	const std::shared_ptr<SendRtpHistory> mSendRtpHistory;
+	const uint32_t mUniqueId;
+	const uint8_t mVideoExtMediaId;
+	const uint8_t mVideoExtStreamId;
+	const uint8_t mVideoExtRepairedStreamId;
+	const uint8_t mVideoExtGoogleVLA;
+	const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
+	const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
 	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
 
 	Filter<float> mIceRttFilter;
 	Filter<float> mRtpRttFilter;
 
-    std::shared_ptr<SrtpConnection> mSrtpConnection;
+	std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;
 
-    std::list<ByteBuffer> mDtlsReceiveQueue;
+	std::list<ByteBuffer> mDtlsReceiveQueue;
 
-    std::list<Socket::ReceivedData> mRawReceiveQueue;
+	std::list<Socket::ReceivedData> mRawReceiveQueue;
 
-    std::list<ByteBuffer> mRawSendQueue;
-    std::list<FrameToSend> mFrameSendQueue;
+	std::list<ByteBuffer> mRawSendQueue;
+	std::list<FrameToSend> mFrameSendQueue;
 
-    bool mSentUseCandidate = { false };
+	bool mSentUseCandidate = { false };
 
 	ByteBuffer mProtectedBuf;
 
-    // DTLS
-    enum class DtlsState {
-        Inactive,
-        Activating,
-        Failed,
-        Completed
-    };
+	// DTLS
+	enum class DtlsState {
+		Inactive,
+		Activating,
+		Failed,
+		Completed
+	};
 
-    ssl_ctx_st* mDtlsCtx = {};
-    ssl_st* mDtlsSsl = {};
-    bio_st* mDtlsBio = {};
-    DtlsState mDtlsState = { DtlsState::Inactive };
+	ssl_ctx_st* mDtlsCtx = {};
+	ssl_st* mDtlsSsl = {};
+	bio_st* mDtlsBio = {};
+	DtlsState mDtlsState = { DtlsState::Inactive };
 
-    // OpenSSL BIO
-    static int dgram_read(struct bio_st* b, char* out, int outl);
-    static int dgram_write(struct bio_st* b, const char* in, int inl);
-    static long dgram_ctrl(struct bio_st* b, int cmd, long num, void* ptr);
-    static int dgram_free(struct bio_st* b);
+	// OpenSSL BIO
+	static int dgram_read(struct bio_st* b, char* out, int outl);
+	static int dgram_write(struct bio_st* b, const char* in, int inl);
+	static long dgram_ctrl(struct bio_st* b, int cmd, long num, void* ptr);
+	static int dgram_free(struct bio_st* b);
 
-    static std::once_flag dgram_once;
-    static struct bio_method_st* dgram_method;
+	static std::once_flag dgram_once;
+	static struct bio_method_st* dgram_method;
 
-    static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
+	static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
 
-    void freeDTLS();
+	void freeDTLS();
 
-    // State
-    void emitOnConnecting();
-    void emitOnIceSelected();
-    void emitOnConnected();
-    void emitOnFailedToConnect(const Error& error);
+	// State
+	void emitOnConnecting();
+	void emitOnIceSelected();
+	void emitOnConnected();
+	void emitOnFailedToConnect(const Error& error);
 
-    // Sending STUN requests and responses
-    void sendStunBindingRequest(unsigned int iteration);
-    void sendStunBindingResponse(unsigned int iteration);
+	// Sending STUN requests and responses
+	void sendStunBindingRequest(unsigned int iteration);
+	void sendStunBindingResponse(unsigned int iteration);
 
-    // Timeouts
-    void updateConnectionLostTimeout();
-    void onConnectionLostTimeout();
+	// Timeouts
+	void updateConnectionLostTimeout();
+	void onConnectionLostTimeout();
 	void sendConnectionRestoreRequest();
-    void updateKeepAliveTimeout();
-    void onKeepAliveTimeout();
+	void updateKeepAliveTimeout();
+	void onKeepAliveTimeout();
 
-    std::chrono::steady_clock::time_point mLastSendTime;
-    std::chrono::steady_clock::time_point mLastReceiveTime;
+	std::chrono::steady_clock::time_point mLastSendTime;
+	std::chrono::steady_clock::time_point mLastReceiveTime;
 
-    // Scheduler and tasks
-    std::weak_ptr<Task> mTaskConnectTimeout;
-    std::weak_ptr<Task> mTaskSendStunConnectRequest;
-    std::weak_ptr<Task> mTaskSendStunConnectResponse;
-    std::weak_ptr<Task> mTaskConnectionLostTimeout;
-    std::weak_ptr<Task> mTaskConnectionRestoreTimeout;
-    std::weak_ptr<Task> mTaskExpireStunRequests;
-    std::weak_ptr<Task> mTaskKeepAliveTimeout;
+	// Scheduler and tasks
+	std::weak_ptr<Task> mTaskConnectTimeout;
+	std::weak_ptr<Task> mTaskSendStunConnectRequest;
+	std::weak_ptr<Task> mTaskSendStunConnectResponse;
+	std::weak_ptr<Task> mTaskConnectionLostTimeout;
+	std::weak_ptr<Task> mTaskConnectionRestoreTimeout;
+	std::weak_ptr<Task> mTaskExpireStunRequests;
+	std::weak_ptr<Task> mTaskKeepAliveTimeout;
 
-    ScopedScheduler mScheduler;
+	ScopedScheduler mScheduler;
 };
 
 } // namespace srtc

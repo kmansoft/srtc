@@ -124,7 +124,7 @@ private:
 	};
 	std::vector<LayerInfo> mVideoSimulcastLayerList;
 
-	void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer, std::shared_ptr<SdpAnswer> answer);
+	void networkThreadWorkerFunc();
 
 	void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
@@ -210,22 +210,20 @@ private:
 		std::list<LosePacketsItem> history;
 
 	public:
-		[[nodiscard]] bool hasBeenLost(uint32_t ssrc, uint16_t seq)
+		[[nodiscard]] bool shouldLosePacket(uint32_t ssrc, uint16_t seq)
 		{
 			for (const auto& item : history) {
 				if (item.ssrc == ssrc && item.seq == seq) {
-					return true;
+					return false;
 				}
 			}
-			return false;
-		}
 
-		void saveLost(uint32_t ssrc, uint16_t seq)
-		{
 			while (history.size() > 256) {
 				history.pop_front();
 			}
 			history.emplace_back(ssrc, seq);
+
+			return true;
 		}
 	};
 

@@ -335,6 +335,23 @@ void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<
 	}
 }
 
+void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList)
+{
+	for (const auto seq : nackList) {
+		ByteBuffer payload;
+		ByteWriter w(payload);
+
+		const auto ssrc = track->getSSRC();
+
+		w.writeU32(ssrc);
+		w.writeU16(seq);
+		w.writeU16(0);
+
+		const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
+		sendRtcpPacket(track, packet);
+	}
+}
+
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
 	const auto now = std::chrono::steady_clock::now();

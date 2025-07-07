@@ -88,6 +88,29 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 {
 }
 
+RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
+					 uint32_t ssrc,
+					 uint8_t payloadId,
+					 bool marker,
+					 uint32_t rollover,
+					 uint16_t sequence,
+					 uint32_t timestamp,
+					 uint8_t padding,
+					 RtpExtension&& extension,
+					 ByteBuffer&& payload)
+	: mTrack(track)
+	, mSSRC(ssrc)
+	, mPayloadId(payloadId)
+	, mMarker(marker)
+	, mRollover(rollover)
+	, mSequence(sequence)
+	, mTimestamp(timestamp)
+	, mPaddingSize(padding)
+	, mPayload(std::move(payload))
+	, mExtension(std::move(extension))
+{
+}
+
 RtpPacket::~RtpPacket() = default;
 
 std::shared_ptr<Track> RtpPacket::getTrack() const
@@ -140,7 +163,8 @@ RtpPacket::Output RtpPacket::generate() const
 	// V=2 | P | X | CC | M | PT
 	const auto pad = mPaddingSize != 0;
 	const auto ext = !mExtension.empty();
-	const uint16_t header = (2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7Fu);
+	const uint16_t header =
+		(2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (mPayloadId & 0x7Fu);
 	writer.writeU16(header);
 
 	writer.writeU16(mSequence);
@@ -209,7 +233,8 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 	// V=2 | P | X | CC | M | PT
 	const auto pad = mPaddingSize != 0;
 	const auto ext = !extension.empty();
-	const uint16_t header = (2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7Fu);
+	const uint16_t header =
+		(2 << 14) | (pad ? (1 << 13) : 0) | (ext ? (1 << 12) : 0) | (mMarker ? (1 << 7) : 0) | (rtxPayloadId & 0x7Fu);
 	writer.writeU16(header);
 
 	const auto packetSource = mTrack->getRtxPacketSource();
@@ -256,6 +281,7 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
 	RtpExtension extension;
 
 	if ((header & (1 << 12)) != 0) {
+		// There is an extension
 		if (reader.remaining() < 4) {
 			return {};
 		}
@@ -269,10 +295,12 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
 
 		auto extData = reader.readByteBuffer(extSize);
 
+		// Convert one byte to two byte extension
 		if (extId == RtpExtension::kOneByte && !extData.empty()) {
 			extData = RtpExtension::convertOneToTwoByte(extData);
 		}
 
+		// Remove padding from extension
 		ByteReader extReader(extData);
 		while (extReader.remaining() > 0) {
 			const auto extId2 = extReader.readU8();
@@ -310,7 +338,8 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
 		payload.resize(payloadSize);
 	}
 
-	return std::make_shared<RtpPacket>(track, marker, 0, sequence, timestamp, 0, std::move(extension), std::move(payload));
+	return std::make_shared<RtpPacket>(
+		track, ssrc, payloadId, marker, 0, sequence, timestamp, 0, std::move(extension), std::move(payload));
 }
 
 } // namespace srtc

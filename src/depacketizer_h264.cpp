@@ -68,10 +68,6 @@ std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
 				}
 
 				ByteBuffer  buf(packet.data() + reader.position(), size);
-
-				const auto dump = bin_to_hex(buf.data(), std::min<size_t>(16u, buf.size()));
-				std::printf("STAP_A frame: %5zu bytes, hex = %s\n", buf.size(), dump.c_str());
-
 				list.push_back(std::move(buf));
 
 				reader.skip(size);
@@ -119,9 +115,6 @@ std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& 
 			w.write(packet->data() + pos, packet->size() - pos);
 		}
 	}
-
-	const auto dump = bin_to_hex(buf.data(), std::min<size_t>(16u, buf.size()));
-	std::printf("FU_A  frame: %5zu bytes, hex = %s\n", buf.size(), dump.c_str());
 
 	list.push_back(std::move(buf));
 

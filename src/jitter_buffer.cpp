@@ -141,17 +141,11 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 		mItemList[seq_ext.value() & mCapacityMask] = item;
 	} else if (seq_ext.value() + mCapacity / 10 < mMinSeq) {
 		// Out of range, much less than min
-		LOG(SRTC_LOG_E,
-			"The new packet's sequence number %" PRIu64 " (0x%" PRIx64 ") is too late",
-			seq_ext.value(),
-			seq_ext.value());
+		LOG(SRTC_LOG_E, "The new packet's sequence number %u is too late, min = %u", seq, static_cast<uint16_t>(mMinSeq));
 		return;
 	} else if (seq_ext.value() - mCapacity / 10 > mMaxSeq) {
 		// Out of range, much greater than max
-		LOG(SRTC_LOG_E,
-			"The new packet's sequence number %" PRIu64 " (0x%" PRIx64 ") is too early",
-			seq_ext.value(),
-			seq_ext.value());
+		LOG(SRTC_LOG_E, "The new packet's sequence number %u is too early, max = %u", seq, static_cast<uint16_t>(mMaxSeq));
 		return;
 	}
 
@@ -210,41 +204,78 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 		}
 
 		while (mMaxSeq <= seq_ext.value() - 1) {
+			const auto lost = new Item;
+			lost->when_received = std::chrono::steady_clock::time_point::min();
+			lost->when_dequeue = std::chrono::steady_clock::time_point::max();
+			lost->when_nack_request = when_nack_request;
+			lost->when_nack_abandon = when_dequeue;
+
+			lost->received = false;
+			lost->nack_needed = true;
+
+			lost->seq_ext = mMaxSeq;
+			lost->rtp_timestamp_ext = 0;
+
+			//			const auto lost_nack_request_ms =
+			//				std::chrono::duration_cast<std::chrono::milliseconds>(when_nack_request.time_since_epoch()).count();
+			//			const auto lost_nack_abandon_ms =
+			//				std::chrono::duration_cast<std::chrono::milliseconds>(when_dequeue.time_since_epoch()).count();
+			//			const auto lost_now_ms =
+			//				std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+			//
+			//			LOG(SRTC_LOG_Z,
+			//				"Lost packet %u, nack_request = %ld, nack_abandon = %ld, lost_now = %ld, len = %ld",
+			//				static_cast<uint16_t>(lost->seq_ext),
+			//				lost_nack_request_ms,
+			//				lost_nack_abandon_ms,
+			//				lost_now_ms,
+			//				mLength.count());
+
+			const auto index = lost->seq_ext & mCapacityMask;
+			mItemList[index] = lost;
+
 			mMaxSeq += 1;
-
-			const auto spacer = new Item;
-			spacer->when_received = std::chrono::steady_clock::time_point::min();
-			spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
-			spacer->when_nack_request = when_nack_request;
-			spacer->when_nack_abandon = when_dequeue;
-
-			spacer->received = false;
-			spacer->nack_needed = true;
-
-			spacer->seq_ext = mMaxSeq;
-			spacer->rtp_timestamp_ext = 0;
-
-			const auto index = spacer->seq_ext & mCapacityMask;
-			mItemList[index] = spacer;
 		}
 
 		mMaxSeq += 1;
 		assert(mMaxSeq - 1 == seq_ext.value());
 
-		const auto index = seq_ext.value() & mCapacityMask;
 		item = new Item;
+		const auto index = seq_ext.value() & mCapacityMask;
 		mItemList[index] = item;
 	} else {
 		// Somewhere in the middle, we should already have an item there
 		const auto index = seq_ext.value() & mCapacityMask;
 		item = mItemList[index];
 		assert(item);
+
+		if (!item->received) {
+			LOG(SRTC_LOG_Z, "*** Received a packet from NACK: %u", seq);
+		}
 	}
 
 	item->when_received = now;
 	item->when_dequeue = when_dequeue;
 	item->when_nack_request = when_nack_request;
 	item->when_nack_abandon = when_dequeue;
+
+	//	const auto when_nack_request_ms =
+	//		std::chrono::duration_cast<std::chrono::milliseconds>(when_nack_request.time_since_epoch()).count();
+	//	const auto when_dequeue_ms =
+	//		std::chrono::duration_cast<std::chrono::milliseconds>(when_dequeue.time_since_epoch()).count();
+	//	const auto when_nack_abandon_ms =
+	//		std::chrono::duration_cast<std::chrono::milliseconds>(when_dequeue.time_since_epoch()).count();
+	//	const auto now_ms =
+	//		std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+	//
+	//	LOG(SRTC_LOG_Z,
+	//		"New packet %u, nack_request = %ld, dequeue = %ld, nack_abandon = %ld, now = %ld, len = %ld",
+	//		seq,
+	//		when_nack_request_ms,
+	//		when_dequeue_ms,
+	//		when_nack_abandon_ms,
+	//		now_ms,
+	//		mLength.count());
 
 	item->received = true;
 	item->nack_needed = false;
@@ -264,6 +295,10 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
 	}
 
 	const auto now = std::chrono::steady_clock::now();
+	const auto cutoff = now + std::chrono::milliseconds(defaultTimeout);
+
+	std::optional<int> when_dequeue;
+	std::optional<int> when_abandon;
 
 	// We add packets on the Max end and consume them from the Min end
 	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
@@ -273,19 +308,40 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
 
 		// Depacketization
 		if (item->received) {
-			return static_cast<int>(
-				std::chrono::duration_cast<std::chrono::milliseconds>(item->when_dequeue - now).count());
+			if (!when_dequeue.has_value()) {
+				when_dequeue = static_cast<int>(
+					std::chrono::duration_cast<std::chrono::milliseconds>(item->when_dequeue - now).count());
+			}
 		}
 
-		if (item->when_dequeue > now + std::chrono::milliseconds(defaultTimeout)) {
+		// Abandoning nacks
+		if (!item->received) {
+			if (!when_abandon.has_value()) {
+				when_abandon = static_cast<int>(
+					std::chrono::duration_cast<std::chrono::milliseconds>(item->when_nack_abandon - now).count());
+			}
+		}
+
+		if (when_dequeue.has_value() && when_abandon.has_value()) {
+			break;
+		}
+		if (item->when_dequeue > cutoff && item->when_nack_abandon > cutoff) {
 			break;
 		}
 	}
 
-	return defaultTimeout;
+	auto timeout = defaultTimeout;
+	if (when_dequeue.has_value() && when_dequeue.value() < timeout) {
+		timeout = when_dequeue.value();
+	}
+	if (when_abandon.has_value() && when_abandon.value() < timeout) {
+		timeout = when_abandon.value();
+	}
+
+	return timeout;
 }
 
-std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
+std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 {
 	std::vector<std::shared_ptr<EncodedFrame>> result;
 
@@ -375,6 +431,13 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 			}
 		} else if (item->when_nack_abandon <= now) {
 			// A nack that was never received - delete and keep going
+			const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+			LOG(SRTC_LOG_Z,
+				"***** Forgetting a packet %u which was never received, now = %ld",
+				static_cast<unsigned int>(item->seq_ext & 0xFFFFu),
+				now_ms);
+
 			mItemList[index] = nullptr;
 			mMinSeq += 1;
 
@@ -387,9 +450,46 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::dequeue()
 	return result;
 }
 
+std::vector<uint16_t> JitterBuffer::processNack()
+{
+	std::vector<uint16_t> result;
+
+	if (!mItemList || mMinSeq == mMaxSeq) {
+		return result;
+	}
+
+	const auto now = std::chrono::steady_clock::now();
+
+	// We add packets on the Max end and consume them from the Min end
+	for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+		const auto index = seq & mCapacityMask;
+		const auto item = mItemList[index];
+		assert(item);
+
+		if (item->when_nack_request <= now) {
+			if (!item->received && item->nack_needed) {
+				item->nack_needed = false;
+
+				result.push_back(static_cast<uint16_t>(item->seq_ext));
+
+				const auto now_ms =
+					std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+				LOG(SRTC_LOG_Z,
+					"***** Sending nack for %u, now = %ld",
+					static_cast<unsigned int>(item->seq_ext & 0xFFFFu),
+					now_ms);
+			}
+		} else if (item->when_nack_abandon <= now) {
+			break;
+		}
+	}
+
+	return result;
+}
+
 bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 {
-	auto index = (mMinSeq) & mCapacityMask;
+	auto index = (mMinSeq)&mCapacityMask;
 	auto item = mItemList[index];
 	assert(item);
 	assert(item->received);
