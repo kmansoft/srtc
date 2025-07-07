@@ -2,6 +2,7 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/encoded_frame.h"
+#include "srtc/extended_value.h"
 #include "srtc/srtc.h"
 
 #include <chrono>
@@ -17,21 +18,6 @@ class Depacketizer;
 class Track;
 class RtpPacket;
 class RtcpPacket;
-
-// Extends sequential values to 64 bits on rollover, used for SEQ and RTP timestamps
-
-template <typename T>
-class ExtendedValue
-{
-public:
-	ExtendedValue();
-
-	std::optional<uint64_t> extend(T src);
-
-private:
-	uint64_t mRollover;
-	std::optional<T> mLast;
-};
 
 // Jitter buffer, has a fixed max capacity (number of packets) and duration, for now
 

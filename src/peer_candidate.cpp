@@ -22,6 +22,7 @@
 #include "srtc/sdp_offer.h"
 #include "srtc/send_pacer.h"
 #include "srtc/send_rtp_history.h"
+#include "srtc/sender_report.h"
 #include "srtc/sender_reports_history.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
@@ -314,6 +315,45 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
 			sendRtcpPacket(track, packet);
 
 			mSenderReportsHistory->save(ssrc, ntp);
+		}
+	}
+}
+
+void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList)
+{
+	for (const auto& track : trackList) {
+		if (track->getDirection() == Direction::Subscribe) {
+			const auto ssrc = track->getSSRC();
+			const auto stats = track->getStats();
+
+			const auto seq = stats->getReceivedHighestSeqEx();
+			const auto sr = stats->getReceivedSenderReport();
+
+			ByteBuffer payload;
+			ByteWriter w(payload);
+
+			w.writeU32(ssrc);
+			w.writeU32(0); // TODO: fraction lost | cumulative number of packets lost
+			w.writeU32(static_cast<uint32_t>(seq));
+			w.writeU32(0); // TODO: interarrival jitter
+
+			if (sr.has_value()) {
+				const auto lastSRMiddle32 = static_cast<uint32_t>(sr.value().ntp.seconds & 0xFFFFu) << 16 ||
+											static_cast<uint32_t>(sr.value().ntp.fraction >> 16) % 0xFFFFu;
+				const auto lastSRDelayDelta = std::chrono::steady_clock::now() - sr.value().when;
+				const auto lastSRDelayValue =
+					static_cast<int64_t>(65536) * 1000 /
+					std::chrono::duration_cast<std::chrono::milliseconds>(lastSRDelayDelta).count();
+
+				w.writeU32(lastSRMiddle32);
+				w.writeU32(lastSRDelayValue);
+			} else {
+				w.writeU32(0);
+				w.writeU32(0);
+			}
+
+			const auto packet = std::make_shared<RtcpPacket>(0, 0, RtcpPacket::kReceiverReport, std::move(payload));
+			sendRtcpPacket(track, packet);
 		}
 	}
 }
@@ -749,9 +789,15 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
 				LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 
-				if (const auto track = findReceivedMediaPacketTrack(output)) {
+				if (const auto track = findTrack(output)) {
 					const auto packet = RtpPacket::fromUdpPacket(track, output);
 					if (packet) {
+						const auto stats = track->getStats();
+						;
+
+						stats->incrementReceivedPackets(1);
+						stats->incrementReceivedBytes(buf.size());
+
 						onReceivedMediaPacket(packet);
 					}
 				}
@@ -773,7 +819,11 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 
 	LOG(SRTC_LOG_V, "RTCP payload = %d, len = %zu, SSRC = %u", rtcpPT, payload.size(), packet->getSSRC());
 
-	if (rtcpPT == 201) {
+	if (rtcpPT == 200) {
+		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.1
+		// Sender Report
+		onReceivedControlMessage_200(packet->getSSRC(), rtcpReader);
+	} else if (rtcpPT == 201) {
 		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
 		// Receiver Report
 		onReceivedControlMessage_201(rtcpReader);
@@ -810,15 +860,53 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
 
+	const auto track = packet->getTrack();
+
 	LOG(SRTC_LOG_V,
 		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
-		to_string(packet->getTrack()->getMediaType()).c_str(),
+		to_string(track->getMediaType()).c_str(),
 		packet->getSSRC(),
 		packet->getSequence(),
 		packet->getPayloadId(),
 		packet->getPayloadSize());
 
 	mListener->onCandidateReceivedMediaPacket(this, packet);
+}
+
+void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader& rtcpReader)
+{
+	const auto track = findTrack(ssrc);
+
+	if (track && rtcpReader.remaining() >= 20) {
+		const auto ntp_high = rtcpReader.readU32();
+		const auto ntp_low = rtcpReader.readU32();
+		const auto rtp_timestamp = rtcpReader.readU32();
+		const auto packet_count = rtcpReader.readU32();
+		const auto octet_count = rtcpReader.readU32();
+
+		LOG(SRTC_LOG_Z,
+			"*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
+			ssrc,
+			ntp_high,
+			ntp_low,
+			packet_count,
+			octet_count,
+			to_string(track->getMediaType()).c_str());
+
+		SenderReport sr;
+		sr.when = std::chrono::steady_clock::now();
+		sr.ntp.seconds = static_cast<int32_t>(ntp_high);
+		sr.ntp.fraction = ntp_low;
+		sr.rtp = rtp_timestamp;
+		sr.packet_count = packet_count;
+		sr.octet_count = octet_count;
+
+		const auto stats = track->getStats();
+		stats->setReceivedSenderReport(sr);
+
+	} else {
+		LOG(SRTC_LOG_E, "Cannot find track with ssrc = %u for a sender report", ssrc);
+	}
 }
 
 void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
@@ -943,7 +1031,18 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 	}
 }
 
-std::shared_ptr<Track> PeerCandidate::findReceivedMediaPacketTrack(ByteBuffer& packet)
+std::shared_ptr<Track> PeerCandidate::findTrack(uint32_t ssrc)
+{
+	for (const auto& track : mTrackList) {
+		if (track->getSSRC() == ssrc) {
+			return track;
+		}
+	}
+
+	return {};
+}
+
+std::shared_ptr<Track> PeerCandidate::findTrack(ByteBuffer& packet)
 {
 	if (packet.size() < 12) {
 		return {};
