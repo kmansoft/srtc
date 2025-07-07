@@ -26,7 +26,9 @@ Features:
 - Just merged the initial piece of work.
 - Jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
 - Sends nacks, understands RTX.
-- No explicit media synchronization based on sender reports NTP timestamps (yet).
+- Does not send Receiver Reports (yet).
+- Does not support TWCC reporting (yet).
+- No explicit media synchronization based on sender reports NTP timestamps (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to fix this.
 - No speed up / slow down for audio samples (yet).
 
 ### API design 
@@ -156,6 +158,8 @@ Options:
   -h, --help           Show this help message
 ```
 
+The subscribe tool handles Ctrl+C and SIGTERM and terminates gracefully, flushing and closing the output files.
+
 Note that *.h264 files have no frame rate information, and so may play "very fast" depending on your video player. If using
 VLC, you can use the below option to adjust playback speed:
 
@@ -195,18 +199,18 @@ This library is my side project.
 
 ### Future plans
 
-- I'd like to replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly. This is done.
+- Replace Cisco's SRTP library with my new code using OpenSSL / BoringSSL directly. This is done.
 
-- I'd lke to implement support for Simulcast (multiple video layers on the same peer connection). This is done.
+- Implement support for Simulcast (multiple video layers on the same peer connection). This is done.
 
-- Google's Transport Wide Congestion Control. This is mostly done and will continue to improve.
+- Support Google's Transport Wide Congestion Control. This is mostly done and will continue to improve.
 
 - Windows port. This is done.
 
 - Releases. This is done.
 
-- Start implementing subscribing. A very large piece of work. Started.
-
-- Support for more codecs can be added, but I currently only have access to systems which support H264. If you'd
+- Start implementing subscribing. Started, the initial piece of work has been merged.
+  
+- Support for more codecs, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
 supports those.
