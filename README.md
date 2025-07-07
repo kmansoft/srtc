@@ -1,8 +1,8 @@
 ### srtc - a "simple" WebRTC library
 
-This is srtc, a "simple" WebRTC library (publish side is done and working quite well, subscribe is in progress, works but needs more time).
+This is srtc, a "simple" WebRTC library (publish side is done and working quite well, subscribe is in progress, works but needs more time to mature).
 
-Features:
+#### Features:
 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
@@ -24,11 +24,12 @@ Features:
 #### State of subscribe
 
 - Just merged the initial piece of work.
-- Jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
+- The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
 - Sends nacks, understands RTX.
+- Sends PLI (key frame requests).
 - Does not send Receiver Reports (yet).
 - Does not support TWCC reporting (yet).
-- No explicit media synchronization based on sender reports NTP timestamps (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to fix this.
+- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to fix this.
 - No speed up / slow down for audio samples (yet).
 
 ### API design 
@@ -37,12 +38,12 @@ Efficient. Can be used for publishing media from a server side system i.e. where
 perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's implementation is not a good choice
 due to its hunger for threads.
 
-Has a simple command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
+Has a command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
 
-There is a subscribe tool as well which can save media to .ogg and .h264 files.
+Has a command line tool to subscribe to audio and/or video, which can save media to .ogg and .h264 files.
 
-Media encoding is deliberately out of scope of this library. It expects the application to provide encoded media samples,
-but does take care of packetization.
+Media encoding / decoding and presentation are deliberately out of scope of this library. For publishing, the application needs to
+provide encoded media samples. For subscribing, the application receives encoded media samples which it needs to decode and present.
 
 The API is deliberately not compatible with Google's, but the concepts are similar. The Google WebRTC library is inteded
 for browsers, and therefore its API has to match the API defined for JavaScript and cannot be changed. I decided that it's
@@ -50,11 +51,11 @@ not necessary to follow the JavaScript API.
 
 ### Basic use from C++
 
-Create a PeerConnection, ask it to create an SDP offer, send it to a WHIP server using your favorite HTTP library,
-then set the SDP answer on the PeerConnection. This will initiate a network connection and its state will be emitted
-via the state callback.
+Create a PeerConnection, ask it to create an SDP offer, send it to a WHIP / WHEP server using your favorite HTTP library,
+then set the SDP answer on the PeerConnection. This will initiate a network connection, whose state will be emitted via the connection
+state callback.
 
-Once connected, you can start sending audio and video samples using these methods:
+Once the peer is connected, you can start publishing audio and video samples using these methods:
 
 - setVideoSingleCodecSpecificData
 - publishVideoSingleFrame
@@ -66,9 +67,10 @@ For simulcast, the methods are similar but different:
 - setVideoSimulcastCodecSpecificData
 - publishVideoSimulcastFrame
 
+For subscribing, use the `setSubscribeEncodedFrameListener` method to receive encoded frames as they come out of the jitter buffer.
+
 The peer connection will maintain connectivity using STUN probe requests if no media is flowing and will attempt to
-re-establish connectivity if there is no data received from the server. If the re-connection fails, so will the
-overall connection state.
+re-establish connectivity as needed. If the re-connection fails, so will the overall connection state.
 
 ### A command line tool for publishing
 
