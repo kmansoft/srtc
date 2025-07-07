@@ -30,21 +30,30 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build ${{github.workspace}}/build --target srtc_publish
+          cmake --build ${{github.workspace}}/build --target srtc_publish --target srtc_subscribe
 
       - name: Package
         run: |
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_publish release/
+          cp ${{ github.workspace }}/build/srtc_subscribe release/
           cd release
           strip srtc_publish || true
           tar -czvf srtc_publish-linux.tar.gz srtc_publish
+          strip srtc_subscribe || true
+          tar -czvf srtc_subscribe-linux.tar.gz srtc_subscribe
 
-      - name: Upload artifacts
+      - name: Upload publish
         uses: actions/upload-artifact@v4
         with:
           name: srtc_publish-linux
           path: release/srtc_publish-linux.tar.gz
+
+      - name: Upload subscribe
+        uses: actions/upload-artifact@v4
+        with:
+          name: srtc_subscribe-linux
+          path: release/srtc_subscribe-linux.tar.gz
 
   build-macos:
     runs-on: macos-15 # For better compatibility
@@ -66,21 +75,30 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build ${{ github.workspace }}/build --target srtc_publish
+          cmake --build ${{ github.workspace }}/build --target srtc_publish --target subscribe
 
       - name: Package
         run: |
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_publish release/
+          cp ${{ github.workspace }}/build/srtc_subscribe release/
           cd release
           strip srtc_publish || true
           tar -czvf srtc_publish-macos.tar.gz srtc_publish
+          strip srtc_subscribe || true
+          tar -czvf srtc_subscribe-macos.tar.gz srtc_subscribe
 
-      - name: Upload artifacts
+      - name: Upload publish
         uses: actions/upload-artifact@v4
         with:
           name: srtc_publish-macos
           path: release/srtc_publish-macos.tar.gz
+
+      - name: Upload subscribe
+        uses: actions/upload-artifact@v4
+        with:
+          name: srtc_subscribe-macos
+          path: release/srtc_subscribe-macos.tar.gz
 
   build-windows:
     runs-on: windows-2022
@@ -104,20 +122,29 @@ jobs:
           cmake `
             --build ${{github.workspace}}/build `
             --target srtc `
-            --target srtc_publish
+            --target srtc_publish `
+            --target srtc_subscribe
 
       - name: Package
         run: |
           mkdir -p release
           cp ${{ github.workspace }}/build/srtc_publish.exe release/
+          cp ${{ github.workspace }}/build/srtc_subscribe.exe release/
           cd release
           7z a -tzip srtc_publish-windows.zip srtc_publish.exe
+          7z a -tzip srtc_subscribe-windows.zip srtc_subscribe.exe
 
-      - name: Upload artifacts
+      - name: Upload publish
         uses: actions/upload-artifact@v4
         with:
           name: srtc_publish-windows
           path: release/srtc_publish-windows.zip
+
+      - name: Upload subscribe
+        uses: actions/upload-artifact@v4
+        with:
+          name: srtc_subscribe-windows
+          path: release/srtc_subscribe-windows.zip
 
   video-files:
     runs-on: ubuntu-latest
@@ -155,8 +182,11 @@ jobs:
         with:
           files: |
             artifacts/srtc_publish-linux/srtc_publish-linux.tar.gz
+            artifacts/srtc_subscribe-linux/srtc_subscribe-linux.tar.gz
             artifacts/srtc_publish-macos/srtc_publish-macos.tar.gz
+            artifacts/srtc_subscribe-macos/srtc_subscribe-macos.tar.gz
             artifacts/srtc_publish-windows/srtc_publish-windows.zip
+            artifacts/srtc_subscribe-windows/srtc_subscribe-windows.zip
             artifacts/video-files/sintel.h264
             artifacts/video-files/sintel_with_slices.h264
           draft: false
