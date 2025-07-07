@@ -1,21 +1,21 @@
+#include "srtc/encoded_frame.h"
 #include "srtc/h264.h"
 #include "srtc/logging.h"
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
-#include "srtc/encoded_frame.h"
 
-#include "media_writer_ogg.h"
 #include "media_writer_h26x.h"
+#include "media_writer_ogg.h"
 
 #include "http_whip_whep.h"
 
+#include <csignal>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <csignal>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -65,7 +65,7 @@ void printUsage(const char* programName)
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
 	std::cout << "  --oa <filename>      Save video to a file (h264 format)" << std::endl;
-	std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
+	std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -275,18 +275,19 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	peerConnection->setSubscribeEncodedFrameListener([mediaWriterAudio, mediaWriterVideo](const std::shared_ptr<EncodedFrame>& frame) {
-		const auto mediaType = frame->track->getMediaType();
-		if (mediaType == srtc::MediaType::Audio) {
-			if (mediaWriterAudio) {
-				mediaWriterAudio->send(frame);
+	peerConnection->setSubscribeEncodedFrameListener(
+		[mediaWriterAudio, mediaWriterVideo](const std::shared_ptr<EncodedFrame>& frame) {
+			const auto mediaType = frame->track->getMediaType();
+			if (mediaType == srtc::MediaType::Audio) {
+				if (mediaWriterAudio) {
+					mediaWriterAudio->send(frame);
+				}
+			} else if (mediaType == srtc::MediaType::Video) {
+				if (mediaWriterVideo) {
+					mediaWriterVideo->send(frame);
+				}
 			}
-		} else if (mediaType == srtc::MediaType::Video) {
-			if (mediaWriterVideo) {
-				mediaWriterVideo->send(frame);
-			}
-		}
-	});
+		});
 
 	// Connect the peer connection
 	peerConnection->setOffer(offer);
@@ -325,7 +326,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Wait a little and exit
-	std::this_thread::sleep_for(std::chrono::milliseconds (100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	peerConnection->close();
 

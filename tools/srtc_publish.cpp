@@ -293,7 +293,7 @@ void printUsage(const char* programName)
 	std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  -i, --info           Print input file info" << std::endl;
-	std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
+	std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
 	std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
@@ -487,7 +487,7 @@ int main(int argc, char* argv[])
 	playVideoFile(peerConnection, inputFileData);
 
 	// Wait a little and exit
-	std::this_thread::sleep_for(std::chrono::milliseconds (100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	peerConnection->close();
 
