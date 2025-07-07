@@ -17,6 +17,7 @@ class RtcpPacket
 {
 public:
 	static constexpr uint8_t kSenderReport = 200;
+	static constexpr uint8_t kReceiverReport = 201;
 	static constexpr uint8_t kFeedback = 205;
 	static constexpr uint8_t kPayloadSpecific = 206;
 

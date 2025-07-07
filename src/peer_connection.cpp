@@ -29,7 +29,7 @@ namespace
 
 std::once_flag gInitFlag;
 
-constexpr auto kSenderReportsInterval = std::chrono::seconds(1);
+constexpr auto kReportsInterval = std::chrono::seconds(1);
 constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
 
 } // namespace
@@ -699,9 +699,9 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 		trackItem->getRtcpPacketSource()->clear();
 	}
 
-	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports =
-		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	Task::cancelHelper(mTaskReports);
+	mTaskReports =
+		mLoopScheduler->submit(kReportsInterval, __FILE__, __LINE__, [this] { sendReports(); });
 
 	Task::cancelHelper(mTaskConnectionStats);
 	mTaskConnectionStats =
@@ -784,6 +784,10 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 
 	if (mDirection == Direction::Subscribe) {
 		const auto track = packet->getTrack();
+
+		const auto stats = track->getStats();
+		stats->setHighestReceivedSeq(packet->getSequence());
+
 		if (mVideoSingleTrack == track) {
 			if (const auto buffer = mJitterBufferVideo) {
 				assert(buffer->getTrack() == track);
@@ -798,11 +802,11 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 	}
 }
 
-void PeerConnection::sendSenderReports()
+void PeerConnection::sendReports()
 {
-	Task::cancelHelper(mTaskSenderReports);
-	mTaskSenderReports =
-		mLoopScheduler->submit(kSenderReportsInterval, __FILE__, __LINE__, [this] { sendSenderReports(); });
+	Task::cancelHelper(mTaskReports);
+	mTaskReports =
+		mLoopScheduler->submit(kReportsInterval, __FILE__, __LINE__, [this] { sendReports(); });
 
 	if (mSelectedCandidate) {
 		std::lock_guard lock(mMutex);
@@ -810,6 +814,7 @@ void PeerConnection::sendSenderReports()
 		if (mConnectionState == ConnectionState::Connected) {
 			const auto trackList = collectTracks();
 			mSelectedCandidate->sendSenderReports(trackList);
+			mSelectedCandidate->sendReceiverReports(trackList);
 		}
 	}
 }

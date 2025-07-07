@@ -175,9 +175,9 @@ private:
 	std::shared_ptr<JitterBuffer> mJitterBufferVideo;
 	std::shared_ptr<JitterBuffer> mJitterBufferAudio;
 
-	// Sender reports
-	void sendSenderReports();
-	std::weak_ptr<Task> mTaskSenderReports;
+	// Sender and received reports
+	void sendReports();
+	std::weak_ptr<Task> mTaskReports;
 
 	// Connection stats
 	void sendConnectionStats();
