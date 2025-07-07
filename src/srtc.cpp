@@ -12,6 +12,18 @@
 namespace srtc
 {
 
+std::string to_string(MediaType m)
+{
+	switch (m) {
+	case MediaType::Video:
+		return "video";
+	case MediaType::Audio:
+		return "audio";
+	default:
+		return "unknown-" + std::to_string(static_cast<unsigned int>(m));
+	}
+}
+
 std::string to_string(const anyaddr& addr)
 {
     char buf[INET6_ADDRSTRLEN + 16];

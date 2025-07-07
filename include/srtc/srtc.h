@@ -21,16 +21,21 @@ typedef int SocketHandle;
 #endif
 
 enum class Codec {
-    None = 0,
     H264 = 1,
     Opus = 100,
     Rtx = 200
 };
 
 enum class MediaType {
-    None = 0,
     Video = 1,
     Audio = 2
+};
+
+std::string to_string(MediaType m);
+
+enum class Direction {
+	Publish = 0,
+	Subscribe = 1
 };
 
 union anyaddr {
@@ -38,6 +43,8 @@ union anyaddr {
     struct sockaddr_in sin_ipv4;
     struct sockaddr_in6 sin_ipv6;
 };
+
+std::string to_string(const anyaddr& addr);
 
 struct Host {
     union anyaddr addr;
@@ -52,7 +59,12 @@ struct PublishConnectionStats {
 	float bandwidth_suggested_kbit_per_second;
 };
 
-std::string to_string(const anyaddr& addr);
+enum class PacketKind {
+	Standalone = 0,
+	Start = 1,
+	Middle = 2,
+	End = 3
+};
 
 #if defined(__clang__) || defined(__GNUC__)
 

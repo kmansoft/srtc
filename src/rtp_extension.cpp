@@ -70,4 +70,38 @@ RtpExtension RtpExtension::copy() const
     return { mId, mData.copy() };
 }
 
+ByteBuffer RtpExtension::convertOneToTwoByte(const ByteBuffer& src)
+{
+	ByteBuffer buf;
+	ByteWriter writer(buf);
+
+	ByteReader reader(src);
+
+	while (reader.remaining() > 1) {
+		const auto value = reader.readU8();
+		if (value == 0) {
+			break;
+		}
+
+		const auto id = static_cast<uint8_t>(value >> 4);
+		if (id == 0x0F) {
+			break;
+		}
+
+		const auto len = static_cast<uint8_t>(value & 0x0Fu) + 1u;
+		if (reader.remaining() < len) {
+			break;
+		}
+
+		uint8_t extbuf[16];
+		reader.read(extbuf, len);;
+
+		writer.writeU8(id);
+		writer.writeU8(len);
+		writer.write(extbuf, len);
+	}
+
+	return buf;
+}
+
 } // namespace srtc

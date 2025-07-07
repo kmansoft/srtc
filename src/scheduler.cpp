@@ -303,7 +303,7 @@ int LoopScheduler::getTimeoutMillis(int defaultValue) const
     if (diff <= std::chrono::milliseconds::zero()) {
         return 0;
     }
-    if (diff.count() > std::numeric_limits<int>::max()) {
+    if (diff.count() > std::numeric_limits<unsigned int>::max()) {
         return std::numeric_limits<int>::max();
     }
     return static_cast<int>(diff.count());

@@ -2,11 +2,14 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
+#include "srtc/jitter_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
+#include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/srtc.h"
+#include "srtc/subscribe_config.h"
 #include "srtc/track_selector.h"
 
 #include <functional>
@@ -30,127 +33,203 @@ class EventLoop;
 class PeerConnection final : public PeerCandidateListener
 {
 public:
-    PeerConnection();
-    ~PeerConnection();
+	explicit PeerConnection(Direction direction);
+	~PeerConnection() override;
 
-    std::shared_ptr<SdpOffer> createPublishSdpOffer(const OfferConfig& config,
-                                                    const std::optional<PubVideoConfig>& videoConfig,
-                                                    const std::optional<PubAudioConfig>& audioConfig);
-    Error setSdpOffer(const std::shared_ptr<SdpOffer>& offer);
+	// SDP offer
+	using OfferAndError = std::pair<std::shared_ptr<SdpOffer>, Error>;
 
-    std::pair<std::shared_ptr<SdpAnswer>, Error> parsePublishSdpAnswer(const std::shared_ptr<SdpOffer>& offer,
-                                                                       const std::string& answer,
-                                                                       const std::shared_ptr<TrackSelector>& selector);
-    Error setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer);
+	OfferAndError createPublishOffer(const PubOfferConfig& pubConfig,
+									 const std::optional<PubVideoConfig>& videoConfig,
+									 const std::optional<PubAudioConfig>& audioConfig);
+	OfferAndError createSubscribeOffer(const SubOfferConfig& subConfig,
+									   const std::optional<SubVideoConfig>& videoConfig,
+									   const std::optional<SubAudioConfig>& audioConfig);
+	Error setOffer(const std::shared_ptr<SdpOffer>& offer);
 
-    std::shared_ptr<SdpOffer> getSdpOffer() const;
-    std::shared_ptr<SdpAnswer> getSdpAnswer() const;
+	// SDP answer
+	using AnswerAndError = std::pair<std::shared_ptr<SdpAnswer>, Error>;
 
-    std::shared_ptr<Track> getVideoSingleTrack() const;
-    std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
-    std::shared_ptr<Track> getAudioTrack() const;
+	AnswerAndError parsePublishAnswer(const std::shared_ptr<SdpOffer>& offer,
+									  const std::string& answer,
+									  const std::shared_ptr<TrackSelector>& selector);
+	AnswerAndError parseSubscribeAnswer(const std::shared_ptr<SdpOffer>& offer,
+										const std::string& answer,
+										const std::shared_ptr<TrackSelector>& selector);
+	Error setAnswer(const std::shared_ptr<SdpAnswer>& answer);
 
-    enum class ConnectionState {
-        Inactive = 0,
-        Connecting = 1,
-        Connected = 2,
-        Failed = 100,
-        Closed = 200
-    };
-    using ConnectionStateListener = std::function<void(ConnectionState state)>;
-    void setConnectionStateListener(const ConnectionStateListener& listener);
+	std::shared_ptr<SdpOffer> getOffer() const;
+	std::shared_ptr<SdpAnswer> getAnswer() const;
 
-    using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
-    void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
+	std::shared_ptr<Track> getVideoSingleTrack() const;
+	std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
+	std::shared_ptr<Track> getAudioTrack() const;
 
-    Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
-    Error publishVideoSingleFrame(ByteBuffer&& buf);
+	// Connection state
+	enum class ConnectionState {
+		Inactive = 0,
+		Connecting = 1,
+		Connected = 2,
+		Failed = 100,
+		Closed = 200
+	};
+	using ConnectionStateListener = std::function<void(ConnectionState state)>;
+	void setConnectionStateListener(const ConnectionStateListener& listener);
 
-    Error setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list);
-    Error publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf);
+	// Publish stats
+	using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
+	void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
 
-    Error publishAudioFrame(ByteBuffer&& buf);
+	// Publishing media
+	Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
+	Error publishVideoSingleFrame(ByteBuffer&& buf);
+
+	Error setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list);
+	Error publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf);
+
+	Error publishAudioFrame(ByteBuffer&& buf);
+
+	// Subscribing
+	using SubscribeEncodedFrameListener = std::function<void(const std::shared_ptr<EncodedFrame>&)>;
+	void setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener);
+
+	// Closing
+	void close();
 
 private:
-    mutable std::mutex mMutex;
+	const Direction mDirection;
 
-    std::shared_ptr<SdpOffer> mSdpOffer SRTC_GUARDED_BY(mMutex);
-    std::shared_ptr<SdpAnswer> mSdpAnswer SRTC_GUARDED_BY(mMutex);
+	mutable std::mutex mMutex;
 
-    std::shared_ptr<Track> mVideoSingleTrack SRTC_GUARDED_BY(mMutex);
-    std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList SRTC_GUARDED_BY(mMutex);
-    std::shared_ptr<Track> mAudioTrack SRTC_GUARDED_BY(mMutex);
+	std::shared_ptr<SdpOffer> mSdpOffer SRTC_GUARDED_BY(mMutex);
+	std::shared_ptr<SdpAnswer> mSdpAnswer SRTC_GUARDED_BY(mMutex);
 
-    struct LayerInfo {
-        LayerInfo(const std::string& ridName,
-                  const std::shared_ptr<Track>& track,
-                  const std::shared_ptr<Packetizer>& packetizer)
-            : ridName(ridName)
-            , track(track)
-            , packetizer(packetizer)
-        {
-        }
+	std::shared_ptr<Track> mVideoSingleTrack;
+	std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList;
+	std::shared_ptr<Track> mAudioTrack;
 
-        std::string ridName;
-        std::shared_ptr<Track> track;
-        std::shared_ptr<Packetizer> packetizer;
-    };
-    std::vector<LayerInfo> mVideoSimulcastLayerList;
+	struct LayerInfo {
+		LayerInfo(const std::string& ridName,
+				  const std::shared_ptr<Track>& track,
+				  const std::shared_ptr<Packetizer>& packetizer)
+			: ridName(ridName)
+			, track(track)
+			, packetizer(packetizer)
+		{
+		}
 
-    void networkThreadWorkerFunc(std::shared_ptr<SdpOffer> offer, std::shared_ptr<SdpAnswer> answer);
+		std::string ridName;
+		std::shared_ptr<Track> track;
+		std::shared_ptr<Packetizer> packetizer;
+	};
+	std::vector<LayerInfo> mVideoSimulcastLayerList;
 
-    void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
+	void networkThreadWorkerFunc();
 
-    void startConnecting();
+	void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
-    std::vector<std::shared_ptr<Track>> collectTracksLocked() const SRTC_SHARED_LOCKS_REQUIRED(mMutex);
+	void startConnecting();
 
-    bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
-    bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
-    std::thread mThread SRTC_GUARDED_BY(mMutex);
+	std::vector<std::shared_ptr<Track>> collectTracks() const;
 
-    // Event loop
-    const std::shared_ptr<EventLoop> mEventLoop SRTC_GUARDED_BY(mMutex);
+	bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
+	bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
+	std::thread mThread SRTC_GUARDED_BY(mMutex);
 
-    struct FrameToSend {
-        std::shared_ptr<Track> track;
-        std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;              // possibly empty
-        std::vector<ByteBuffer> csd; // possibly empty
-    };
+	// Event loop
+	const std::shared_ptr<EventLoop> mEventLoop SRTC_GUARDED_BY(mMutex);
 
-    std::list<FrameToSend> mFrameSendQueue;
+	struct FrameToSend {
+		std::shared_ptr<Track> track;
+		std::shared_ptr<Packetizer> packetizer;
+		ByteBuffer buf;				 // possibly empty
+		std::vector<ByteBuffer> csd; // possibly empty
+	};
 
-    // PeerCandidateListener
-    void onCandidateHasDataToSend(PeerCandidate* candidate) override;
-    void onCandidateConnecting(PeerCandidate* candidate) override;
-    void onCandidateIceSelected(PeerCandidate* candidate) override;
-    void onCandidateConnected(PeerCandidate* candidate) override;
-    void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
+	std::list<FrameToSend> mFrameSendQueue;
 
-    // Overall connection state and listener
-    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
+	// Jitter buffer processing
+	void processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer);
 
-    std::mutex mListenerMutex;
-    ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
-    PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
+	// PeerCandidateListener
+	void onCandidateHasDataToSend(PeerCandidate* candidate) override;
+	void onCandidateConnecting(PeerCandidate* candidate) override;
+	void onCandidateIceSelected(PeerCandidate* candidate) override;
+	void onCandidateConnected(PeerCandidate* candidate) override;
+	void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
+	void onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet) override;
 
-    // Packetizers
-    std::shared_ptr<Packetizer> mVideoSinglePacketizer SRTC_GUARDED_BY(mMutex);
-    std::shared_ptr<Packetizer> mAudioPacketizer SRTC_GUARDED_BY(mMutex);
+	// Overall connection state and listener
+	ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
 
-    // Sender reports
-    void sendSenderReports();
-    std::weak_ptr<Task> mTaskSenderReports;
+	std::mutex mListenerMutex;
+	ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
+	PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
+	SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
 
-    // Connection stats
-    void sendConnectionStats();
-    std::weak_ptr<Task> mTaskConnectionStats;
+	// Packetizers
+	std::shared_ptr<Packetizer> mVideoSinglePacketizer;
+	std::shared_ptr<Packetizer> mAudioPacketizer;
 
-    // These are only used on the worker thread so don't need mutexes
-    std::shared_ptr<LoopScheduler> mLoopScheduler;
-    std::shared_ptr<PeerCandidate> mSelectedCandidate;
-    std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
+	// Jitter buffers
+	std::shared_ptr<JitterBuffer> mJitterBufferVideo;
+	std::shared_ptr<JitterBuffer> mJitterBufferAudio;
+
+	// Sender reports
+	void sendSenderReports();
+	std::weak_ptr<Task> mTaskSenderReports;
+
+	// Connection stats
+	void sendConnectionStats();
+	std::weak_ptr<Task> mTaskConnectionStats;
+
+	// Subscribe PLI
+	void sendPictureLossIndicator();
+	std::weak_ptr<Task> mTaskPictureLossIndicator;
+
+	// These are only used on the worker thread so don't need mutexes
+	std::shared_ptr<LoopScheduler> mLoopScheduler;
+	std::shared_ptr<PeerCandidate> mSelectedCandidate;
+	std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
+
+#ifdef NDEBUG
+#else
+	struct LosePacketsItem {
+		uint32_t ssrc;
+		uint16_t seq;
+
+		LosePacketsItem(uint32_t ssrc, uint16_t seq)
+			: ssrc(ssrc)
+			, seq(seq)
+		{
+		}
+	};
+
+	class LosePacketsHistory
+	{
+		std::list<LosePacketsItem> history;
+
+	public:
+		[[nodiscard]] bool shouldLosePacket(uint32_t ssrc, uint16_t seq)
+		{
+			for (const auto& item : history) {
+				if (item.ssrc == ssrc && item.seq == seq) {
+					return false;
+				}
+			}
+
+			while (history.size() > 256) {
+				history.pop_front();
+			}
+			history.emplace_back(ssrc, seq);
+
+			return true;
+		}
+	};
+
+	RandomGenerator<uint32_t> mLosePacketsRandomGenerator;
+	LosePacketsHistory mLosePacketHistory;
+#endif
 };
 
 } // namespace srtc

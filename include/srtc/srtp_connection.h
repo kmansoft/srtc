@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <optional>
 
 struct ssl_st;
 
@@ -19,62 +20,70 @@ class SrtpCrypto;
 class SrtpConnection
 {
 public:
-    static const char* const kSrtpCipherList;
+	static const char* const kSrtpCipherList;
 
-    static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
-    ~SrtpConnection();
+	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
+	~SrtpConnection();
 
-    [[nodiscard]] size_t getMediaProtectionOverhead() const;
+	void onPeerConnected();
 
-    // Returns false on error
-    bool protectOutgoingControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output);
+	[[nodiscard]] size_t getMediaProtectionOverhead() const;
 
-    // Returns false on error
-    bool protectOutgoingMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output);
+	// Returns false on error
+	bool protectSendControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output);
 
-    // Returns false on error
-    bool unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output);
+	// Returns false on error
+	bool protectSendMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output);
 
-    // Implementation
-    SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);
+	// Returns false on error
+	bool unprotectReceiveControl(const ByteBuffer& packetData, ByteBuffer& output);
+
+	// Returns false on error
+	bool unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output);
+
+	// Implementation
+	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);
 
 private:
-    const std::shared_ptr<SrtpCrypto> mCrypto;
-    const unsigned long mProfileId;
+	const std::shared_ptr<SrtpCrypto> mCrypto;
+	const unsigned long mProfileId;
 
-    struct ChannelKey {
-        uint32_t ssrc;
-        uint8_t payloadId;
-    };
+	struct ChannelKey {
+		uint32_t ssrc;
+		uint8_t payloadId;
+	};
 
-    struct hash_channel_key {
-        std::size_t operator()(const ChannelKey& key) const
-        {
-            return key.ssrc ^ key.payloadId;
-        }
-    };
+	struct hash_channel_key {
+		std::size_t operator()(const ChannelKey& key) const
+		{
+			return key.ssrc ^ key.payloadId;
+		}
+	};
 
-    struct equal_to_channel_key {
-        bool operator()(const ChannelKey& lhs, const ChannelKey& rhs) const
-        {
-            return lhs.ssrc == rhs.ssrc && lhs.payloadId == rhs.payloadId;
-        }
-    };
+	struct equal_to_channel_key {
+		bool operator()(const ChannelKey& lhs, const ChannelKey& rhs) const
+		{
+			return lhs.ssrc == rhs.ssrc && lhs.payloadId == rhs.payloadId;
+		}
+	};
 
-    struct ChannelValue {
-        std::unique_ptr<ReplayProtection> replayProtection;
-    };
+	struct ChannelValue {
+		std::unique_ptr<ReplayProtection> replayProtection;
+		uint32_t rolloverCount = { 0 };
+		std::optional<uint16_t> lastSequence16;
+	};
 
-    using ChannelMap = std::unordered_map<ChannelKey, ChannelValue, hash_channel_key, equal_to_channel_key>;
+	using ChannelMap = std::unordered_map<ChannelKey, ChannelValue, hash_channel_key, equal_to_channel_key>;
 
-    ChannelMap mSrtpInMap;
-    ChannelMap mSrtpOutMap;
+	ChannelMap mSrtpInMap;
+	ChannelMap mSrtpOutMap;
 
-    ChannelValue& ensureSrtpChannel(ChannelMap& map,
-                                    const ChannelKey& key,
-                                    uint32_t maxPossibleValueForReplayProtection);
+	ChannelValue& ensureSrtpChannel(ChannelMap& map,
+									const ChannelKey& key,
+									uint32_t maxPossibleValueForReplayProtection);
 
-    bool getRtcpSequenceNumber(const ByteBuffer& packet, uint32_t& outSequenceNumber) const;
+	bool getControlSequenceNumber(const ByteBuffer& packet, uint32_t& outSequenceNumber) const;
+	bool getMediaSequenceNumber(const ByteBuffer& packet, uint16_t& outSequenceNumber) const;
 };
 
 } // namespace srtc

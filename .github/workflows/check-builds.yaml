@@ -55,7 +55,8 @@ jobs:
           --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target srtc_publish
+          --target srtc_publish \
+          --target srtc_subscribe
 
     - name: Test
       run: |
@@ -77,7 +78,8 @@ jobs:
           --config ${{ env.BUILD_TYPE }} \
           --target srtc \
           --target srtc_test \
-          --target srtc_publish
+          --target srtc_publish \
+          --target srtc_subscribe
 
     - name: Test
       run: |
@@ -87,59 +89,61 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          brew install openssl curl ninja
+    - name: Install dependencies
+      run: |
+        brew install openssl curl ninja
 
-      - name: Configure CMake
-        run: |
-          cmake \
-            -B ${{github.workspace}}/build \
-            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) \
-            -GNinja
+    - name: Configure CMake
+      run: |
+        cmake \
+          -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) \
+          -GNinja
 
-      - name: Build
-        run: |
-          cmake \
-            --build ${{github.workspace}}/build \
-            --config ${{env.BUILD_TYPE}} \
-            --target srtc \
-            --target srtc_test \
-            --target srtc_publish
+    - name: Build
+      run: |
+        cmake \
+          --build ${{github.workspace}}/build \
+          --config ${{env.BUILD_TYPE}} \
+          --target srtc \
+          --target srtc_test \
+        --target srtc_publish \
+        --target srtc_subscribe
 
-      - name: Test
-        run: |
-          ${{github.workspace}}/build/srtc_test
+    - name: Test
+      run: |
+        ${{github.workspace}}/build/srtc_test
 
   build-windows:
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Use the MSVC compiler
-        uses: ilammy/msvc-dev-cmd@v1
+    - name: Use the MSVC compiler
+      uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure CMake
-        run: |
-          cmake `
-            -B ${{github.workspace}}/build `
-            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
-            -GNinja
+    - name: Configure CMake
+      run: |
+        cmake `
+          -B ${{github.workspace}}/build `
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+          -GNinja
 
-      - name: Build
-        run: |
-          cmake `
-            --build ${{github.workspace}}/build `
-            --config ${{env.BUILD_TYPE}} `
-            --target srtc `
-            --target srtc_test `
-            --target srtc_publish
+    - name: Build
+      run: |
+        cmake `
+          --build ${{github.workspace}}/build `
+          --config ${{env.BUILD_TYPE}} `
+          --target srtc `
+          --target srtc_test `
+          --target srtc_publish `
+          --target srtc_subscribe
 
-      - name: Test
-        run: |
-          ${{github.workspace}}/build/srtc_test.exe
+    - name: Test
+      run: |
+        ${{github.workspace}}/build/srtc_test.exe
 

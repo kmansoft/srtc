@@ -61,14 +61,15 @@ std::string get_openssl_error()
 
 constexpr auto kIceMessageBufferSize = 2048;
 
-constexpr std::chrono::milliseconds kConnectTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kConnectionLostTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kExpireStunPeriod = std::chrono::milliseconds(1000);
-constexpr std::chrono::milliseconds kExpireStunTimeout = std::chrono::milliseconds(5000);
-constexpr std::chrono::milliseconds kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
-constexpr std::chrono::milliseconds kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
-constexpr std::chrono::milliseconds kConnectRepeatPeriod = std::chrono::milliseconds(100);
-constexpr std::chrono::milliseconds kConnectRepeatIncrement = std::chrono::milliseconds(100);
+constexpr auto kConnectTimeout = std::chrono::milliseconds(5000);
+constexpr auto kConnectionLostTimeout = std::chrono::milliseconds(5000);
+constexpr auto kExpireStunPeriod = std::chrono::milliseconds(1000);
+constexpr auto kExpireStunTimeout = std::chrono::milliseconds(5000);
+constexpr auto kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
+constexpr auto kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
+constexpr auto kConnectRepeatPeriod = std::chrono::milliseconds(100);
+constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
+constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -209,6 +210,7 @@ namespace srtc
 {
 
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
+							 const std::vector<std::shared_ptr<Track>>& trackList,
 							 const std::shared_ptr<SdpOffer>& offer,
 							 const std::shared_ptr<SdpAnswer>& answer,
 							 const std::shared_ptr<RealScheduler>& scheduler,
@@ -216,6 +218,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 							 const std::shared_ptr<EventLoop>& eventLoop,
 							 const Scheduler::Delay& startDelay)
 	: mListener(listener)
+	, mTrackList(trackList)
 	, mOffer(offer)
 	, mAnswer(answer)
 	, mHost(host)
@@ -282,53 +285,75 @@ void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 	mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendSenderReport(const std::shared_ptr<Track>& track)
+void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	const auto ssrc = track->getSSRC();
+	for (const auto& track : trackList) {
+		if (track->getDirection() == Direction::Publish) {
+			const auto ssrc = track->getSSRC();
 
-	ByteBuffer payload;
-	ByteWriter w(payload);
+			ByteBuffer payload;
+			ByteWriter w(payload);
 
-	// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+			// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
 
-	NtpTime ntp = {};
-	getNtpTime(ntp);
+			NtpTime ntp = {};
+			getNtpTime(ntp);
 
-	const auto timeSource = track->getRtpTimeSource();
-	const auto rtpTime = timeSource->getCurrTimestamp();
+			const auto timeSource = track->getRtpTimeSource();
+			const auto rtpTime = timeSource->getCurrTimestamp();
 
-	w.writeU32(ntp.seconds);
-	w.writeU32(ntp.fraction);
-	w.writeU32(rtpTime);
+			w.writeU32(ntp.seconds);
+			w.writeU32(ntp.fraction);
+			w.writeU32(rtpTime);
 
-	const auto stats = track->getStats();
-	w.writeU32(stats->getSentPackets());
-	w.writeU32(stats->getSentBytes());
+			const auto stats = track->getStats();
+			w.writeU32(stats->getSentPackets());
+			w.writeU32(stats->getSentBytes());
 
-	const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
-	sendRtcpPacket(track, packet);
+			const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+			sendRtcpPacket(track, packet);
 
-	mSenderReportsHistory->save(ssrc, ntp);
+			mSenderReportsHistory->save(ssrc, ntp);
+		}
+	}
 }
 
-void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
+void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	if (mSrtpConnection) {
-		const auto rtcpSource = track->getRtcpPacketSource();
+	for (const auto& track : trackList) {
+		if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+			const auto ssrc = track->getSSRC();
 
-		const auto packetData = packet->generate();
+			ByteBuffer payload;
+			ByteWriter w(payload);
 
-		if (mSrtpConnection->protectOutgoingControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
-			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
-			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+			w.writeU32(ssrc);
+
+			const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
+			sendRtcpPacket(track, packet);
 		}
+	}
+}
+
+void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList)
+{
+	for (const auto seq : nackList) {
+		ByteBuffer payload;
+		ByteWriter w(payload);
+
+		const auto ssrc = track->getSSRC();
+
+		w.writeU32(ssrc);
+		w.writeU16(seq);
+		w.writeU16(0);
+
+		const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
+		sendRtcpPacket(track, packet);
 	}
 }
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	const auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
-
 	const auto now = std::chrono::steady_clock::now();
 	if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
 		// RTT from sender / receiver reports
@@ -341,6 +366,16 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
 	}
+}
+
+std::optional<float> PeerCandidate::getIceRtt() const
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+		// RTT from STUN requests / responses
+		return mIceRttFilter.value();
+	}
+	return {};
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
@@ -636,7 +671,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 					if (srtpError.isOk()) {
 						mSrtpConnection = srtpConnection;
 						mSendPacer =
-							std::make_shared<SendPacer>(mOffer->getConfig(),
+							std::make_shared<SendPacer>(mOffer->getPubConfig(),
 														mSrtpConnection,
 														mSocket,
 														mSendRtpHistory,
@@ -648,10 +683,11 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 						const auto cipher = SSL_get_cipher(mDtlsSsl);
 						const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
 						LOG(SRTC_LOG_V,
-							"Connected to %s with cipher %s, profile %s",
+							"Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
 							addr.c_str(),
 							cipher,
-							profile->name);
+							profile->name,
+							mIceRttFilter.value());
 
 						Task::cancelHelper(mTaskConnectTimeout);
 						emitOnConnected();
@@ -697,20 +733,34 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
-	if (is_rtcp_message(buf) && mSrtpConnection) {
-		ByteBuffer output;
-		if (mSrtpConnection->unprotectIncomingControl(buf, output)) {
-			LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+	ByteBuffer output;
 
-			const auto list = RtcpPacket::fromUdpPacket(output);
-			for (const auto& packet : list) {
-				onReceivedRtcpPacket(packet);
+	if (mSrtpConnection) {
+		if (is_rtcp_message(buf)) {
+			if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
+				LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+
+				const auto list = RtcpPacket::fromUdpPacket(output);
+				for (const auto& packet : list) {
+					onReceivedControlPacket(packet);
+				}
+			}
+		} else {
+			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
+				LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
+
+				if (const auto track = findReceivedMediaPacketTrack(output)) {
+					const auto packet = RtpPacket::fromUdpPacket(track, output);
+					if (packet) {
+						onReceivedMediaPacket(packet);
+					}
+				}
 			}
 		}
 	}
 }
 
-void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& packet)
+void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
 	mLastReceiveTime = std::chrono::steady_clock::now();
 	updateConnectionLostTimeout();
@@ -726,42 +776,26 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 	if (rtcpPT == 201) {
 		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
 		// Receiver Report
-		while (rtcpReader.remaining() >= 24) {
-			const auto ssrc = rtcpReader.readU32();
-			const auto lost = rtcpReader.readU32();
-			const auto highestReceived = rtcpReader.readU32();
-			const auto jitter = rtcpReader.readU32();
-			const auto lastSR = rtcpReader.readU32();
-			const auto delaySinceLastSR = rtcpReader.readU32();
-
-			(void)lost;
-			(void)highestReceived;
-			(void)jitter;
-
-			const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
-			if (rtt) {
-				LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-				mRtpRttFilter.update(rtt.value());
-			}
-		}
+		onReceivedControlMessage_201(rtcpReader);
 	} else if (rtcpPT == 205) {
 		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
 		// RTPFB: Transport layer FB message
 		if (rtcpReader.remaining() >= 4) {
 			const auto rtcpFmt = rtcpRC;
 			const auto rtcpSSRC_1 = rtcpReader.readU32();
+
 			LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
 			switch (rtcpFmt) {
 			case 1:
 				// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
 				// NACKs
-				onReceivedRtcMessage_205_1(rtcpSSRC_1, rtcpReader);
+				onReceivedControlMessage_205_1(rtcpSSRC_1, rtcpReader);
 				break;
 			case 15:
 				// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
 				// Google'e Transport-Wide Congension Control
-				onReceivedRtcMessage_205_15(rtcpSSRC_1, rtcpReader);
+				onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
 				break;
 			default:
 				LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
@@ -771,7 +805,45 @@ void PeerCandidate::onReceivedRtcpPacket(const std::shared_ptr<RtcpPacket>& pack
 	}
 }
 
-void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
+{
+	mLastReceiveTime = std::chrono::steady_clock::now();
+	updateConnectionLostTimeout();
+
+	LOG(SRTC_LOG_V,
+		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
+		to_string(packet->getTrack()->getMediaType()).c_str(),
+		packet->getSSRC(),
+		packet->getSequence(),
+		packet->getPayloadId(),
+		packet->getPayloadSize());
+
+	mListener->onCandidateReceivedMediaPacket(this, packet);
+}
+
+void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
+{
+	while (rtcpReader.remaining() >= 24) {
+		const auto ssrc = rtcpReader.readU32();
+		const auto lost = rtcpReader.readU32();
+		const auto highestReceived = rtcpReader.readU32();
+		const auto jitter = rtcpReader.readU32();
+		const auto lastSR = rtcpReader.readU32();
+		const auto delaySinceLastSR = rtcpReader.readU32();
+
+		(void)lost;
+		(void)highestReceived;
+		(void)jitter;
+
+		const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
+		if (rtt) {
+			LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
+			mRtpRttFilter.update(rtt.value());
+		}
+	}
+}
+
+void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
 {
 	while (rtcpReader.remaining() >= 4) {
 		const auto pid = rtcpReader.readU16();
@@ -818,7 +890,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 					packetData = packet->generate();
 				}
 
-				if (mSrtpConnection->protectOutgoingMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
+				if (mSrtpConnection->protectSendMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
 					// And send
 					const auto sentSize = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
 					LOG(SRTC_LOG_V,
@@ -842,7 +914,7 @@ void PeerCandidate::onReceivedRtcMessage_205_1(uint32_t ssrc, ByteReader& rtcpRe
 	}
 }
 
-void PeerCandidate::onReceivedRtcMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
 {
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
@@ -855,6 +927,42 @@ void PeerCandidate::forgetExpiredStunRequests()
 
 	mTaskExpireStunRequests =
 		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+}
+
+void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
+{
+	if (mSrtpConnection) {
+		const auto rtcpSource = track->getRtcpPacketSource();
+
+		const auto packetData = packet->generate();
+
+		if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
+			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+		}
+	}
+}
+
+std::shared_ptr<Track> PeerCandidate::findReceivedMediaPacketTrack(ByteBuffer& packet)
+{
+	if (packet.size() < 12) {
+		return {};
+	}
+
+	const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packet.data() + 8));
+	const auto pt = ntohs(*reinterpret_cast<const uint16_t*>(packet.data())) & 0x7Fu;
+
+	for (const auto& track : mTrackList) {
+		if (track->getSSRC() == ssrc && track->getPayloadId() == pt) {
+			return track;
+		}
+
+		if (track->getRtxSSRC() == ssrc && track->getRtxPayloadId() == pt) {
+			return track;
+		}
+	}
+
+	return {};
 }
 
 // Custom BIO for DGRAM
@@ -989,6 +1097,8 @@ void PeerCandidate::emitOnIceSelected()
 void PeerCandidate::emitOnConnected()
 {
 	mListener->onCandidateConnected(this);
+
+	mSrtpConnection->onPeerConnected();
 
 	if (mExtensionSourceTWCC) {
 		mExtensionSourceTWCC->onPeerConnected();

@@ -1,6 +1,8 @@
 #include "srtc/peer_connection.h"
+#include "srtc/depacketizer.h"
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
+#include "srtc/jitter_buffer.h"
 #include "srtc/logging.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
@@ -9,6 +11,7 @@
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/send_rtp_history.h"
+#include "srtc/srtc.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
@@ -34,8 +37,13 @@ constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
 namespace srtc
 {
 
-PeerConnection::PeerConnection()
-	: mEventLoop(EventLoop::factory())
+PeerConnection::PeerConnection(Direction direction)
+	: mDirection(direction)
+	, mEventLoop(EventLoop::factory())
+#ifdef NDEBUG
+#else
+	, mLosePacketsRandomGenerator(0, 99)
+#endif
 {
 	std::call_once(gInitFlag, [] {
 		// Just in case we need something
@@ -44,32 +52,92 @@ PeerConnection::PeerConnection()
 
 PeerConnection::~PeerConnection()
 {
-	std::thread waitForThread;
+	close();
+}
 
-	{
-		std::lock_guard lock(mMutex);
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
+	const PubOfferConfig& pubConfig,
+	const std::optional<PubVideoConfig>& videoConfig,
+	const std::optional<PubAudioConfig>& audioConfig)
+{
+	if (mDirection != Direction::Publish) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
+	}
 
-		if (mIsStarted) {
-			mIsQuit = true;
-			mEventLoop->interrupt();
-			waitForThread = std::move(mThread);
+	SdpOffer::Config config;
+	config.cname = pubConfig.cname;
+	config.enable_rtx = pubConfig.enable_rtx;
+	config.enable_bwe = pubConfig.enable_bwe;
+	config.debug_drop_packets = pubConfig.debug_drop_packets;
+
+	std::optional<SdpOffer::VideoConfig> video;
+	if (videoConfig) {
+		video = SdpOffer::VideoConfig{};
+
+		for (const auto& codec : videoConfig->codec_list) {
+			video->codec_list.emplace_back(codec.codec, codec.profile_level_id);
+		}
+		for (const auto& layer : videoConfig->simulcast_layer_list) {
+			const srtc::SimulcastLayer simulcastLayer = {
+				layer.name, layer.width, layer.height, layer.frames_per_second, layer.kilobits_per_second
+			};
+			video->simulcast_layer_list.push_back(simulcastLayer);
 		}
 	}
 
-	if (waitForThread.joinable()) {
-		waitForThread.join();
+	std::optional<SdpOffer::AudioConfig> audio;
+	if (audioConfig) {
+		audio = SdpOffer::AudioConfig{};
+
+		for (const auto& codec : audioConfig->codec_list) {
+			audio->codec_list.emplace_back(codec.codec, codec.minptime, codec.stereo);
+		}
 	}
+
+	return { std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Publish, config, video, audio)), Error::OK };
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::createPublishSdpOffer(const OfferConfig& config,
-																const std::optional<PubVideoConfig>& videoConfig,
-																const std::optional<PubAudioConfig>& audioConfig)
+std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer(
+	const SubOfferConfig& subConfig,
+	const std::optional<SubVideoConfig>& videoConfig,
+	const std::optional<SubAudioConfig>& audioConfig)
 {
-	return std::shared_ptr<SdpOffer>(new SdpOffer(config, videoConfig, audioConfig));
+	if (mDirection != Direction::Subscribe) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
+	}
+
+	SdpOffer::Config config;
+	config.cname = subConfig.cname;
+	config.pli_interval_millis = subConfig.pli_interval_millis;
+	config.debug_drop_packets = subConfig.debug_drop_packets;
+
+	std::optional<SdpOffer::VideoConfig> video;
+	if (videoConfig) {
+		video = SdpOffer::VideoConfig{};
+
+		for (const auto& codec : videoConfig->codec_list) {
+			video->codec_list.emplace_back(codec.codec, codec.profile_level_id);
+		}
+	}
+
+	std::optional<SdpOffer::AudioConfig> audio;
+	if (audioConfig) {
+		audio = SdpOffer::AudioConfig{};
+
+		for (const auto& codec : audioConfig->codec_list) {
+			audio->codec_list.emplace_back(codec.codec, codec.minptime, codec.stereo);
+		}
+	}
+
+	return { std::shared_ptr<SdpOffer>(new SdpOffer(Direction::Subscribe, config, video, audio)), Error::OK };
 }
 
-Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
+Error PeerConnection::setOffer(const std::shared_ptr<SdpOffer>& offer)
 {
+	if (mDirection != offer->getDirection()) {
+		return { Error::Code::InvalidData, "Wrong publish / subscribe direction for the offer" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	assert(!mIsQuit);
@@ -83,13 +151,27 @@ Error PeerConnection::setSdpOffer(const std::shared_ptr<SdpOffer>& offer)
 	return Error::OK;
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishSdpAnswer(
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(
 	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
 {
-	return SdpAnswer::parse(offer, answer, selector);
+	if (mDirection != Direction::Publish) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
+	}
+
+	return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
 }
 
-Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
+std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(
+	const std::shared_ptr<SdpOffer>& offer, const std::string& answer, const std::shared_ptr<TrackSelector>& selector)
+{
+	if (mDirection != Direction::Subscribe) {
+		return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
+	}
+
+	return SdpAnswer::parse(Direction::Subscribe, offer, answer, selector);
+}
+
+Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 {
 	std::lock_guard lock(mMutex);
 
@@ -106,51 +188,59 @@ Error PeerConnection::setSdpAnswer(const std::shared_ptr<SdpAnswer>& answer)
 	mAudioTrack = answer->getAudioTrack();
 
 	if (mSdpOffer && mSdpAnswer) {
-		// Packetizers
-		if (mVideoSingleTrack) {
-			const auto [packetizer, error] = Packetizer::makePacketizer(mVideoSingleTrack);
-			if (error.isError()) {
-				return error;
-			}
-			mVideoSinglePacketizer = packetizer;
-		} else if (!mVideoSimulcastTrackList.empty()) {
-			for (const auto& track : mVideoSimulcastTrackList) {
-				const auto simulcastLayer = track->getSimulcastLayer();
+		if (mSdpOffer->getDirection() != mSdpAnswer->getDirection()) {
+			return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
+		}
 
-				const auto [packetizer, error] = Packetizer::makePacketizer(track);
+		if (mDirection == Direction::Publish) {
+			// Packetizers
+			if (mVideoSingleTrack) {
+				const auto [packetizer, error] = Packetizer::make(mVideoSingleTrack);
 				if (error.isError()) {
 					return error;
 				}
+				mVideoSinglePacketizer = packetizer;
+			} else if (!mVideoSimulcastTrackList.empty()) {
+				for (const auto& track : mVideoSimulcastTrackList) {
+					const auto simulcastLayer = track->getSimulcastLayer();
 
-				mVideoSimulcastLayerList.emplace_back(simulcastLayer->name, track, packetizer);
-			}
-		}
+					const auto [packetizer, error] = Packetizer::make(track);
+					if (error.isError()) {
+						return error;
+					}
 
-		if (mAudioTrack) {
-			const auto [packetizer, error] = Packetizer::makePacketizer(mAudioTrack);
-			if (error.isError()) {
-				return error;
+					mVideoSimulcastLayerList.emplace_back(simulcastLayer->name, track, packetizer);
+				}
 			}
-			mAudioPacketizer = packetizer;
+
+			if (mAudioTrack) {
+				const auto [packetizer, error] = Packetizer::make(mAudioTrack);
+				if (error.isError()) {
+					return error;
+				}
+				mAudioPacketizer = packetizer;
+			}
+		} else if (mDirection == Direction::Subscribe) {
+			// Jitter buffers are created when we connect because we have to know the rtt
 		}
 
 		// We are started
 		mIsStarted = true;
 
 		// The network thread
-		mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this, mSdpOffer, mSdpAnswer);
+		mThread = std::thread(&PeerConnection::networkThreadWorkerFunc, this);
 	}
 
 	return Error::OK;
 }
 
-std::shared_ptr<SdpOffer> PeerConnection::getSdpOffer() const
+std::shared_ptr<SdpOffer> PeerConnection::getOffer() const
 {
 	std::lock_guard lock(mMutex);
 	return mSdpOffer;
 }
 
-std::shared_ptr<SdpAnswer> PeerConnection::getSdpAnswer() const
+std::shared_ptr<SdpAnswer> PeerConnection::getAnswer() const
 {
 	std::lock_guard lock(mMutex);
 	return mSdpAnswer;
@@ -158,19 +248,16 @@ std::shared_ptr<SdpAnswer> PeerConnection::getSdpAnswer() const
 
 std::shared_ptr<Track> PeerConnection::getVideoSingleTrack() const
 {
-	std::lock_guard lock(mMutex);
 	return mVideoSingleTrack;
 }
 
 std::vector<std::shared_ptr<Track>> PeerConnection::getVideoSimulcastTrackList() const
 {
-	std::lock_guard lock(mMutex);
 	return mVideoSimulcastTrackList;
 }
 
 std::shared_ptr<Track> PeerConnection::getAudioTrack() const
 {
-	std::lock_guard lock(mMutex);
 	return mAudioTrack;
 }
 
@@ -190,6 +277,10 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& 
 {
 	std::lock_guard lock(mMutex);
 
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	if (mVideoSingleTrack == nullptr) {
 		return { Error::Code::InvalidData, "There is no video track" };
 	}
@@ -205,6 +296,10 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& 
 
 Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
@@ -226,6 +321,10 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
 
 Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
@@ -251,6 +350,10 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
 
 Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
@@ -280,6 +383,10 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, B
 
 Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 {
+	if (mDirection != Direction::Publish) {
+		return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+	}
+
 	std::lock_guard lock(mMutex);
 
 	if (mConnectionState != ConnectionState::Connected) {
@@ -299,8 +406,32 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
 	return Error::OK;
 }
 
-void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> offer,
-											 const std::shared_ptr<SdpAnswer> answer)
+void PeerConnection::setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener)
+{
+	std::lock_guard lock(mListenerMutex);
+	mSubscribeEncodedFrameListener = listener;
+}
+
+void PeerConnection::close()
+{
+	std::thread waitForThread;
+
+	{
+		std::lock_guard lock(mMutex);
+
+		if (mIsStarted) {
+			mIsQuit = true;
+			mEventLoop->interrupt();
+			waitForThread = std::move(mThread);
+		}
+	}
+
+	if (waitForThread.joinable()) {
+		waitForThread.join();
+	}
+}
+
+void PeerConnection::networkThreadWorkerFunc()
 {
 	// Loop scheduler
 	mLoopScheduler = std::make_shared<LoopScheduler>();
@@ -318,11 +449,25 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 	// Our processing loop
 	while (true) {
 		// Epoll for incoming data
-		auto timeout = mLoopScheduler->getTimeoutMillis(1000);
+		constexpr auto kDefaultTimeoutMillis = 100;
+
+		auto timeout = mLoopScheduler->getTimeoutMillis(kDefaultTimeoutMillis);
 		if (mSelectedCandidate) {
-			const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(1000);
+			const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
 			if (timeout > selectedTimeout) {
 				timeout = selectedTimeout;
+			}
+		}
+		if (mJitterBufferVideo) {
+			const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
+			if (timeout > timeoutJitter) {
+				timeout = timeoutJitter;
+			}
+		}
+		if (mJitterBufferAudio) {
+			const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
+			if (timeout > timeoutJitter) {
+				timeout = timeoutJitter;
 			}
 		}
 
@@ -375,15 +520,25 @@ void PeerConnection::networkThreadWorkerFunc(const std::shared_ptr<SdpOffer> off
 		if (mSelectedCandidate) {
 			mSelectedCandidate->run();
 		}
+
+		// Jitter buffer processing
+		if (const auto buffer = mJitterBufferVideo) {
+			processJitterBuffer(buffer);
+		}
+		if (const auto buffer = mJitterBufferAudio) {
+			processJitterBuffer(buffer);
+		}
 	}
 
 	mLoopScheduler.reset();
 
 	setConnectionState(ConnectionState::Closed);
 
-	// Clear everything on this thread before quitting
+	// Clear everything on this thread before exiting
 	mConnectingCandidateList.clear();
 	mSelectedCandidate.reset();
+	mJitterBufferVideo.reset();
+	mJitterBufferAudio.reset();
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)
@@ -425,6 +580,9 @@ void PeerConnection::startConnecting()
 
 	mFrameSendQueue.clear();
 
+	// We will need the track list
+	const auto trackList = collectTracks();
+
 	// Interleave IPv4 and IPv6 candidates
 	std::vector<Host> hostList4;
 	std::vector<Host> hostList6;
@@ -441,14 +599,26 @@ void PeerConnection::startConnecting()
 	for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
 		if (i < hostList4.size()) {
 			const auto host = hostList4[i];
-			const auto candidate = std::make_shared<PeerCandidate>(
-				this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
+			const auto candidate = std::make_shared<PeerCandidate>(this,
+																   trackList,
+																   mSdpOffer,
+																   mSdpAnswer,
+																   mLoopScheduler,
+																   host,
+																   mEventLoop,
+																   std::chrono::milliseconds(connectDelay));
 			mConnectingCandidateList.push_back(candidate);
 		}
 		if (i < hostList6.size()) {
 			const auto host = hostList6[i];
-			const auto candidate = std::make_shared<PeerCandidate>(
-				this, mSdpOffer, mSdpAnswer, mLoopScheduler, host, mEventLoop, std::chrono::milliseconds(connectDelay));
+			const auto candidate = std::make_shared<PeerCandidate>(this,
+																   trackList,
+																   mSdpOffer,
+																   mSdpAnswer,
+																   mLoopScheduler,
+																   host,
+																   mEventLoop,
+																   std::chrono::milliseconds(connectDelay));
 			mConnectingCandidateList.push_back(candidate);
 		}
 
@@ -456,7 +626,27 @@ void PeerConnection::startConnecting()
 	}
 }
 
-std::vector<std::shared_ptr<Track>> PeerConnection::collectTracksLocked() const
+void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer)
+{
+	const auto nackList = buffer->processNack();
+	if (!nackList.empty()) {
+		if (mSelectedCandidate) {
+			mSelectedCandidate->sendNacks(buffer->getTrack(), nackList);
+		}
+	}
+
+	const auto frameList = buffer->processDeque();
+	if (!frameList.empty()) {
+		std::lock_guard lock(mListenerMutex);
+		if (mSubscribeEncodedFrameListener) {
+			for (const auto& frame : frameList) {
+				mSubscribeEncodedFrameListener(frame);
+			}
+		}
+	}
+}
+
+std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
 {
 	std::vector<std::shared_ptr<Track>> list;
 
@@ -482,6 +672,9 @@ void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
 void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 {
 	setConnectionState(ConnectionState::Connecting);
+
+	mJitterBufferVideo = nullptr;
+	mJitterBufferAudio = nullptr;
 }
 
 void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
@@ -497,9 +690,7 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 
 	mLoopScheduler->dump();
 
-	std::lock_guard lock(mMutex);
-
-	const auto trackList = collectTracksLocked();
+	const auto trackList = collectTracks();
 	for (const auto& trackItem : trackList) {
 		trackItem->getStats()->clear();
 
@@ -520,6 +711,39 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 {
 	setConnectionState(ConnectionState::Connected);
+
+	if (mDirection == Direction::Subscribe) {
+		const auto rtt = candidate->getIceRtt();
+		if (rtt.has_value()) {
+			// We should have the rtt from ice
+			auto length = std::chrono::milliseconds(lround(rtt.value()) + 10);
+			auto nackDelay = std::chrono::milliseconds(4);
+
+			if (rtt.value() >= 50.0f) {
+				length = std::chrono::milliseconds(lround(rtt.value()) + 25);
+				nackDelay = std::chrono::milliseconds(10);
+			}
+
+			if (const auto track = mVideoSingleTrack) {
+				const auto [depacketizer, error] = Depacketizer::make(track);
+				if (error.isError()) {
+					LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
+				} else {
+					mJitterBufferVideo = std::make_shared<JitterBuffer>(track, depacketizer, 2048, length, nackDelay);
+				}
+			}
+			if (const auto track = mAudioTrack) {
+				const auto [depacketizer, error] = Depacketizer::make(track);
+				if (error.isError()) {
+					LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
+				} else {
+					mJitterBufferAudio = std::make_shared<JitterBuffer>(track, depacketizer, 1024, length, nackDelay);
+				}
+			}
+		}
+
+		sendPictureLossIndicator();
+	}
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
@@ -541,6 +765,39 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
 	}
 }
 
+void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet)
+{
+#ifdef NDEBUG
+#else
+	const auto config = mSdpOffer->getSubConfig();
+	const auto randomValue = mLosePacketsRandomGenerator.next();
+
+	// In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
+	if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
+		if (config.debug_drop_packets && randomValue < 5) {
+			if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
+				return;
+			}
+		}
+	}
+#endif
+
+	if (mDirection == Direction::Subscribe) {
+		const auto track = packet->getTrack();
+		if (mVideoSingleTrack == track) {
+			if (const auto buffer = mJitterBufferVideo) {
+				assert(buffer->getTrack() == track);
+				buffer->consume(packet);
+			}
+		} else if (mAudioTrack == track) {
+			if (const auto buffer = mJitterBufferAudio) {
+				assert(buffer->getTrack() == track);
+				buffer->consume(packet);
+			}
+		}
+	}
+}
+
 void PeerConnection::sendSenderReports()
 {
 	Task::cancelHelper(mTaskSenderReports);
@@ -551,10 +808,8 @@ void PeerConnection::sendSenderReports()
 		std::lock_guard lock(mMutex);
 
 		if (mConnectionState == ConnectionState::Connected) {
-			const auto trackList = collectTracksLocked();
-			for (const auto& trackItem : trackList) {
-				mSelectedCandidate->sendSenderReport(trackItem);
-			}
+			const auto trackList = collectTracks();
+			mSelectedCandidate->sendSenderReports(trackList);
 		}
 	}
 }
@@ -576,11 +831,11 @@ void PeerConnection::sendConnectionStats()
 		connectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
 
 		std::lock_guard lock(mMutex);
-		if (mConnectionState != ConnectionState::Connected) {
+		if (mConnectionState == ConnectionState::Connected) {
 			return;
 		}
 
-		const auto trackList = collectTracksLocked();
+		const auto trackList = collectTracks();
 		for (const auto& trackItem : trackList) {
 			const auto stats = trackItem->getStats();
 			connectionStats.packet_count += stats->getSentPackets();
@@ -597,4 +852,23 @@ void PeerConnection::sendConnectionStats()
 		mPublishConnectionStatsListener(connectionStats);
 	}
 }
+
+void PeerConnection::sendPictureLossIndicator()
+{
+	const auto config = mSdpOffer->getSubConfig();
+
+	Task::cancelHelper(mTaskPictureLossIndicator);
+	mTaskPictureLossIndicator = mLoopScheduler->submit(
+		std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] { sendConnectionStats(); });
+
+	if (mSelectedCandidate) {
+		std::lock_guard lock(mMutex);
+
+		if (mConnectionState == ConnectionState::Connected) {
+			const auto trackList = collectTracks();
+			mSelectedCandidate->sendPictureLossIndicators(trackList);
+		}
+	}
+}
+
 } // namespace srtc

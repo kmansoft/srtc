@@ -111,12 +111,20 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
 SrtpConnection::~SrtpConnection() = default;
 
+void SrtpConnection::onPeerConnected()
+{
+	// We may have missed some packets while not connected, so need to reset replay protection.
+	// Technically we only need this for the incoming map, but let's clear both for consistency.
+	mSrtpInMap.clear();
+	mSrtpOutMap.clear();
+}
+
 size_t SrtpConnection::getMediaProtectionOverhead() const
 {
 	return mCrypto->getMediaProtectionOverhead();
 }
 
-bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output)
+bool SrtpConnection::protectSendControl(const ByteBuffer& packetData, uint32_t sequence, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4) {
 		// 4 byte header
@@ -125,24 +133,24 @@ bool SrtpConnection::protectOutgoingControl(const ByteBuffer& packetData, uint32
 		return false;
 	}
 
-	if (!mCrypto->protectSendRtcp(packetData, sequence, output)) {
+	if (!mCrypto->protectSendControl(packetData, sequence, output)) {
 		return false;
 	}
 
 	return true;
 }
 
-bool SrtpConnection::protectOutgoingMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output)
+bool SrtpConnection::protectSendMedia(const ByteBuffer& packetData, uint32_t rollover, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4 + 4) {
 		LOG(SRTC_LOG_E, "Outgoing RTP packet is too small");
 		return false;
 	}
 
-	return mCrypto->protectSendRtp(packetData, rollover, output);
+	return mCrypto->protectSendMedia(packetData, rollover, output);
 }
 
-bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, ByteBuffer& output)
+bool SrtpConnection::unprotectReceiveControl(const ByteBuffer& packetData, ByteBuffer& output)
 {
 	if (packetData.size() < 4 + 4 + 4) {
 		// 4 byte header
@@ -152,11 +160,12 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
 		return false;
 	}
 
-	const ChannelKey key = { ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4)), 0 };
+	const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 4));
+	const ChannelKey key = { ssrc, 0 };
 	auto& channelValue = ensureSrtpChannel(mSrtpInMap, key, std::numeric_limits<uint32_t>::max());
 
 	uint32_t sequenceNumber;
-	if (!getRtcpSequenceNumber(packetData, sequenceNumber)) {
+	if (!getControlSequenceNumber(packetData, sequenceNumber)) {
 		LOG(SRTC_LOG_E, "Error getting sequence number from incoming RTCP packet");
 		return false;
 	}
@@ -166,7 +175,7 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
 		return false;
 	}
 
-	if (!mCrypto->unprotectReceiveRtcp(packetData, output)) {
+	if (!mCrypto->unprotectReceiveControl(packetData, output)) {
 		return false;
 	}
 
@@ -175,6 +184,69 @@ bool SrtpConnection::unprotectIncomingControl(const ByteBuffer& packetData, Byte
 		// 4 byte header
 		// 4 byte SSRC
 		LOG(SRTC_LOG_E, "Incoming RTCP packet is too small after unprotecting");
+		return false;
+	}
+
+	channelValue.replayProtection->set(sequenceNumber);
+	return true;
+}
+
+bool SrtpConnection::unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output)
+{
+	if (packetData.size() < 4 + 4 + 4) {
+		// 4 byte header
+		// 4 byte timestamp
+		// 4 byte SSRC
+		LOG(SRTC_LOG_E, "Incoming RTP packet is too small");
+		return false;
+	}
+
+	const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packetData.data() + 8));
+	const auto pt = ntohs(*reinterpret_cast<const uint16_t*>(packetData.data())) & 0x7Fu;
+
+	const ChannelKey key = { ssrc, static_cast<uint8_t>(pt) };
+	auto& channelValue = ensureSrtpChannel(mSrtpInMap, key, std::numeric_limits<uint16_t>::max());
+
+	uint16_t sequenceNumber;
+	if (!getMediaSequenceNumber(packetData, sequenceNumber)) {
+		LOG(SRTC_LOG_E, "Error getting sequence number from incoming RTP packet");
+		return false;
+	}
+
+	if (!channelValue.replayProtection->canProceed(sequenceNumber)) {
+		LOG(SRTC_LOG_E,
+			"Replay protection says we can't proceed with RTP packet ssrc = %" PRIu32 ", seq = %u",
+			ssrc,
+			sequenceNumber);
+		return false;
+	}
+
+	// Because of jitter, we may cross the rollover back and forth, only count once
+	auto rolloverCount = channelValue.rolloverCount;
+	if (!channelValue.lastSequence16) {
+		channelValue.lastSequence16 = sequenceNumber;
+	} else if (channelValue.lastSequence16 <= 0x1000u && sequenceNumber >= 0xF000u) {
+		if (rolloverCount > 0) {
+			rolloverCount -= 1;
+		}
+	} else {
+		if (channelValue.lastSequence16 >= 0xF000u && sequenceNumber <= 0x1000u) {
+			channelValue.rolloverCount += 1;
+			rolloverCount += 1;
+		}
+		channelValue.lastSequence16 = sequenceNumber;
+	}
+
+	if (!mCrypto->unprotectReceiveMedia(packetData, rolloverCount, output)) {
+		return false;
+	}
+
+	const auto outputSize = output.size();
+	if (outputSize < 4 + 4 + 4) {
+		// 4 byte header
+		// 4 byte timestamp
+		// 4 byte SSRC
+		LOG(SRTC_LOG_E, "Incoming RTP packet is too small after unprotecting");
 		return false;
 	}
 
@@ -197,14 +269,12 @@ SrtpConnection::ChannelValue& SrtpConnection::ensureSrtpChannel(ChannelMap& map,
 		return iter->second;
 	}
 
-	auto replayProtection = maxPossibleValueForReplayProtection != 0
-								? std::make_unique<ReplayProtection>(maxPossibleValueForReplayProtection, 2048)
-								: nullptr;
+	auto replayProtection = std::make_unique<ReplayProtection>(maxPossibleValueForReplayProtection, 2048);
 	const auto result = map.insert({ key, ChannelValue{ std::move(replayProtection) } });
 	return result.first->second;
 }
 
-bool SrtpConnection::getRtcpSequenceNumber(const ByteBuffer& packet, uint32_t& outSequenceNumber) const
+bool SrtpConnection::getControlSequenceNumber(const ByteBuffer& packet, uint32_t& outSequenceNumber) const
 {
 	size_t offetFromEnd;
 	switch (mProfileId) {
@@ -240,6 +310,17 @@ bool SrtpConnection::getRtcpSequenceNumber(const ByteBuffer& packet, uint32_t& o
 	const auto value = ntohl(*reinterpret_cast<const uint32_t*>(packetData + packetSize - offetFromEnd));
 	// Clear the encryption bit
 	outSequenceNumber = value & ~0x80000000u;
+	return true;
+}
+
+bool SrtpConnection::getMediaSequenceNumber(const ByteBuffer& packet, uint16_t& outSequenceNumber) const
+{
+	const auto packetSize = packet.size();
+	if (packetSize < 12) {
+		return false;
+	}
+
+	outSequenceNumber = htons(*reinterpret_cast<const uint16_t*>(packet.data() + 2));
 	return true;
 }
 

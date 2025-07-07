@@ -22,7 +22,7 @@ bool Packetizer::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::makePacketizer(const std::shared_ptr<Track>& track)
+std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::make(const std::shared_ptr<Track>& track)
 {
     const auto codec = track->getCodec();
     switch (codec) {

@@ -1,21 +1,22 @@
 #include <curl/curl.h>
 #include <curl/easy.h>
 
-#include <iomanip>
+#include <algorithm>
 #include <iostream>
-#include <memory>
 #include <string>
 
-namespace {
-	bool gInitCurlDone = false;
+namespace
+{
+bool gInitCurlDone = false;
 
-	void initCurl() {
-		if (!gInitCurlDone) {
-			gInitCurlDone = true;
-			curl_global_init(CURL_GLOBAL_DEFAULT);
-		}
+void initCurl()
+{
+	if (!gInitCurlDone) {
+		gInitCurlDone = true;
+		curl_global_init(CURL_GLOBAL_DEFAULT);
 	}
 }
+} // namespace
 
 std::size_t string_write_callback(const char* in, size_t size, size_t nmemb, std::string* out)
 {
@@ -73,8 +74,7 @@ std::string perform_whip_whep(const std::string& offer, const std::string& url, 
 	if (res != CURLE_OK) {
 		std::cerr << "Error: curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
 		exit(1);
-	}
-	else {
+	} else {
 		long response_code;
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 		if (response_code > 201) {
@@ -86,6 +86,9 @@ std::string perform_whip_whep(const std::string& offer, const std::string& url, 
 	// Clean up
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
+
+	// Remove \r chars
+	answer.erase(std::remove(answer.begin(), answer.end(), '\r'), answer.end());
 
 	return answer;
 }

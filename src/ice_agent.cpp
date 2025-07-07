@@ -7,6 +7,7 @@
 
 #include "srtc/ice_agent.h"
 #include "srtc/logging.h"
+#include "srtc/srtp_crypto.h"
 
 #define LOG(level, ...) srtc::log(level, "IceAgent", __VA_ARGS__)
 
@@ -198,7 +199,7 @@ bool IceAgent::verifyRequestMessage(stun::StunMessage* msg, const std::string& u
 					password.size(),
 					false);
 
-	if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
+	if (!SrtpCrypto::secureEquals(sha1Calculated, attrIntegrityPtr, 20)) {
 		LOG(SRTC_LOG_E, "Request verification failed: signature does not match");
 		return false;
 	}
@@ -249,7 +250,7 @@ bool IceAgent::verifyResponseMessage(stun::StunMessage* msg, const std::string& 
 					password.size(),
 					false);
 
-	if (std::memcmp(sha1Calculated, attrIntegrityPtr, 20) != 0) {
+	if (!SrtpCrypto::secureEquals(sha1Calculated, attrIntegrityPtr, 20)) {
 		LOG(SRTC_LOG_E, "Response verification failed: signature does not match");
 		return false;
 	}

@@ -26,12 +26,11 @@ std::once_flag gInitFlag;
 
 void initLibSRTP()
 {
-	std::call_once(gInitFlag, [] {
-		srtp_init();
-	});
+	std::call_once(gInitFlag, [] { srtp_init(); });
 }
 
-uint32_t randomU32() {
+uint32_t randomU32()
+{
 	uint32_t value;
 	RAND_bytes((unsigned char*)&value, sizeof(value));
 	return value;
@@ -39,11 +38,11 @@ uint32_t randomU32() {
 
 } // namespace
 
-// RTP send
+// Send media
 
-TEST(SrtpCrypto, RtpSend)
+TEST(SrtpCrypto, SendMedia)
 {
-	std::cout << "SrtpCrypto RtpSend" << std::endl;
+	std::cout << "SrtpCrypto SendMedia" << std::endl;
 
 	initLibSRTP();
 	srtc::initOpenSSL();
@@ -119,7 +118,6 @@ TEST(SrtpCrypto, RtpSend)
 		bufMasterCombined.append(bufSendMasterSalt, srtpSaltSize);
 
 		srtp_policy_t srtpPolicy;
-
 		std::memset(&srtpPolicy, 0, sizeof(srtpPolicy));
 		srtpPolicy.ssrc.type = ssrc_any_outbound;
 		srtpPolicy.key = bufMasterCombined.data();
@@ -140,8 +138,20 @@ TEST(SrtpCrypto, RtpSend)
 
 		std::optional<uint16_t> prevSequence;
 
-		const auto track = std::make_shared<srtc::Track>(
-			0, srtc::MediaType::Video, "0", ssrc, 96, 0, 0, srtc::Codec::H264, nullptr, nullptr, 90000, false, false);
+		const auto track = std::make_shared<srtc::Track>(0,
+														 srtc::Direction::Publish,
+														 srtc::MediaType::Video,
+														 "0",
+														 ssrc,
+														 96,
+														 0,
+														 0,
+														 srtc::Codec::H264,
+														 nullptr,
+														 nullptr,
+														 90000,
+														 false,
+														 false);
 
 		{
 			// Edge case 1: empty payload with an extension, not valid in our library
@@ -156,7 +166,7 @@ TEST(SrtpCrypto, RtpSend)
 			const auto output = packet->generate();
 
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_FALSE(crypto->protectSendRtp(output.buf, output.rollover, protectedSrtcCrypto));
+			ASSERT_FALSE(crypto->protectSendMedia(output.buf, output.rollover, protectedSrtcCrypto));
 		}
 
 		{
@@ -175,7 +185,7 @@ TEST(SrtpCrypto, RtpSend)
 			const auto output = packet->generate();
 
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtp(output.buf, output.rollover, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendMedia(output.buf, output.rollover, protectedSrtcCrypto));
 		}
 
 		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
@@ -223,12 +233,11 @@ TEST(SrtpCrypto, RtpSend)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtp(source.buf, source.rollover, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendMedia(source.buf, source.rollover, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
-
-			for (size_t i = 0; i < protectedSize; i += 1) {
+			for (size_t i = 0; i < protectedLibSrtp.size(); i += 1) {
 				ASSERT_EQ(protectedLibSrtp.data()[i], protectedSrtcCrypto.data()[i])
 					<< " diff at offset " << i << " of " << protectedLibSrtp.size() << srtpProfileName << std::endl;
 			}
@@ -240,11 +249,190 @@ TEST(SrtpCrypto, RtpSend)
 	}
 }
 
-// RTCP send
+// Receive media
 
-TEST(SrtpCrypto, RtcpSend)
+TEST(SrtpCrypto, ReceiveMedia)
 {
-	std::cout << "SrtpCrypto RtcpSend" << std::endl;
+	std::cout << "SrtpCrypto ReceiveMedia" << std::endl;
+
+	initLibSRTP();
+	srtc::initOpenSSL();
+
+	static constexpr uint16_t kOpenSslProfileList[] = {
+		SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM,
+		// SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
+	};
+
+	for (const auto openSSlProfile : kOpenSslProfileList) {
+		const char* srtpProfileName;
+		srtp_profile_t srtpProfileId;
+		size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
+
+		switch (openSSlProfile) {
+		case SRTP_AEAD_AES_256_GCM:
+			srtpProfileName = "SRTP_AEAD_AES_256_GCM";
+			srtpProfileId = srtp_profile_aead_aes_256_gcm;
+			srtpKeySize = SRTP_AES_256_KEY_LEN;
+			srtpSaltSize = SRTP_AEAD_SALT_LEN;
+			break;
+		case SRTP_AEAD_AES_128_GCM:
+			srtpProfileName = "SRTP_AEAD_AES_128_GCM";
+			srtpProfileId = srtp_profile_aead_aes_128_gcm;
+			srtpKeySize = SRTP_AES_128_KEY_LEN;
+			srtpSaltSize = SRTP_AEAD_SALT_LEN;
+			break;
+		case SRTP_AES128_CM_SHA1_80:
+			srtpProfileName = "SRTP_AES128_CM_SHA1_80";
+			srtpProfileId = srtp_profile_aes128_cm_sha1_80;
+			srtpKeySize = SRTP_AES_128_KEY_LEN;
+			srtpSaltSize = SRTP_SALT_LEN;
+			break;
+		case SRTP_AES128_CM_SHA1_32:
+			srtpProfileName = "SRTP_AES128_CM_SHA1_32";
+			srtpProfileId = srtp_profile_aes128_cm_sha1_32;
+			srtpKeySize = SRTP_AES_128_KEY_LEN;
+			srtpSaltSize = SRTP_SALT_LEN;
+			break;
+		default:
+			ASSERT_TRUE(false);
+			break;
+		}
+
+		std::cout << "Testing " << srtpProfileName << std::endl;
+
+		// Generate random keys and salts
+		uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
+		RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+		RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+
+		uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
+		RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+		RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+
+		// Convert to our objects
+		srtc::CryptoBytes sendMasterKey, sendMasterSalt;
+		sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
+		sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
+
+		srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
+		receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
+		receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+
+		// Create our own crypto
+		const auto [crypto, error] = srtc::SrtpCrypto::create(
+			openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+		ASSERT_TRUE(error.isOk());
+		ASSERT_TRUE(crypto);
+
+		// Create libSRTP crypto
+		srtc::ByteBuffer bufMasterCombined;
+		bufMasterCombined.append(bufReceiveMasterKey, srtpKeySize);
+		bufMasterCombined.append(bufReceiveMasterSalt, srtpSaltSize);
+
+		srtp_policy_t srtpPolicy;
+
+		std::memset(&srtpPolicy, 0, sizeof(srtpPolicy));
+		srtpPolicy.ssrc.type = ssrc_any_outbound;
+		srtpPolicy.key = bufMasterCombined.data();
+		srtpPolicy.allow_repeat_tx = true;
+
+		srtp_crypto_policy_set_from_profile_for_rtp(&srtpPolicy.rtp, srtpProfileId);
+		srtp_crypto_policy_set_from_profile_for_rtcp(&srtpPolicy.rtcp, srtpProfileId);
+
+		srtp_t srtp = nullptr;
+		ASSERT_EQ(srtp_create(&srtp, &srtpPolicy), srtp_err_status_ok);
+
+		// Randomly generate RTP packets, encrypt them using libSRTP and decrypt using our crypto
+		// Verify that the result of decryption matches the original
+		uint32_t ssrc = 0x12345678;
+		uint16_t sequence = 65000;
+		uint32_t rolloverCounter = 0;
+		uint32_t timestamp = 10000;
+
+		std::optional<uint16_t> prevSequence;
+
+		const auto track = std::make_shared<srtc::Track>(0,
+														 srtc::Direction::Subscribe,
+														 srtc::MediaType::Video,
+														 "0",
+														 ssrc,
+														 96,
+														 0,
+														 0,
+														 srtc::Codec::H264,
+														 nullptr,
+														 nullptr,
+														 90000,
+														 false,
+														 false);
+
+		for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
+			const auto payloadSize = 5 + randomU32() % 1000;
+			srtc::ByteBuffer payload(payloadSize);
+			RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+			payload.resize(payloadSize);
+
+			// Rollover counter
+			if (prevSequence.has_value() && prevSequence > sequence) {
+				rolloverCounter += 1;
+			}
+			prevSequence = sequence;
+
+			srtc::RtpExtension extension;
+
+			if ((repeatIndex % 2) == 1) {
+				// Extension
+				const auto extensionId = static_cast<uint16_t>(1 + randomU32() % 2000);
+				const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
+				srtc::ByteBuffer extensionData(extensionLen);
+				extensionData.resize(extensionLen);
+				RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+
+				extension = { extensionId, std::move(extensionData) };
+			}
+
+			uint8_t padding = 0;
+			if ((repeatIndex % 5) == 1) {
+				padding = 1 + static_cast<uint8_t>(randomU32() % 128);
+			}
+
+			const auto packet = std::make_shared<srtc::RtpPacket>(
+				track, false, rolloverCounter, sequence, timestamp, padding, std::move(extension), std::move(payload));
+			// This is our packet's unencrypted data
+			const auto sourcePacket = packet->generate();
+
+			// Encrypt
+			srtc::ByteBuffer encryptedPacket;
+			encryptedPacket.reserve(sourcePacket.buf.size() + SRTP_MAX_TRAILER_LEN);
+			size_t encryptedLen = encryptedPacket.capacity();
+
+			ASSERT_EQ(
+				srtp_protect(
+					srtp, sourcePacket.buf.data(), sourcePacket.buf.size(), encryptedPacket.data(), &encryptedLen, 0),
+				srtp_err_status_ok);
+			encryptedPacket.resize(encryptedLen);
+
+			// Decrypt using our crypto
+			srtc::ByteBuffer decryptedPacket;
+			const auto decryptedResult =
+				crypto->unprotectReceiveMedia(encryptedPacket, rolloverCounter, decryptedPacket);
+			ASSERT_TRUE(decryptedResult);
+
+			// The packet should be equal to the source
+			ASSERT_EQ(decryptedPacket.size(), sourcePacket.buf.size());
+			ASSERT_EQ(std::memcmp(decryptedPacket.data(), sourcePacket.buf.data(), decryptedPacket.size()), 0);
+		}
+
+		// Cleanup
+		srtp_dealloc(srtp);
+	}
+}
+
+// Send control
+
+TEST(SrtpCrypto, SendControl)
+{
+	std::cout << "SrtpCrypto SendControl" << std::endl;
 
 	initLibSRTP();
 	srtc::initOpenSSL();
@@ -356,7 +544,7 @@ TEST(SrtpCrypto, RtcpSend)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtcp(source, sequence, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendControl(source, sequence, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
@@ -373,11 +561,11 @@ TEST(SrtpCrypto, RtcpSend)
 	}
 }
 
-// RTCP send - multiple RTCP packets in one UDP packet
+// Send control - multiple RTCP packets in one UDP packet
 
-TEST(SrtpCrypto, RtcpSendMulti)
+TEST(SrtpCrypto, SendControlMulti)
 {
-	std::cout << "SrtpCrypto RtcpSendMulti" << std::endl;
+	std::cout << "SrtpCrypto SendControlMulti" << std::endl;
 
 	initLibSRTP();
 	srtc::initOpenSSL();
@@ -505,7 +693,7 @@ TEST(SrtpCrypto, RtcpSendMulti)
 
 			// Encrypt using our own crypto
 			srtc::ByteBuffer protectedSrtcCrypto;
-			ASSERT_TRUE(crypto->protectSendRtcp(source, sequence, protectedSrtcCrypto));
+			ASSERT_TRUE(crypto->protectSendControl(source, sequence, protectedSrtcCrypto));
 
 			// Validate
 			ASSERT_EQ(protectedLibSrtp.size(), protectedSrtcCrypto.size());
@@ -522,11 +710,11 @@ TEST(SrtpCrypto, RtcpSendMulti)
 	}
 }
 
-// RTCP receive
+// Receive control
 
-TEST(SrtpCrypto, RtcpReceive)
+TEST(SrtpCrypto, ReceiveControl)
 {
-	std::cout << "SrtpCrypto RtcpReceive" << std::endl;
+	std::cout << "SrtpCrypto ReceiveControl" << std::endl;
 
 	initLibSRTP();
 	srtc::initOpenSSL();
@@ -652,7 +840,7 @@ TEST(SrtpCrypto, RtcpReceive)
 
 			// Decrypt using our crypto
 			srtc::ByteBuffer decryptedPacket;
-			const auto decryptedResult = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
+			const auto decryptedResult = crypto->unprotectReceiveControl(encryptedPacket, decryptedPacket);
 			ASSERT_TRUE(decryptedResult);
 
 			// The packet should be equal to the source
@@ -823,7 +1011,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 
 			// Decrypt using our crypto
 			srtc::ByteBuffer decryptedPacket;
-			const auto decryptedResult = crypto->unprotectReceiveRtcp(encryptedPacket, decryptedPacket);
+			const auto decryptedResult = crypto->unprotectReceiveControl(encryptedPacket, decryptedPacket);
 			ASSERT_TRUE(decryptedResult);
 
 			// The packet should be equal to the source

@@ -10,7 +10,7 @@ if(POLICY CMP0091)
 endif()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
-option(SRTC_BUILD_CMDLINE "Build the command line demo" ON)
+option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -32,11 +32,15 @@ endif()
 add_library(srtc
         # Headers
         include/srtc/byte_buffer.h
+        include/srtc/depacketizer.h
+        include/srtc/depacketizer_h264.h
+        include/srtc/depacketizer_opus.h
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
+        include/srtc/jitter_buffer.h
         include/srtc/logging.h
         include/srtc/packetizer.h
         include/srtc/packetizer_h264.h
@@ -74,16 +78,20 @@ add_library(srtc
         include/srtc/track.h
         include/srtc/track_selector.h
         include/srtc/track_stats.h
-        include/srtc/twcc.h
+        include/srtc/twcc_publish.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
         include/srtc/x509_hash.h
         # Sources
         src/byte_buffer.cpp
+        src/depacketizer.cpp
+        src/depacketizer_h264.cpp
+        src/depacketizer_opus.cpp
         src/error.cpp
         src/extension_map.cpp
         src/h264.cpp
         src/ice_agent.cpp
+        src/jitter_buffer.cpp
         src/logging.cpp
         src/packetizer.cpp
         src/packetizer_h264.cpp
@@ -121,7 +129,7 @@ add_library(srtc
         src/track.cpp
         src/track_selector.cpp
         src/track_stats.cpp
-        src/twcc.cpp
+        src/twcc_publish.cpp
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp)
@@ -224,8 +232,8 @@ target_include_directories(srtc PRIVATE
         src/stun
 )
 
-target_link_directories(srtc PUBLIC
-        "${CMAKE_BINARY_DIR}/stun"
+target_link_directories(srtc PRIVATE
+        "${CMAKE_BINARY_DIR}/src/stun"
 )
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
@@ -284,10 +292,12 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
     add_executable(
             srtc_test
             EXCLUDE_FROM_ALL
-            src/test_google_vla.cpp
-            src/test_replay_protection.cpp
-            src/test_srtp_key_derivation.cpp
-            src/test_srtp_crypto.cpp
+            test/test_google_vla.cpp
+            test/test_extended_value.cpp
+            test/test_replay_protection.cpp
+            test/test_rtp_packet.cpp
+            test/test_srtp_key_derivation.cpp
+            test/test_srtp_crypto.cpp
     )
 
     target_include_directories(
@@ -327,7 +337,7 @@ endif()
 
 # Tools
 
-if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
+if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     # Publish
 
@@ -365,6 +375,58 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_CMDLINE)
 
         target_link_libraries(
                 srtc_publish
+                PRIVATE
+                srtc
+                CURL::libcurl
+        )
+    endif()
+
+    # Subscribe
+
+    add_subdirectory(tools/libogg)
+
+    add_executable(srtc_subscribe
+            tools/srtc_subscribe.cpp
+            tools/http_whip_whep.h
+            tools/media_writer.h
+            tools/media_writer.cpp
+            tools/media_writer_h26x.h
+            tools/media_writer_h26x.cpp
+            tools/media_writer_ogg.h
+            tools/media_writer_ogg.cpp
+    )
+
+    add_dependencies(srtc_subscribe srtc ogg)
+
+    target_link_libraries(srtc_subscribe PRIVATE ogg)
+
+    if(WIN32)
+        target_sources(srtc_subscribe
+                PRIVATE
+                tools/http_whip_whep_win.cpp
+        )
+
+        target_link_libraries(
+                srtc_subscribe
+                PRIVATE
+                srtc
+                winmm
+        )
+    else()
+        find_package(CURL REQUIRED)
+
+        target_sources(srtc_subscribe
+                PRIVATE
+                tools/http_whip_whep_curl.cpp
+        )
+
+        target_include_directories(srtc_subscribe
+                PRIVATE
+                ${CURL_INCLUDE_DIRS}
+        )
+
+        target_link_libraries(
+                srtc_subscribe
                 PRIVATE
                 srtc
                 CURL::libcurl

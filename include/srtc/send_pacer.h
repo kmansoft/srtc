@@ -21,12 +21,12 @@ class RtpPacket;
 class RtpExtensionSourceTWCC;
 class Track;
 
-struct OfferConfig;
+struct PubOfferConfig;
 
 class SendPacer
 {
 public:
-	SendPacer(const struct OfferConfig& offerConfig,
+	SendPacer(const PubOfferConfig& offerConfig,
 			  const std::shared_ptr<SrtpConnection>& srtp,
 			  const std::shared_ptr<Socket>& socket,
 			  const std::shared_ptr<SendRtpHistory>& history,
@@ -46,7 +46,7 @@ public:
 	void run();
 
 private:
-	const struct OfferConfig mOfferConfig;
+	const PubOfferConfig mOfferConfig;
 	const std::shared_ptr<SrtpConnection> mSrtp;
 	const std::shared_ptr<Socket> mSocket;
 	const std::shared_ptr<SendRtpHistory> mHistory;
@@ -74,7 +74,7 @@ private:
 
 #ifdef NDEBUG
 #else
-	RandomGenerator<uint32_t> mNoSendRandomGenerator;
+	RandomGenerator<uint32_t> mLosePacketsRandomGenerator;
 #endif
 
 };

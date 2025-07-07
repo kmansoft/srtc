@@ -1,10 +1,13 @@
 #pragma once
 
+#include <memory>
+
 namespace srtc
 {
 
 class PeerCandidate;
 class Error;
+class RtpPacket;
 
 class PeerCandidateListener
 {
@@ -17,6 +20,8 @@ public:
     virtual void onCandidateIceSelected(PeerCandidate* candidate) = 0;
     virtual void onCandidateConnected(PeerCandidate* candidate) = 0;
     virtual void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) = 0;
+
+	virtual void onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet) = 0;
 };
 
 } // namespace srtc

@@ -38,13 +38,14 @@ public:
         }
     };
 
-    Track(int trackId,
+    Track(uint32_t trackId,
+		  Direction direction,
           MediaType mediaType,
           const std::string& mediaId,
           uint32_t ssrc,
-          int payloadId,
+		  uint8_t payloadId,
           uint32_t rtxSsrc,
-          int rtxPayloadId,
+		  uint8_t rtxPayloadId,
           Codec codec,
           const std::shared_ptr<CodecOptions>& codecOptions,
           const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -52,11 +53,12 @@ public:
           bool hasNack,
           bool hasPli);
 
-    [[nodiscard]] int getTrackId() const;
+    [[nodiscard]] uint32_t getTrackId() const;
+	[[nodiscard]] Direction getDirection() const;
     [[nodiscard]] MediaType getMediaType() const;
     [[nodiscard]] std::string getMediaId() const;
-    [[nodiscard]] int getPayloadId() const;
-    [[nodiscard]] int getRtxPayloadId() const;
+    [[nodiscard]] uint8_t getPayloadId() const;
+    [[nodiscard]] uint8_t getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
     [[nodiscard]] std::shared_ptr<CodecOptions> getCodecOptions() const;
     [[nodiscard]] bool isSimulcast() const;
@@ -76,13 +78,14 @@ public:
     [[nodiscard]] std::shared_ptr<TrackStats> getStats() const;
 
 private:
-    const int mTrackId;
+    const uint32_t mTrackId;
+	const Direction mDirection;
     const MediaType mMediaType;
     const std::string mMediaId;
     const uint32_t mSSRC;
-    const int mPayloadId;
+    const uint8_t mPayloadId;
     const uint32_t mRtxSSRC;
-    const int mRtxPayloadId;
+    const uint8_t mRtxPayloadId;
     const Codec mCodec;
     const std::shared_ptr<CodecOptions> mCodecOptions;
     const std::shared_ptr<SimulcastLayer> mSimulcastLayer;

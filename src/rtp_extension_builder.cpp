@@ -50,7 +50,7 @@ void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
         if (extensionId == id) {
 			assert(extensionLen == 2);
 
-            const auto offset = reader.current();
+            const auto offset = reader.position();
             const auto data = mBuf.data();
 
             data[offset + 0] = (value >> 8) & 0xFF;
@@ -70,7 +70,7 @@ RtpExtension RtpExtensionBuilder::build()
         return { 0, {} };
     }
 
-    return { 0x1000, std::move(mBuf) };
+    return { RtpExtension::kTwoByte, std::move(mBuf) };
 }
 
 RtpExtensionBuilder RtpExtensionBuilder::from(const RtpExtension& extension)

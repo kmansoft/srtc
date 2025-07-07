@@ -39,6 +39,17 @@ public:
 			  RtpExtension&& extension,
 			  ByteBuffer&& payload);
 
+	RtpPacket(const std::shared_ptr<Track>& track,
+			  uint32_t ssrc,
+			  uint8_t payloadId,
+			  bool marker,
+			  uint32_t rollover,
+			  uint16_t sequence,
+			  uint32_t timestamp,
+			  uint8_t padding,
+			  RtpExtension&& extension,
+			  ByteBuffer&& payload);
+
 	~RtpPacket();
 
 	[[nodiscard]] std::shared_ptr<Track> getTrack() const;
@@ -50,6 +61,9 @@ public:
 	[[nodiscard]] size_t getPayloadSize() const;
 	[[nodiscard]] uint16_t getSequence() const;
 	[[nodiscard]] uint32_t getSSRC() const;
+	[[nodiscard]] uint32_t getTimestamp() const;
+	[[nodiscard]] const ByteBuffer& getPayload() const;
+	[[nodiscard]] ByteBuffer&& movePayload();
 
 	// The extension is mutable
 	void setExtension(RtpExtension&& extension);
@@ -62,6 +76,9 @@ public:
 	[[nodiscard]] Output generate() const;
 	[[nodiscard]] Output generateRtx(const RtpExtension& extension) const;
 
+	static std::shared_ptr<RtpPacket> fromUdpPacket(const std::shared_ptr<Track>& track,
+													const srtc::ByteBuffer& data);
+
 private:
 	const std::shared_ptr<Track> mTrack;
 	const uint32_t mSSRC;
@@ -71,7 +88,7 @@ private:
 	const uint16_t mSequence;
 	const uint32_t mTimestamp;
 	const uint8_t mPaddingSize;
-	const ByteBuffer mPayload;
+	ByteBuffer mPayload;
 	RtpExtension mExtension;
 };
 

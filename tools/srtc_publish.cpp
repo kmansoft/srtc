@@ -24,7 +24,7 @@
 
 static std::string gInputFile = "sintel.h264";
 static std::string gWhipUrl = "http://localhost:8080/whip";
-static std::string gWhipToken = "none";
+static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintInfo = false;
@@ -93,8 +93,6 @@ uint32_t BitReader::readUnsignedExpGolomb()
 	uint32_t remainingBits = readBits(leadingZeros);
 	return (1 << leadingZeros) - 1 + remainingBits;
 }
-
-// WHIP
 
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
@@ -295,7 +293,7 @@ void printUsage(const char* programName)
 	std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
 	std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
 	std::cout << "  -i, --info           Print input file info" << std::endl;
-	std::cout << "  -d, --drop           Drop some packets at random (test NCK and RTX handling)" << std::endl;
+	std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
 	std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
 	std::cout << "  -h, --help           Show this help message" << std::endl;
 }
@@ -328,7 +326,7 @@ int main(int argc, char* argv[])
 			}
 		} else if (arg == "-t" || arg == "--token") {
 			if (i + 1 < argc) {
-				gWhipToken = argv[++i];
+				gAuthToken = argv[++i];
 			} else {
 				std::cerr << "Error: -t/--token requires a token value" << std::endl;
 				return 1;
@@ -391,7 +389,7 @@ int main(int argc, char* argv[])
 	// Peer connection
 	auto connectedReported = false;
 	const auto ms0 = std::chrono::steady_clock::now();
-	const auto peerConnection = std::make_shared<PeerConnection>();
+	const auto peerConnection = std::make_shared<PeerConnection>(Direction::Publish);
 
 	peerConnection->setConnectionStateListener(
 		[ms0, &connectedReported, &connectionStateMutex, &connectionState, &connectionStateCond](
@@ -426,23 +424,28 @@ int main(int argc, char* argv[])
 	});
 
 	// Offer
-	OfferConfig offerConfig = {};
+	PubOfferConfig offerConfig = {};
 	offerConfig.cname = "foo";
 	offerConfig.enable_rtx = true;
 	offerConfig.enable_bwe = gEnableBWE;
 	offerConfig.debug_drop_packets = gDropPackets;
 
-	PubVideoCodec videoCodec;
+	PubVideoCodec videoCodec = {};
 	videoCodec.codec = Codec::H264;
 	videoCodec.profile_level_id = 0x42e01f;
 
 	PubVideoConfig videoConfig = {};
 	videoConfig.codec_list.push_back(videoCodec);
 
-	const auto offer = peerConnection->createPublishSdpOffer(offerConfig, videoConfig, std::nullopt);
-	const auto [offerString, offerError] = offer->generate();
-	if (offerError.isError()) {
-		std::cout << "Error: cannot generate offer: " << offerError.mMessage << std::endl;
+	const auto [offer, offerCreateError] = peerConnection->createPublishOffer(offerConfig, videoConfig, std::nullopt);
+	if (offerCreateError.isError()) {
+		std::cout << "Error: cannot create offer: " << offerCreateError.mMessage << std::endl;
+		exit(1);
+	}
+
+	const auto [offerString, offerStringError] = offer->generate();
+	if (offerStringError.isError()) {
+		std::cout << "Error: cannot generate offer: " << offerStringError.mMessage << std::endl;
 		exit(1);
 	}
 	if (gPrintSDP) {
@@ -450,21 +453,21 @@ int main(int argc, char* argv[])
 	}
 
 	// WHIP
-	const auto answerString = perform_whip_whep(offerString, gWhipUrl, gWhipToken);
+	const auto answerString = perform_whip_whep(offerString, gWhipUrl, gAuthToken);
 	if (gPrintSDP) {
 		std::cout << "----- SDP answer -----\n" << answerString << std::endl;
 	}
 
 	// Answer
-	const auto [answer, answerError] = peerConnection->parsePublishSdpAnswer(offer, answerString, nullptr);
+	const auto [answer, answerError] = peerConnection->parsePublishAnswer(offer, answerString, nullptr);
 	if (answerError.isError()) {
 		std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
 		exit(1);
 	}
 
 	// Connect the peer connection
-	peerConnection->setSdpOffer(offer);
-	peerConnection->setSdpAnswer(answer);
+	peerConnection->setOffer(offer);
+	peerConnection->setAnswer(answer);
 
 	// Wait for connection to either be connected or fail
 	{
@@ -484,7 +487,9 @@ int main(int argc, char* argv[])
 	playVideoFile(peerConnection, inputFileData);
 
 	// Wait a little and exit
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	peerConnection->close();
 
 	return 0;
 }
