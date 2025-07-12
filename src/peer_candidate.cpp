@@ -793,7 +793,6 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
                     const auto packet = RtpPacket::fromUdpPacket(track, output);
                     if (packet) {
                         const auto stats = track->getStats();
-                        ;
 
                         stats->incrementReceivedPackets(1);
                         stats->incrementReceivedBytes(buf.size());
