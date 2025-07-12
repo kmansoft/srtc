@@ -38,6 +38,7 @@ add_library(srtc
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
+        include/srtc/extended_value.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer.h
@@ -64,6 +65,7 @@ add_library(srtc
         include/srtc/scheduler.h
         include/srtc/sdp_offer.h
         include/srtc/sdp_answer.h
+        include/srtc/sender_report.h
         include/srtc/sender_reports_history.h
         include/srtc/send_rtp_history.h
         include/srtc/send_pacer.h
@@ -89,6 +91,7 @@ add_library(srtc
         src/depacketizer_opus.cpp
         src/error.cpp
         src/extension_map.cpp
+        src/extended_value.cpp
         src/h264.cpp
         src/ice_agent.cpp
         src/jitter_buffer.cpp
