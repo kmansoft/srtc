@@ -45,19 +45,19 @@ std::atomic<uint32_t> gNextUniqueId = 0;
 
 int verify_callback(int ok, X509_STORE_CTX* store_ctx)
 {
-	// We verify cert has ourselves after the handshake has completed
-	return 1;
+    // We verify cert has ourselves after the handshake has completed
+    return 1;
 }
 
 std::string get_openssl_error()
 {
-	BIO* bio = BIO_new(BIO_s_mem());
-	ERR_print_errors(bio);
-	char* buf;
-	size_t len = BIO_get_mem_data(bio, &buf);
-	std::string ret(buf, len);
-	BIO_free(bio);
-	return ret;
+    BIO* bio = BIO_new(BIO_s_mem());
+    ERR_print_errors(bio);
+    char* buf;
+    size_t len = BIO_get_mem_data(bio, &buf);
+    std::string ret(buf, len);
+    BIO_free(bio);
+    return ret;
 }
 
 constexpr auto kIceMessageBufferSize = 2048;
@@ -75,134 +75,134 @@ constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
 {
-	return (1 << 24) * type_preference + (1 << 8) * local_preference + (256 - component_id);
+    return (1 << 24) * type_preference + (1 << 8) * local_preference + (256 - component_id);
 }
 
 stun::StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::IceAgent>& agent,
-													uint8_t* buf,
-													size_t len,
-													const std::shared_ptr<srtc::SdpOffer>& offer,
-													const std::shared_ptr<srtc::SdpAnswer>& answer,
-													const char* label,
-													bool useCandidate)
+                                                    uint8_t* buf,
+                                                    size_t len,
+                                                    const std::shared_ptr<srtc::SdpOffer>& offer,
+                                                    const std::shared_ptr<srtc::SdpAnswer>& answer,
+                                                    const char* label,
+                                                    bool useCandidate)
 {
-	stun::StunMessage msg = {};
-	agent->initRequest(&msg, buf, len, stun::STUN_BINDING);
+    stun::StunMessage msg = {};
+    agent->initRequest(&msg, buf, len, stun::STUN_BINDING);
 
-	if (useCandidate) {
-		stun_message_append_flag(&msg, stun::STUN_ATTRIBUTE_USE_CANDIDATE);
-	}
+    if (useCandidate) {
+        stun_message_append_flag(&msg, stun::STUN_ATTRIBUTE_USE_CANDIDATE);
+    }
 
-	const uint32_t priority = make_stun_priority(200, 10, 1);
-	stun::stun_message_append32(&msg, stun::STUN_ATTRIBUTE_PRIORITY, priority);
+    const uint32_t priority = make_stun_priority(200, 10, 1);
+    stun::stun_message_append32(&msg, stun::STUN_ATTRIBUTE_PRIORITY, priority);
 
-	// https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-	const auto offerUserName = offer->getIceUFrag();
-	const auto answerUserName = answer->getIceUFrag();
-	const auto iceUserName = answerUserName + ":" + offerUserName;
-	const auto icePassword = answer->getIcePassword();
+    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
+    const auto offerUserName = offer->getIceUFrag();
+    const auto answerUserName = answer->getIceUFrag();
+    const auto iceUserName = answerUserName + ":" + offerUserName;
+    const auto icePassword = answer->getIcePassword();
 
-	agent->finishMessage(&msg, iceUserName, icePassword);
+    agent->finishMessage(&msg, iceUserName, icePassword);
 
-	return msg;
+    return msg;
 }
 
 stun::StunMessage make_stun_message_binding_response(const std::shared_ptr<srtc::IceAgent>& agent,
-													 uint8_t* buf,
-													 size_t len,
-													 const std::shared_ptr<srtc::SdpOffer>& offer,
-													 const std::shared_ptr<srtc::SdpAnswer>& answer,
-													 const stun::StunMessage& request,
-													 const srtc::anyaddr& address,
-													 socklen_t addressLen)
+                                                     uint8_t* buf,
+                                                     size_t len,
+                                                     const std::shared_ptr<srtc::SdpOffer>& offer,
+                                                     const std::shared_ptr<srtc::SdpAnswer>& answer,
+                                                     const stun::StunMessage& request,
+                                                     const srtc::anyaddr& address,
+                                                     socklen_t addressLen)
 {
-	stun::StunMessage msg = {};
-	agent->initResponse(&msg, buf, len, &request);
+    stun::StunMessage msg = {};
+    agent->initResponse(&msg, buf, len, &request);
 
-	stun_message_append_xor_addr(&msg, stun::STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS, &address.ss, addressLen);
+    stun_message_append_xor_addr(&msg, stun::STUN_ATTRIBUTE_XOR_MAPPED_ADDRESS, &address.ss, addressLen);
 
-	// https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
-	const auto icePassword = offer->getIcePassword();
+    // https://datatracker.ietf.org/doc/html/rfc5245#section-7.1.2.3
+    const auto icePassword = offer->getIcePassword();
 
-	agent->finishMessage(&msg, std::nullopt, icePassword);
+    agent->finishMessage(&msg, std::nullopt, icePassword);
 
-	return msg;
+    return msg;
 }
 
 bool is_stun_message(const srtc::ByteBuffer& buf)
 {
-	// https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
-	if (buf.size() > 20) {
-		const auto data = buf.data();
-		if (data[0] < 2) {
-			uint32_t magic = htonl(srtc::IceAgent::kRfc5389Cookie);
-			uint8_t cookie[4];
-			std::memcpy(cookie, buf.data() + 4, 4);
+    // https://datatracker.ietf.org/doc/html/rfc5764#section-5.1.2
+    if (buf.size() > 20) {
+        const auto data = buf.data();
+        if (data[0] < 2) {
+            uint32_t magic = htonl(srtc::IceAgent::kRfc5389Cookie);
+            uint8_t cookie[4];
+            std::memcpy(cookie, buf.data() + 4, 4);
 
-			if (std::memcmp(&magic, cookie, 4) == 0) {
-				return true;
-			}
-		}
-	}
+            if (std::memcmp(&magic, cookie, 4) == 0) {
+                return true;
+            }
+        }
+    }
 
-	return false;
+    return false;
 }
 
 bool is_dtls_message(const srtc::ByteBuffer& buf)
 {
-	// https://datatracker.ietf.org/doc/html/rfc7983#section-5
-	if (buf.size() >= 4) {
-		const auto data = buf.data();
-		if (data[0] >= 20 && data[0] <= 24) {
-			return true;
-		}
-	}
+    // https://datatracker.ietf.org/doc/html/rfc7983#section-5
+    if (buf.size() >= 4) {
+        const auto data = buf.data();
+        if (data[0] >= 20 && data[0] <= 24) {
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 bool is_rtc_message(const srtc::ByteBuffer& buf)
 {
-	// https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
-	if (buf.size() >= 8) {
-		const auto data = buf.data();
-		if (data[0] >= 128 && data[0] <= 191) {
-			return true;
-		}
-	}
+    // https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
+    if (buf.size() >= 8) {
+        const auto data = buf.data();
+        if (data[0] >= 128 && data[0] <= 191) {
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 bool is_rtcp_message(const srtc::ByteBuffer& buf)
 {
-	// https://datatracker.ietf.org/doc/html/rfc5761#section-4
-	if (buf.size() >= 8) {
-		const auto data = buf.data();
-		const auto payloadId = data[1] & 0x7F;
-		return payloadId >= 64 && payloadId <= 95;
-	}
-	return false;
+    // https://datatracker.ietf.org/doc/html/rfc5761#section-4
+    if (buf.size() >= 8) {
+        const auto data = buf.data();
+        const auto payloadId = data[1] & 0x7F;
+        return payloadId >= 64 && payloadId <= 95;
+    }
+    return false;
 }
 
 uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer, const std::string& name)
 {
-	return answer->getVideoExtensionMap().findByName(name);
+    return answer->getVideoExtensionMap().findByName(name);
 }
 
 float calculateLayerBandwidthScale(const std::vector<std::shared_ptr<srtc::SimulcastLayer>>& layerList,
-								   const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
+                                   const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
 {
-	if (layerList.empty()) {
-		return 1.0f;
-	}
+    if (layerList.empty()) {
+        return 1.0f;
+    }
 
-	uint32_t total = 0;
-	for (const auto& layer : layerList) {
-		total += layer->kilobits_per_second;
-	}
+    uint32_t total = 0;
+    for (const auto& layer : layerList) {
+        total += layer->kilobits_per_second;
+    }
 
-	return static_cast<float>(trackLayer->kilobits_per_second) / static_cast<float>(total);
+    return static_cast<float>(trackLayer->kilobits_per_second) / static_cast<float>(total);
 }
 
 } // namespace
@@ -211,931 +211,931 @@ namespace srtc
 {
 
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
-							 const std::vector<std::shared_ptr<Track>>& trackList,
-							 const std::shared_ptr<SdpOffer>& offer,
-							 const std::shared_ptr<SdpAnswer>& answer,
-							 const std::shared_ptr<RealScheduler>& scheduler,
-							 const Host& host,
-							 const std::shared_ptr<EventLoop>& eventLoop,
-							 const Scheduler::Delay& startDelay)
-	: mListener(listener)
-	, mTrackList(trackList)
-	, mOffer(offer)
-	, mAnswer(answer)
-	, mHost(host)
-	, mEventLoop(eventLoop)
-	, mSocket(std::make_shared<Socket>(host.addr))
-	, mIceAgent(std::make_shared<IceAgent>())
-	, mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
-	, mSendRtpHistory(std::make_shared<SendRtpHistory>())
-	, mUniqueId(++gNextUniqueId)
-	, mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
-	, mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
-	, mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
-	, mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
-	, mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast(),
-																	 mVideoExtMediaId,
-																	 mVideoExtStreamId,
-																	 mVideoExtRepairedStreamId,
-																	 mVideoExtGoogleVLA))
-	, mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
-	, mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
-	, mIceRttFilter(0.2f)
-	, mRtpRttFilter(0.2f)
-	, mLastSendTime(std::chrono::steady_clock::time_point::min())
-	, mLastReceiveTime(std::chrono::steady_clock::time_point::min())
-	, mScheduler(scheduler)
+                             const std::vector<std::shared_ptr<Track>>& trackList,
+                             const std::shared_ptr<SdpOffer>& offer,
+                             const std::shared_ptr<SdpAnswer>& answer,
+                             const std::shared_ptr<RealScheduler>& scheduler,
+                             const Host& host,
+                             const std::shared_ptr<EventLoop>& eventLoop,
+                             const Scheduler::Delay& startDelay)
+    : mListener(listener)
+    , mTrackList(trackList)
+    , mOffer(offer)
+    , mAnswer(answer)
+    , mHost(host)
+    , mEventLoop(eventLoop)
+    , mSocket(std::make_shared<Socket>(host.addr))
+    , mIceAgent(std::make_shared<IceAgent>())
+    , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
+    , mSendRtpHistory(std::make_shared<SendRtpHistory>())
+    , mUniqueId(++gNextUniqueId)
+    , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
+    , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
+    , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
+    , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
+    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast(),
+                                                                     mVideoExtMediaId,
+                                                                     mVideoExtStreamId,
+                                                                     mVideoExtRepairedStreamId,
+                                                                     mVideoExtGoogleVLA))
+    , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
+    , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
+    , mIceRttFilter(0.2f)
+    , mRtpRttFilter(0.2f)
+    , mLastSendTime(std::chrono::steady_clock::time_point::min())
+    , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
+    , mScheduler(scheduler)
 {
-	assert(mListener);
+    assert(mListener);
 
-	LOG(SRTC_LOG_V, "Constructor for %p #%d", static_cast<void*>(this), mUniqueId);
+    LOG(SRTC_LOG_V, "Constructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
-	initOpenSSL();
+    initOpenSSL();
 
-	mEventLoop->registerSocket(mSocket, this);
+    mEventLoop->registerSocket(mSocket, this);
 
-	mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
+    mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
 
-	// Trim stun requests from time to time
-	Task::cancelHelper(mTaskExpireStunRequests);
+    // Trim stun requests from time to time
+    Task::cancelHelper(mTaskExpireStunRequests);
 
-	mTaskExpireStunRequests =
-		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+    mTaskExpireStunRequests =
+        mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
 }
 
 PeerCandidate::~PeerCandidate()
 {
-	LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
+    LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
 
-	mEventLoop->unregisterSocket(mSocket);
+    mEventLoop->unregisterSocket(mSocket);
 
-	freeDTLS();
+    freeDTLS();
 }
 
 void PeerCandidate::receiveFromSocket()
 {
-	auto list = mSocket->receive();
-	for (auto& item : list) {
-		mRawReceiveQueue.push_back(std::move(item));
-	}
-	list.clear();
+    auto list = mSocket->receive();
+    for (auto& item : list) {
+        mRawReceiveQueue.push_back(std::move(item));
+    }
+    list.clear();
 }
 
 void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
 {
-	mFrameSendQueue.push_back(std::move(frame));
+    mFrameSendQueue.push_back(std::move(frame));
 }
 
 void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	for (const auto& track : trackList) {
-		if (track->getDirection() == Direction::Publish) {
-			const auto ssrc = track->getSSRC();
+    for (const auto& track : trackList) {
+        if (track->getDirection() == Direction::Publish) {
+            const auto ssrc = track->getSSRC();
 
-			ByteBuffer payload;
-			ByteWriter w(payload);
+            ByteBuffer payload;
+            ByteWriter w(payload);
 
-			// https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+            // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
 
-			NtpTime ntp = {};
-			getNtpTime(ntp);
+            NtpTime ntp = {};
+            getNtpTime(ntp);
 
-			const auto timeSource = track->getRtpTimeSource();
-			const auto rtpTime = timeSource->getCurrTimestamp();
+            const auto timeSource = track->getRtpTimeSource();
+            const auto rtpTime = timeSource->getCurrTimestamp();
 
-			w.writeU32(ntp.seconds);
-			w.writeU32(ntp.fraction);
-			w.writeU32(rtpTime);
+            w.writeU32(ntp.seconds);
+            w.writeU32(ntp.fraction);
+            w.writeU32(rtpTime);
 
-			const auto stats = track->getStats();
-			w.writeU32(stats->getSentPackets());
-			w.writeU32(stats->getSentBytes());
+            const auto stats = track->getStats();
+            w.writeU32(stats->getSentPackets());
+            w.writeU32(stats->getSentBytes());
 
-			const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
-			sendRtcpPacket(track, packet);
+            const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+            sendRtcpPacket(track, packet);
 
-			mSenderReportsHistory->save(ssrc, ntp);
-		}
-	}
+            mSenderReportsHistory->save(ssrc, ntp);
+        }
+    }
 }
 
 void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	for (const auto& track : trackList) {
-		if (track->getDirection() == Direction::Subscribe) {
-			const auto ssrc = track->getSSRC();
-			const auto stats = track->getStats();
+    for (const auto& track : trackList) {
+        if (track->getDirection() == Direction::Subscribe) {
+            const auto ssrc = track->getSSRC();
+            const auto stats = track->getStats();
 
-			const auto seq = stats->getReceivedHighestSeqEx();
-			const auto sr = stats->getReceivedSenderReport();
+            const auto seq = stats->getReceivedHighestSeqEx();
+            const auto sr = stats->getReceivedSenderReport();
 
-			ByteBuffer payload;
-			ByteWriter w(payload);
+            ByteBuffer payload;
+            ByteWriter w(payload);
 
-			w.writeU32(ssrc);
-			w.writeU32(0); // TODO: fraction lost | cumulative number of packets lost
-			w.writeU32(static_cast<uint32_t>(seq));
-			w.writeU32(0); // TODO: interarrival jitter
+            w.writeU32(ssrc);
+            w.writeU32(0); // TODO: fraction lost | cumulative number of packets lost
+            w.writeU32(static_cast<uint32_t>(seq));
+            w.writeU32(0); // TODO: interarrival jitter
 
-			if (sr.has_value()) {
-				const auto lastSRMiddle32 = static_cast<uint32_t>(sr.value().ntp.seconds & 0xFFFFu) << 16 ||
-											static_cast<uint32_t>(sr.value().ntp.fraction >> 16) % 0xFFFFu;
-				const auto lastSRDelayDelta = std::chrono::steady_clock::now() - sr.value().when;
-				const auto lastSRDelayValue =
-					static_cast<int64_t>(65536) * 1000 /
-					std::chrono::duration_cast<std::chrono::milliseconds>(lastSRDelayDelta).count();
+            if (sr.has_value()) {
+                const auto sr_value = sr.value();
+                const auto lastSRMiddle32 = static_cast<uint32_t>(sr_value.ntp.seconds & 0xFFFFu) << 16 ||
+                                            static_cast<uint32_t>(sr_value.ntp.fraction >> 16) % 0xFFFFu;
+                const auto lastSRDelayDelta = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - sr_value.when);
+                const auto lastSRDelayValue = lastSRDelayDelta.count() * static_cast<int64_t>(65536) / 1000;
 
-				w.writeU32(lastSRMiddle32);
-				w.writeU32(lastSRDelayValue);
-			} else {
-				w.writeU32(0);
-				w.writeU32(0);
-			}
+                w.writeU32(lastSRMiddle32);
+                w.writeU32(lastSRDelayValue);
+            } else {
+                w.writeU32(0);
+                w.writeU32(0);
+            }
 
-			const auto packet = std::make_shared<RtcpPacket>(0, 0, RtcpPacket::kReceiverReport, std::move(payload));
-			sendRtcpPacket(track, packet);
-		}
-	}
+            const auto packet = std::make_shared<RtcpPacket>(0, 0, RtcpPacket::kReceiverReport, std::move(payload));
+            sendRtcpPacket(track, packet);
+        }
+    }
 }
 
 void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
 {
-	for (const auto& track : trackList) {
-		if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
-			const auto ssrc = track->getSSRC();
+    for (const auto& track : trackList) {
+        if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+            const auto ssrc = track->getSSRC();
 
-			ByteBuffer payload;
-			ByteWriter w(payload);
+            ByteBuffer payload;
+            ByteWriter w(payload);
 
-			w.writeU32(ssrc);
+            w.writeU32(ssrc);
 
-			const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
-			sendRtcpPacket(track, packet);
-		}
-	}
+            const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
+            sendRtcpPacket(track, packet);
+        }
+    }
 }
 
 void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList)
 {
-	for (const auto seq : nackList) {
-		ByteBuffer payload;
-		ByteWriter w(payload);
+    for (const auto seq : nackList) {
+        ByteBuffer payload;
+        ByteWriter w(payload);
 
-		const auto ssrc = track->getSSRC();
+        const auto ssrc = track->getSSRC();
 
-		w.writeU32(ssrc);
-		w.writeU16(seq);
-		w.writeU16(0);
+        w.writeU32(ssrc);
+        w.writeU16(seq);
+        w.writeU16(0);
 
-		const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
-		sendRtcpPacket(track, packet);
-	}
+        const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
+        sendRtcpPacket(track, packet);
+    }
 }
 
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
-	const auto now = std::chrono::steady_clock::now();
-	if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-		// RTT from sender / receiver reports
-		stats.rtt_ms = mRtpRttFilter.value();
-	} else if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-		// RTT from STUN requests / responses
-		stats.rtt_ms = mIceRttFilter.value();
-	}
+    const auto now = std::chrono::steady_clock::now();
+    if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+        // RTT from sender / receiver reports
+        stats.rtt_ms = mRtpRttFilter.value();
+    } else if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+        // RTT from STUN requests / responses
+        stats.rtt_ms = mIceRttFilter.value();
+    }
 
-	if (mExtensionSourceTWCC) {
-		mExtensionSourceTWCC->updatePublishConnectionStats(stats);
-	}
+    if (mExtensionSourceTWCC) {
+        mExtensionSourceTWCC->updatePublishConnectionStats(stats);
+    }
 }
 
 std::optional<float> PeerCandidate::getIceRtt() const
 {
-	const auto now = std::chrono::steady_clock::now();
-	if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-		// RTT from STUN requests / responses
-		return mIceRttFilter.value();
-	}
-	return {};
+    const auto now = std::chrono::steady_clock::now();
+    if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+        // RTT from STUN requests / responses
+        return mIceRttFilter.value();
+    }
+    return {};
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
 {
-	if (mSendPacer) {
-		return mSendPacer->getTimeoutMillis(defaultValue);
-	}
-	return defaultValue;
+    if (mSendPacer) {
+        return mSendPacer->getTimeoutMillis(defaultValue);
+    }
+    return defaultValue;
 }
 
 void PeerCandidate::run()
 {
-	// Sending
-	if (mSendPacer) {
-		mSendPacer->run();
-	}
+    // Sending
+    if (mSendPacer) {
+        mSendPacer->run();
+    }
 
-	// Raw data
-	while (!mRawSendQueue.empty()) {
-		const auto buf = std::move(mRawSendQueue.front());
-		mRawSendQueue.erase(mRawSendQueue.begin());
+    // Raw data
+    while (!mRawSendQueue.empty()) {
+        const auto buf = std::move(mRawSendQueue.front());
+        mRawSendQueue.erase(mRawSendQueue.begin());
 
-		const auto w = mSocket->send(buf);
-		LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
-	}
+        const auto w = mSocket->send(buf);
+        LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
+    }
 
-	// Frames
-	while (!mFrameSendQueue.empty()) {
-		const auto item = std::move(mFrameSendQueue.front());
-		mFrameSendQueue.erase(mFrameSendQueue.begin());
+    // Frames
+    while (!mFrameSendQueue.empty()) {
+        const auto item = std::move(mFrameSendQueue.front());
+        mFrameSendQueue.erase(mFrameSendQueue.begin());
 
-		if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
-			// We are not connected yet
-			LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
-			continue;
-		}
+        if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
+            // We are not connected yet
+            LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
+            continue;
+        }
 
-		if (!item.csd.empty()) {
-			// Codec Specific Data
-			item.packetizer->setCodecSpecificData(item.csd);
-		} else if (!item.buf.empty()) {
-			// Simulcast layers
-			std::vector<std::shared_ptr<SimulcastLayer>> layerList;
-			if (item.track->isSimulcast()) {
-				for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
-					layerList.push_back(trackItem->getSimulcastLayer());
-				}
-			}
+        if (!item.csd.empty()) {
+            // Codec Specific Data
+            item.packetizer->setCodecSpecificData(item.csd);
+        } else if (!item.buf.empty()) {
+            // Simulcast layers
+            std::vector<std::shared_ptr<SimulcastLayer>> layerList;
+            if (item.track->isSimulcast()) {
+                for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
+                    layerList.push_back(trackItem->getSimulcastLayer());
+                }
+            }
 
-			// Frame data
-			if (mExtensionSourceSimulcast) {
-				if (item.track->isSimulcast() &&
-					mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
-					mExtensionSourceSimulcast->prepare(item.track, layerList);
-				} else {
-					mExtensionSourceSimulcast->clear();
-				}
-			}
+            // Frame data
+            if (mExtensionSourceSimulcast) {
+                if (item.track->isSimulcast() &&
+                    mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
+                    mExtensionSourceSimulcast->prepare(item.track, layerList);
+                } else {
+                    mExtensionSourceSimulcast->clear();
+                }
+            }
 
-			// Packetize
-			const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
-															  mExtensionSourceTWCC,
-															  mSrtpConnection->getMediaProtectionOverhead(),
-															  item.buf);
+            // Packetize
+            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
+                                                              mExtensionSourceTWCC,
+                                                              mSrtpConnection->getMediaProtectionOverhead(),
+                                                              item.buf);
 
-			// Flush any packets from the same track which we haven't sent yet
-			mSendPacer->flush(item.track);
+            // Flush any packets from the same track which we haven't sent yet
+            mSendPacer->flush(item.track);
 
-			// Use the pacer to send
-			if (!packetList.empty()) {
-				if (packetList.size() <= 1) {
-					mSendPacer->sendNow(packetList.front());
-				} else {
-					auto spread = SendPacer::kDefaultSpreadMillis;
-					if (mExtensionSourceTWCC) {
-						auto bandwidthScale = 1.0f;
-						if (item.track->isSimulcast()) {
-							// Each layer gets a portion of the total bandwidth
-							bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
-						}
-						spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
-					}
-					mSendPacer->sendPaced(packetList, spread);
-				}
-			}
-		}
-	}
+            // Use the pacer to send
+            if (!packetList.empty()) {
+                if (packetList.size() <= 1) {
+                    mSendPacer->sendNow(packetList.front());
+                } else {
+                    auto spread = SendPacer::kDefaultSpreadMillis;
+                    if (mExtensionSourceTWCC) {
+                        auto bandwidthScale = 1.0f;
+                        if (item.track->isSimulcast()) {
+                            // Each layer gets a portion of the total bandwidth
+                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
+                        }
+                        spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
+                    }
+                    mSendPacer->sendPaced(packetList, spread);
+                }
+            }
+        }
+    }
 
-	// Receive
-	while (!mRawReceiveQueue.empty()) {
-		Socket::ReceivedData data = std::move(mRawReceiveQueue.front());
-		mRawReceiveQueue.erase(mRawReceiveQueue.begin());
+    // Receive
+    while (!mRawReceiveQueue.empty()) {
+        Socket::ReceivedData data = std::move(mRawReceiveQueue.front());
+        mRawReceiveQueue.erase(mRawReceiveQueue.begin());
 
-		if (is_stun_message(data.buf)) {
-			LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
-			onReceivedStunMessage(data);
-		} else if (mDtlsSsl && is_dtls_message(data.buf)) {
-			LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
-			onReceivedDtlsMessage(std::move(data.buf));
-		} else if (is_rtc_message(data.buf)) {
-			LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
-			onReceivedRtcMessage(std::move(data.buf));
-		} else {
-			LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
-		}
-	}
+        if (is_stun_message(data.buf)) {
+            LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
+            onReceivedStunMessage(data);
+        } else if (mDtlsSsl && is_dtls_message(data.buf)) {
+            LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
+            onReceivedDtlsMessage(std::move(data.buf));
+        } else if (is_rtc_message(data.buf)) {
+            LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
+            onReceivedRtcMessage(std::move(data.buf));
+        } else {
+            LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
+        }
+    }
 
-	if (mDtlsState == DtlsState::Activating && mDtlsSsl == nullptr) {
-		LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
+    if (mDtlsState == DtlsState::Activating && mDtlsSsl == nullptr) {
+        LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
 
-		const auto cert = mOffer->getCertificate();
-		mDtlsCtx = SSL_CTX_new(mAnswer->isSetupActive() ? DTLS_server_method() : DTLS_client_method());
+        const auto cert = mOffer->getCertificate();
+        mDtlsCtx = SSL_CTX_new(mAnswer->isSetupActive() ? DTLS_server_method() : DTLS_client_method());
 
-		SSL_CTX_use_certificate(mDtlsCtx, cert->getCertificate());
-		SSL_CTX_use_PrivateKey(mDtlsCtx, cert->getPrivateKey());
+        SSL_CTX_use_certificate(mDtlsCtx, cert->getCertificate());
+        SSL_CTX_use_PrivateKey(mDtlsCtx, cert->getPrivateKey());
 
-		if (!SSL_CTX_check_private_key(mDtlsCtx)) {
-			LOG(SRTC_LOG_V, "ERROR: invalid private key");
-			mDtlsState = DtlsState::Failed;
-			emitOnFailedToConnect({ Error::Code::InvalidData, "Invalid private key" });
-		} else {
-			SSL_CTX_set_verify(mDtlsCtx, SSL_VERIFY_PEER, verify_callback);
+        if (!SSL_CTX_check_private_key(mDtlsCtx)) {
+            LOG(SRTC_LOG_V, "ERROR: invalid private key");
+            mDtlsState = DtlsState::Failed;
+            emitOnFailedToConnect({ Error::Code::InvalidData, "Invalid private key" });
+        } else {
+            SSL_CTX_set_verify(mDtlsCtx, SSL_VERIFY_PEER, verify_callback);
 
-			SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
-			SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
-			SSL_CTX_set_read_ahead(mDtlsCtx, 1);
+            SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
+            SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
+            SSL_CTX_set_read_ahead(mDtlsCtx, 1);
 
-			mDtlsSsl = SSL_new(mDtlsCtx);
+            mDtlsSsl = SSL_new(mDtlsCtx);
 
-			mDtlsBio = BIO_new_dgram(this);
-			SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
+            mDtlsBio = BIO_new_dgram(this);
+            SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
 
-			SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
-			SSL_set_connect_state(mDtlsSsl);
+            SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
+            SSL_set_connect_state(mDtlsSsl);
 
-			if (mAnswer->isSetupActive()) {
-				SSL_set_accept_state(mDtlsSsl);
-				SSL_accept(mDtlsSsl);
-			} else {
-				SSL_set_connect_state(mDtlsSsl);
-				SSL_do_handshake(mDtlsSsl);
-			}
-		}
-	}
+            if (mAnswer->isSetupActive()) {
+                SSL_set_accept_state(mDtlsSsl);
+                SSL_accept(mDtlsSsl);
+            } else {
+                SSL_set_connect_state(mDtlsSsl);
+                SSL_do_handshake(mDtlsSsl);
+            }
+        }
+    }
 }
 
 void PeerCandidate::startConnecting()
 {
-	// Notify the listener
-	emitOnConnecting();
+    // Notify the listener
+    emitOnConnecting();
 
-	// Clean up some things
-	Task::cancelHelper(mTaskConnectionLostTimeout);
-	Task::cancelHelper(mTaskKeepAliveTimeout);
+    // Clean up some things
+    Task::cancelHelper(mTaskConnectionLostTimeout);
+    Task::cancelHelper(mTaskKeepAliveTimeout);
 
-	mSrtpConnection.reset();
-	mSendPacer.reset();
+    mSrtpConnection.reset();
+    mSendPacer.reset();
 
-	// Connecting should take a limited amount of time
-	Task::cancelHelper(mTaskConnectTimeout);
+    // Connecting should take a limited amount of time
+    Task::cancelHelper(mTaskConnectTimeout);
 
-	mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
-		emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
-	});
+    mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
+        emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
+    });
 
-	// Open the conversation by sending a STUN binding request
-	sendStunBindingRequest(0);
+    // Open the conversation by sending a STUN binding request
+    sendStunBindingRequest(0);
 }
 
 void PeerCandidate::addSendRaw(ByteBuffer&& buf)
 {
-	mRawSendQueue.push_back(std::move(buf));
-	mListener->onCandidateHasDataToSend(this);
+    mRawSendQueue.push_back(std::move(buf));
+    mListener->onCandidateHasDataToSend(this);
 }
 
 void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 {
-	stun::StunMessage incomingMessage = {};
-	incomingMessage.buffer = data.buf.data();
-	incomingMessage.buffer_len = data.buf.size();
+    stun::StunMessage incomingMessage = {};
+    incomingMessage.buffer = data.buf.data();
+    incomingMessage.buffer_len = data.buf.size();
 
-	const auto stunMessageClass = stun::stun_message_get_class(&incomingMessage);
-	const auto stunMessageMethod = stun::stun_message_get_method(&incomingMessage);
+    const auto stunMessageClass = stun::stun_message_get_class(&incomingMessage);
+    const auto stunMessageMethod = stun::stun_message_get_method(&incomingMessage);
 
-	LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
-	LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
+    LOG(SRTC_LOG_V, "Received STUN message class  = %d", stunMessageClass);
+    LOG(SRTC_LOG_V, "Received STUN message method = %d", stunMessageMethod);
 
-	if (stunMessageClass == stun::STUN_REQUEST && stunMessageMethod == stun::STUN_BINDING) {
-		const auto offerUserName = mOffer->getIceUFrag();
-		const auto answerUserName = mAnswer->getIceUFrag();
-		const auto iceUserName = offerUserName + ":" + answerUserName;
-		const auto icePassword = mOffer->getIcePassword();
+    if (stunMessageClass == stun::STUN_REQUEST && stunMessageMethod == stun::STUN_BINDING) {
+        const auto offerUserName = mOffer->getIceUFrag();
+        const auto answerUserName = mAnswer->getIceUFrag();
+        const auto iceUserName = offerUserName + ":" + answerUserName;
+        const auto icePassword = mOffer->getIcePassword();
 
-		if (mIceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
-			const auto response = make_stun_message_binding_response(mIceAgent,
-																	 mIceMessageBuffer.get(),
-																	 kIceMessageBufferSize,
-																	 mOffer,
-																	 mAnswer,
-																	 incomingMessage,
-																	 data.addr,
-																	 data.addr_len);
-			addSendRaw({ mIceMessageBuffer.get(), stun::stun_message_length(&response) });
-		} else {
-			LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
-		}
-	} else if (stunMessageClass == stun::STUN_RESPONSE && stunMessageMethod == stun::STUN_BINDING) {
-		int errorCode = { 0 };
-		if (stun::stun_message_find_error(&incomingMessage, &errorCode) == stun::STUN_MESSAGE_RETURN_SUCCESS) {
-			LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
-		}
+        if (mIceAgent->verifyRequestMessage(&incomingMessage, iceUserName, icePassword)) {
+            const auto response = make_stun_message_binding_response(mIceAgent,
+                                                                     mIceMessageBuffer.get(),
+                                                                     kIceMessageBufferSize,
+                                                                     mOffer,
+                                                                     mAnswer,
+                                                                     incomingMessage,
+                                                                     data.addr,
+                                                                     data.addr_len);
+            addSendRaw({ mIceMessageBuffer.get(), stun::stun_message_length(&response) });
+        } else {
+            LOG(SRTC_LOG_E, "STUN request verification failed, ignoring");
+        }
+    } else if (stunMessageClass == stun::STUN_RESPONSE && stunMessageMethod == stun::STUN_BINDING) {
+        int errorCode = { 0 };
+        if (stun::stun_message_find_error(&incomingMessage, &errorCode) == stun::STUN_MESSAGE_RETURN_SUCCESS) {
+            LOG(SRTC_LOG_V, "STUN response error code: %d", errorCode);
+        }
 
-		uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
-		stun::stun_message_id(&incomingMessage, id);
+        uint8_t id[STUN_MESSAGE_TRANS_ID_LEN];
+        stun::stun_message_id(&incomingMessage, id);
 
-		float rtt = 0.0f;
-		if (mIceAgent->forgetTransaction(id, rtt)) {
-			LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request, rtt = %.2f", rtt);
+        float rtt = 0.0f;
+        if (mIceAgent->forgetTransaction(id, rtt)) {
+            LOG(SRTC_LOG_V, "Removed old STUN transaction ID for binding request, rtt = %.2f", rtt);
 
-			mIceRttFilter.update(rtt);
+            mIceRttFilter.update(rtt);
 
-			if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
-				if (mSentUseCandidate) {
-					// Keep-alive
-					LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
+            if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
+                if (mSentUseCandidate) {
+                    // Keep-alive
+                    LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
 
-					if (mDtlsState == DtlsState::Completed) {
-						// We are connected again
-						mLastReceiveTime = std::chrono::steady_clock::now();
-						updateConnectionLostTimeout();
+                    if (mDtlsState == DtlsState::Completed) {
+                        // We are connected again
+                        mLastReceiveTime = std::chrono::steady_clock::now();
+                        updateConnectionLostTimeout();
 
-						Task::cancelHelper(mTaskConnectTimeout);
-						Task::cancelHelper(mTaskConnectionRestoreTimeout);
+                        Task::cancelHelper(mTaskConnectTimeout);
+                        Task::cancelHelper(mTaskConnectionRestoreTimeout);
 
-						emitOnConnected();
-					}
-				} else {
-					// Initial connection
-					LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
+                        emitOnConnected();
+                    }
+                } else {
+                    // Initial connection
+                    LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
 
-					mSentUseCandidate = true;
+                    mSentUseCandidate = true;
 
-					emitOnIceSelected();
-					sendStunBindingResponse(0);
+                    emitOnIceSelected();
+                    sendStunBindingResponse(0);
 
-					mDtlsState = DtlsState::Activating;
-				}
-			} else {
-				LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
-			}
-		}
-	}
+                    mDtlsState = DtlsState::Activating;
+                }
+            } else {
+                LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
+            }
+        }
+    }
 }
 
 void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
-	Task::cancelHelper(mTaskSendStunConnectRequest);
-	Task::cancelHelper(mTaskSendStunConnectResponse);
+    Task::cancelHelper(mTaskSendStunConnectRequest);
+    Task::cancelHelper(mTaskSendStunConnectResponse);
 
-	mDtlsReceiveQueue.push_back(std::move(buf));
+    mDtlsReceiveQueue.push_back(std::move(buf));
 
-	// Try the handshake
-	if (mDtlsState == DtlsState::Activating) {
-		const auto r1 = SSL_do_handshake(mDtlsSsl);
-		const auto err = SSL_get_error(mDtlsSsl, r1);
-		LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
+    // Try the handshake
+    if (mDtlsState == DtlsState::Activating) {
+        const auto r1 = SSL_do_handshake(mDtlsSsl);
+        const auto err = SSL_get_error(mDtlsSsl, r1);
+        LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
 
-		if (err == SSL_ERROR_WANT_READ) {
-			LOG(SRTC_LOG_V, "Still in progress");
-		} else if (r1 == 1 && err == 0) {
-			const auto cert = SSL_get_peer_certificate(mDtlsSsl);
-			if (cert == nullptr) {
-				// Error, no certificate
-				LOG(SRTC_LOG_E, "There is no DTLS server certificate");
-				mDtlsState = DtlsState::Failed;
-				emitOnFailedToConnect({ Error::Code::InvalidData, "There is no DTLS server certificate" });
-			} else {
-				uint8_t fpBuf[32] = {};
-				unsigned int fpSize = {};
+        if (err == SSL_ERROR_WANT_READ) {
+            LOG(SRTC_LOG_V, "Still in progress");
+        } else if (r1 == 1 && err == 0) {
+            const auto cert = SSL_get_peer_certificate(mDtlsSsl);
+            if (cert == nullptr) {
+                // Error, no certificate
+                LOG(SRTC_LOG_E, "There is no DTLS server certificate");
+                mDtlsState = DtlsState::Failed;
+                emitOnFailedToConnect({ Error::Code::InvalidData, "There is no DTLS server certificate" });
+            } else {
+                uint8_t fpBuf[32] = {};
+                unsigned int fpSize = {};
 
-				const auto digest = EVP_get_digestbyname("sha256");
-				X509_digest(cert, digest, fpBuf, &fpSize);
+                const auto digest = EVP_get_digestbyname("sha256");
+                X509_digest(cert, digest, fpBuf, &fpSize);
 
-				std::string hex = bin_to_hex(fpBuf, fpSize);
-				LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
+                std::string hex = bin_to_hex(fpBuf, fpSize);
+                LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
 
-				const auto expectedHash = mAnswer->getCertificateHash();
-				const auto actualHashBin = ByteBuffer{ fpBuf, fpSize };
+                const auto expectedHash = mAnswer->getCertificateHash();
+                const auto actualHashBin = ByteBuffer{ fpBuf, fpSize };
 
-				if (expectedHash.getBin() == actualHashBin) {
-					const auto [srtpConnection, srtpError] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
+                if (expectedHash.getBin() == actualHashBin) {
+                    const auto [srtpConnection, srtpError] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
 
-					if (srtpError.isOk()) {
-						mSrtpConnection = srtpConnection;
-						mSendPacer =
-							std::make_shared<SendPacer>(mOffer->getPubConfig(),
-														mSrtpConnection,
-														mSocket,
-														mSendRtpHistory,
-														mExtensionSourceTWCC,
-														[this]() { mLastSendTime = std::chrono::steady_clock::now(); });
-						mDtlsState = DtlsState::Completed;
+                    if (srtpError.isOk()) {
+                        mSrtpConnection = srtpConnection;
+                        mSendPacer =
+                            std::make_shared<SendPacer>(mOffer->getPubConfig(),
+                                                        mSrtpConnection,
+                                                        mSocket,
+                                                        mSendRtpHistory,
+                                                        mExtensionSourceTWCC,
+                                                        [this]() { mLastSendTime = std::chrono::steady_clock::now(); });
+                        mDtlsState = DtlsState::Completed;
 
-						const auto addr = to_string(mHost.addr);
-						const auto cipher = SSL_get_cipher(mDtlsSsl);
-						const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
-						LOG(SRTC_LOG_V,
-							"Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
-							addr.c_str(),
-							cipher,
-							profile->name,
-							mIceRttFilter.value());
+                        const auto addr = to_string(mHost.addr);
+                        const auto cipher = SSL_get_cipher(mDtlsSsl);
+                        const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
+                        LOG(SRTC_LOG_V,
+                            "Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
+                            addr.c_str(),
+                            cipher,
+                            profile->name,
+                            mIceRttFilter.value());
 
-						Task::cancelHelper(mTaskConnectTimeout);
-						emitOnConnected();
+                        Task::cancelHelper(mTaskConnectTimeout);
+                        emitOnConnected();
 
-						mLastReceiveTime = std::chrono::steady_clock::now();
-						updateConnectionLostTimeout();
-						updateKeepAliveTimeout();
-					} else {
-						// Error, failed to initialize SRTP
-						LOG(SRTC_LOG_E,
-							"Failed to initialize SRTP: %d, %s",
-							static_cast<int>(srtpError.mCode),
-							srtpError.mMessage.c_str());
-						mDtlsState = DtlsState::Failed;
+                        mLastReceiveTime = std::chrono::steady_clock::now();
+                        updateConnectionLostTimeout();
+                        updateKeepAliveTimeout();
+                    } else {
+                        // Error, failed to initialize SRTP
+                        LOG(SRTC_LOG_E,
+                            "Failed to initialize SRTP: %d, %s",
+                            static_cast<int>(srtpError.mCode),
+                            srtpError.mMessage.c_str());
+                        mDtlsState = DtlsState::Failed;
 
-						Task::cancelHelper(mTaskConnectTimeout);
-						emitOnFailedToConnect(srtpError);
-					}
-				} else {
-					// Error, certificate hash does not match
-					LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
-					mDtlsState = DtlsState::Failed;
+                        Task::cancelHelper(mTaskConnectTimeout);
+                        emitOnFailedToConnect(srtpError);
+                    }
+                } else {
+                    // Error, certificate hash does not match
+                    LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
+                    mDtlsState = DtlsState::Failed;
 
-					Task::cancelHelper(mTaskConnectTimeout);
-					emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match" });
-				}
-			}
-		} else {
-			// Error during DTLS handshake
-			const auto opensslError = get_openssl_error();
-			LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
-			mDtlsState = DtlsState::Failed;
+                    Task::cancelHelper(mTaskConnectTimeout);
+                    emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match" });
+                }
+            }
+        } else {
+            // Error during DTLS handshake
+            const auto opensslError = get_openssl_error();
+            LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
+            mDtlsState = DtlsState::Failed;
 
-			Task::cancelHelper(mTaskConnectTimeout);
-			emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
-		}
+            Task::cancelHelper(mTaskConnectTimeout);
+            emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
+        }
 
-		if (mDtlsState == DtlsState::Failed) {
-			freeDTLS();
-		}
-	}
+        if (mDtlsState == DtlsState::Failed) {
+            freeDTLS();
+        }
+    }
 }
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
-	ByteBuffer output;
+    ByteBuffer output;
 
-	if (mSrtpConnection) {
-		if (is_rtcp_message(buf)) {
-			if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
-				LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
+    if (mSrtpConnection) {
+        if (is_rtcp_message(buf)) {
+            if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
+                LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
 
-				const auto list = RtcpPacket::fromUdpPacket(output);
-				for (const auto& packet : list) {
-					onReceivedControlPacket(packet);
-				}
-			}
-		} else {
-			if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
-				LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
+                const auto list = RtcpPacket::fromUdpPacket(output);
+                for (const auto& packet : list) {
+                    onReceivedControlPacket(packet);
+                }
+            }
+        } else {
+            if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
+                LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 
-				if (const auto track = findTrack(output)) {
-					const auto packet = RtpPacket::fromUdpPacket(track, output);
-					if (packet) {
-						const auto stats = track->getStats();
-						;
+                if (const auto track = findTrack(output)) {
+                    const auto packet = RtpPacket::fromUdpPacket(track, output);
+                    if (packet) {
+                        const auto stats = track->getStats();
+                        ;
 
-						stats->incrementReceivedPackets(1);
-						stats->incrementReceivedBytes(buf.size());
+                        stats->incrementReceivedPackets(1);
+                        stats->incrementReceivedBytes(buf.size());
 
-						onReceivedMediaPacket(packet);
-					}
-				}
-			}
-		}
-	}
+                        onReceivedMediaPacket(packet);
+                    }
+                }
+            }
+        }
+    }
 }
 
 void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
-	mLastReceiveTime = std::chrono::steady_clock::now();
-	updateConnectionLostTimeout();
+    mLastReceiveTime = std::chrono::steady_clock::now();
+    updateConnectionLostTimeout();
 
-	const auto rtcpRC = packet->getRC();
-	const auto rtcpPT = packet->getPayloadId();
+    const auto rtcpRC = packet->getRC();
+    const auto rtcpPT = packet->getPayloadId();
 
-	const auto& payload = packet->getPayload();
-	ByteReader rtcpReader = { payload.data(), payload.size() };
+    const auto& payload = packet->getPayload();
+    ByteReader rtcpReader = { payload.data(), payload.size() };
 
-	LOG(SRTC_LOG_V, "RTCP payload = %d, len = %zu, SSRC = %u", rtcpPT, payload.size(), packet->getSSRC());
+    LOG(SRTC_LOG_V, "RTCP payload = %d, len = %zu, SSRC = %u", rtcpPT, payload.size(), packet->getSSRC());
 
-	if (rtcpPT == 200) {
-		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.1
-		// Sender Report
-		onReceivedControlMessage_200(packet->getSSRC(), rtcpReader);
-	} else if (rtcpPT == 201) {
-		// https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
-		// Receiver Report
-		onReceivedControlMessage_201(rtcpReader);
-	} else if (rtcpPT == 205) {
-		// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
-		// RTPFB: Transport layer FB message
-		if (rtcpReader.remaining() >= 4) {
-			const auto rtcpFmt = rtcpRC;
-			const auto rtcpSSRC_1 = rtcpReader.readU32();
+    if (rtcpPT == 200) {
+        // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.1
+        // Sender Report
+        onReceivedControlMessage_200(packet->getSSRC(), rtcpReader);
+    } else if (rtcpPT == 201) {
+        // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
+        // Receiver Report
+        onReceivedControlMessage_201(rtcpReader);
+    } else if (rtcpPT == 205) {
+        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
+        // RTPFB: Transport layer FB message
+        if (rtcpReader.remaining() >= 4) {
+            const auto rtcpFmt = rtcpRC;
+            const auto rtcpSSRC_1 = rtcpReader.readU32();
 
-			LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
+            LOG(SRTC_LOG_V, "RTCP RTPFB FMT = %u, SSRC = %u", rtcpFmt, rtcpSSRC_1);
 
-			switch (rtcpFmt) {
-			case 1:
-				// https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
-				// NACKs
-				onReceivedControlMessage_205_1(rtcpSSRC_1, rtcpReader);
-				break;
-			case 15:
-				// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
-				// Google'e Transport-Wide Congension Control
-				onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
-				break;
-			default:
-				LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
-				break;
-			}
-		}
-	}
+            switch (rtcpFmt) {
+            case 1:
+                // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
+                // NACKs
+                onReceivedControlMessage_205_1(rtcpSSRC_1, rtcpReader);
+                break;
+            case 15:
+                // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
+                // Google'e Transport-Wide Congension Control
+                onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
+                break;
+            default:
+                LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
+                break;
+            }
+        }
+    }
 }
 
 void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
-	mLastReceiveTime = std::chrono::steady_clock::now();
-	updateConnectionLostTimeout();
+    mLastReceiveTime = std::chrono::steady_clock::now();
+    updateConnectionLostTimeout();
 
-	const auto track = packet->getTrack();
+    const auto track = packet->getTrack();
 
-	LOG(SRTC_LOG_V,
-		"RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
-		to_string(track->getMediaType()).c_str(),
-		packet->getSSRC(),
-		packet->getSequence(),
-		packet->getPayloadId(),
-		packet->getPayloadSize());
+    LOG(SRTC_LOG_V,
+        "RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
+        to_string(track->getMediaType()).c_str(),
+        packet->getSSRC(),
+        packet->getSequence(),
+        packet->getPayloadId(),
+        packet->getPayloadSize());
 
-	mListener->onCandidateReceivedMediaPacket(this, packet);
+    mListener->onCandidateReceivedMediaPacket(this, packet);
 }
 
 void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader& rtcpReader)
 {
-	const auto track = findTrack(ssrc);
+    const auto track = findTrack(ssrc);
 
-	if (track && rtcpReader.remaining() >= 20) {
-		const auto ntp_high = rtcpReader.readU32();
-		const auto ntp_low = rtcpReader.readU32();
-		const auto rtp_timestamp = rtcpReader.readU32();
-		const auto packet_count = rtcpReader.readU32();
-		const auto octet_count = rtcpReader.readU32();
+    if (track && rtcpReader.remaining() >= 20) {
+        const auto ntp_high = rtcpReader.readU32();
+        const auto ntp_low = rtcpReader.readU32();
+        const auto rtp_timestamp = rtcpReader.readU32();
+        const auto packet_count = rtcpReader.readU32();
+        const auto octet_count = rtcpReader.readU32();
 
-		LOG(SRTC_LOG_Z,
-			"*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
-			ssrc,
-			ntp_high,
-			ntp_low,
-			packet_count,
-			octet_count,
-			to_string(track->getMediaType()).c_str());
+        LOG(SRTC_LOG_V,
+            "*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
+            ssrc,
+            ntp_high,
+            ntp_low,
+            packet_count,
+            octet_count,
+            to_string(track->getMediaType()).c_str());
 
-		SenderReport sr;
-		sr.when = std::chrono::steady_clock::now();
-		sr.ntp.seconds = static_cast<int32_t>(ntp_high);
-		sr.ntp.fraction = ntp_low;
-		sr.rtp = rtp_timestamp;
-		sr.packet_count = packet_count;
-		sr.octet_count = octet_count;
+        SenderReport sr;
+        sr.when = std::chrono::steady_clock::now();
+        sr.ntp.seconds = static_cast<int32_t>(ntp_high);
+        sr.ntp.fraction = ntp_low;
+        sr.rtp = rtp_timestamp;
+        sr.packet_count = packet_count;
+        sr.octet_count = octet_count;
 
-		const auto stats = track->getStats();
-		stats->setReceivedSenderReport(sr);
+        const auto stats = track->getStats();
+        stats->setReceivedSenderReport(sr);
 
-	} else {
-		LOG(SRTC_LOG_E, "Cannot find track with ssrc = %u for a sender report", ssrc);
-	}
+    } else {
+        LOG(SRTC_LOG_E, "Cannot find track with ssrc = %u for a sender report", ssrc);
+    }
 }
 
 void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
 {
-	while (rtcpReader.remaining() >= 24) {
-		const auto ssrc = rtcpReader.readU32();
-		const auto lost = rtcpReader.readU32();
-		const auto highestReceived = rtcpReader.readU32();
-		const auto jitter = rtcpReader.readU32();
-		const auto lastSR = rtcpReader.readU32();
-		const auto delaySinceLastSR = rtcpReader.readU32();
+    while (rtcpReader.remaining() >= 24) {
+        const auto ssrc = rtcpReader.readU32();
+        const auto lost = rtcpReader.readU32();
+        const auto highestReceived = rtcpReader.readU32();
+        const auto jitter = rtcpReader.readU32();
+        const auto lastSR = rtcpReader.readU32();
+        const auto delaySinceLastSR = rtcpReader.readU32();
 
-		(void)lost;
-		(void)highestReceived;
-		(void)jitter;
+        (void)lost;
+        (void)highestReceived;
+        (void)jitter;
 
-		const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
-		if (rtt) {
-			LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-			mRtpRttFilter.update(rtt.value());
-		}
-	}
+        const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
+        if (rtt) {
+            LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
+            mRtpRttFilter.update(rtt.value());
+        }
+    }
 }
 
 void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
 {
-	while (rtcpReader.remaining() >= 4) {
-		const auto pid = rtcpReader.readU16();
-		const auto blp = rtcpReader.readU16();
+    while (rtcpReader.remaining() >= 4) {
+        const auto pid = rtcpReader.readU16();
+        const auto blp = rtcpReader.readU16();
 
-		LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
+        LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u, blp = 0x%04x", pid, blp);
 
-		std::vector<uint16_t> missingSeqList;
-		missingSeqList.push_back(pid);
+        std::vector<uint16_t> missingSeqList;
+        missingSeqList.push_back(pid);
 
-		if (blp != 0) {
-			for (auto index = 0; index < 16; index += 1) {
-				if (blp & (1 << index)) {
-					LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-					missingSeqList.push_back(pid + index + 1);
-				}
-			}
-		}
+        if (blp != 0) {
+            for (auto index = 0; index < 16; index += 1) {
+                if (blp & (1 << index)) {
+                    LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
+                    missingSeqList.push_back(pid + index + 1);
+                }
+            }
+        }
 
-		for (const auto seq : missingSeqList) {
-			const auto packet = mSendRtpHistory->find(ssrc, seq);
+        for (const auto seq : missingSeqList) {
+            const auto packet = mSendRtpHistory->find(ssrc, seq);
 
-			// Record in TWCC
-			if (packet && mExtensionSourceTWCC) {
-				mExtensionSourceTWCC->onPacketWasNacked(packet);
-			}
+            // Record in TWCC
+            if (packet && mExtensionSourceTWCC) {
+                mExtensionSourceTWCC->onPacketWasNacked(packet);
+            }
 
-			if (packet && mSrtpConnection) {
-				// Generate
-				const auto track = packet->getTrack();
+            if (packet && mSrtpConnection) {
+                // Generate
+                const auto track = packet->getTrack();
 
-				RtpPacket::Output packetData;
-				if (track->getRtxPayloadId() > 0) {
-					RtpExtension extension = packet->getExtension().copy();
+                RtpPacket::Output packetData;
+                if (track->getRtxPayloadId() > 0) {
+                    RtpExtension extension = packet->getExtension().copy();
 
-					if (track->isSimulcast() && mExtensionSourceSimulcast) {
-						auto builder = RtpExtensionBuilder::from(extension);
-						mExtensionSourceSimulcast->updateForRtx(builder, track);
-						extension = builder.build();
-					}
+                    if (track->isSimulcast() && mExtensionSourceSimulcast) {
+                        auto builder = RtpExtensionBuilder::from(extension);
+                        mExtensionSourceSimulcast->updateForRtx(builder, track);
+                        extension = builder.build();
+                    }
 
-					packetData = packet->generateRtx(extension);
-				} else {
-					packetData = packet->generate();
-				}
+                    packetData = packet->generateRtx(extension);
+                } else {
+                    packetData = packet->generate();
+                }
 
-				if (mSrtpConnection->protectSendMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
-					// And send
-					const auto sentSize = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
-					LOG(SRTC_LOG_V,
-						"Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
-						packet->getSSRC(),
-						packet->getSequence(),
-						sentSize,
-						packet->getTrack()->getRtxPayloadId() > 0);
+                if (mSrtpConnection->protectSendMedia(packetData.buf, packetData.rollover, mProtectedBuf)) {
+                    // And send
+                    const auto sentSize = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
+                    LOG(SRTC_LOG_V,
+                        "Re-sent RTP packet with SSRC = %u, SEQ = %u, size = %zu, rtx = %d",
+                        packet->getSSRC(),
+                        packet->getSequence(),
+                        sentSize,
+                        packet->getTrack()->getRtxPayloadId() > 0);
 
-					// Keep stats
-					const auto stats = packet->getTrack()->getStats();
-					stats->incrementSentPackets(1);
-					stats->incrementSentBytes(mProtectedBuf.size());
-				} else {
-					LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
-				}
-			} else {
-				LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", ssrc, seq);
-			}
-		}
-	}
+                    // Keep stats
+                    const auto stats = packet->getTrack()->getStats();
+                    stats->incrementSentPackets(1);
+                    stats->incrementSentBytes(mProtectedBuf.size());
+                } else {
+                    LOG(SRTC_LOG_E, "Error protecting packet for re-sending");
+                }
+            } else {
+                LOG(SRTC_LOG_V, "Cannot find packet with SSRC = %u, SEQ = %u for re-sending", ssrc, seq);
+            }
+        }
+    }
 }
 
 void PeerCandidate::onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
 {
-	if (mExtensionSourceTWCC) {
-		mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
-	}
+    if (mExtensionSourceTWCC) {
+        mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
+    }
 }
 
 void PeerCandidate::forgetExpiredStunRequests()
 {
-	mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
+    mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
 
-	mTaskExpireStunRequests =
-		mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+    mTaskExpireStunRequests =
+        mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
 }
 
 void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
 {
-	if (mSrtpConnection) {
-		const auto rtcpSource = track->getRtcpPacketSource();
+    if (mSrtpConnection) {
+        const auto rtcpSource = track->getRtcpPacketSource();
 
-		const auto packetData = packet->generate();
+        const auto packetData = packet->generate();
 
-		if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
-			const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
-			LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
-		}
-	}
+        if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+            const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
+            LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+        }
+    }
 }
 
 std::shared_ptr<Track> PeerCandidate::findTrack(uint32_t ssrc)
 {
-	for (const auto& track : mTrackList) {
-		if (track->getSSRC() == ssrc) {
-			return track;
-		}
-	}
+    for (const auto& track : mTrackList) {
+        if (track->getSSRC() == ssrc) {
+            return track;
+        }
+    }
 
-	return {};
+    return {};
 }
 
 std::shared_ptr<Track> PeerCandidate::findTrack(ByteBuffer& packet)
 {
-	if (packet.size() < 12) {
-		return {};
-	}
+    if (packet.size() < 12) {
+        return {};
+    }
 
-	const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packet.data() + 8));
-	const auto pt = ntohs(*reinterpret_cast<const uint16_t*>(packet.data())) & 0x7Fu;
+    const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(packet.data() + 8));
+    const auto pt = ntohs(*reinterpret_cast<const uint16_t*>(packet.data())) & 0x7Fu;
 
-	for (const auto& track : mTrackList) {
-		if (track->getSSRC() == ssrc && track->getPayloadId() == pt) {
-			return track;
-		}
+    for (const auto& track : mTrackList) {
+        if (track->getSSRC() == ssrc && track->getPayloadId() == pt) {
+            return track;
+        }
 
-		if (track->getRtxSSRC() == ssrc && track->getRtxPayloadId() == pt) {
-			return track;
-		}
-	}
+        if (track->getRtxSSRC() == ssrc && track->getRtxPayloadId() == pt) {
+            return track;
+        }
+    }
 
-	return {};
+    return {};
 }
 
 // Custom BIO for DGRAM
 
 struct dgram_data {
-	PeerCandidate* pc;
+    PeerCandidate* pc;
 };
 
 int PeerCandidate::dgram_read(BIO* b, char* out, int outl)
 {
-	if (out == nullptr) {
-		return 0;
-	}
+    if (out == nullptr) {
+        return 0;
+    }
 
-	BIO_clear_retry_flags(b);
+    BIO_clear_retry_flags(b);
 
-	auto ptr = BIO_get_data(b);
-	auto data = reinterpret_cast<dgram_data*>(ptr);
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data*>(ptr);
 
-	if (data->pc->mDtlsReceiveQueue.empty()) {
-		BIO_set_retry_read(b);
-		return -1;
-	}
+    if (data->pc->mDtlsReceiveQueue.empty()) {
+        BIO_set_retry_read(b);
+        return -1;
+    }
 
-	const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
-	data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
+    const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
+    data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
 
-	const auto ret = std::min(static_cast<int>(item.size()), outl);
-	std::memcpy(out, item.data(), static_cast<size_t>(ret));
+    const auto ret = std::min(static_cast<int>(item.size()), outl);
+    std::memcpy(out, item.data(), static_cast<size_t>(ret));
 
-	return ret;
+    return ret;
 }
 
 int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
 {
-	if (inl == 0) {
-		return 0;
-	}
+    if (inl == 0) {
+        return 0;
+    }
 
-	auto ptr = BIO_get_data(b);
-	auto data = reinterpret_cast<dgram_data*>(ptr);
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data*>(ptr);
 
-	data->pc->addSendRaw({ reinterpret_cast<const uint8_t*>(in), static_cast<size_t>(inl) });
+    data->pc->addSendRaw({ reinterpret_cast<const uint8_t*>(in), static_cast<size_t>(inl) });
 
-	return inl;
+    return inl;
 }
 
 long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
 {
-	switch (cmd) {
-	case BIO_CTRL_DGRAM_QUERY_MTU:
-		return 1200;
-	case BIO_CTRL_DUP:
-	case BIO_CTRL_FLUSH:
-		return 1;
+    switch (cmd) {
+    case BIO_CTRL_DGRAM_QUERY_MTU:
+        return 1200;
+    case BIO_CTRL_DUP:
+    case BIO_CTRL_FLUSH:
+        return 1;
 #ifdef BIO_CTRL_GET_KTLS_SEND
-	case BIO_CTRL_GET_KTLS_SEND:
-		// Fallthrough
+    case BIO_CTRL_GET_KTLS_SEND:
+        // Fallthrough
 #endif
 #ifdef BIO_CTRL_GET_KTLS_RECV
-	case BIO_CTRL_GET_KTLS_RECV:
-		// Fallthrough
+    case BIO_CTRL_GET_KTLS_RECV:
+        // Fallthrough
 #endif
-	default:
-		return 0;
-	}
+    default:
+        return 0;
+    }
 }
 
 int PeerCandidate::dgram_free(BIO* b)
 {
-	auto ptr = BIO_get_data(b);
-	auto data = reinterpret_cast<dgram_data*>(ptr);
-	delete data;
-	return 1;
+    auto ptr = BIO_get_data(b);
+    auto data = reinterpret_cast<dgram_data*>(ptr);
+    delete data;
+    return 1;
 }
 
 std::once_flag PeerCandidate::dgram_once;
@@ -1143,167 +1143,167 @@ BIO_METHOD* PeerCandidate::dgram_method = nullptr;
 
 BIO* PeerCandidate::BIO_new_dgram(PeerCandidate* pc)
 {
-	std::call_once(dgram_once, [] {
-		dgram_method = BIO_meth_new(BIO_TYPE_DGRAM, "dgram");
-		BIO_meth_set_read(dgram_method, dgram_read);
-		BIO_meth_set_write(dgram_method, dgram_write);
-		BIO_meth_set_ctrl(dgram_method, dgram_ctrl);
-		BIO_meth_set_destroy(dgram_method, dgram_free);
-	});
+    std::call_once(dgram_once, [] {
+        dgram_method = BIO_meth_new(BIO_TYPE_DGRAM, "dgram");
+        BIO_meth_set_read(dgram_method, dgram_read);
+        BIO_meth_set_write(dgram_method, dgram_write);
+        BIO_meth_set_ctrl(dgram_method, dgram_ctrl);
+        BIO_meth_set_destroy(dgram_method, dgram_free);
+    });
 
-	BIO* b = BIO_new(dgram_method);
-	if (b == nullptr) {
-		return nullptr;
-	}
+    BIO* b = BIO_new(dgram_method);
+    if (b == nullptr) {
+        return nullptr;
+    }
 
-	BIO_set_init(b, 1);
-	BIO_set_shutdown(b, 0);
+    BIO_set_init(b, 1);
+    BIO_set_shutdown(b, 0);
 
-	const auto ptr = new dgram_data{ pc };
-	BIO_set_data(b, ptr);
-	return b;
+    const auto ptr = new dgram_data{ pc };
+    BIO_set_data(b, ptr);
+    return b;
 }
 
 void PeerCandidate::freeDTLS()
 {
-	if (mDtlsSsl) {
-		SSL_shutdown(mDtlsSsl);
-		SSL_free(mDtlsSsl);
-		mDtlsSsl = nullptr;
-	}
+    if (mDtlsSsl) {
+        SSL_shutdown(mDtlsSsl);
+        SSL_free(mDtlsSsl);
+        mDtlsSsl = nullptr;
+    }
 
-	if (mDtlsCtx) {
-		SSL_CTX_free(mDtlsCtx);
-		mDtlsCtx = nullptr;
-	}
+    if (mDtlsCtx) {
+        SSL_CTX_free(mDtlsCtx);
+        mDtlsCtx = nullptr;
+    }
 
-	mDtlsReceiveQueue.clear();
-	mDtlsBio = nullptr;
+    mDtlsReceiveQueue.clear();
+    mDtlsBio = nullptr;
 }
 
 // State
 
 void PeerCandidate::emitOnConnecting()
 {
-	mListener->onCandidateConnecting(this);
+    mListener->onCandidateConnecting(this);
 }
 
 void PeerCandidate::emitOnIceSelected()
 {
-	mListener->onCandidateIceSelected(this);
+    mListener->onCandidateIceSelected(this);
 }
 
 void PeerCandidate::emitOnConnected()
 {
-	mListener->onCandidateConnected(this);
+    mListener->onCandidateConnected(this);
 
-	mSrtpConnection->onPeerConnected();
+    mSrtpConnection->onPeerConnected();
 
-	if (mExtensionSourceTWCC) {
-		mExtensionSourceTWCC->onPeerConnected();
-	}
+    if (mExtensionSourceTWCC) {
+        mExtensionSourceTWCC->onPeerConnected();
+    }
 }
 
 void PeerCandidate::emitOnFailedToConnect(const Error& error)
 {
-	mListener->onCandidateFailedToConnect(this, error);
+    mListener->onCandidateFailedToConnect(this, error);
 }
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
 {
-	LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
+    LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
 
-	const auto iceMessage = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "start to connect", false);
-	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
+    const auto iceMessage = make_stun_message_binding_request(
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "start to connect", false);
+    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
-	mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
-													__FILE__,
-													__LINE__,
-													[this, iteration] { sendStunBindingRequest(iteration + 1); });
+    mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
+                                                    __FILE__,
+                                                    __LINE__,
+                                                    [this, iteration] { sendStunBindingRequest(iteration + 1); });
 }
 
 void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
 {
-	LOG(SRTC_LOG_V, "Sending STUN binding response #%u", mUniqueId);
+    LOG(SRTC_LOG_V, "Sending STUN binding response #%u", mUniqueId);
 
-	const auto iceMessage = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "use candidate", true);
+    const auto iceMessage = make_stun_message_binding_request(
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "use candidate", true);
 
-	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
+    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
-	mTaskSendStunConnectResponse = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
-													 __FILE__,
-													 __LINE__,
-													 [this, iteration] { sendStunBindingResponse(iteration + 1); });
+    mTaskSendStunConnectResponse = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
+                                                     __FILE__,
+                                                     __LINE__,
+                                                     [this, iteration] { sendStunBindingResponse(iteration + 1); });
 }
 
 void PeerCandidate::updateConnectionLostTimeout()
 {
-	if (const auto task = mTaskConnectionLostTimeout.lock()) {
-		mTaskConnectionLostTimeout = task->update(kConnectionLostTimeout);
-	} else {
-		mTaskConnectionLostTimeout =
-			mScheduler.submit(kConnectionLostTimeout, __FILE__, __LINE__, [this] { onConnectionLostTimeout(); });
-	}
+    if (const auto task = mTaskConnectionLostTimeout.lock()) {
+        mTaskConnectionLostTimeout = task->update(kConnectionLostTimeout);
+    } else {
+        mTaskConnectionLostTimeout =
+            mScheduler.submit(kConnectionLostTimeout, __FILE__, __LINE__, [this] { onConnectionLostTimeout(); });
+    }
 }
 
 void PeerCandidate::onConnectionLostTimeout()
 {
-	Task::cancelHelper(mTaskConnectionLostTimeout);
+    Task::cancelHelper(mTaskConnectionLostTimeout);
 
-	emitOnConnecting();
+    emitOnConnecting();
 
-	LOG(SRTC_LOG_V, "Starting STUN requests to restore the connection #%u", mUniqueId);
+    LOG(SRTC_LOG_V, "Starting STUN requests to restore the connection #%u", mUniqueId);
 
-	// Connecting should take a limited amount of time
-	Task::cancelHelper(mTaskConnectTimeout);
+    // Connecting should take a limited amount of time
+    Task::cancelHelper(mTaskConnectTimeout);
 
-	mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
-		emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
-	});
+    mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
+        emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
+    });
 
-	// Send ice requests
-	sendConnectionRestoreRequest();
+    // Send ice requests
+    sendConnectionRestoreRequest();
 }
 
 void PeerCandidate::sendConnectionRestoreRequest()
 {
-	LOG(SRTC_LOG_V, "Sending a STUN request to restore the connection #%u", mUniqueId);
+    LOG(SRTC_LOG_V, "Sending a STUN request to restore the connection #%u", mUniqueId);
 
-	const auto request = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "connection restore", false);
-	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
+    const auto request = make_stun_message_binding_request(
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "connection restore", false);
+    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 
-	Task::cancelHelper(mTaskConnectionRestoreTimeout);
-	mTaskConnectionRestoreTimeout =
-		mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] { sendConnectionRestoreRequest(); });
+    Task::cancelHelper(mTaskConnectionRestoreTimeout);
+    mTaskConnectionRestoreTimeout =
+        mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] { sendConnectionRestoreRequest(); });
 }
 
 void PeerCandidate::updateKeepAliveTimeout()
 {
-	if (const auto task = mTaskKeepAliveTimeout.lock()) {
-		mTaskKeepAliveTimeout = task->update(kKeepAliveCheckTimeout);
-	} else {
-		mTaskKeepAliveTimeout =
-			mScheduler.submit(kKeepAliveCheckTimeout, __FILE__, __LINE__, [this] { onKeepAliveTimeout(); });
-	}
+    if (const auto task = mTaskKeepAliveTimeout.lock()) {
+        mTaskKeepAliveTimeout = task->update(kKeepAliveCheckTimeout);
+    } else {
+        mTaskKeepAliveTimeout =
+            mScheduler.submit(kKeepAliveCheckTimeout, __FILE__, __LINE__, [this] { onKeepAliveTimeout(); });
+    }
 }
 
 void PeerCandidate::onKeepAliveTimeout()
 {
-	updateKeepAliveTimeout();
+    updateKeepAliveTimeout();
 
-	const auto now = std::chrono::steady_clock::now();
-	if (now - mLastSendTime < kKeepAliveSendTimeout && now - mLastReceiveTime < kKeepAliveSendTimeout) {
-		return;
-	}
+    const auto now = std::chrono::steady_clock::now();
+    if (now - mLastSendTime < kKeepAliveSendTimeout && now - mLastReceiveTime < kKeepAliveSendTimeout) {
+        return;
+    }
 
-	LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
+    LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
 
-	const auto request = make_stun_message_binding_request(
-		mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive", false);
-	addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
+    const auto request = make_stun_message_binding_request(
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive", false);
+    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 }
 
 } // namespace srtc
