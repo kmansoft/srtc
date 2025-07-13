@@ -109,6 +109,8 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
     SdpOffer::Config config;
     config.cname = subConfig.cname;
     config.pli_interval_millis = subConfig.pli_interval_millis;
+    config.jitter_buffer_length_millis = subConfig.jitter_buffer_length_millis;
+    config.jitter_buffer_nack_delay_millis = subConfig.jitter_buffer_nack_delay_millis;
     config.debug_drop_packets = subConfig.debug_drop_packets;
 
     std::optional<SdpOffer::VideoConfig> video;
@@ -727,6 +729,15 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
             if (rtt.value() >= 50.0f) {
                 length = std::chrono::milliseconds(lround(rtt.value()) + 25);
                 nackDelay = std::chrono::milliseconds(10);
+            }
+
+            const auto subConfig = mSdpOffer->getSubConfig();
+            if (subConfig.jitter_buffer_length_millis > 0 && subConfig.jitter_buffer_length_millis > length.count()) {
+                length = std::chrono::milliseconds(subConfig.jitter_buffer_length_millis);
+
+                if (subConfig.jitter_buffer_nack_delay_millis > 0 && subConfig.jitter_buffer_nack_delay_millis > nackDelay.count()) {
+                    nackDelay = std::chrono::milliseconds(subConfig.jitter_buffer_nack_delay_millis);
+                }
             }
 
             if (const auto track = mVideoSingleTrack) {
