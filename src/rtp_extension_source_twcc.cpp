@@ -58,7 +58,7 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
                                                                         const std::shared_ptr<SdpAnswer>& answer,
                                                                         const std::shared_ptr<RealScheduler>& scheduler)
 {
-    const auto& config = offer->getPubConfig();
+    const auto& config = offer->getConfig();
     if (!config.enable_bwe) {
         return {};
     }

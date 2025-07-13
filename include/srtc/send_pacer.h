@@ -26,7 +26,7 @@ struct PubOfferConfig;
 class SendPacer
 {
 public:
-	SendPacer(const PubOfferConfig& offerConfig,
+	SendPacer(const SdpOffer::Config& offerConfig,
 			  const std::shared_ptr<SrtpConnection>& srtp,
 			  const std::shared_ptr<Socket>& socket,
 			  const std::shared_ptr<SendRtpHistory>& history,
@@ -46,7 +46,7 @@ public:
 	void run();
 
 private:
-	const PubOfferConfig mOfferConfig;
+	const SdpOffer::Config mOfferConfig;
 	const std::shared_ptr<SrtpConnection> mSrtp;
 	const std::shared_ptr<Socket> mSocket;
 	const std::shared_ptr<SendRtpHistory> mHistory;

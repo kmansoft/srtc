@@ -731,12 +731,12 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
                 nackDelay = std::chrono::milliseconds(10);
             }
 
-            const auto subConfig = mSdpOffer->getSubConfig();
-            if (subConfig.jitter_buffer_length_millis > 0 && subConfig.jitter_buffer_length_millis > length.count()) {
-                length = std::chrono::milliseconds(subConfig.jitter_buffer_length_millis);
+            const auto config = mSdpOffer->getConfig();
+            if (config.jitter_buffer_length_millis > 0 && config.jitter_buffer_length_millis > length.count()) {
+                length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
 
-                if (subConfig.jitter_buffer_nack_delay_millis > 0 && subConfig.jitter_buffer_nack_delay_millis > nackDelay.count()) {
-                    nackDelay = std::chrono::milliseconds(subConfig.jitter_buffer_nack_delay_millis);
+                if (config.jitter_buffer_nack_delay_millis > 0 && config.jitter_buffer_nack_delay_millis > nackDelay.count()) {
+                    nackDelay = std::chrono::milliseconds(config.jitter_buffer_nack_delay_millis);
                 }
             }
 
@@ -785,7 +785,7 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 {
 #ifdef NDEBUG
 #else
-    const auto config = mSdpOffer->getSubConfig();
+    const auto config = mSdpOffer->getConfig();
     const auto randomValue = mLosePacketsRandomGenerator.next();
 
     // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
@@ -885,7 +885,7 @@ void PeerConnection::sendConnectionStats()
 
 void PeerConnection::sendPictureLossIndicator()
 {
-    const auto config = mSdpOffer->getSubConfig();
+    const auto& config = mSdpOffer->getConfig();
 
     Task::cancelHelper(mTaskPictureLossIndicator);
     mTaskPictureLossIndicator = mLoopScheduler->submit(

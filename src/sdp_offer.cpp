@@ -43,11 +43,11 @@ namespace srtc
 {
 
 SdpOffer::SdpOffer(Direction direction,
-				   const Config& config,
+                   const Config& config,
                    const std::optional<VideoConfig>& videoConfig,
                    const std::optional<AudioConfig>& audioConfig)
     : mRandomGenerator(0, 0x7ffffffe)
-	, mDirection(direction)
+    , mDirection(direction)
     , mConfig(config)
     , mVideoConfig(videoConfig)
     , mAudioConfig(audioConfig)
@@ -66,38 +66,12 @@ SdpOffer::SdpOffer(Direction direction,
 
 Direction SdpOffer::getDirection() const
 {
-	return mDirection;
+    return mDirection;
 }
 
-PubOfferConfig SdpOffer::getPubConfig() const
+const SdpOffer::Config& SdpOffer::getConfig() const
 {
-	PubOfferConfig config = {};
-
-	// Common
-	config.cname = mConfig.cname;
-
-	// Publish
-	config.enable_rtx = mConfig.enable_rtx;
-	config.enable_bwe = mConfig.enable_bwe;
-	config.debug_drop_packets = mConfig.debug_drop_packets;
-
-    return config;
-}
-
-SubOfferConfig SdpOffer::getSubConfig() const
-{
-	SubOfferConfig config = {};
-
-	// Common
-	config.cname = mConfig.cname;
-
-	// Subscribe
-	config.pli_interval_millis = mConfig.pli_interval_millis;
-    config.jitter_buffer_length_millis = mConfig.jitter_buffer_length_millis;
-    config.jitter_buffer_nack_delay_millis = mConfig.jitter_buffer_nack_delay_millis;
-	config.debug_drop_packets = mConfig.debug_drop_packets;
-
-	return config;
+    return mConfig;
 }
 
 std::pair<std::string, Error> SdpOffer::generate()
@@ -144,13 +118,13 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
 
-		if (mDirection == Direction::Publish) {
-			ss << "a=sendonly" << std::endl;
-		} else if (mDirection == Direction::Subscribe) {
-			ss << "a=recvonly" << std::endl;
-		} else {
-			assert(false);
-		}
+        if (mDirection == Direction::Publish) {
+            ss << "a=sendonly" << std::endl;
+        } else if (mDirection == Direction::Subscribe) {
+            ss << "a=recvonly" << std::endl;
+        } else {
+            assert(false);
+        }
 
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
@@ -264,14 +238,13 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=mid:" << mid << std::endl;
         mid += 1;
 
-		if (mDirection == Direction::Publish) {
-			ss << "a=sendonly" << std::endl;
-		} else if (mDirection == Direction::Subscribe) {
-			ss << "a=recvonly" << std::endl;
-		} else {
-			assert(false);
-		}
-
+        if (mDirection == Direction::Publish) {
+            ss << "a=sendonly" << std::endl;
+        } else if (mDirection == Direction::Subscribe) {
+            ss << "a=recvonly" << std::endl;
+        } else {
+            assert(false);
+        }
 
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
