@@ -20,7 +20,7 @@ bool operator==(const struct sockaddr_in6& sin1, const struct sockaddr_in6& sin2
 bool operator==(const anyaddr& addr1, const anyaddr& addr2);
 
 struct NtpTime {
-	int32_t seconds;   // Seconds since Jan 1, 1900
+    uint32_t seconds;   // Seconds since Jan 1, 1900
 	uint32_t fraction; // Fraction of second (in 2^-32 seconds)
 };
 

@@ -775,7 +775,7 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
     ByteBuffer output;
 
-    if (mSrtpConnection) {
+    if (mSrtpConnection)  {
         if (is_rtcp_message(buf)) {
             if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
                 LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
@@ -894,7 +894,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
 
         SenderReport sr;
         sr.when = std::chrono::steady_clock::now();
-        sr.ntp.seconds = static_cast<int32_t>(ntp_high);
+        sr.ntp.seconds = ntp_high;
         sr.ntp.fraction = ntp_low;
         sr.rtp = rtp_timestamp;
         sr.packet_count = packet_count;
@@ -903,6 +903,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
         const auto stats = track->getStats();
         stats->setReceivedSenderReport(sr);
 
+        mListener->onCandidateReceivedSenderReport(this, track, sr);
     } else {
         LOG(SRTC_LOG_E, "Cannot find track with ssrc = %u for a sender report", ssrc);
     }
