@@ -22,7 +22,7 @@ namespace
 // future or something. Then we'll end up cycling the event loop with 0 millisecond timeout value several times, which
 // is bad for optimization.
 
-int elapsed_millis(const std::chrono::steady_clock::time_point& when, const std::chrono::steady_clock::time_point& now)
+int diff_millis(const std::chrono::steady_clock::time_point& when, const std::chrono::steady_clock::time_point& now)
 {
     return static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(when - now + std::chrono::microseconds(500)).count());
@@ -94,34 +94,26 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     // Extend
     const auto seq_ext = mExtValueSeq.extend(seq);
-    if (!seq_ext) {
-        LOG(SRTC_LOG_E, "Cannot extend the sequence number");
-        return;
-    }
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
-    if (!rtp_timestamp_ext) {
-        LOG(SRTC_LOG_E, "Cannot extend the rtp timestamp");
-        return;
-    }
 
     if (mItemList == nullptr) {
         // First packet
-        mMinSeq = seq_ext.value();
+        mMinSeq = seq_ext;
         mMaxSeq = mMinSeq + 1;
         mItemList = new Item*[mCapacity];
         mBaseTime = std::chrono::steady_clock::now();
-        mBaseRtpTimestamp = rtp_timestamp_ext.value();
+        mBaseRtpTimestamp = rtp_timestamp_ext;
 
         const auto item = new Item;
-        mItemList[seq_ext.value() & mCapacityMask] = item;
-    } else if (seq_ext.value() + mCapacity / 10 < mMinSeq) {
+        mItemList[seq_ext & mCapacityMask] = item;
+    } else if (seq_ext + mCapacity / 10 < mMinSeq) {
         // Out of range, much less than min
         LOG(SRTC_LOG_E,
             "The new packet's sequence number %u is too late, min = %u",
             seq,
             static_cast<uint16_t>(mMinSeq));
         return;
-    } else if (seq_ext.value() - mCapacity / 10 > mMaxSeq) {
+    } else if (seq_ext - mCapacity / 10 > mMaxSeq) {
         // Out of range, much greater than max
         LOG(SRTC_LOG_E,
             "The new packet's sequence number %u is too early, max = %u",
@@ -131,7 +123,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     }
 
     const auto now = std::chrono::steady_clock::now();
-    const auto rtp_timestamp_delta = rtp_timestamp_ext.value() - mBaseRtpTimestamp;
+    const auto rtp_timestamp_delta = rtp_timestamp_ext - mBaseRtpTimestamp;
     const auto time_delta = std::chrono::milliseconds(1000 * rtp_timestamp_delta / mTrack->getClockRate());
     const auto packet_time = mBaseTime + time_delta;
     const auto when_dequeue = packet_time + mLength;
@@ -139,17 +131,17 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     Item* item = nullptr;
 
-    if (seq_ext.value() < mMinSeq) {
+    if (seq_ext < mMinSeq) {
         // Before min
-        if (mMaxSeq - seq_ext.value() > mCapacity) {
+        if (mMaxSeq - seq_ext > mCapacity) {
             LOG(SRTC_LOG_E,
                 "The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
-                seq_ext.value(),
-                seq_ext.value());
+                seq_ext,
+                seq_ext);
             return;
         }
 
-        while (seq_ext.value() + 1 < mMinSeq) {
+        while (seq_ext + 1 < mMinSeq) {
             mMinSeq -= 1;
 
             const auto spacer = new Item;
@@ -169,22 +161,22 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         }
 
         mMinSeq -= 1;
-        assert(mMinSeq == seq_ext.value());
+        assert(mMinSeq == seq_ext);
 
-        const auto index = seq_ext.value() & mCapacityMask;
+        const auto index = seq_ext & mCapacityMask;
         item = new Item;
         mItemList[index] = item;
     } else if (seq_ext >= mMaxSeq) {
         // Above max
-        if (seq_ext.value() - mMinSeq > mCapacity) {
+        if (seq_ext - mMinSeq > mCapacity) {
             LOG(SRTC_LOG_E,
                 "The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
-                seq_ext.value(),
-                seq_ext.value());
+                seq_ext,
+                seq_ext);
             return;
         }
 
-        while (mMaxSeq <= seq_ext.value() - 1) {
+        while (mMaxSeq <= seq_ext - 1) {
             const auto lost = new Item;
             lost->when_received = std::chrono::steady_clock::time_point::min();
             lost->when_dequeue = std::chrono::steady_clock::time_point::max();
@@ -204,14 +196,14 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         }
 
         mMaxSeq += 1;
-        assert(mMaxSeq - 1 == seq_ext.value());
+        assert(mMaxSeq - 1 == seq_ext);
 
         item = new Item;
-        const auto index = seq_ext.value() & mCapacityMask;
+        const auto index = seq_ext & mCapacityMask;
         mItemList[index] = item;
     } else {
         // Somewhere in the middle, we should already have an item there
-        const auto index = seq_ext.value() & mCapacityMask;
+        const auto index = seq_ext & mCapacityMask;
         item = mItemList[index];
         assert(item);
     }
@@ -226,8 +218,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     item->kind = mDepacketizer->getPacketKind(payload);
 
-    item->seq_ext = seq_ext.value();
-    item->rtp_timestamp_ext = rtp_timestamp_ext.value();
+    item->seq_ext = seq_ext;
+    item->rtp_timestamp_ext = rtp_timestamp_ext;
 
     item->payload = std::move(payload);
 }
@@ -256,20 +248,18 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
         const auto item = mItemList[index];
         assert(item);
 
-        // Requesting and abandoning nacks
-        if (!item->received) {
+        if (item->received) {
+            // Depacketization
+            if (!when_dequeue.has_value()) {
+                when_dequeue = diff_millis(item->when_dequeue, now);
+            }
+        } else {
+            // Requesting and abandoning nacks
             if (!when_request.has_value() && item->nack_needed) {
-                when_request = elapsed_millis(item->when_nack_request, now);
+                when_request = diff_millis(item->when_nack_request, now);
             }
             if (!when_abandon.has_value()) {
-                when_abandon = elapsed_millis(item->when_nack_abandon, now);
-            }
-        }
-
-        // Depacketization
-        if (item->received) {
-            if (!when_dequeue.has_value()) {
-                when_dequeue = elapsed_millis(item->when_dequeue, now);
+                when_abandon = diff_millis(item->when_nack_abandon, now);
             }
         }
 
@@ -312,7 +302,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
         const auto item = mItemList[index];
         assert(item);
 
-        if (item->received && elapsed_millis(item->when_dequeue, now) <= 0) {
+        if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->kind == PacketKind::Standalone) {
                 // A standalone packet, which is ready to be extracted, possibly into multiple frames
                 auto frameList = mDepacketizer->extract(item->payload);
@@ -383,7 +373,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                 delete item;
             }
-        } else if (elapsed_millis(item->when_nack_abandon, now) <= 0) {
+        } else if (diff_millis(item->when_nack_abandon, now) <= 0) {
             // A nack that was never received - delete and keep going
             mItemList[index] = nullptr;
             mMinSeq += 1;
@@ -413,7 +403,7 @@ std::vector<uint16_t> JitterBuffer::processNack()
         const auto item = mItemList[index];
         assert(item);
 
-        if (elapsed_millis(item->when_nack_request, now) <= 0) {
+        if (diff_millis(item->when_nack_request, now) <= 0) {
             if (!item->received && item->nack_needed) {
                 item->nack_needed = false;
                 result.push_back(static_cast<uint16_t>(item->seq_ext));

@@ -13,10 +13,11 @@ class ExtendedValue
 public:
 	ExtendedValue();
 
-	std::optional<uint64_t> extend(T src);
-	std::optional<uint64_t> get() const;
+	uint64_t extend(T src);
+	[[nodiscard]] std::optional<uint64_t> get() const;
 
 private:
+    const uint64_t mIncrement;
 	uint64_t mRollover;
 	std::optional<T> mLast;
 };
