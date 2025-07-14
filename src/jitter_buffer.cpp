@@ -380,9 +380,12 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     break;
                 }
             } else {
-                // We cannot extract this - delete and keep going
+                // We cannot extract this
                 mItemList[index] = nullptr;
                 mMinSeq += 1;
+
+                std::printf("*** Deleting packet that we could not dequeue, received = %d, kind = %d\n",
+                            item->received, static_cast<int>(item->kind));
 
                 delete item;
             }
@@ -390,6 +393,9 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
             // A nack that was never received - delete and keep going
             mItemList[index] = nullptr;
             mMinSeq += 1;
+
+            std::printf("*** Deleting packet that's too old, received = %d, kind = %d\n",
+                        item->received, static_cast<int>(item->kind));
 
             delete item;
         } else {
