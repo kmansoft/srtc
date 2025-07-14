@@ -241,7 +241,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mIceRttFilter(0.2f)
-    , mRtpRttFilter(0.2f)
+    , mControlRttFilter(0.2f)
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
     , mScheduler(scheduler)
@@ -397,9 +397,9 @@ void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::ve
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
     const auto now = std::chrono::steady_clock::now();
-    if (now - mRtpRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
+    if (now - mControlRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
         // RTT from sender / receiver reports
-        stats.rtt_ms = mRtpRttFilter.value();
+        stats.rtt_ms = mControlRttFilter.value();
     } else if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
         // RTT from STUN requests / responses
         stats.rtt_ms = mIceRttFilter.value();
@@ -777,7 +777,7 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 {
     ByteBuffer output;
 
-    if (mSrtpConnection)  {
+    if (mSrtpConnection) {
         if (is_rtcp_message(buf)) {
             if (mSrtpConnection->unprotectReceiveControl(buf, output)) {
                 LOG(SRTC_LOG_V, "RTCP unprotect: size = %zd", output.size());
@@ -928,7 +928,7 @@ void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
         const auto rtt = mSenderReportsHistory->calculateRtt(ssrc, lastSR, delaySinceLastSR);
         if (rtt) {
             LOG(SRTC_LOG_V, "RTT from receiver report: %.2f", rtt.value());
-            mRtpRttFilter.update(rtt.value());
+            mControlRttFilter.update(rtt.value());
         }
     }
 }
