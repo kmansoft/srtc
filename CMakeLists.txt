@@ -449,6 +449,6 @@ install(FILES
 
 install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/libsrtc.a
-        ${CMAKE_CURRENT_BINARY_DIR}/stun/libstun.a
+        ${CMAKE_CURRENT_BINARY_DIR}/stun/libsrtc_stun.a
         DESTINATION lib
 )
