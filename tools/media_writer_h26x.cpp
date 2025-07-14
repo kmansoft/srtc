@@ -46,11 +46,16 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 		}
 	}
 
+    const auto& data = frame->data;
+
+    const auto dump = srtc::bin_to_hex(data.data(), std::min<size_t>(data.size(), 32));
+    std::printf("Writing NAL %s\n", dump.c_str());
+
 	static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };
 
 	fwrite(kAnnexB, sizeof(kAnnexB), 1, mFile);
-	fwrite(frame->data.data(), frame->data.size(), 1, mFile);
+	fwrite(data.data(), data.size(), 1, mFile);
 
 	m_outPacketCount += 1;
-	m_outByteCount += frame->data.size();
+	m_outByteCount += data.size();
 }

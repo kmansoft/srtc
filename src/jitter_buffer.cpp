@@ -320,6 +320,14 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     frameList.pop_front();
                 }
 
+                if (mTrack->getMediaType() == MediaType::Video) {
+                    if (!result.empty()) {
+                        if (result.front()->data.data()[0] == 0x67) {
+                            std::printf("*** De-queued SPS\n");
+                        }
+                    }
+                }
+
                 mItemList[index] = nullptr;
                 mMinSeq += 1;
 
@@ -353,6 +361,14 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                         frameList.pop_front();
                     }
 
+                    if (mTrack->getMediaType() == MediaType::Video) {
+                        if (!result.empty()) {
+                            if (result.front()->data.data()[0] == 0x65) {
+                                std::printf("*** De-queued key frame\n");
+                            }
+                        }
+                    }
+
                     for (auto cleanup_seq = seq; cleanup_seq <= maxSeq; cleanup_seq += 1) {
                         const auto cleanup_index = cleanup_seq & mCapacityMask;
                         delete mItemList[cleanup_index];
@@ -361,10 +377,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     mMinSeq = maxSeq + 1;
                 } else {
-                    mItemList[index] = nullptr;
-                    mMinSeq += 1;
-
-                    delete item;
+                    break;
                 }
             } else {
                 // We cannot extract this - delete and keep going
