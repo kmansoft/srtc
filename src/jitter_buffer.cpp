@@ -361,17 +361,20 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     mMinSeq = maxSeq + 1;
                 } else {
+                    break;
+                }
+            } else {
+                // We cannot extract this
+                if (findNextToDequeue(now)) {
+                    // There is another frame that's ready, delete this one
                     mItemList[index] = nullptr;
                     mMinSeq += 1;
 
                     delete item;
+                } else {
+                    // There is no another frame, we can afford to wait
+                    break;
                 }
-            } else {
-                // We cannot extract this - delete and keep going
-                mItemList[index] = nullptr;
-                mMinSeq += 1;
-
-                delete item;
             }
         } else if (diff_millis(item->when_nack_abandon, now) <= 0) {
             // A nack that was never received - delete and keep going
@@ -444,6 +447,30 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 
             mMinSeq = seq + 1;
             break;
+        }
+    }
+
+    return false;
+}
+
+bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now) {
+    auto index = (mMinSeq) & mCapacityMask;
+    auto item = mItemList[index];
+    assert(item);
+    assert(item->received);
+    assert(item->kind == PacketKind::Start);
+
+    const auto startTimestamp = item->rtp_timestamp_ext;
+
+    for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
+        index = seq & mCapacityMask;
+        item = mItemList[index];
+        assert(item);
+
+        if (item->received &&  diff_millis(item->when_dequeue, now) <= 0) {
+            if (item->rtp_timestamp_ext > startTimestamp) {
+                return true;
+            }
         }
     }
 

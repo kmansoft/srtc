@@ -118,7 +118,7 @@ private:
 	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
 
 	Filter<float> mIceRttFilter;
-	Filter<float> mRtpRttFilter;
+	Filter<float> mControlRttFilter;
 
 	std::shared_ptr<SrtpConnection> mSrtpConnection;
 	std::shared_ptr<SendPacer> mSendPacer;

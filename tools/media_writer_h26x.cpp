@@ -7,6 +7,8 @@ MediaWriterH26x::MediaWriterH26x(const std::string& filename, const std::shared_
 	, mTrack(track)
 	, mFile(nullptr)
 	, mIsSeenKeyFrame(false)
+    , m_outPacketCount(0)
+    , m_outByteCount(0)
 {
 }
 
@@ -46,11 +48,13 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 		}
 	}
 
+    const auto& data = frame->data;
+
 	static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };
 
 	fwrite(kAnnexB, sizeof(kAnnexB), 1, mFile);
-	fwrite(frame->data.data(), frame->data.size(), 1, mFile);
+	fwrite(data.data(), data.size(), 1, mFile);
 
 	m_outPacketCount += 1;
-	m_outByteCount += frame->data.size();
+	m_outByteCount += data.size();
 }

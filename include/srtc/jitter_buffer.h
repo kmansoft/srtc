@@ -61,6 +61,7 @@ private:
 	};
 
 	[[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
+    [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now);
 
 	const std::shared_ptr<Track> mTrack;
 	const std::shared_ptr<Depacketizer> mDepacketizer;

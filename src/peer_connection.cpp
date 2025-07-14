@@ -723,8 +723,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
         const auto rtt = candidate->getIceRtt();
         if (rtt.has_value()) {
             // We should have the rtt from ice
-            auto length = std::chrono::milliseconds(lround(rtt.value()) + 10);
-            auto nackDelay = std::chrono::milliseconds(4);
+            auto length = std::chrono::milliseconds(lround(rtt.value()) + 12);
+            auto nackDelay = std::chrono::milliseconds(6);
 
             if (rtt.value() >= 50.0f) {
                 length = std::chrono::milliseconds(lround(rtt.value()) + 25);
@@ -886,6 +886,8 @@ void PeerConnection::sendConnectionStats()
 
 void PeerConnection::sendPictureLossIndicator()
 {
+    std::printf("***** Sending PLI\n");
+
     const auto& config = mSdpOffer->getConfig();
 
     Task::cancelHelper(mTaskPictureLossIndicator);
