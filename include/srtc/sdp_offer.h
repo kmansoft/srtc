@@ -32,7 +32,7 @@ struct PubOfferConfig : OfferConfig {
 };
 
 struct SubOfferConfig : OfferConfig {
-    uint16_t pli_interval_millis = 1000;
+    uint16_t pli_interval_millis = 2000;
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
     bool debug_drop_packets = false;
