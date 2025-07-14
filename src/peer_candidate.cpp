@@ -364,6 +364,8 @@ void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<
         if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
 
+            LOG(SRTC_LOG_V, "Sending PLI for ssrc=%u", ssrc);
+
             ByteBuffer payload;
             ByteWriter w(payload);
 

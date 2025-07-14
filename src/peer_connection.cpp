@@ -735,7 +735,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
             if (config.jitter_buffer_length_millis > 0 && config.jitter_buffer_length_millis > length.count()) {
                 length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
 
-                if (config.jitter_buffer_nack_delay_millis > 0 && config.jitter_buffer_nack_delay_millis > nackDelay.count()) {
+                if (config.jitter_buffer_nack_delay_millis > 0 &&
+                    config.jitter_buffer_nack_delay_millis > nackDelay.count()) {
                     nackDelay = std::chrono::milliseconds(config.jitter_buffer_nack_delay_millis);
                 }
             }
@@ -888,8 +889,10 @@ void PeerConnection::sendPictureLossIndicator()
     const auto& config = mSdpOffer->getConfig();
 
     Task::cancelHelper(mTaskPictureLossIndicator);
-    mTaskPictureLossIndicator = mLoopScheduler->submit(
-        std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] { sendConnectionStats(); });
+    mTaskPictureLossIndicator =
+        mLoopScheduler->submit(std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] {
+            sendPictureLossIndicator();
+        });
 
     if (mSelectedCandidate) {
         std::lock_guard lock(mMutex);
