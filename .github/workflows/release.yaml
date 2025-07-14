@@ -75,7 +75,7 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build ${{ github.workspace }}/build --target srtc_publish --target subscribe
+          cmake --build ${{ github.workspace }}/build --target srtc_publish --target srtc_subscribe
 
       - name: Package
         run: |
