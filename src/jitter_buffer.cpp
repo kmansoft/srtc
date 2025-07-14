@@ -320,14 +320,6 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     frameList.pop_front();
                 }
 
-                if (mTrack->getMediaType() == MediaType::Video) {
-                    if (!result.empty()) {
-                        if (result.front()->data.data()[0] == 0x67) {
-                            std::printf("*** De-queued SPS\n");
-                        }
-                    }
-                }
-
                 mItemList[index] = nullptr;
                 mMinSeq += 1;
 
@@ -361,14 +353,6 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                         frameList.pop_front();
                     }
 
-                    if (mTrack->getMediaType() == MediaType::Video) {
-                        if (!result.empty()) {
-                            if (result.front()->data.data()[0] == 0x65) {
-                                std::printf("*** De-queued key frame\n");
-                            }
-                        }
-                    }
-
                     for (auto cleanup_seq = seq; cleanup_seq <= maxSeq; cleanup_seq += 1) {
                         const auto cleanup_index = cleanup_seq & mCapacityMask;
                         delete mItemList[cleanup_index];
@@ -381,21 +365,21 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 }
             } else {
                 // We cannot extract this
-                mItemList[index] = nullptr;
-                mMinSeq += 1;
+                if (findNextToDequeue(now)) {
+                    // There is another frame that's ready, delete this one
+                    mItemList[index] = nullptr;
+                    mMinSeq += 1;
 
-                std::printf("*** Deleting packet that we could not dequeue, received = %d, kind = %d\n",
-                            item->received, static_cast<int>(item->kind));
-
-                delete item;
+                    delete item;
+                } else {
+                    // There is no another frame, we can afford to wait
+                    break;
+                }
             }
         } else if (diff_millis(item->when_nack_abandon, now) <= 0) {
             // A nack that was never received - delete and keep going
             mItemList[index] = nullptr;
             mMinSeq += 1;
-
-            std::printf("*** Deleting packet that's too old, received = %d, kind = %d\n",
-                        item->received, static_cast<int>(item->kind));
 
             delete item;
         } else {
@@ -463,6 +447,30 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 
             mMinSeq = seq + 1;
             break;
+        }
+    }
+
+    return false;
+}
+
+bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now) {
+    auto index = (mMinSeq) & mCapacityMask;
+    auto item = mItemList[index];
+    assert(item);
+    assert(item->received);
+    assert(item->kind == PacketKind::Start);
+
+    const auto startTimestamp = item->rtp_timestamp_ext;
+
+    for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
+        index = seq & mCapacityMask;
+        item = mItemList[index];
+        assert(item);
+
+        if (item->received &&  diff_millis(item->when_dequeue, now) <= 0) {
+            if (item->rtp_timestamp_ext > startTimestamp) {
+                return true;
+            }
         }
     }
 

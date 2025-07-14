@@ -7,6 +7,8 @@ MediaWriterH26x::MediaWriterH26x(const std::string& filename, const std::shared_
 	, mTrack(track)
 	, mFile(nullptr)
 	, mIsSeenKeyFrame(false)
+    , m_outPacketCount(0)
+    , m_outByteCount(0)
 {
 }
 
@@ -38,7 +40,6 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 	const auto type = value & 0x1F;
 
 	if (type == 1 && !mIsSeenKeyFrame) {
-		std::printf("H26x: No key frame yet, ignoring\n");
 		return;
 	} else if (!mIsSeenKeyFrame) {
 		if (type == 5 || type == 7 || type == 8) {
@@ -48,9 +49,6 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 	}
 
     const auto& data = frame->data;
-
-    const auto dump = srtc::bin_to_hex(data.data(), std::min<size_t>(data.size(), 32));
-    std::printf("Writing NAL %s\n", dump.c_str());
 
 	static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };
 
