@@ -886,8 +886,6 @@ void PeerConnection::sendConnectionStats()
 
 void PeerConnection::sendPictureLossIndicator()
 {
-    std::printf("***** Sending PLI\n");
-
     const auto& config = mSdpOffer->getConfig();
 
     Task::cancelHelper(mTaskPictureLossIndicator);
