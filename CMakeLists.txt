@@ -2,12 +2,12 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("srtc")
 
-if(POLICY CMP0135)
+if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
-endif()
-if(POLICY CMP0091)
+endif ()
+if (POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
-endif()
+endif ()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
 option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
@@ -23,9 +23,9 @@ include(FetchContent)
 
 # Static link runtime on Windows, unless building tests (link errors)
 
-if(WIN32 AND NOT SRTC_BUILD_TESTS)
+if (WIN32 AND NOT SRTC_BUILD_TESTS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
+endif ()
 
 # The main srtc library
 
@@ -72,6 +72,7 @@ add_library(srtc
         include/srtc/simulcast_layer.h
         include/srtc/socket.h
         include/srtc/srtc.h
+        include/srtc/srtc_util.h
         include/srtc/srtp_connection.h
         include/srtc/srtp_crypto.h
         include/srtc/srtp_hmac_sha1.h
@@ -124,6 +125,7 @@ add_library(srtc
         src/simulcast_layer.cpp
         src/socket.cpp
         src/srtc.cpp
+        src/srtc_util.cpp
         src/srtp_connection.cpp
         src/srtp_crypto.cpp
         src/srtp_hmac_sha1.cpp
@@ -135,46 +137,48 @@ add_library(srtc
         src/twcc_publish.cpp
         src/util.cpp
         src/x509_certificate.cpp
-        src/x509_hash.cpp)
+        src/x509_hash.cpp
+        include/srtc/srtc_util.h
+        src/srtc_util.cpp)
 
-if(APPLE)
-	target_sources(srtc
-        PRIVATE
-        include/srtc/event_loop_macos.h
-        src/event_loop_macos.cpp
-	)
-elseif(WIN32)
+if (APPLE)
     target_sources(srtc
-        PRIVATE
-        include/srtc/event_loop_win.h
-        src/event_loop_win.cpp
+            PRIVATE
+            include/srtc/event_loop_macos.h
+            src/event_loop_macos.cpp
     )
-elseif(UNIX)
+elseif (WIN32)
     target_sources(srtc
-        PRIVATE
-        include/srtc/event_loop_linux.h
-        src/event_loop_linux.cpp
+            PRIVATE
+            include/srtc/event_loop_win.h
+            src/event_loop_win.cpp
     )
-endif()
+elseif (UNIX)
+    target_sources(srtc
+            PRIVATE
+            include/srtc/event_loop_linux.h
+            src/event_loop_linux.cpp
+    )
+endif ()
 
 target_include_directories(srtc PUBLIC "./include")
 
-if(UNIX)
+if (UNIX)
     target_compile_options(srtc
             PRIVATE
             "-ffunction-sections"
             "-Wall"
             "-Werror"
     )
-endif()
-if(WIN32)
+endif ()
+if (WIN32)
     target_compile_options(srtc
             PRIVATE
             "-DNOMINMAX"
     )
-endif()
+endif ()
 
-if(ANDROID)
+if (ANDROID)
     target_compile_options(srtc PRIVATE
             "-Wthread-safety")
     target_compile_definitions(srtc PRIVATE
@@ -183,8 +187,8 @@ if(ANDROID)
     target_link_libraries(srtc
             PRIVATE
             log
-            )
-endif()
+    )
+endif ()
 
 target_link_libraries(
         srtc
@@ -194,24 +198,24 @@ target_link_libraries(
 
 # OpenSSL
 
-if(WIN32)
+if (WIN32)
     # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
     # so we build it ourselves somewhere else and upload to a server, then fetch from there.
     set(OPENSSL_USE_STATIC_LIBS ON)
     set(OPENSSL_VERSION "3.5.0")
     set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
 
-    if(NOT EXISTS "${OPENSSL_ROOT_DIR}")
+    if (NOT EXISTS "${OPENSSL_ROOT_DIR}")
         message(STATUS "Downloading OpenSSL binaries...")
         set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
         file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
         file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
-    endif()
-endif()
-if(APPLE)
+    endif ()
+endif ()
+if (APPLE)
     # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
     set(OPENSSL_USE_STATIC_LIBS ON)
-endif()
+endif ()
 
 find_package(OpenSSL REQUIRED)
 
@@ -241,7 +245,7 @@ target_link_directories(srtc PRIVATE
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
 
-if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
+if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
 
     # Google Test
 
@@ -261,21 +265,21 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             "-DLIBSRTP_TEST_APPS=OFF"
             "-DENABLE_OPENSSL=ON"
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-            )
+    )
 
-    if(WIN32)
+    if (WIN32)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
         )
-    endif()
-    if(ANDROID)
+    endif ()
+    if (ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
                 -DANDROID_ABI=${ANDROID_ABI}
                 -DANDROID_PLATFORM=android-29
                 -DCMAKE_FIND_ROOT_PATH=${OPENSSL_ROOT_DIR}
         )
-    endif()
+    endif ()
 
     ExternalProject_Add(
             srtp
@@ -301,6 +305,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             test/test_rtp_packet.cpp
             test/test_srtp_key_derivation.cpp
             test/test_srtp_crypto.cpp
+            test/test_util.cpp
     )
 
     target_include_directories(
@@ -327,20 +332,20 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             OpenSSL::SSL
     )
 
-    if(WIN32)
+    if (WIN32)
         target_link_libraries(
                 srtc_test
                 ws2_32
         )
-    endif()
+    endif ()
 
     include(GoogleTest)
     gtest_discover_tests(srtc_test)
-endif()
+endif ()
 
 # Tools
 
-if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
+if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     # Publish
 
@@ -351,7 +356,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     add_dependencies(srtc_publish srtc)
 
-    if(WIN32)
+    if (WIN32)
         target_sources(srtc_publish
                 PRIVATE
                 tools/http_whip_whep_win.cpp
@@ -363,7 +368,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 srtc
                 winmm
         )
-    else()
+    else ()
         find_package(CURL REQUIRED)
 
         target_sources(srtc_publish
@@ -382,7 +387,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 srtc
                 CURL::libcurl
         )
-    endif()
+    endif ()
 
     # Subscribe
 
@@ -403,7 +408,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
     target_link_libraries(srtc_subscribe PRIVATE ogg)
 
-    if(WIN32)
+    if (WIN32)
         target_sources(srtc_subscribe
                 PRIVATE
                 tools/http_whip_whep_win.cpp
@@ -415,7 +420,7 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 srtc
                 winmm
         )
-    else()
+    else ()
         find_package(CURL REQUIRED)
 
         target_sources(srtc_subscribe
@@ -434,9 +439,9 @@ if(NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 srtc
                 CURL::libcurl
         )
-    endif()
+    endif ()
 
-endif()
+endif ()
 
 # Install
 
