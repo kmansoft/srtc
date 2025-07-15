@@ -27,7 +27,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
 - Sends nacks, understands RTX.
 - Sends PLI (key frame requests).
-- Does not send Receiver Reports (yet).
+- Sends Receiver Reports.
 - Does not support TWCC reporting (yet).
 - No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to fix this.
 - No speed up / slow down for audio samples (yet).
