@@ -24,7 +24,8 @@ size_t compressNackList(const std::vector<uint16_t>& nackList, uint16_t* buf_seq
         in_pos += 1;
 
         while (in_pos < in_end && static_cast<uint16_t>(nackList[in_pos] - seq) <= 16) {
-            buf_blp[out_pos] |= 1 << (static_cast<uint16_t>(nackList[in_pos] - seq - 1));
+            const auto shift = static_cast<uint16_t>(nackList[in_pos] - seq - 1);
+            buf_blp[out_pos] |= 1u << shift;
             in_pos += 1;
         }
 
