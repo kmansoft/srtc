@@ -453,7 +453,7 @@ void PeerCandidate::run()
 
         if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
             // We are not connected yet
-            LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
+            LOG(SRTC_LOG_E, "We are not connected yet, not sending a frame");
             continue;
         }
 
