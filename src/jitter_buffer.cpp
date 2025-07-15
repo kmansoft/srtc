@@ -507,8 +507,8 @@ bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point
         item = mItemList[index];
         assert(item);
 
-        if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
-            if (item->rtp_timestamp_ext > startTimestamp) {
+        if (item->received && item->rtp_timestamp_ext > startTimestamp) {
+            if (diff_millis(item->when_dequeue, now) <= 0) {
                 return true;
             }
         }
