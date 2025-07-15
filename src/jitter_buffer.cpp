@@ -95,7 +95,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     // Decide what to do
     const auto now = std::chrono::steady_clock::now();
 
-    if (mLastPacketTime != std::chrono::steady_clock::time_point::min()) {
+    if (mItemList) {
         const auto elapsed = now - mLastPacketTime;
         if (elapsed >= kNoPacketsResetDelay) {
             LOG(SRTC_LOG_E,
