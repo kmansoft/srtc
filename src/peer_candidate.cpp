@@ -389,6 +389,8 @@ void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::ve
         w.writeU16(seq);
         w.writeU16(0);
 
+        LOG(SRTC_LOG_V, "Sending NACK for media %s, ssrc = %u, seq = %u", to_string(track->getMediaType()).c_str(), ssrc, seq);
+
         const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
         sendRtcpPacket(track, packet);
     }

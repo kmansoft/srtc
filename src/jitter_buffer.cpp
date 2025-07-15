@@ -117,18 +117,24 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
         const auto item = newItem();
         mItemList[seq_ext & mCapacityMask] = item;
-    } else if (seq_ext + mCapacity / 10 < mMinSeq) {
+    } else if (seq_ext + mCapacity / 4 < mMinSeq) {
         // Out of range, much less than min
         LOG(SRTC_LOG_E,
-            "The new packet's sequence number %u is too late, min = %u",
+            "The new packet's sequence number %u is too late, ssrc = %u, media = %s, min = %u, max = %u",
             seq,
-            static_cast<uint16_t>(mMinSeq));
+            mTrack->getSSRC(),
+            to_string(mTrack->getMediaType()).c_str(),
+            static_cast<uint16_t>(mMinSeq),
+            static_cast<uint16_t>(mMaxSeq));
         return;
-    } else if (seq_ext - mCapacity / 10 > mMaxSeq) {
+    } else if (seq_ext - mCapacity / 4 > mMaxSeq) {
         // Out of range, much greater than max
         LOG(SRTC_LOG_E,
-            "The new packet's sequence number %u is too early, max = %u",
+            "The new packet's sequence number %u is too early, ssrc = %u, media = %s, min = %u, max = %u",
             seq,
+            mTrack->getSSRC(),
+            to_string(mTrack->getMediaType()).c_str(),
+            static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
     }
