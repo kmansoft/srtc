@@ -60,6 +60,10 @@ private:
 		ByteBuffer payload;
 	};
 
+    void freeEverything();
+    [[nodiscard]] Item* newItem();
+    void deleteItem(Item* item);
+
 	[[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
     [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now);
 
@@ -69,6 +73,8 @@ private:
 	const size_t mCapacityMask;
 	const std::chrono::milliseconds mLength;
 	const std::chrono::milliseconds mNackDelay;
+
+    std::chrono::steady_clock::time_point mLastPacketTime;
 
 	Item** mItemList;
 	uint64_t mMinSeq;

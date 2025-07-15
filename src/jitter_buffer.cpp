@@ -16,6 +16,8 @@
 namespace
 {
 
+constexpr auto kNoPacketsResetDelay = std::chrono::milliseconds(2000);
+
 // We calculate timeouts for the event loop (when there are no network events) with millisecond precision. When we
 // time out and go to process actual logic like de-queuing frames or sending nacks, we need to use millisecond precision
 // as well. If we don't, we might have a timeout = 0, but the actual logic won't run because it's 12 nanoseconds in the
@@ -46,6 +48,7 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
     , mCapacityMask(capacity - 1)
     , mLength(length)
     , mNackDelay(nackDelay)
+    , mLastPacketTime(std::chrono::steady_clock::time_point::min())
     , mItemList(nullptr)
     , mMinSeq(0)
     , mMaxSeq(0)
@@ -57,14 +60,7 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
 
 JitterBuffer::~JitterBuffer()
 {
-    if (mItemList) {
-        for (uint64_t seq = mMinSeq; seq < mMaxSeq; seq += 1) {
-            const auto index = seq & (mCapacity - 1);
-            delete mItemList[index];
-        }
-
-        delete[] mItemList;
-    }
+    freeEverything();
 }
 
 std::shared_ptr<Track> JitterBuffer::getTrack() const
@@ -96,6 +92,21 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto seq_ext = mExtValueSeq.extend(seq);
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
 
+    // Decide what to do
+    const auto now = std::chrono::steady_clock::now();
+
+    if (mLastPacketTime != std::chrono::steady_clock::time_point::min()) {
+        const auto elapsed = now - mLastPacketTime;
+        if (elapsed >= kNoPacketsResetDelay) {
+            LOG(SRTC_LOG_E,
+                "We have not had %s packets for %ld milliseconds, resetting the jitter buffer",
+                to_string(mTrack->getMediaType()).c_str(),
+                static_cast<long>(elapsed.count()));
+            freeEverything();
+        }
+    }
+    mLastPacketTime = now;
+
     if (mItemList == nullptr) {
         // First packet
         mMinSeq = seq_ext;
@@ -104,7 +115,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         mBaseTime = std::chrono::steady_clock::now();
         mBaseRtpTimestamp = rtp_timestamp_ext;
 
-        const auto item = new Item;
+        const auto item = newItem();
         mItemList[seq_ext & mCapacityMask] = item;
     } else if (seq_ext + mCapacity / 10 < mMinSeq) {
         // Out of range, much less than min
@@ -122,7 +133,6 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         return;
     }
 
-    const auto now = std::chrono::steady_clock::now();
     const auto rtp_timestamp_delta = rtp_timestamp_ext - mBaseRtpTimestamp;
     const auto time_delta = std::chrono::milliseconds(1000 * rtp_timestamp_delta / mTrack->getClockRate());
     const auto packet_time = mBaseTime + time_delta;
@@ -144,27 +154,27 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         while (seq_ext + 1 < mMinSeq) {
             mMinSeq -= 1;
 
-            const auto spacer = new Item;
-            spacer->when_received = std::chrono::steady_clock::time_point::min();
-            spacer->when_dequeue = std::chrono::steady_clock::time_point::max();
-            spacer->when_nack_request = when_nack_request;
-            spacer->when_nack_abandon = when_dequeue;
+            const auto lost = newItem();
+            lost->when_received = std::chrono::steady_clock::time_point::min();
+            lost->when_dequeue = std::chrono::steady_clock::time_point::max();
+            lost->when_nack_request = when_nack_request;
+            lost->when_nack_abandon = when_dequeue;
 
-            spacer->received = false;
-            spacer->nack_needed = true;
+            lost->received = false;
+            lost->nack_needed = true;
 
-            spacer->seq_ext = mMinSeq;
-            spacer->rtp_timestamp_ext = 0;
+            lost->seq_ext = mMinSeq;
+            lost->rtp_timestamp_ext = 0;
 
-            const auto index = spacer->seq_ext & mCapacityMask;
-            mItemList[index] = spacer;
+            const auto index = lost->seq_ext & mCapacityMask;
+            mItemList[index] = lost;
         }
 
         mMinSeq -= 1;
         assert(mMinSeq == seq_ext);
 
         const auto index = seq_ext & mCapacityMask;
-        item = new Item;
+        item = newItem();
         mItemList[index] = item;
     } else if (seq_ext >= mMaxSeq) {
         // Above max
@@ -177,7 +187,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         }
 
         while (mMaxSeq <= seq_ext - 1) {
-            const auto lost = new Item;
+            const auto lost = newItem();
             lost->when_received = std::chrono::steady_clock::time_point::min();
             lost->when_dequeue = std::chrono::steady_clock::time_point::max();
             lost->when_nack_request = when_nack_request;
@@ -198,7 +208,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         mMaxSeq += 1;
         assert(mMaxSeq - 1 == seq_ext);
 
-        item = new Item;
+        item = newItem();
         const auto index = seq_ext & mCapacityMask;
         mItemList[index] = item;
     } else {
@@ -323,7 +333,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 mItemList[index] = nullptr;
                 mMinSeq += 1;
 
-                delete item;
+                deleteItem(item);
             } else if (item->kind == PacketKind::Start) {
                 // Start of a multi-packet sequence
                 uint64_t maxSeq = 0;
@@ -355,7 +365,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     for (auto cleanup_seq = seq; cleanup_seq <= maxSeq; cleanup_seq += 1) {
                         const auto cleanup_index = cleanup_seq & mCapacityMask;
-                        delete mItemList[cleanup_index];
+                        deleteItem(mItemList[cleanup_index]);
                         mItemList[cleanup_index] = nullptr;
                     }
 
@@ -419,6 +429,29 @@ std::vector<uint16_t> JitterBuffer::processNack()
     return result;
 }
 
+void JitterBuffer::freeEverything()
+{
+    if (mItemList) {
+        for (uint64_t seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+            const auto index = seq & (mCapacity - 1);
+            delete mItemList[index];
+        }
+
+        delete[] mItemList;
+        mItemList = nullptr;
+    }
+}
+
+JitterBuffer::Item* JitterBuffer::newItem()
+{
+    return new Item;
+}
+
+void JitterBuffer::deleteItem(Item* item)
+{
+    delete item;
+}
+
 bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 {
     auto index = (mMinSeq)&mCapacityMask;
@@ -441,7 +474,7 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
             for (auto delete_seq = mMinSeq; delete_seq <= seq; delete_seq += 1) {
                 const auto delete_index = delete_seq & mCapacityMask;
                 const auto delete_item = mItemList[delete_index];
-                delete delete_item;
+                deleteItem(delete_item);
                 mItemList[delete_index] = nullptr;
             }
 
@@ -453,8 +486,9 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
     return false;
 }
 
-bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now) {
-    auto index = (mMinSeq) & mCapacityMask;
+bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now)
+{
+    auto index = (mMinSeq)&mCapacityMask;
     auto item = mItemList[index];
     assert(item);
     assert(item->received);
@@ -467,7 +501,7 @@ bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point
         item = mItemList[index];
         assert(item);
 
-        if (item->received &&  diff_millis(item->when_dequeue, now) <= 0) {
+        if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->rtp_timestamp_ext > startTimestamp) {
                 return true;
             }
