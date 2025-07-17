@@ -49,9 +49,9 @@ PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& packet)
 	return PacketKind::Standalone;
 }
 
-std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
+void DepacketizerH264::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
 {
-	std::list<ByteBuffer> list;
+	out.clear();
 
 	ByteReader reader(packet);
 	if (reader.remaining() >= 1) {
@@ -68,21 +68,21 @@ std::list<ByteBuffer> DepacketizerH264::extract(ByteBuffer& packet)
 				}
 
 				ByteBuffer  buf(packet.data() + reader.position(), size);
-				list.push_back(std::move(buf));
+                out.emplace_back(std::move(buf));
 
 				reader.skip(size);
 			}
 		} else {
 			// https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
-			list.push_back(std::move(packet));
+            out.emplace_back(std::move(packet));
 		}
 	}
-
-	return list;
 }
 
-std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& packetList)
+void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList)
 {
+    out.clear();
+
 #ifndef NDEBUG
 	assert(!packetList.empty());
 	assert(getPacketKind(*packetList[0]) == PacketKind::Start);
@@ -91,8 +91,6 @@ std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& 
 	}
 	assert(getPacketKind(*packetList[packetList.size() - 1]) == PacketKind::End);
 #endif
-
-	std::list<ByteBuffer> list;
 
 	ByteBuffer buf;
 	ByteWriter w(buf);
@@ -116,9 +114,7 @@ std::list<ByteBuffer> DepacketizerH264::extract(const std::vector<ByteBuffer*>& 
 		}
 	}
 
-	list.push_back(std::move(buf));
-
-	return list;
+	out.emplace_back(std::move(buf));
 }
 
 } // namespace srtc

@@ -321,21 +321,12 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
         if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->kind == PacketKind::Standalone) {
                 // A standalone packet, which is ready to be extracted, possibly into multiple frames
-                auto frameList = mDepacketizer->extract(item->payload);
+                mDepacketizer->extract(mTempFrameList, item->payload);
 
-                while (!frameList.empty()) {
-                    const auto frame = std::make_shared<EncodedFrame>();
+                // Append to result frame list
+                appendToResult(result, item, mTempFrameList);
 
-                    frame->track = mTrack;
-                    frame->seq_ext = item->seq_ext;
-                    frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-                    frame->data = std::move(frameList.front());
-
-                    result.push_back(frame);
-
-                    frameList.pop_front();
-                }
-
+                // Cleanup
                 mItemList[index] = nullptr;
                 mMinSeq += 1;
 
@@ -344,37 +335,19 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 // Start of a multi-packet sequence
                 uint64_t maxSeq = 0;
                 if (findMultiPacketSequence(maxSeq)) {
-
-                    std::vector<ByteBuffer*> bufList;
-                    for (auto extract_seq = seq; extract_seq <= maxSeq; extract_seq += 1) {
-                        const auto extract_index = extract_seq & mCapacityMask;
-                        auto extract_item = mItemList[extract_index];
-                        assert(extract_item);
-                        bufList.push_back(&extract_item->payload);
-                    }
+                    // Create a list of buffers
+                    extractBufferList(mTempBufferList, seq, maxSeq);
 
                     // Extract, possibly into multiple frames (theoretical)
-                    auto frameList = mDepacketizer->extract(bufList);
+                    mDepacketizer->extract(mTempFrameList, mTempBufferList);
 
-                    while (!frameList.empty()) {
-                        const auto frame = std::make_shared<EncodedFrame>();
+                    // Append to result frame list
+                    appendToResult(result, item, mTempFrameList);
 
-                        frame->track = mTrack;
-                        frame->seq_ext = item->seq_ext;
-                        frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-                        frame->data = std::move(frameList.front());
+                    // Clean up
+                    deleteItemList(seq, maxSeq);
 
-                        result.push_back(frame);
-
-                        frameList.pop_front();
-                    }
-
-                    for (auto cleanup_seq = seq; cleanup_seq <= maxSeq; cleanup_seq += 1) {
-                        const auto cleanup_index = cleanup_seq & mCapacityMask;
-                        deleteItem(mItemList[cleanup_index]);
-                        mItemList[cleanup_index] = nullptr;
-                    }
-
+                    // Advance
                     mMinSeq = maxSeq + 1;
                 } else {
                     break;
@@ -386,18 +359,18 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     mItemList[index] = nullptr;
                     mMinSeq += 1;
 
-                    delete item;
+                    deleteItem(item);
                 } else {
                     // There is no another frame, we can afford to wait
                     break;
                 }
             }
-        } else if (diff_millis(item->when_nack_abandon, now) <= 0) {
+        } else if (!item->received && diff_millis(item->when_nack_abandon, now) <= 0) {
             // A nack that was never received - delete and keep going
             mItemList[index] = nullptr;
             mMinSeq += 1;
 
-            delete item;
+            deleteItem(item);
         } else {
             break;
         }
@@ -456,6 +429,49 @@ JitterBuffer::Item* JitterBuffer::newItem()
 void JitterBuffer::deleteItem(Item* item)
 {
     delete item;
+}
+
+void JitterBuffer::extractBufferList(std::vector<ByteBuffer*>& out, uint64_t start, uint64_t max)
+{
+    out.clear();
+
+    for (uint64_t seq = start; seq <= max; seq += 1) {
+        const auto index = seq & mCapacityMask;
+        auto item = mItemList[index];
+        assert(item);
+        out.push_back(&item->payload);
+    }
+}
+
+void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
+{
+    for (auto seq = start; seq <= max; seq += 1) {
+        const auto index = seq & mCapacityMask;
+        const auto item = mItemList[index];
+        assert(item);
+        mItemList[index] = nullptr;
+        deleteItem(mItemList[index]);
+    }
+}
+
+void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
+                                  Item* item,
+                                  std::vector<srtc::ByteBuffer>& list)
+{
+    if (!list.empty()) {
+        for (auto& buf : list) {
+            const auto frame = std::make_shared<EncodedFrame>();
+
+            frame->track = mTrack;
+            frame->seq_ext = item->seq_ext;
+            frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
+            frame->data = std::move(buf);
+
+            assert(!frame->data.empty());
+
+            result.push_back(frame);
+        }
+    }
 }
 
 bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
