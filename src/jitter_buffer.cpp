@@ -97,11 +97,11 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     if (mItemList) {
         const auto elapsed = now - mLastPacketTime;
-        if (elapsed >= kNoPacketsResetDelay) {
+        if (elapsed >= kNoPacketsResetDelay && seq_ext - mCapacity / 8 >= mMaxSeq) {
             LOG(SRTC_LOG_E,
                 "We have not had %s packets for %ld milliseconds, resetting the jitter buffer",
                 to_string(mTrack->getMediaType()).c_str(),
-                static_cast<long>(elapsed.count()));
+                static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
             freeEverything();
         }
     }
@@ -349,21 +349,28 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     // Advance
                     mMinSeq = maxSeq + 1;
-                } else {
-                    break;
-                }
-            } else {
-                // We cannot extract this
-                if (findNextToDequeue(now)) {
+                } else if (findNextToDequeue(now)) {
                     // There is another frame that's ready, delete this one
+                    LOG(SRTC_LOG_E,
+                        "Dropping incomplete multi-frame, seq = %" PRIu64 ", min = %" PRIu64 ", max = %" PRIu64,
+                        seq,
+                        mMinSeq,
+                        mMaxSeq);
+
                     mItemList[index] = nullptr;
                     mMinSeq += 1;
 
                     deleteItem(item);
                 } else {
-                    // There is no another frame, we can afford to wait
+                    // There is no other frame, we can afford to wait longer
                     break;
                 }
+            } else {
+                // We cannot and will never be able to extract this
+                mItemList[index] = nullptr;
+                mMinSeq += 1;
+
+                deleteItem(item);
             }
         } else if (!item->received && diff_millis(item->when_nack_abandon, now) <= 0) {
             // A nack that was never received - delete and keep going
@@ -493,13 +500,7 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
             outEnd = seq;
             return true;
         } else if (item->kind != PacketKind::Middle) {
-            for (auto delete_seq = mMinSeq; delete_seq <= seq; delete_seq += 1) {
-                const auto delete_index = delete_seq & mCapacityMask;
-                const auto delete_item = mItemList[delete_index];
-                deleteItem(delete_item);
-                mItemList[delete_index] = nullptr;
-            }
-
+            deleteItemList(mMinSeq, seq);
             mMinSeq = seq + 1;
             break;
         }

@@ -17,7 +17,7 @@ class HmacSha1;
 class SrtpCrypto
 {
 public:
-    [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(uint16_t profileId,
+    [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(uint64_t profileId,
                                                                               const CryptoBytes& sendMasterKey,
                                                                               const CryptoBytes& sendMasterSalt,
                                                                               const CryptoBytes& receiveMasterKey,
@@ -42,7 +42,7 @@ public:
         CryptoBytes salt;
     };
 
-    SrtpCrypto(uint16_t profileId,
+    SrtpCrypto(uint64_t profileId,
 			   // Send RTP
 			   const CryptoVectors& sendRtp,
 			   // Receive RTP
@@ -67,7 +67,7 @@ private:
 
     [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 
-    const uint16_t mProfileId;
+    const uint64_t mProfileId;
 	const CryptoVectors mSendRtp;
 	const CryptoVectors mReceiveRtp;
     const CryptoVectors mSendRtcp;
