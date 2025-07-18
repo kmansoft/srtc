@@ -40,6 +40,7 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 	const auto type = value & 0x1F;
 
 	if (type == 1 && !mIsSeenKeyFrame) {
+        std::printf("H26x: no key frame yet\n");
 		return;
 	} else if (!mIsSeenKeyFrame) {
 		if (type == 5 || type == 7 || type == 8) {
