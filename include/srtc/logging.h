@@ -7,6 +7,7 @@ namespace srtc
 
 #define SRTC_LOG_V 0
 #define SRTC_LOG_I 1
+#define SRTC_LOG_W 8
 #define SRTC_LOG_E 9
 
 #define SRTC_LOG_Z 1000
