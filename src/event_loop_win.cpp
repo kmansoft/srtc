@@ -67,7 +67,7 @@ void EventLoop_Win::wait(std::vector<void*>& udataList, int timeoutMillis)
 
     udataList.clear();
 
-    auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
+    const auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
 
     const auto res = WaitForMultipleObjects(count, handleListPtr, FALSE, timeoutArg);
     if (res != WAIT_TIMEOUT) {

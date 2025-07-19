@@ -53,7 +53,7 @@ void EventLoop_Linux::wait(std::vector<void*>& udataList, int timeoutMillis)
     udataList.clear();
 
     // Calling epoll with timeout < 0 causes it to wait indefinitely
-    auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
+    const auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
 
     struct epoll_event epollEvent[10];
     const auto nfds = epoll_wait(mEpollHandle, epollEvent, sizeof(epollEvent) / sizeof(epollEvent[0]), timeoutArg);
