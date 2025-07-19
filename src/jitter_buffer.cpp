@@ -491,7 +491,7 @@ void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
         const auto item = mItemList[index];
         assert(item);
         mItemList[index] = nullptr;
-        deleteItem(mItemList[index]);
+        deleteItem(item);
     }
 }
 
