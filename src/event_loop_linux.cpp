@@ -5,6 +5,7 @@
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <algorithm>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_Linux", __VA_ARGS__)
 
@@ -51,8 +52,11 @@ void EventLoop_Linux::wait(std::vector<void*>& udataList, int timeoutMillis)
 {
     udataList.clear();
 
+    // Calling epoll with timeout < 0 causes it to wait indefinitely
+    auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
+
     struct epoll_event epollEvent[10];
-    const auto nfds = epoll_wait(mEpollHandle, epollEvent, sizeof(epollEvent) / sizeof(epollEvent[0]), timeoutMillis);
+    const auto nfds = epoll_wait(mEpollHandle, epollEvent, sizeof(epollEvent) / sizeof(epollEvent[0]), timeoutArg);
 
     if (nfds > 0) {
         for (int i = 0; i < nfds; i += 1) {

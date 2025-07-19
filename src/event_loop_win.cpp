@@ -3,6 +3,7 @@
 #include "srtc/socket.h"
 
 #include <cassert>
+#include <algorithm>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_Win", __VA_ARGS__)
 
@@ -66,7 +67,9 @@ void EventLoop_Win::wait(std::vector<void*>& udataList, int timeoutMillis)
 
     udataList.clear();
 
-    const auto res = WaitForMultipleObjects(count, handleListPtr, FALSE, timeoutMillis);
+    auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
+
+    const auto res = WaitForMultipleObjects(count, handleListPtr, FALSE, timeoutArg);
     if (res != WAIT_TIMEOUT) {
         const auto index = res - WAIT_OBJECT_0;
         if (index >= 1 && index < count) {
