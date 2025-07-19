@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "srtc/srtc_util.h"
+#include "srtc/util.h"
 
 #include <iostream>
 

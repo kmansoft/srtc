@@ -24,11 +24,11 @@
 #include "srtc/send_rtp_history.h"
 #include "srtc/sender_report.h"
 #include "srtc/sender_reports_history.h"
-#include "srtc/srtc_util.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
+#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>

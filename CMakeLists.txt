@@ -72,7 +72,6 @@ add_library(srtc
         include/srtc/simulcast_layer.h
         include/srtc/socket.h
         include/srtc/srtc.h
-        include/srtc/srtc_util.h
         include/srtc/srtp_connection.h
         include/srtc/srtp_crypto.h
         include/srtc/srtp_hmac_sha1.h
@@ -125,7 +124,6 @@ add_library(srtc
         src/simulcast_layer.cpp
         src/socket.cpp
         src/srtc.cpp
-        src/srtc_util.cpp
         src/srtp_connection.cpp
         src/srtp_crypto.cpp
         src/srtp_hmac_sha1.cpp
@@ -138,8 +136,7 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
-        include/srtc/srtc_util.h
-        src/srtc_util.cpp)
+)
 
 if (APPLE)
     target_sources(srtc
