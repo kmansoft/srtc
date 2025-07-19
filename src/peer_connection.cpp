@@ -462,21 +462,21 @@ void PeerConnection::networkThreadWorkerFunc()
 
         auto timeout = mLoopScheduler->getTimeoutMillis(kDefaultTimeoutMillis);
         if (mSelectedCandidate) {
-            const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > selectedTimeout) {
+            if (const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > selectedTimeout) {
                 timeout = selectedTimeout;
             }
         }
         if (mJitterBufferVideo) {
-            const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > timeoutJitter) {
-                timeout = timeoutJitter;
+            if (const auto jitterTimeout = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > jitterTimeout) {
+                timeout = jitterTimeout;
             }
         }
         if (mJitterBufferAudio) {
-            const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > timeoutJitter) {
-                timeout = timeoutJitter;
+            if (const auto jitterTimeout = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > jitterTimeout) {
+                timeout = jitterTimeout;
             }
         }
 
@@ -796,9 +796,17 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
     if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
         if (config.debug_drop_packets && randomValue < 5) {
             if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
+                LOG(SRTC_LOG_V,
+                    "Dropping incoming packet with SSRC = %u, SEQ = %u",
+                    packet->getSSRC(),
+                    packet->getSequence());
                 return;
             }
         }
+    } else if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
+        ByteReader reader(packet->getPayload());
+        const auto seq = reader.remaining() >= 2 ? reader.readU16() : 0;
+        LOG(SRTC_LOG_V, "Received packet from RTX, SEQ = %u", seq);
     }
 #endif
 
