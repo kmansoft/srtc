@@ -23,7 +23,7 @@ const char* codec_to_string(srtc::Codec codec)
     }
 }
 
-std::string list_to_string(uint32_t start, uint32_t end)
+std::string list_to_string(size_t start, size_t end)
 {
     std::stringstream ss;
     for (auto i = start; i < end; i += 1) {

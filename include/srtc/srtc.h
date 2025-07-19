@@ -7,8 +7,9 @@
 #include <arpa/inet.h>
 #endif
 
-#include <thread>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace srtc
 {
@@ -34,8 +35,8 @@ enum class MediaType {
 std::string to_string(MediaType m);
 
 enum class Direction {
-	Publish = 0,
-	Subscribe = 1
+    Publish = 0,
+    Subscribe = 1
 };
 
 union anyaddr {
@@ -51,19 +52,19 @@ struct Host {
 };
 
 struct PublishConnectionStats {
-	size_t packet_count;
-	size_t byte_count;
-	float packets_lost_percent;
-	float rtt_ms;
-	float bandwidth_actual_kbit_per_second;
-	float bandwidth_suggested_kbit_per_second;
+    size_t packet_count;
+    size_t byte_count;
+    float packets_lost_percent;
+    float rtt_ms;
+    float bandwidth_actual_kbit_per_second;
+    float bandwidth_suggested_kbit_per_second;
 };
 
 enum class PacketKind {
-	Standalone = 0,
-	Start = 1,
-	Middle = 2,
-	End = 3
+    Standalone = 0,
+    Start = 1,
+    Middle = 2,
+    End = 3
 };
 
 #if defined(__clang__) || defined(__GNUC__)

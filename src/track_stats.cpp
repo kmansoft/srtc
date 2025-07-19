@@ -19,32 +19,32 @@ void TrackStats::clear()
 	mSentBytes = 0;
 }
 
-uint32_t TrackStats::getSentPackets() const
+size_t TrackStats::getSentPackets() const
 {
 	return mSentPackets;
 }
 
-uint32_t TrackStats::getSentBytes() const
+size_t TrackStats::getSentBytes() const
 {
 	return mSentBytes;
 }
 
-void TrackStats::incrementSentPackets(uint32_t increment)
+void TrackStats::incrementSentPackets(size_t increment)
 {
 	mSentPackets += increment;
 }
 
-void TrackStats::incrementSentBytes(uint32_t increment)
+void TrackStats::incrementSentBytes(size_t increment)
 {
 	mSentBytes += increment;
 }
 
-uint32_t TrackStats::getReceivedPackets() const
+size_t TrackStats::getReceivedPackets() const
 {
 	return mReceivedPackets;
 }
 
-uint32_t TrackStats::getReceivedBytes() const
+size_t TrackStats::getReceivedBytes() const
 {
 	return mReceivedBytes;
 }
@@ -64,12 +64,12 @@ uint64_t TrackStats::getReceivedHighestSeqEx() const
 }
 
 
-void TrackStats::incrementReceivedPackets(uint32_t increment)
+void TrackStats::incrementReceivedPackets(size_t increment)
 {
 	mReceivedPackets += increment;
 }
 
-void TrackStats::incrementReceivedBytes(uint32_t increment)
+void TrackStats::incrementReceivedBytes(size_t increment)
 {
 	mReceivedBytes += increment;
 }

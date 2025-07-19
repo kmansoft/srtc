@@ -6,6 +6,7 @@ cmake-vs-build-*
 CMakePresets.json
 *.mp4
 token.txt
+token*.txt
 go.sum
 build
 out

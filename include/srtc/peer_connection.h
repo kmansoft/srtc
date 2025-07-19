@@ -172,7 +172,7 @@ private:
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
     PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
-    SubscribeSenderReportListener  mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
+    SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer;
@@ -219,10 +219,8 @@ private:
     public:
         [[nodiscard]] bool shouldLosePacket(uint32_t ssrc, uint16_t seq)
         {
-            for (const auto& item : history) {
-                if (item.ssrc == ssrc && item.seq == seq) {
-                    return false;
-                }
+            if (didLosePacket(ssrc, seq)) {
+                return false;
             }
 
             while (history.size() > 256) {
@@ -231,6 +229,17 @@ private:
             history.emplace_back(ssrc, seq);
 
             return true;
+        }
+
+        [[nodiscard]] bool didLosePacket(uint32_t ssrc, uint16_t seq)
+        {
+            for (const auto& item : history) {
+                if (item.ssrc == ssrc && item.seq == seq) {
+                    return true;
+                }
+            }
+
+            return false;
         }
     };
 

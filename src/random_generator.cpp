@@ -15,6 +15,7 @@ template <class Value> Value RandomGenerator<Value>::next()
     return mRandomDist(mRandomTwister);
 }
 
+template class RandomGenerator<uint16_t>;
 template class RandomGenerator<uint32_t>;
 
 } // namespace srtc

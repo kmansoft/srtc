@@ -98,7 +98,7 @@ void MediaWriterOgg::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 
 	// Write the packet
 	m_op.packet = frame->data.data();
-	m_op.bytes = frame->data.size();
+	m_op.bytes = static_cast<long>(frame->data.size());
 	m_op.b_o_s = 0;
 	m_op.e_o_s = 0;
 	m_op.granulepos = m_granulepos;
