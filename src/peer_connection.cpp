@@ -31,6 +31,7 @@ std::once_flag gInitFlag;
 
 constexpr auto kReportsInterval = std::chrono::seconds(1);
 constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
+constexpr auto kJitterBufferSize = 4096;
 
 } // namespace
 
@@ -461,21 +462,21 @@ void PeerConnection::networkThreadWorkerFunc()
 
         auto timeout = mLoopScheduler->getTimeoutMillis(kDefaultTimeoutMillis);
         if (mSelectedCandidate) {
-            const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > selectedTimeout) {
+            if (const auto selectedTimeout = mSelectedCandidate->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > selectedTimeout) {
                 timeout = selectedTimeout;
             }
         }
         if (mJitterBufferVideo) {
-            const auto timeoutJitter = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > timeoutJitter) {
-                timeout = timeoutJitter;
+            if (const auto jitterTimeout = mJitterBufferVideo->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > jitterTimeout) {
+                timeout = jitterTimeout;
             }
         }
         if (mJitterBufferAudio) {
-            const auto timeoutJitter = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
-            if (timeout > timeoutJitter) {
-                timeout = timeoutJitter;
+            if (const auto jitterTimeout = mJitterBufferAudio->getTimeoutMillis(kDefaultTimeoutMillis);
+                timeout > jitterTimeout) {
+                timeout = jitterTimeout;
             }
         }
 
@@ -746,7 +747,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
                 if (error.isError()) {
                     LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
                 } else {
-                    mJitterBufferVideo = std::make_shared<JitterBuffer>(track, depacketizer, 2048, length, nackDelay);
+                    mJitterBufferVideo =
+                        std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
                 }
             }
             if (const auto track = mAudioTrack) {
@@ -754,7 +756,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
                 if (error.isError()) {
                     LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
                 } else {
-                    mJitterBufferAudio = std::make_shared<JitterBuffer>(track, depacketizer, 1024, length, nackDelay);
+                    mJitterBufferAudio =
+                        std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
                 }
             }
         }
@@ -793,9 +796,17 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
     if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
         if (config.debug_drop_packets && randomValue < 5) {
             if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
+                LOG(SRTC_LOG_V,
+                    "Dropping incoming packet with SSRC = %u, SEQ = %u",
+                    packet->getSSRC(),
+                    packet->getSequence());
                 return;
             }
         }
+    } else if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
+        ByteReader reader(packet->getPayload());
+        const auto seq = reader.remaining() >= 2 ? reader.readU16() : 0;
+        LOG(SRTC_LOG_V, "Received packet from RTX, SEQ = %u", seq);
     }
 #endif
 

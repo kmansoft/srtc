@@ -71,7 +71,11 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
     struct kevent event[10];
 
     struct timespec timeout = {};
-    if (timeoutMillis < 1000) {
+    if (timeoutMillis < 0) {
+        timeout.tv_sec = 0;
+        timeout.tv_nsec = 0;
+    } else if (timeoutMillis < 1000) {
+        timeout.tv_sec = 0;
         timeout.tv_nsec = timeoutMillis * 1000000;
     } else {
         timeout.tv_sec = timeoutMillis / 1000;

@@ -28,6 +28,7 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
+#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -379,15 +380,34 @@ void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<
 
 void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList)
 {
-    for (const auto seq : nackList) {
+    if (nackList.empty()) {
+        return;
+    }
+    const auto nackSize = nackList.size();
+
+    const auto seqList = std::make_unique<uint16_t[]>(nackSize);
+    const auto blpList = std::make_unique<uint16_t[]>(nackSize);
+
+    const auto n = compressNackList(nackList, seqList.get(), blpList.get());
+
+    for (size_t i = 0; i < n; i += 1) {
         ByteBuffer payload;
         ByteWriter w(payload);
 
         const auto ssrc = track->getSSRC();
+        const auto seq = seqList[i];
+        const auto blp = blpList[i];
 
         w.writeU32(ssrc);
         w.writeU16(seq);
-        w.writeU16(0);
+        w.writeU16(blp);
+
+        LOG(SRTC_LOG_V,
+            "Sending NACK for media %s, SSRC = %u, SEQ = %u, BLP = 0x%x",
+            to_string(track->getMediaType()).c_str(),
+            ssrc,
+            seq,
+            blp);
 
         const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kFeedback, std::move(payload));
         sendRtcpPacket(track, packet);
@@ -451,7 +471,7 @@ void PeerCandidate::run()
 
         if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
             // We are not connected yet
-            LOG(SRTC_LOG_E, "We are not connected yet, not sending a packet");
+            LOG(SRTC_LOG_E, "We are not connected yet, not sending a frame");
             continue;
         }
 

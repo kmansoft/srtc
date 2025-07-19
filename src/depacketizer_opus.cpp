@@ -17,22 +17,19 @@ PacketKind DepacketizerOpus::getPacketKind(const ByteBuffer& packet)
 	return PacketKind::Standalone;
 }
 
-std::list<ByteBuffer> DepacketizerOpus::extract(ByteBuffer& packet)
+void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
 {
-	std::list<ByteBuffer> list;
-
 	assert(getPacketKind(packet) == PacketKind::Standalone);
 
-	list.emplace_back(std::move(packet));
-
-	return list;
+    out.clear();
+    out.emplace_back(std::move(packet));
 }
 
-std::list<ByteBuffer> DepacketizerOpus::extract(const std::vector<ByteBuffer*>& packetList)
+void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList)
 {
 	// Opus packets are always standalone
+    out.clear();
 	assert(false);
-	return {};
 }
 
 } // namespace srtc

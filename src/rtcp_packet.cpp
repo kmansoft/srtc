@@ -74,7 +74,7 @@ std::list<std::shared_ptr<RtcpPacket>> RtcpPacket::fromUdpPacket(const srtc::Byt
 		const auto padding = static_cast<uint8_t>(ptr[0] & 0x20);
 		const auto rc = static_cast<uint8_t>(ptr[0] & 0x1f);
 		const auto payloadId = ptr[1];
-		const auto len4 = (ptr[2] << 8) | ptr[3];
+		const auto len4 = static_cast<size_t>((ptr[2] << 8) | ptr[3]);
 		const auto len = (len4 + 1) * 4;
 		const auto ssrc = static_cast<uint32_t>(ptr[4]) << 24 | static_cast<uint32_t>(ptr[5]) << 16 |
 						  static_cast<uint32_t>(ptr[6]) << 8 | static_cast<uint32_t>(ptr[7]);

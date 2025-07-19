@@ -41,7 +41,7 @@ constexpr size_t kRTCP_TrailerSize = 4u;
 namespace srtc
 {
 
-std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(uint16_t profileId,
+std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(uint64_t profileId,
 																 const CryptoBytes& sendMasterKey,
 																 const CryptoBytes& sendMasterSalt,
 																 const CryptoBytes& receiveMasterKey,
@@ -242,7 +242,7 @@ bool SrtpCrypto::protectSendMediaGCM(const ByteBuffer& packet, uint32_t rollover
 
 fail:
 	if (final_ret > 0) {
-		assert(total_len + headerSize + digestSize == encryptedSize);
+		assert(static_cast<size_t>(total_len) + headerSize + digestSize == encryptedSize);
 		(void)total_len;
 		encrypted.resize(encryptedSize);
 		return true;
@@ -349,7 +349,7 @@ bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverC
 
 fail:
 	if (final_ret > 0) {
-		assert(total_len + headerSize + digestSize == encryptedSize);
+		assert(static_cast<size_t>(total_len) + headerSize + digestSize == encryptedSize);
 		(void)total_len;
 		encrypted.resize(encryptedSize);
 		return true;
@@ -708,7 +708,7 @@ bool SrtpCrypto::protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, B
 
 fail:
 	if (final_ret > 0) {
-		assert(total_len + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
+		assert(static_cast<size_t>(total_len) + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
 		(void)total_len;
 		encrypted.resize(encryptedSize);
 		return true;
@@ -795,7 +795,7 @@ bool SrtpCrypto::protectSendControlCM(const ByteBuffer& packet, uint32_t seq, By
 
 fail:
 	if (final_ret > 0) {
-		assert(total_len + headerSize + trailerSize + digestSize == encryptedSize);
+		assert(static_cast<size_t>(total_len) + headerSize + trailerSize + digestSize == encryptedSize);
 		(void)total_len;
 		encrypted.resize(encryptedSize);
 		return true;
@@ -1045,7 +1045,7 @@ bool SrtpCrypto::secureEquals(const void* a, const void* b, size_t size)
 	return CRYPTO_memcmp(a, b, size) == 0;
 }
 
-SrtpCrypto::SrtpCrypto(uint16_t profileId,
+SrtpCrypto::SrtpCrypto(uint64_t profileId,
 					   const CryptoVectors& sendRtp,
 					   const CryptoVectors& receiveRtp,
 					   const CryptoVectors& sendRtcp,
