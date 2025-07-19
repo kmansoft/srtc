@@ -120,7 +120,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     } else if (seq_ext + mCapacity / 4 < mMinSeq) {
         // Out of range, much less than min
         LOG(SRTC_LOG_E,
-            "The new packet's sequence number %u is too late, ssrc = %u, media = %s, min = %u, max = %u",
+            "The new packet SEQ = %u is too late, SSRC = %u, media = %s, min = %u, max = %u",
             seq,
             mTrack->getSSRC(),
             to_string(mTrack->getMediaType()).c_str(),
@@ -130,7 +130,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     } else if (seq_ext - mCapacity / 4 > mMaxSeq) {
         // Out of range, much greater than max
         LOG(SRTC_LOG_E,
-            "The new packet's sequence number %u is too early, ssrc = %u, media = %s, min = %u, max = %u",
+            "The new packet SEQ = %u is too early, SSRC = %u, media = %s, min = %u, max = %u",
             seq,
             mTrack->getSSRC(),
             to_string(mTrack->getMediaType()).c_str(),
@@ -144,6 +144,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto packet_time = mBaseTime + time_delta;
     const auto when_dequeue = packet_time + mLength;
     const auto when_nack_request = now + mNackDelay;
+    const auto when_nack_abandon = when_dequeue;
 
     Item* item = nullptr;
 
@@ -151,9 +152,12 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // Before min
         if (mMaxSeq - seq_ext > mCapacity) {
             LOG(SRTC_LOG_E,
-                "The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
-                seq_ext,
-                seq_ext);
+                "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
+                static_cast<uint16_t>(seq_ext),
+                mTrack->getSSRC(),
+                to_string(mTrack->getMediaType()).c_str(),
+                static_cast<uint16_t>(mMinSeq),
+                static_cast<uint16_t>(mMaxSeq));
             return;
         }
 
@@ -164,7 +168,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             lost->when_received = std::chrono::steady_clock::time_point::min();
             lost->when_dequeue = std::chrono::steady_clock::time_point::max();
             lost->when_nack_request = when_nack_request;
-            lost->when_nack_abandon = when_dequeue;
+            lost->when_nack_abandon = when_nack_abandon;
 
             lost->received = false;
             lost->nack_needed = true;
@@ -186,9 +190,12 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // Above max
         if (seq_ext - mMinSeq > mCapacity) {
             LOG(SRTC_LOG_E,
-                "The new packet with sequence number %" PRIu64 " (%" PRIx64 ") would exceed the capacity",
-                seq_ext,
-                seq_ext);
+                "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
+                static_cast<uint16_t>(seq_ext),
+                mTrack->getSSRC(),
+                to_string(mTrack->getMediaType()).c_str(),
+                static_cast<uint16_t>(mMinSeq),
+                static_cast<uint16_t>(mMaxSeq));
             return;
         }
 
@@ -197,7 +204,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             lost->when_received = std::chrono::steady_clock::time_point::min();
             lost->when_dequeue = std::chrono::steady_clock::time_point::max();
             lost->when_nack_request = when_nack_request;
-            lost->when_nack_abandon = when_dequeue;
+            lost->when_nack_abandon = when_nack_abandon;
 
             lost->received = false;
             lost->nack_needed = true;
@@ -207,6 +214,19 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
             const auto index = lost->seq_ext & mCapacityMask;
             mItemList[index] = lost;
+
+#ifdef NDEBUG
+#else
+            const auto diff_request = diff_millis(lost->when_nack_request, now);
+            const auto diff_abandon = diff_millis(lost->when_nack_abandon, now);
+
+            LOG(SRTC_LOG_V,
+                "Storing NACK for lost SEQ = %u, NEW_SEQ = %u, diff_request = %d, diff_abandon = %d",
+                static_cast<uint16_t>(lost->seq_ext),
+                seq,
+                diff_request,
+                diff_abandon);
+#endif
 
             mMaxSeq += 1;
         }
@@ -352,10 +372,10 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 } else if (findNextToDequeue(now)) {
                     // There is another frame that's ready, delete this one
                     LOG(SRTC_LOG_E,
-                        "Dropping incomplete multi-frame, seq = %" PRIu64 ", min = %" PRIu64 ", max = %" PRIu64,
-                        seq,
-                        mMinSeq,
-                        mMaxSeq);
+                        "***** Dropping an incomplete multi-frame, SEQ = %u, MIN = %u, MAX = %u",
+                        static_cast<uint16_t>(seq),
+                        static_cast<uint16_t>(mMinSeq),
+                        static_cast<uint16_t>(mMaxSeq));
 
                     mItemList[index] = nullptr;
                     mMinSeq += 1;
@@ -406,6 +426,20 @@ std::vector<uint16_t> JitterBuffer::processNack()
             if (!item->received && item->nack_needed) {
                 item->nack_needed = false;
                 result.push_back(static_cast<uint16_t>(item->seq_ext));
+
+#ifdef NDEBUG
+#else
+                const auto diff_request = diff_millis(item->when_nack_request, now);
+                const auto diff_abandon = diff_millis(item->when_nack_abandon, now);
+
+                LOG(SRTC_LOG_V,
+                    "Processing NACK for item SEQ = %u, diff_request = %d, diff_abandon = %d, min = %u, max = %u",
+                    static_cast<uint16_t>(item->seq_ext),
+                    diff_request,
+                    diff_abandon,
+                    static_cast<uint16_t>(mMinSeq),
+                    static_cast<uint16_t>(mMaxSeq));
+#endif
             }
         } else if (item->when_nack_abandon <= now) {
             break;
