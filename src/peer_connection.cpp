@@ -734,6 +734,15 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
                 nackDelay = std::chrono::milliseconds(10);
             }
 
+#ifdef WIN32
+            // Windows events are very low resolution, a wait can take 3-4-5 milliseconds longer (or more) than we ask
+            // for. This can affect our nacks, we send them too late and they don't arrive in time.
+            if (length.count() < 100) {
+                length = std::chrono::milliseconds(100);
+                nackDelay = std::chrono::milliseconds(10);
+            }
+#endif
+
             const auto config = mSdpOffer->getConfig();
             if (config.jitter_buffer_length_millis > 0 && config.jitter_buffer_length_millis > length.count()) {
                 length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
