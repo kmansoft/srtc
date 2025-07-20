@@ -927,7 +927,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
 
         mListener->onCandidateReceivedSenderReport(this, track, sr);
     } else {
-        LOG(SRTC_LOG_E, "Cannot find track with ssrc = %u for a sender report", ssrc);
+        LOG(SRTC_LOG_W, "Cannot find track with ssrc = %u for a sender report", ssrc);
     }
 }
 
