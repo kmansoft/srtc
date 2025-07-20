@@ -16,7 +16,7 @@ namespace
 
 int gLogLevel =
 #ifdef NDEBUG
-    SRTC_LOG_E
+    SRTC_LOG_W
 #else
     SRTC_LOG_V
 #endif

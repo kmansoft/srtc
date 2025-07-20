@@ -371,8 +371,8 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     mMinSeq = maxSeq + 1;
                 } else if (findNextToDequeue(now)) {
                     // There is another frame that's ready, delete this one
-                    LOG(SRTC_LOG_E,
-                        "***** Dropping an incomplete multi-frame, SEQ = %u, MIN = %u, MAX = %u",
+                    LOG(SRTC_LOG_W,
+                        "Dropping an incomplete multi-frame, SEQ = %u, MIN = %u, MAX = %u",
                         static_cast<uint16_t>(seq),
                         static_cast<uint16_t>(mMinSeq),
                         static_cast<uint16_t>(mMaxSeq));

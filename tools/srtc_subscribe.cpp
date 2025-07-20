@@ -89,8 +89,8 @@ const char* connectionStateToString(const srtc::PeerConnection::ConnectionState&
 
 int main(int argc, char* argv[])
 {
-    // Set logging to errors by default
-    srtc::setLogLevel(SRTC_LOG_E);
+    // Set logging to warnings by default
+    srtc::setLogLevel(SRTC_LOG_W);
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
