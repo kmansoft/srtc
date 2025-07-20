@@ -873,7 +873,7 @@ void PeerConnection::sendConnectionStats()
         connectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
 
         std::lock_guard lock(mMutex);
-        if (mConnectionState == ConnectionState::Connected) {
+        if (mConnectionState != ConnectionState::Connected) {
             return;
         }
 
