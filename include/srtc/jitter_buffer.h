@@ -94,6 +94,8 @@ private:
 
     std::vector<ByteBuffer> mTempFrameList;
     std::vector<ByteBuffer*> mTempBufferList;
+
+    std::optional<uint64_t> mLastFrameTimeStamp;
 };
 
 } // namespace srtc

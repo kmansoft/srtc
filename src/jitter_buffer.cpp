@@ -56,6 +56,11 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
     , mBaseRtpTimestamp(0)
 {
     assert((mCapacity & mCapacityMask) == 0 && "capacity should be a power of 2");
+
+    LOG(SRTC_LOG_V, "Constructed for %s with length = %ld, nack delay = %ld",
+        to_string(mTrack->getMediaType()).c_str(),
+        static_cast<long>(length.count()),
+        static_cast<long>(nackDelay.count()));
 }
 
 JitterBuffer::~JitterBuffer()
@@ -78,7 +83,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     if (packet->getSSRC() == mTrack->getRtxSSRC() && packet->getPayloadId() == mTrack->getRtxPayloadId()) {
         // Unwrap RTX
         if (payload.size() < 2) {
-            LOG(SRTC_LOG_E, "RTX payload is less than 2 bytes, can't be");
+            LOG(SRTC_LOG_E, "RTX payload is less than 2 bytes, which can't be");
             return;
         }
 
@@ -92,12 +97,22 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto seq_ext = mExtValueSeq.extend(seq);
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
 
+    // Is this packet too late?
+    if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
+        LOG(SRTC_LOG_W,
+            "Will not en-queue %s frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
+            to_string(mTrack->getMediaType()).c_str(),
+            rtp_timestamp_ext,
+            mLastFrameTimeStamp.value());
+        return;
+    }
+
     // Decide what to do
     const auto now = std::chrono::steady_clock::now();
 
     if (mItemList) {
         const auto elapsed = now - mLastPacketTime;
-        if (elapsed >= kNoPacketsResetDelay && seq_ext - mCapacity / 8 >= mMaxSeq) {
+        if (elapsed >= kNoPacketsResetDelay && seq_ext >= mMaxSeq + mCapacity / 8) {
             LOG(SRTC_LOG_E,
                 "We have not had %s packets for %ld milliseconds, resetting the jitter buffer",
                 to_string(mTrack->getMediaType()).c_str(),
@@ -117,7 +132,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
         const auto item = newItem();
         mItemList[seq_ext & mCapacityMask] = item;
-    } else if (seq_ext + mCapacity / 4 < mMinSeq) {
+    } else if (seq_ext + mCapacity / 4 <= mMinSeq) {
         // Out of range, much less than min
         LOG(SRTC_LOG_E,
             "The new packet SEQ = %u is too late, SSRC = %u, media = %s, min = %u, max = %u",
@@ -127,7 +142,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
-    } else if (seq_ext - mCapacity / 4 > mMaxSeq) {
+    } else if (seq_ext >= mMaxSeq + mCapacity / 4) {
         // Out of range, much greater than max
         LOG(SRTC_LOG_E,
             "The new packet SEQ = %u is too early, SSRC = %u, media = %s, min = %u, max = %u",
@@ -500,6 +515,18 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
                                   std::vector<srtc::ByteBuffer>& list)
 {
     if (!list.empty()) {
+        // Check that we're not trying to go backwards
+        if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > item->rtp_timestamp_ext) {
+            LOG(SRTC_LOG_W,
+                "Will not de-queue %s frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
+                to_string(mTrack->getMediaType()).c_str(),
+                item->rtp_timestamp_ext,
+                mLastFrameTimeStamp.value());
+            return;
+        }
+
+        mLastFrameTimeStamp = item->rtp_timestamp_ext;
+
         for (auto& buf : list) {
             const auto frame = std::make_shared<EncodedFrame>();
 
