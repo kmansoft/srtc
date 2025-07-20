@@ -723,6 +723,8 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
     if (mDirection == Direction::Subscribe) {
         const auto rtt = candidate->getIceRtt();
         if (rtt.has_value()) {
+            std::lock_guard lock(mMutex);
+
             // We should have the rtt from ice
             auto length = std::chrono::milliseconds(lround(rtt.value()) + 12);
             auto nackDelay = std::chrono::milliseconds(6);
@@ -789,24 +791,28 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 {
 #ifdef NDEBUG
 #else
-    const auto config = mSdpOffer->getConfig();
-    const auto randomValue = mLosePacketsRandomGenerator.next();
+    {
+        std::lock_guard lock(mMutex);
 
-    // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-    if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
-        if (config.debug_drop_packets && randomValue < 5) {
-            if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
-                LOG(SRTC_LOG_V,
-                    "Dropping incoming packet with SSRC = %u, SEQ = %u",
-                    packet->getSSRC(),
-                    packet->getSequence());
-                return;
+        const auto config = mSdpOffer->getConfig();
+        const auto randomValue = mLosePacketsRandomGenerator.next();
+
+        // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
+        if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
+            if (config.debug_drop_packets && randomValue < 5) {
+                if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
+                    LOG(SRTC_LOG_V,
+                        "Dropping incoming packet with SSRC = %u, SEQ = %u",
+                        packet->getSSRC(),
+                        packet->getSequence());
+                    return;
+                }
             }
+        } else if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
+            ByteReader reader(packet->getPayload());
+            const auto seq = reader.remaining() >= 2 ? reader.readU16() : 0;
+            LOG(SRTC_LOG_V, "Received packet from RTX, SEQ = %u", seq);
         }
-    } else if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
-        ByteReader reader(packet->getPayload());
-        const auto seq = reader.remaining() >= 2 ? reader.readU16() : 0;
-        LOG(SRTC_LOG_V, "Received packet from RTX, SEQ = %u", seq);
     }
 #endif
 
@@ -897,21 +903,27 @@ void PeerConnection::sendConnectionStats()
 
 void PeerConnection::sendPictureLossIndicator()
 {
-    const auto& config = mSdpOffer->getConfig();
+    std::vector<std::shared_ptr<Track>> trackList;
 
-    Task::cancelHelper(mTaskPictureLossIndicator);
-    mTaskPictureLossIndicator =
-        mLoopScheduler->submit(std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] {
-            sendPictureLossIndicator();
-        });
+    {
+        std::lock_guard lock(mMutex);
+        const auto& config = mSdpOffer->getConfig();
+
+        Task::cancelHelper(mTaskPictureLossIndicator);
+        mTaskPictureLossIndicator =
+            mLoopScheduler->submit(std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] {
+                sendPictureLossIndicator();
+            });
+
+        if (mConnectionState != ConnectionState::Connected) {
+            return;
+        }
+
+        trackList = collectTracks();
+    }
 
     if (mSelectedCandidate) {
-        std::lock_guard lock(mMutex);
-
-        if (mConnectionState == ConnectionState::Connected) {
-            const auto trackList = collectTracks();
-            mSelectedCandidate->sendPictureLossIndicators(trackList);
-        }
+        mSelectedCandidate->sendPictureLossIndicators(trackList);
     }
 }
 
