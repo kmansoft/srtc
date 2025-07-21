@@ -17,8 +17,24 @@
 namespace
 {
 
+#ifdef _WIN32
+std::once_flag gWSAStartup;
+
+void initWinSocket()
+{
+    std::call_once(gWSAStartup, [] {
+        WSADATA wsa;
+        (void)WSAStartup(MAKEWORD(2, 2), &wsa);
+    });
+}
+#endif
+
 srtc::SocketHandle createSocket(const srtc::anyaddr& addr)
 {
+#ifdef _WIN32
+    initWinSocket();
+#endif
+
     if (addr.ss.ss_family == AF_INET6) {
         return socket(AF_INET6, SOCK_DGRAM, 0);
     }
@@ -90,7 +106,6 @@ HANDLE Socket::event() const
 }
 #endif
 
-
 [[nodiscard]] std::list<Socket::ReceivedData> Socket::receive()
 {
     std::list<ReceivedData> list;
@@ -99,14 +114,16 @@ HANDLE Socket::event() const
         union anyaddr from = {};
         socklen_t fromLen = sizeof(from);
 
-        const auto r = recvfrom(
-            mHandle,
+        const auto r = recvfrom(mHandle,
 #ifdef _WIN32
-            reinterpret_cast<char*>(mReceiveBuffer.get()),
+                                reinterpret_cast<char*>(mReceiveBuffer.get()),
 #else
-            mReceiveBuffer.get(),
+                                mReceiveBuffer.get(),
 #endif
-            kReceiveBufferSize, 0, reinterpret_cast<struct sockaddr*>(&from), &fromLen);
+                                kReceiveBufferSize,
+                                0,
+                                reinterpret_cast<struct sockaddr*>(&from),
+                                &fromLen);
         if (r > 0) {
             if (mAddr == from) {
                 ByteBuffer buf = { mReceiveBuffer.get(), static_cast<size_t>(r) };
@@ -129,17 +146,29 @@ ssize_t Socket::send(const void* ptr, size_t len)
 {
     const auto r = sendto(mHandle,
 #ifdef _WIN32
-                            reinterpret_cast<const char*>(ptr),
+                          reinterpret_cast<const char*>(ptr),
 #else
-                            ptr,
+                          ptr,
 #endif
-                            len,
-                            0,
-                            (struct sockaddr*)&mAddr,
-                            mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
+                          len,
+                          0,
+                          (struct sockaddr*)&mAddr,
+                          mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
 
     if (r == -1) {
+#ifdef _WIN32
+        const auto error = GetLastError();
+        char errorMessage[1024];
+        FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                       NULL,
+                       error,
+                       MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                       errorMessage,
+                       sizeof(errorMessage),
+                       NULL);
+#else
         const auto errorMessage = strerror(errno);
+#endif
         LOG(SRTC_LOG_E, "Cannot send on a socket: %s", errorMessage);
     }
 

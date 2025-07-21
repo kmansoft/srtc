@@ -289,13 +289,6 @@ int main(int argc, char* argv[])
             }
         });
 
-    //    peerConnection->setSubscribeSenderReportsListener([](const std::shared_ptr<Track>& track, const SenderReport&
-    //    sr) {
-    //        std::cout << "Sender report for " << to_string(track->getMediaType()) << ", ssrc = " << std::setw(10)
-    //                  << track->getSSRC() << ", rtp_time = " << sr.rtp << ", ntp_time = " << sr.ntp.seconds << "."
-    //                  << sr.ntp.fraction << std::endl;
-    //    });
-
     // Connect the peer connection
     peerConnection->setOffer(offer);
     peerConnection->setAnswer(answer);
@@ -328,6 +321,10 @@ int main(int argc, char* argv[])
         }
         if (gSigTerminate) {
             std::cout << "Termination requested, exiting..." << std::endl;
+            break;
+        }
+        if (gIsConnectionFailed) {
+            std::cout << "The connection has failed, exiting..." << std::endl;
             break;
         }
     }
