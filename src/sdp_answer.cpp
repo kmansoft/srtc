@@ -635,10 +635,11 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         // a=candidate:182981660 1 udp 2130706431 99.181.107.72 443 typ host
         if (props.size() >= 7) {
             if (props[0] == "1" && props[1] == "udp" && props[5] == "typ" && props[6] == "host") {
-                if (const auto port = parse_u32(props[4]); port.has_value() && port > 0u && port < 63536u) {
+                if (const auto port = parse_u32(props[4]); port.has_value() && port > 0u && port <= 65536u) {
                     Host host{};
 
                     const auto& addrStr = props[3];
+
                     if (addrStr.find('.') != std::string::npos) {
                         if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
 

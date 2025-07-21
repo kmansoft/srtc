@@ -721,60 +721,59 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
     setConnectionState(ConnectionState::Connected);
 
     if (mDirection == Direction::Subscribe) {
+        // We should have the rtt from ice
         const auto rtt = candidate->getIceRtt();
-        if (rtt.has_value()) {
-            std::lock_guard lock(mMutex);
+        assert(rtt.has_value());
 
-            // We should have the rtt from ice
-            auto length = std::chrono::milliseconds(lround(rtt.value()) + 12);
-            auto nackDelay = std::chrono::milliseconds(6);
+        std::lock_guard lock(mMutex);
 
-            if (rtt.value() >= 50.0f) {
-                length = std::chrono::milliseconds(lround(rtt.value()) + 25);
-                nackDelay = std::chrono::milliseconds(10);
-            }
+        auto length = std::chrono::milliseconds(lround(rtt.value()) + 12);
+        auto nackDelay = std::chrono::milliseconds(6);
+
+        if (rtt.value() >= 50.0f) {
+            length = std::chrono::milliseconds(lround(rtt.value()) + 25);
+            nackDelay = std::chrono::milliseconds(10);
+        }
 
 #ifdef WIN32
-            // Windows events are very low resolution, a wait can take 3-4-5 milliseconds longer (or more) than we ask
-            // for. This can affect our nacks, we send them too late and they don't arrive in time.
-            if (length.count() < 100) {
-                length = std::chrono::milliseconds(100);
-                nackDelay = std::chrono::milliseconds(10);
-            }
+        // Windows events are very low resolution, a wait can take 3-4-5 milliseconds longer (or more) than we ask
+        // for. This can affect our nacks, we send them too late and they don't arrive in time.
+        if (length.count() < 75) {
+            length = std::chrono::milliseconds(75);
+            nackDelay = std::chrono::milliseconds(10);
+        }
 #endif
 
-            const auto config = mSdpOffer->getConfig();
-            if (config.jitter_buffer_length_millis > 0 && config.jitter_buffer_length_millis > length.count()) {
-                length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
+        const auto config = mSdpOffer->getConfig();
+        if (config.jitter_buffer_length_millis > length.count()) {
+            length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
 
-                if (config.jitter_buffer_nack_delay_millis > 0 &&
-                    config.jitter_buffer_nack_delay_millis > nackDelay.count()) {
-                    nackDelay = std::chrono::milliseconds(config.jitter_buffer_nack_delay_millis);
-                }
-            }
-
-            if (const auto track = mVideoSingleTrack) {
-                const auto [depacketizer, error] = Depacketizer::make(track);
-                if (error.isError()) {
-                    LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
-                } else {
-                    mJitterBufferVideo =
-                        std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
-                }
-            }
-            if (const auto track = mAudioTrack) {
-                const auto [depacketizer, error] = Depacketizer::make(track);
-                if (error.isError()) {
-                    LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
-                } else {
-                    mJitterBufferAudio =
-                        std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
-                }
+            if (config.jitter_buffer_nack_delay_millis > nackDelay.count()) {
+                nackDelay = std::chrono::milliseconds(config.jitter_buffer_nack_delay_millis);
             }
         }
 
-        sendPictureLossIndicator();
+        if (const auto track = mVideoSingleTrack) {
+            const auto [depacketizer, error] = Depacketizer::make(track);
+            if (error.isError()) {
+                LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
+            } else {
+                mJitterBufferVideo =
+                    std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
+            }
+        }
+        if (const auto track = mAudioTrack) {
+            const auto [depacketizer, error] = Depacketizer::make(track);
+            if (error.isError()) {
+                LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
+            } else {
+                mJitterBufferAudio =
+                    std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
+            }
+        }
     }
+
+    sendPictureLossIndicator();
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)

@@ -2,8 +2,8 @@
 #include "srtc/logging.h"
 #include "srtc/socket.h"
 
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_Win", __VA_ARGS__)
 
@@ -18,7 +18,6 @@ std::shared_ptr<EventLoop> EventLoop::factory()
 EventLoop_Win::EventLoop_Win()
     : mEventHandle(CreateEvent(NULL, FALSE, FALSE, NULL))
 {
-
 }
 EventLoop_Win::~EventLoop_Win()
 {
@@ -34,8 +33,7 @@ void EventLoop_Win::registerSocket(const std::shared_ptr<Socket>& socket, void* 
 
 void EventLoop_Win::unregisterSocket(const std::shared_ptr<Socket>& socket)
 {
-    for (auto iter = mSocketList.begin(); iter != mSocketList.end(); )
-    {
+    for (auto iter = mSocketList.begin(); iter != mSocketList.end();) {
         if (iter->socket.lock() == socket) {
             mSocketList.erase(iter);
             return;
@@ -53,15 +51,17 @@ void EventLoop_Win::wait(std::vector<void*>& udataList, int timeoutMillis)
     const auto udataListPtr = mUDataList.ensure(size);
 
     size_t count = 0;
+
     handleListPtr[count] = mEventHandle;
     udataListPtr[count] = nullptr;
     count += 1;
+
     for (const auto& item : mSocketList) {
         const auto socket = item.socket.lock();
         if (socket) {
-           handleListPtr[count] = socket->event();
-           udataListPtr[count] = item.udata;
-           count += 1;
+            handleListPtr[count] = socket->event();
+            udataListPtr[count] = item.udata;
+            count += 1;
         }
     }
 
@@ -96,4 +96,4 @@ void EventLoop_Win::interrupt()
     SetEvent(mEventHandle);
 }
 
-}
+} // namespace srtc

@@ -21,17 +21,15 @@ class PeerCandidate;
 class SendPacer;
 class X509Certificate;
 
-struct OfferConfig {
+struct PubOfferConfig {
     std::string cname;
-};
-
-struct PubOfferConfig : OfferConfig {
     bool enable_rtx = true;
     bool enable_bwe = false;
     bool debug_drop_packets = false;
 };
 
-struct SubOfferConfig : OfferConfig {
+struct SubOfferConfig {
+    std::string cname;
     uint16_t pli_interval_millis = 2000;
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
@@ -45,8 +43,9 @@ private:
     friend PeerCandidate;
     friend SendPacer;
 
-    struct Config : OfferConfig {
+    struct Config {
         // Common
+        std::string cname;
         bool debug_drop_packets = false;
         // Publish
         bool enable_rtx = true;
