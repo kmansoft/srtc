@@ -27,7 +27,10 @@ void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
     assert(getPacketKind(packet) == PacketKind::Standalone);
 
     out.clear();
-    out.emplace_back(std::move(packet));
+
+    if (!packet.empty()) {
+        out.emplace_back(std::move(packet));
+    }
 }
 
 void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList)

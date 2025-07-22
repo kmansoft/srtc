@@ -145,7 +145,7 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, ByteBuffer&& fr
             const auto type = static_cast<h264::NaluType>(frame.data()[0] & 0x1F);
             switch (type) {
             case h264::NaluType::NonKeyFrame:
-                LOG(SRTC_LOG_Z, "Not emitting a non-key frame until there is a keyframe");
+                LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
                 return;
             case h264::NaluType::SPS:
                 mHaveBits |= kHaveSPS;
