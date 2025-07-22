@@ -2,6 +2,7 @@
 #include "srtc/logging.h"
 #include "srtc/socket.h"
 
+#include <cstring>
 #include <sys/event.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -29,7 +30,7 @@ EventLoop_MacOS::EventLoop_MacOS()
         mPipeWrite = fd[1];
     }
 
-    struct kevent change;
+    struct kevent change = {};
     EV_SET(&change, mPipeRead, EVFILT_READ, EV_ADD, 0, 0, nullptr);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
@@ -50,7 +51,7 @@ void EventLoop_MacOS::registerSocket(const std::shared_ptr<Socket>& socket, void
     EV_SET(&change, socket->handle(), EVFILT_READ, EV_ADD, 0, 0, udata);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
-        LOG(SRTC_LOG_E, "Cannot add socket to kqueue");
+        LOG(SRTC_LOG_E, "Error adding socket to kqueue: %s", strerror(errno));
     }
 }
 
@@ -60,7 +61,7 @@ void EventLoop_MacOS::unregisterSocket(const std::shared_ptr<Socket>& socket)
     EV_SET(&change, socket->handle(), EVFILT_READ, EV_DELETE, 0, 0, nullptr);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
-        LOG(SRTC_LOG_E, "Cannot remove socket from kqueue");
+        LOG(SRTC_LOG_E, "Error removing socket from kqueue: %s", strerror(errno));
     }
 }
 
@@ -95,7 +96,7 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
             }
         }
     } else if (n == -1) {
-
+        LOG(SRTC_LOG_E, "Error calling kevent: %s", strerror(errno));
     }
 }
 
@@ -103,7 +104,7 @@ void EventLoop_MacOS::interrupt()
 {
     uint8_t value = 0;
     if (write(mPipeWrite, &value, sizeof(value)) != 1) {
-        LOG(SRTC_LOG_E, "Cannot write to pipe");
+        LOG(SRTC_LOG_E, "Error writing to pipe: %s", strerror(errno));
     }
 }
 

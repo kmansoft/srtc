@@ -118,6 +118,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
                 to_string(mTrack->getMediaType()).c_str(),
                 static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
             freeEverything();
+            mDepacketizer->reset();
         }
     }
     mLastPacketTime = now;

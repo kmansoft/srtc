@@ -19,6 +19,9 @@ public:
     virtual ~Depacketizer();
 
     [[nodiscard]] virtual PacketKind getPacketKind(const ByteBuffer& packet) = 0;
+
+    virtual void reset() = 0;
+
     virtual void extract(std::vector<ByteBuffer>& out, ByteBuffer& packet) = 0;
     virtual void extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList) = 0;
 
