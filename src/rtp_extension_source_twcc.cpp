@@ -44,10 +44,10 @@ RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
     : mVideoExtTWCC(nVideoExtTWCC)
     , mAudioExtTWCC(nAudioExtTWCC)
     , mNextPacketSEQ(1)
-    , mPacketHistory(std::make_shared<twcc::PacketStatusHistory>())
-    , mHeaderHistory(std::make_shared<twcc::FeedbackHeaderHistory>())
+    , mPacketHistory(std::make_unique<twcc::PublishPacketHistory>())
     , mIsConnected(false)
     , mIsProbing(false)
+    , mProbingPacketCount(0)
     , mScheduler(scheduler)
 {
 }
@@ -343,7 +343,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 				count_large_delta);
 #endif
 
-    twcc::PacketStatus* prev_ptr = nullptr;
+    twcc::PublishPacket* prev_ptr = nullptr;
 
     if (isReceivedWithTime(tempList[0].status)) {
         const auto curr_seq = header->base_seq_number;
@@ -369,7 +369,6 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
-    mHeaderHistory->save(header);
     mPacketHistory->update(header);
 
     // If we are probing, and it starts causing increased delays or high packet loss, stop

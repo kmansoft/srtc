@@ -11,8 +11,7 @@
 
 namespace srtc::twcc
 {
-class PacketStatusHistory;
-class FeedbackHeaderHistory;
+class PublishPacketHistory;
 }; // namespace srtc::twcc
 
 namespace srtc
@@ -71,8 +70,7 @@ private:
 	const uint8_t mVideoExtTWCC;
 	const uint8_t mAudioExtTWCC;
 	uint16_t mNextPacketSEQ;
-	std::shared_ptr<twcc::PacketStatusHistory> mPacketHistory;
-	std::shared_ptr<twcc::FeedbackHeaderHistory> mHeaderHistory;
+	std::unique_ptr<twcc::PublishPacketHistory> mPacketHistory;
 
 	struct TempPacket {
 		int32_t delta_micros;

@@ -72,73 +72,9 @@ std::optional<double> calculateSlope(const std::vector<T>& list)
 namespace srtc::twcc
 {
 
-// FeedbackHeaderHistory
-
-FeedbackHeaderHistory::FeedbackHeaderHistory()
-	: mPacketCount(0)
-{
-}
-
-FeedbackHeaderHistory::~FeedbackHeaderHistory() = default;
-
-uint32_t FeedbackHeaderHistory::getPacketCount() const
-{
-	return mPacketCount;
-}
-
-void FeedbackHeaderHistory::save(const std::shared_ptr<FeedbackHeader>& header)
-{
-	if (mLastFbPktCount >= 0xE0 && header->fb_pkt_count <= 0x20) {
-		// We wrapped
-		mLastFbPktCountExpanded += 1000;
-	}
-
-	mLastFbPktCount = header->fb_pkt_count;
-	header->fb_pkt_count_expanded = header->fb_pkt_count + mLastFbPktCountExpanded;
-
-	// https://github.com/pion/webrtc/issues/3122
-	for (auto iter = mHistory.begin(); iter != mHistory.end();) {
-		if ((*iter)->fb_pkt_count_expanded == header->fb_pkt_count_expanded) {
-			iter = mHistory.erase(iter);
-		} else {
-			++iter;
-		}
-	}
-
-	mPacketCount += header->packet_status_count;
-
-	if (mHistory.empty() || mHistory.back()->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
-		// Can append at the end
-		mHistory.push_back(header);
-	} else {
-		// Find the right place to insert
-		auto it = mHistory.begin();
-		while (it != mHistory.end() && (*it)->fb_pkt_count_expanded < header->fb_pkt_count_expanded) {
-			++it;
-		}
-		mHistory.insert(it, header);
-
-#ifndef NDEBUG
-		for (auto curr = mHistory.begin(); curr != mHistory.end(); ++curr) {
-			const auto next = std::next(curr);
-			if (next == mHistory.end()) {
-				break;
-			}
-			assert((*next)->fb_pkt_count_expanded > (*curr)->fb_pkt_count_expanded);
-		}
-#endif
-	}
-
-	// Trim the excess headers
-	while (mPacketCount > kMaxPacketCount * 5 / 4 && !mHistory.empty()) {
-		mPacketCount -= mHistory.front()->packet_status_count;
-		mHistory.pop_front();
-	}
-}
-
 // PacketStatusHistory
 
-PacketStatusHistory::PacketStatusHistory()
+PublishPacketHistory::PublishPacketHistory()
 	: mMinSeq(0)
 	, mMaxSeq(0)
 	, mInstantPacketLossPercent(0.0f)
@@ -152,21 +88,21 @@ PacketStatusHistory::PacketStatusHistory()
 {
 }
 
-PacketStatusHistory::~PacketStatusHistory() = default;
+PublishPacketHistory::~PublishPacketHistory() = default;
 
-void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
+void PublishPacketHistory::saveOutgoingPacket(uint16_t seq,
 											 const std::shared_ptr<Track>& track,
 											 size_t paddingSize,
 											 size_t payloadSize,
 											 size_t generatedSize,
 											 size_t encryptedSize)
 {
-	PacketStatus* curr;
+	PublishPacket* curr;
 
 	if (!mHistory) {
 		mMinSeq = mMaxSeq = seq;
-		mHistory = std::make_unique<PacketStatus[]>(kMaxPacketCount);
-		std::memset(mHistory.get(), 0, sizeof(PacketStatus) * kMaxPacketCount);
+		mHistory = std::make_unique<PublishPacket[]>(kMaxPacketCount);
+		std::memset(mHistory.get(), 0, sizeof(PublishPacket) * kMaxPacketCount);
 		curr = mHistory.get() + (mMaxSeq & kMaxPacketMask);
 	} else {
 		while (true) {
@@ -175,7 +111,7 @@ void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
 			}
 			mMaxSeq += 1;
 			curr = mHistory.get() + (mMaxSeq & kMaxPacketMask);
-			std::memset(curr, 0, sizeof(PacketStatus));
+			std::memset(curr, 0, sizeof(PublishPacket));
 			if (mMaxSeq == seq) {
 				break;
 			}
@@ -191,7 +127,7 @@ void PacketStatusHistory::saveOutgoingPacket(uint16_t seq,
 	curr->media_type = track->getMediaType();
 }
 
-PacketStatus* PacketStatusHistory::get(uint16_t seq) const
+PublishPacket* PublishPacketHistory::get(uint16_t seq) const
 {
 	const auto base = mHistory.get();
 	if (!base) {
@@ -211,7 +147,7 @@ PacketStatus* PacketStatusHistory::get(uint16_t seq) const
 	return nullptr;
 }
 
-void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
+void PublishPacketHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 {
 	// Search backwards from max until we find a packet that's been received
 	const auto max = findMostRecentReceivedPacket();
@@ -264,7 +200,7 @@ void PacketStatusHistory::update(const std::shared_ptr<FeedbackHeader>& header)
 	}
 }
 
-uint32_t PacketStatusHistory::getPacketCount() const
+uint32_t PublishPacketHistory::getPacketCount() const
 {
 	if (!mHistory) {
 		return 0;
@@ -272,7 +208,7 @@ uint32_t PacketStatusHistory::getPacketCount() const
 	return (mMaxSeq - mMinSeq + 1 + 0x10000) & 0xFFFF;
 }
 
-unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
+unsigned int PublishPacketHistory::getPacingSpreadMillis(size_t totalSize,
 														float bandwidthScale,
 														unsigned int defaultValue) const
 {
@@ -292,7 +228,7 @@ unsigned int PacketStatusHistory::getPacingSpreadMillis(size_t totalSize,
 	return defaultValue;
 }
 
-void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
+void PublishPacketHistory::updatePublishConnectionStats(PublishConnectionStats& stats)
 {
 	if (!mHistory) {
 		return;
@@ -320,12 +256,12 @@ void PacketStatusHistory::updatePublishConnectionStats(PublishConnectionStats& s
 	}
 }
 
-bool PacketStatusHistory::shouldStopProbing() const
+bool PublishPacketHistory::shouldStopProbing() const
 {
 	return mInstantPacketLossPercent >= 10.0f || mInstantTrendlineEstimate == TrendlineEstimate::kOveruse;
 }
 
-bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* max)
+bool PublishPacketHistory::calculateBandwidthActual(int64_t now, PublishPacket* max)
 {
 	const auto base = mHistory.get();
 	if (base == nullptr) {
@@ -416,7 +352,7 @@ bool PacketStatusHistory::calculateBandwidthActual(int64_t now, PacketStatus* ma
 	return true;
 }
 
-bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max)
+bool PublishPacketHistory::calcualteBandwidthProbe(int64_t now, PublishPacket* max)
 {
 	const auto base = mHistory.get();
 	if (base == nullptr) {
@@ -429,8 +365,8 @@ bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max
 	}
 
 	// Find max span of packets with probe
-	PacketStatus* endPtr = nullptr;
-	PacketStatus* startPtr = nullptr;
+	PublishPacket* endPtr = nullptr;
+	PublishPacket* startPtr = nullptr;
 	uint32_t totalCount = 0, paddingPresentCount = 0;
 	uint32_t paddingAbsentRunCount = 0;
 
@@ -518,7 +454,7 @@ bool PacketStatusHistory::calcualteBandwidthProbe(int64_t now, PacketStatus* max
 	return true;
 }
 
-bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max)
+bool PublishPacketHistory::calculateBandwidthTrend(int64_t now, PublishPacket* max)
 {
 	const auto base = mHistory.get();
 	if (base == nullptr) {
@@ -612,9 +548,9 @@ bool PacketStatusHistory::calculateBandwidthTrend(int64_t now, PacketStatus* max
 	return true;
 }
 
-PacketStatus* PacketStatusHistory::findMostRecentReceivedPacket() const
+PublishPacket* PublishPacketHistory::findMostRecentReceivedPacket() const
 {
-	PacketStatus* base = mHistory.get();
+	PublishPacket* base = mHistory.get();
 	if (!base) {
 		return nullptr;
 	}

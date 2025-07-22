@@ -50,29 +50,9 @@ struct FeedbackHeader {
 	}
 };
 
-// A history of such headers
+// Status of a single published RTP packet
 
-class FeedbackHeaderHistory
-{
-public:
-	FeedbackHeaderHistory();
-	~FeedbackHeaderHistory();
-
-	void save(const std::shared_ptr<FeedbackHeader>& header);
-
-	[[nodiscard]] uint32_t getPacketCount() const;
-
-private:
-	uint32_t mPacketCount;
-	std::list<std::shared_ptr<FeedbackHeader>> mHistory;
-
-	uint16_t mLastFbPktCount = 0;
-	uint16_t mLastFbPktCountExpanded = 0;
-};
-
-// Status of a single RTP packet
-
-struct PacketStatus {
+struct PublishPacket {
 	int64_t sent_time_micros;
 	int64_t received_time_micros;
 
@@ -94,11 +74,11 @@ struct PacketStatus {
 
 // A history of such packets
 
-class PacketStatusHistory
+class PublishPacketHistory
 {
 public:
-	PacketStatusHistory();
-	~PacketStatusHistory();
+	PublishPacketHistory();
+	~PublishPacketHistory();
 
 	void saveOutgoingPacket(uint16_t seq,
 							const std::shared_ptr<Track>& track,
@@ -108,7 +88,7 @@ public:
 							size_t encryptedSize);
 
 	// may return nullptr
-	[[nodiscard]] PacketStatus* get(uint16_t seq) const;
+	[[nodiscard]] PublishPacket* get(uint16_t seq) const;
 
 	void update(const std::shared_ptr<FeedbackHeader>& header);
 
@@ -130,7 +110,7 @@ public:
 private:
 	uint16_t mMinSeq;
 	uint16_t mMaxSeq;
-	std::unique_ptr<PacketStatus[]> mHistory;
+	std::unique_ptr<PublishPacket[]> mHistory;
 	float mInstantPacketLossPercent;
 	Filter<float> mPacketsLostPercentFilter;
 	Filter<float> mBandwidthActualFilter;
@@ -150,13 +130,13 @@ private:
 		{
 		}
 
-		[[nodiscard]] bool isEnough(const PacketStatus* max, unsigned int minPackets, unsigned int minMicros) const
+		[[nodiscard]] bool isEnough(const PublishPacket* max, unsigned int minPackets, unsigned int minMicros) const
 		{
 			return static_cast<uint16_t>(max->seq - seq) >= minPackets &&
 				   max->sent_time_micros - sent_time_micros >= minMicros;
 		}
 
-		void update(const PacketStatus* max)
+		void update(const PublishPacket* max)
 		{
 			seq = max->seq;
 			sent_time_micros = max->sent_time_micros;
@@ -200,11 +180,11 @@ private:
 
 	std::vector<TrendItem> mTrendItemBuf;
 
-	bool calculateBandwidthActual(int64_t now, PacketStatus* max);
-	bool calcualteBandwidthProbe(int64_t now, PacketStatus* max);
-	bool calculateBandwidthTrend(int64_t now, PacketStatus* max);
+	bool calculateBandwidthActual(int64_t now, PublishPacket* max);
+	bool calcualteBandwidthProbe(int64_t now, PublishPacket* max);
+	bool calculateBandwidthTrend(int64_t now, PublishPacket* max);
 
-	[[nodiscard]] PacketStatus* findMostRecentReceivedPacket() const;
+	[[nodiscard]] PublishPacket* findMostRecentReceivedPacket() const;
 };
 
 } // namespace srtc::twcc
