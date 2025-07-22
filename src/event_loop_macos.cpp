@@ -94,6 +94,8 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
                 udataList.push_back(ev.udata);
             }
         }
+    } else if (n == -1) {
+
     }
 }
 

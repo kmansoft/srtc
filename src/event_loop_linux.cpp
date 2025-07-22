@@ -5,6 +5,7 @@
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <cstring>
 #include <algorithm>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_Linux", __VA_ARGS__)
@@ -70,6 +71,9 @@ void EventLoop_Linux::wait(std::vector<void*>& udataList, int timeoutMillis)
                 udataList.push_back(event.data.ptr);
             }
         }
+    } else if (nfds == -1) {
+        const auto message = strerror(errno);
+        LOG(SRTC_LOG_E, "Error calling epoll_wait: %s", message);
     }
 }
 
