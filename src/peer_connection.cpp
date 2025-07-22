@@ -913,13 +913,14 @@ void PeerConnection::sendPictureLossIndicator()
 {
     std::vector<std::shared_ptr<Track>> trackList;
 
-    {
+    if (mDirection == Direction::Subscribe) {
         std::lock_guard lock(mMutex);
         const auto& config = mSdpOffer->getConfig();
+        const auto interval = std::clamp<uint16_t>(config.pli_interval_millis, 500u, 4000u);
 
         Task::cancelHelper(mTaskPictureLossIndicator);
         mTaskPictureLossIndicator =
-            mLoopScheduler->submit(std::chrono::milliseconds(config.pli_interval_millis), __FILE__, __LINE__, [this] {
+            mLoopScheduler->submit(std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] {
                 sendPictureLossIndicator();
             });
 
