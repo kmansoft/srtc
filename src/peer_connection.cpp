@@ -911,28 +911,28 @@ void PeerConnection::sendConnectionStats()
 
 void PeerConnection::sendPictureLossIndicator()
 {
-    std::vector<std::shared_ptr<Track>> trackList;
-
     if (mDirection == Direction::Subscribe) {
-        std::lock_guard lock(mMutex);
-        const auto& config = mSdpOffer->getConfig();
-        const auto interval = std::clamp<uint16_t>(config.pli_interval_millis, 500u, 4000u);
+        std::vector<std::shared_ptr<Track>> trackList;
 
-        Task::cancelHelper(mTaskPictureLossIndicator);
-        mTaskPictureLossIndicator =
-            mLoopScheduler->submit(std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] {
-                sendPictureLossIndicator();
-            });
+        {
+            std::lock_guard lock(mMutex);
+            const auto& config = mSdpOffer->getConfig();
+            const auto interval = std::clamp<uint16_t>(config.pli_interval_millis, 500u, 4000u);
 
-        if (mConnectionState != ConnectionState::Connected) {
-            return;
+            Task::cancelHelper(mTaskPictureLossIndicator);
+            mTaskPictureLossIndicator = mLoopScheduler->submit(
+                std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] { sendPictureLossIndicator(); });
+
+            if (mConnectionState != ConnectionState::Connected) {
+                return;
+            }
         }
 
         trackList = collectTracks();
-    }
 
-    if (mSelectedCandidate) {
-        mSelectedCandidate->sendPictureLossIndicators(trackList);
+        if (mSelectedCandidate && !trackList.empty()) {
+            mSelectedCandidate->sendPictureLossIndicators(trackList);
+        }
     }
 }
 
