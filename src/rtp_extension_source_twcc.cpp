@@ -58,6 +58,10 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
                                                                         const std::shared_ptr<SdpAnswer>& answer,
                                                                         const std::shared_ptr<RealScheduler>& scheduler)
 {
+    if (offer->getDirection() != Direction::Publish) {
+        return {};
+    }
+
     const auto& config = offer->getConfig();
     if (!config.enable_bwe) {
         return {};
@@ -151,8 +155,8 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
                                                       size_t generatedSize,
                                                       size_t encryptedSize)
 {
-    uint16_t seq;
-    if (!getFeedbackSeq(packet, seq)) {
+    const auto seq = getFeedbackSeq(packet);
+    if (!seq.has_value()) {
         return;
     }
 
@@ -160,17 +164,17 @@ void RtpExtensionSourceTWCC::onBeforeSendingRtpPacket(const std::shared_ptr<RtpP
     const auto paddingSize = packet->getPaddingSize();
     const auto payloadSize = packet->getPayloadSize();
 
-    mPacketHistory->saveOutgoingPacket(seq, track, paddingSize, payloadSize, generatedSize, encryptedSize);
+    mPacketHistory->saveOutgoingPacket(seq.value(), track, paddingSize, payloadSize, generatedSize, encryptedSize);
 }
 
 void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet)
 {
-    uint16_t seq;
-    if (!getFeedbackSeq(packet, seq)) {
+    const auto seq = getFeedbackSeq(packet);
+    if (!seq.has_value()) {
         return;
     }
 
-    const auto ptr = mPacketHistory->get(seq);
+    const auto ptr = mPacketHistory->get(seq.value());
     if (ptr) {
         ptr->nack_count += 1;
     }
@@ -379,33 +383,16 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     }
 }
 
-bool RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const
+std::optional<u_int16_t> RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const
 {
     const auto track = packet->getTrack();
     const auto nExtId = getExtensionId(track);
     if (nExtId == 0) {
-        return false;
+        return {};
     }
 
     const auto& ext = packet->getExtension();
-    if (ext.empty()) {
-        return false;
-    }
-
-    ByteReader reader(ext.getData());
-    while (reader.remaining() >= 2) {
-        const auto id = reader.readU8();
-        const auto len = reader.readU8();
-        if (id == nExtId) {
-            outSeq = reader.readU16();
-            return true;
-        }
-        if (reader.remaining() < len) {
-            break;
-        }
-        reader.skip(len);
-    }
-    return false;
+    return ext.findU16(nExtId);
 }
 
 unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,

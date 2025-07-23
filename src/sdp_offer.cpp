@@ -155,7 +155,7 @@ std::pair<std::string, Error> SdpOffer::generate()
         const auto& layerList = mVideoConfig->simulcast_layer_list;
         if (layerList.empty() || mDirection == Direction::Subscribe) {
             // No simulcast or subscribe
-            if (mConfig.enable_bwe) {
+            if (mConfig.enable_bwe || mDirection == Direction::Subscribe) {
                 ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
             }
 

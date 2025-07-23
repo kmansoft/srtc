@@ -34,6 +34,7 @@ class RtcpPacket;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
+class RtpResponderTWCC;
 class SendPacer;
 class SenderReportsHistory;
 
@@ -115,6 +116,7 @@ private:
 	const uint8_t mVideoExtGoogleVLA;
 	const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
 	const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
+    const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;
 	const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
 
 	Filter<float> mIceRttFilter;

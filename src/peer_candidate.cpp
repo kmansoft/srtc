@@ -28,7 +28,7 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/util.h"
+#include "srtc/rtp_responder_twcc.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -240,6 +240,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                                                                      mVideoExtRepairedStreamId,
                                                                      mVideoExtGoogleVLA))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
+    , mResponderTWCC(RtpResponderTWCC::factory(offer, answer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mIceRttFilter(0.2f)
     , mControlRttFilter(0.2f)
@@ -433,12 +434,8 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
 
 std::optional<float> PeerCandidate::getIceRtt() const
 {
-    const auto now = std::chrono::steady_clock::now();
-    if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-        // RTT from STUN requests / responses
-        return mIceRttFilter.value();
-    }
-    return {};
+    // RTT from STUN requests / responses
+    return mIceRttFilter.value();
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
@@ -878,6 +875,10 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
         packet->getSequence(),
         packet->getPayloadId(),
         packet->getPayloadSize());
+
+    if (mResponderTWCC) {
+        mResponderTWCC->onMediaPacket(packet);
+    }
 
     mListener->onCandidateReceivedMediaPacket(this, packet);
 }
