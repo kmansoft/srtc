@@ -666,13 +666,7 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
                     if (mDtlsState == DtlsState::Completed) {
                         // We are connected again
-                        mLastReceiveTime = std::chrono::steady_clock::now();
-                        updateConnectionLostTimeout();
-
-                        Task::cancelHelper(mTaskConnectTimeout);
-                        Task::cancelHelper(mTaskConnectionRestoreTimeout);
-
-                        emitOnConnected();
+                        onReceivedFromRemote();
                     }
                 } else {
                     // Initial connection
@@ -751,12 +745,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                             profile->name,
                             mIceRttFilter.value());
 
-                        Task::cancelHelper(mTaskConnectTimeout);
-                        emitOnConnected();
-
-                        mLastReceiveTime = std::chrono::steady_clock::now();
-                        updateConnectionLostTimeout();
-                        updateKeepAliveTimeout();
+                        onReceivedFromRemote();
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E,
@@ -829,8 +818,7 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
-    mLastReceiveTime = std::chrono::steady_clock::now();
-    updateConnectionLostTimeout();
+    onReceivedFromRemote();
 
     const auto rtcpRC = packet->getRC();
     const auto rtcpPT = packet->getPayloadId();
@@ -878,8 +866,7 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 
 void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
-    mLastReceiveTime = std::chrono::steady_clock::now();
-    updateConnectionLostTimeout();
+    onReceivedFromRemote();
 
     const auto track = packet->getTrack();
 
@@ -1229,6 +1216,17 @@ void PeerCandidate::emitOnConnected()
 void PeerCandidate::emitOnFailedToConnect(const Error& error)
 {
     mListener->onCandidateFailedToConnect(this, error);
+}
+
+void PeerCandidate::onReceivedFromRemote()
+{
+    mLastReceiveTime = std::chrono::steady_clock::now();
+    updateConnectionLostTimeout();
+
+    Task::cancelHelper(mTaskConnectTimeout);
+    Task::cancelHelper(mTaskConnectionRestoreTimeout);
+
+    emitOnConnected();
 }
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)

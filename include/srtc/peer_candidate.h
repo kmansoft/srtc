@@ -166,6 +166,8 @@ private:
 	void emitOnConnected();
 	void emitOnFailedToConnect(const Error& error);
 
+    void onReceivedFromRemote();
+
 	// Sending STUN requests and responses
 	void sendStunBindingRequest(unsigned int iteration);
 	void sendStunBindingResponse(unsigned int iteration);
