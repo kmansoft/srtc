@@ -848,9 +848,11 @@ void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
                                                      const std::shared_ptr<Track>& track,
                                                      const SenderReport& sr)
 {
-    std::lock_guard lock(mListenerMutex);
-    if (mSubscribeSenderReportsListener) {
-        mSubscribeSenderReportsListener(track, sr);
+    if (mDirection == Direction::Subscribe) {
+        std::lock_guard lock(mListenerMutex);
+        if (mSubscribeSenderReportsListener) {
+            mSubscribeSenderReportsListener(track, sr);
+        }
     }
 }
 

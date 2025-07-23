@@ -25,9 +25,9 @@ public:
 
     struct CodecOptions {
         // Video
-        const int profileLevelId;
+        const uint32_t profileLevelId;
         // Audio
-        const int minptime;
+        const uint32_t minptime;
         const bool stereo;
 
         CodecOptions(int profileLevelId, int minptime, bool stereo)

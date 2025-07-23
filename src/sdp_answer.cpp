@@ -565,8 +565,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
 
                 const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
                 if (payloadState) {
-                    int profileLevelId = 0;
-                    int minptime = 0;
+                    uint32_t profileLevelId = 0;
+                    uint32_t minptime = 0;
                     bool stereo = false;
 
                     if (mediaStateCurr == &mediaStateVideo) {

@@ -885,34 +885,36 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
 {
     const auto track = findTrack(ssrc);
 
-    if (track && rtcpReader.remaining() >= 20) {
-        const auto ntp_high = rtcpReader.readU32();
-        const auto ntp_low = rtcpReader.readU32();
-        const auto rtp_timestamp = rtcpReader.readU32();
-        const auto packet_count = rtcpReader.readU32();
-        const auto octet_count = rtcpReader.readU32();
+    if (track) {
+        if (rtcpReader.remaining() >= 20) {
+            const auto ntp_high = rtcpReader.readU32();
+            const auto ntp_low = rtcpReader.readU32();
+            const auto rtp_timestamp = rtcpReader.readU32();
+            const auto packet_count = rtcpReader.readU32();
+            const auto octet_count = rtcpReader.readU32();
 
-        LOG(SRTC_LOG_V,
-            "*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
-            ssrc,
-            ntp_high,
-            ntp_low,
-            packet_count,
-            octet_count,
-            to_string(track->getMediaType()).c_str());
+            LOG(SRTC_LOG_V,
+                "*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
+                ssrc,
+                ntp_high,
+                ntp_low,
+                packet_count,
+                octet_count,
+                to_string(track->getMediaType()).c_str());
 
-        SenderReport sr;
-        sr.when = std::chrono::steady_clock::now();
-        sr.ntp.seconds = ntp_high;
-        sr.ntp.fraction = ntp_low;
-        sr.rtp = rtp_timestamp;
-        sr.packet_count = packet_count;
-        sr.octet_count = octet_count;
+            SenderReport sr;
+            sr.when = std::chrono::steady_clock::now();
+            sr.ntp.seconds = ntp_high;
+            sr.ntp.fraction = ntp_low;
+            sr.rtp = rtp_timestamp;
+            sr.packet_count = packet_count;
+            sr.octet_count = octet_count;
 
-        const auto stats = track->getStats();
-        stats->setReceivedSenderReport(sr);
+            const auto stats = track->getStats();
+            stats->setReceivedSenderReport(sr);
 
-        mListener->onCandidateReceivedSenderReport(this, track, sr);
+            mListener->onCandidateReceivedSenderReport(this, track, sr);
+        }
     } else {
         LOG(SRTC_LOG_W, "Cannot find track with ssrc = %u for a sender report", ssrc);
     }
