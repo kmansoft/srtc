@@ -15,6 +15,7 @@ Track::Track(uint32_t trackId,
 			 uint8_t payloadId,
              uint32_t rtxSsrc,
 			 uint8_t rtxPayloadId,
+             uint32_t remoteSsrc,
              Codec codec,
              const std::shared_ptr<Track::CodecOptions>& codecOptions,
              const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -29,6 +30,7 @@ Track::Track(uint32_t trackId,
     , mPayloadId(payloadId)
     , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
+    , mRemoteSSRC(remoteSsrc)
     , mCodec(codec)
     , mCodecOptions(codecOptions)
     , mSimulcastLayer(simulcastLayer)
@@ -116,6 +118,11 @@ uint32_t Track::getSSRC() const
 uint32_t Track::getRtxSSRC() const
 {
     return mRtxSSRC;
+}
+
+uint32_t Track::getRemoteSSRC() const
+{
+    return mRemoteSSRC;
 }
 
 std::shared_ptr<RtcpPacketSource> Track::getRtcpPacketSource() const

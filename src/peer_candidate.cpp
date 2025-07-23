@@ -323,8 +323,9 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
 void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList)
 {
     for (const auto& track : trackList) {
-        if (track->getDirection() == Direction::Subscribe) {
-            const auto ssrc = track->getSSRC();
+        const auto direction = track->getDirection();
+        if (direction == Direction::Subscribe || (direction == Direction::Publish && track->getRemoteSSRC() != 0)) {
+            const auto ssrc = direction == Direction::Subscribe ? track->getSSRC() : track->getRemoteSSRC();
             const auto stats = track->getStats();
 
             const auto seq = stats->getReceivedHighestSeqEx();
@@ -1046,6 +1047,9 @@ std::shared_ptr<Track> PeerCandidate::findTrack(uint32_t ssrc)
 {
     for (const auto& track : mTrackList) {
         if (track->getSSRC() == ssrc) {
+            return track;
+        }
+        if (track->getDirection() == Direction::Publish && track->getRemoteSSRC() == ssrc) {
             return track;
         }
     }

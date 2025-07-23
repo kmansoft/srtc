@@ -46,6 +46,7 @@ public:
 		  uint8_t payloadId,
           uint32_t rtxSsrc,
 		  uint8_t rtxPayloadId,
+          uint32_t remoteSsrc,
           Codec codec,
           const std::shared_ptr<CodecOptions>& codecOptions,
           const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -69,6 +70,7 @@ public:
 
     [[nodiscard]] uint32_t getSSRC() const;
     [[nodiscard]] uint32_t getRtxSSRC() const;
+    [[nodiscard]] uint32_t getRemoteSSRC() const;
 
     [[nodiscard]] std::shared_ptr<RtcpPacketSource> getRtcpPacketSource() const;
     [[nodiscard]] std::shared_ptr<RtpTimeSource> getRtpTimeSource() const;
@@ -86,6 +88,7 @@ private:
     const uint8_t mPayloadId;
     const uint32_t mRtxSSRC;
     const uint8_t mRtxPayloadId;
+    const uint32_t mRemoteSSRC;
     const Codec mCodec;
     const std::shared_ptr<CodecOptions> mCodecOptions;
     const std::shared_ptr<SimulcastLayer> mSimulcastLayer;

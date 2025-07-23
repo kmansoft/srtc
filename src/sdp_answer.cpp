@@ -248,6 +248,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
         if (payloadState.payloadId > 0 && payloadState.codec.has_value() && payloadState.codec != srtc::Codec::Rtx) {
             const auto trackSsrc = layerList.empty() ? ssrcMedia : 0;
             const auto trackRtxSsrc = layerList.empty() && payloadState.rtxPayloadId != 0 ? rtxSsrc : 0;
+            const auto remoteSsrc = direction == srtc::Direction::Publish && !ssrcList.empty() ? ssrcList.front() : 0;
 
             const auto track = std::make_shared<srtc::Track>(id.value(),
                                                              direction,
@@ -257,6 +258,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
                                                              payloadState.payloadId,
                                                              trackRtxSsrc,
                                                              payloadState.rtxPayloadId,
+                                                             remoteSsrc,
                                                              payloadState.codec.value(),
                                                              payloadState.codecOptions,
                                                              nullptr,
@@ -291,6 +293,7 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
                                                          singleTrack->getPayloadId(),
                                                          layerSsrc.second,
                                                          singleTrack->getRtxPayloadId(),
+                                                         singleTrack->getRemoteSSRC(),
                                                          singleTrack->getCodec(),
                                                          singleTrack->getCodecOptions(),
                                                          std::make_shared<srtc::Track::SimulcastLayer>(layer),

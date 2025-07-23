@@ -85,6 +85,7 @@ TEST(RtpPacket, Serialize)
 													 kPayloadId,
 													 0,
 													 0,
+                                                     0,
 													 srtc::Codec::H264,
 													 nullptr,
 													 nullptr,
