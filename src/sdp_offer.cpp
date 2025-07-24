@@ -267,7 +267,7 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
         }
 
-        if (mConfig.enable_bwe) {
+        if (mConfig.enable_bwe || mDirection == Direction::Subscribe) {
             ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
         }
 
