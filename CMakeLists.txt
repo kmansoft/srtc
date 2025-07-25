@@ -49,6 +49,7 @@ add_library(srtc
         include/srtc/peer_candidate.h
         include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
+        include/srtc/pool_allocator.h
         include/srtc/random_generator.h
         include/srtc/replay_protection.h
         include/srtc/rtcp_packet.h
@@ -60,6 +61,7 @@ add_library(srtc
         include/srtc/rtp_extension_source.h
         include/srtc/rtp_packet.h
         include/srtc/rtp_packet_source.h
+        include/srtc/rtp_responder_twcc.h
         include/srtc/rtp_std_extensions.h
         include/srtc/rtp_time_source.h
         include/srtc/scheduler.h
@@ -101,6 +103,7 @@ add_library(srtc
         src/packetizer_opus.cpp
         src/peer_candidate.cpp
         src/peer_connection.cpp
+        src/pool_allocator.cpp
         src/random_generator.cpp
         src/replay_protection.cpp
         src/replay_protection.cpp
@@ -113,6 +116,7 @@ add_library(srtc
         src/rtp_extension_source.cpp
         src/rtp_packet.cpp
         src/rtp_packet_source.cpp
+        src/rtp_responder_twcc.cpp
         src/rtp_std_extensions.cpp
         src/rtp_time_source.cpp
         src/sdp_answer.cpp
@@ -303,6 +307,7 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             test/test_srtp_key_derivation.cpp
             test/test_srtp_crypto.cpp
             test/test_util.cpp
+            test/test_allocator.cpp
     )
 
     target_include_directories(

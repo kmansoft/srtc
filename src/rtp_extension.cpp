@@ -1,6 +1,7 @@
 #include "srtc/rtp_extension.h"
 
 #include <memory>
+#include <cassert>
 
 namespace srtc
 {
@@ -63,6 +64,28 @@ uint16_t RtpExtension::getId() const
 const ByteBuffer& RtpExtension::getData() const
 {
     return mData;
+}
+
+std::optional<uint16_t> RtpExtension::findU16(uint8_t nExtId) const
+{
+    if (!empty()) {
+        assert(mId == kTwoByte);
+
+        ByteReader reader(mData);
+        while (reader.remaining() >= 2) {
+            const auto id = reader.readU8();
+            const auto len = reader.readU8();
+            if (id == nExtId) {
+                return reader.readU16();
+            }
+            if (reader.remaining() < len) {
+                break;
+            }
+            reader.skip(len);
+        }
+    }
+
+    return {};
 }
 
 RtpExtension RtpExtension::copy() const

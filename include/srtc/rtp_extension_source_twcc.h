@@ -59,7 +59,7 @@ public:
 
 	void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
-	[[nodiscard]] bool getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet, uint16_t& outSeq) const;
+	[[nodiscard]] std::optional<uint16_t> getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const;
 
 	[[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
 													 float bandwidthScale,

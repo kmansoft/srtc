@@ -41,6 +41,7 @@ namespace srtc
 PeerConnection::PeerConnection(Direction direction)
     : mDirection(direction)
     , mEventLoop(EventLoop::factory())
+    , mIsJitterBuffersCreated(false)
 #ifdef NDEBUG
 #else
     , mLosePacketsRandomGenerator(0, 99)
@@ -550,19 +551,19 @@ void PeerConnection::networkThreadWorkerFunc()
     mJitterBufferAudio.reset();
 }
 
-void PeerConnection::setConnectionState(ConnectionState state)
+bool PeerConnection::setConnectionState(ConnectionState state)
 {
     {
         std::lock_guard lock1(mMutex);
 
         if (mConnectionState == state) {
             // Already set
-            return;
+            return false;
         }
 
         if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
             // There is no escape
-            return;
+            return false;
         }
 
         mConnectionState = state;
@@ -579,6 +580,8 @@ void PeerConnection::setConnectionState(ConnectionState state)
             mConnectionStateListener(state);
         }
     }
+
+    return true;
 }
 
 void PeerConnection::startConnecting()
@@ -682,8 +685,9 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connecting);
 
-    mJitterBufferVideo = nullptr;
-    mJitterBufferAudio = nullptr;
+    mIsJitterBuffersCreated = false;
+    mJitterBufferVideo.reset();
+    mJitterBufferAudio.reset();
 }
 
 void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
@@ -718,9 +722,14 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 {
-    setConnectionState(ConnectionState::Connected);
+    if (!setConnectionState(ConnectionState::Connected)) {
+        // Already connected
+        return;
+    }
 
-    if (mDirection == Direction::Subscribe) {
+    if (mDirection == Direction::Subscribe && !mIsJitterBuffersCreated) {
+        mIsJitterBuffersCreated = true;
+
         // We should have the rtt from ice
         const auto rtt = candidate->getIceRtt();
         assert(rtt.has_value());

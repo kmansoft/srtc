@@ -1,7 +1,9 @@
 #pragma once
 
 #include "srtc/byte_buffer.h"
+
 #include <cstdint>
+#include <optional>
 
 namespace srtc
 {
@@ -25,6 +27,8 @@ public:
 
     [[nodiscard]] uint16_t getId() const;
     [[nodiscard]] const ByteBuffer& getData() const;
+
+    [[nodiscard]] std::optional<uint16_t> findU16(uint8_t id) const;
 
     [[nodiscard]] RtpExtension copy() const;
 

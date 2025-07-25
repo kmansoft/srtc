@@ -319,7 +319,7 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
 			extReader.skip(extLen2);
 		}
 
-		extension = RtpExtension(extId, std::move(extData));
+		extension = RtpExtension(RtpExtension::kTwoByte, std::move(extData));
 	}
 
 	auto payloadSize = reader.remaining();

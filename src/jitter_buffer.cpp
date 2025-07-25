@@ -470,7 +470,7 @@ void JitterBuffer::freeEverything()
     if (mItemList) {
         for (uint64_t seq = mMinSeq; seq < mMaxSeq; seq += 1) {
             const auto index = seq & (mCapacity - 1);
-            delete mItemList[index];
+            deleteItem(mItemList[index]);
         }
 
         delete[] mItemList;
@@ -480,12 +480,12 @@ void JitterBuffer::freeEverything()
 
 JitterBuffer::Item* JitterBuffer::newItem()
 {
-    return new Item;
+    return mItemAllocator.create();
 }
 
 void JitterBuffer::deleteItem(Item* item)
 {
-    delete item;
+    mItemAllocator.destroy(item);
 }
 
 void JitterBuffer::extractBufferList(std::vector<ByteBuffer*>& out, uint64_t start, uint64_t max)

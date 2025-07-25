@@ -15,6 +15,7 @@ import (
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
+	"github.com/pion/interceptor/pkg/twcc"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -72,8 +73,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 
-	// Setup the codecs you want to use.
-	// We'll only use H264 but you can also define your own
+	// Set up the codecs you want to use.
 	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
 		PayloadType:        96,
@@ -87,7 +87,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
+	// Create an InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
 	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
 	// for each PeerConnection.
@@ -142,7 +142,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-		}() 
+		}()
 
 		go func() {
 			for {
@@ -155,6 +155,10 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 						panic(err)
 					}
 				}
+
+                // Remove any extensions before forwarding
+				pkt.Header.Extensions = nil
+				pkt.Header.Extension = false
 
 				if track.Kind() == webrtc.RTPCodecTypeVideo {
 					if err = videoTrack.WriteRTP(pkt); err != nil {
@@ -174,14 +178,60 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func whepHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("Request to %s, method = %s\n", r.URL, r.Method)
+
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("Access-Control-Allow-Methods", "POST")
+	w.Header().Add("Access-Control-Allow-Headers", "*")
+	w.Header().Add("Access-Control-Allow-Headers", "Authorization")
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
 	// Read the offer from HTTP Request
 	offer, err := io.ReadAll(r.Body)
 	if err != nil {
 		panic(err)
 	}
 
+	// Create a MediaEngine object to configure the supported codec
+	m := &webrtc.MediaEngine{}
+
+	// Set up the codecs you want to use.
+	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        96,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		panic(err)
+	}
+	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        97,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		panic(err)
+	}
+
+	// Create an InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
+	i := &interceptor.Registry{}
+
+	// Use the default set of Interceptors
+	if err = webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+		panic(err)
+	}
+
+	// We want a TWCC generator in case the subscriber supports it
+	twccGenerator, err := twcc.NewHeaderExtensionInterceptor()
+	if err != nil {
+		panic(err)
+	}
+	i.Add(twccGenerator)
+
+	// Create the API object with the MediaEngine
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i))
+
 	// Create a new RTCPeerConnection
-	peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfiguration)
+	peerConnection, err := api.NewPeerConnection(peerConnectionConfiguration)
 	if err != nil {
 		panic(err)
 	}

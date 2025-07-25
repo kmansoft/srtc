@@ -16,7 +16,6 @@ namespace srtc
 class RtpPacket;
 class Track;
 }
-
 // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-
 namespace srtc::twcc
 {
