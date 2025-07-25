@@ -383,7 +383,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     }
 }
 
-std::optional<u_int16_t> RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const
+std::optional<uint16_t> RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const
 {
     const auto track = packet->getTrack();
     const auto nExtId = getExtensionId(track);
