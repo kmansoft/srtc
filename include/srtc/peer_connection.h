@@ -129,7 +129,7 @@ private:
 
     void networkThreadWorkerFunc();
 
-    void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
+    bool setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
     void startConnecting();
 
@@ -179,6 +179,7 @@ private:
     std::shared_ptr<Packetizer> mAudioPacketizer;
 
     // Jitter buffers
+    bool mIsJitterBuffersCreated;
     std::shared_ptr<JitterBuffer> mJitterBufferVideo;
     std::shared_ptr<JitterBuffer> mJitterBufferAudio;
 
