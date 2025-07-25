@@ -129,7 +129,7 @@ private:
 
     void networkThreadWorkerFunc();
 
-    bool setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
+    void setConnectionState(ConnectionState state) SRTC_LOCKS_EXCLUDED(mMutex, mListenerMutex);
 
     void startConnecting();
 
@@ -140,7 +140,7 @@ private:
     std::thread mThread SRTC_GUARDED_BY(mMutex);
 
     // Event loop
-    const std::shared_ptr<EventLoop> mEventLoop SRTC_GUARDED_BY(mMutex);
+    const std::shared_ptr<EventLoop> mEventLoop;
 
     struct FrameToSend {
         std::shared_ptr<Track> track;
@@ -149,7 +149,7 @@ private:
         std::vector<ByteBuffer> csd; // possibly empty
     };
 
-    std::list<FrameToSend> mFrameSendQueue;
+    std::list<FrameToSend> mFrameSendQueue SRTC_GUARDED_BY(mMutex);
 
     // Jitter buffer processing
     void processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer);
@@ -166,7 +166,7 @@ private:
                                          const SenderReport& sr) override;
 
     // Overall connection state and listener
-    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex) = { ConnectionState::Inactive };
+    ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex);
 
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
@@ -179,7 +179,6 @@ private:
     std::shared_ptr<Packetizer> mAudioPacketizer;
 
     // Jitter buffers
-    bool mIsJitterBuffersCreated;
     std::shared_ptr<JitterBuffer> mJitterBufferVideo;
     std::shared_ptr<JitterBuffer> mJitterBufferAudio;
 

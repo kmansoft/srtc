@@ -244,6 +244,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mIceRttFilter(0.2f)
     , mControlRttFilter(0.2f)
+    , mSentUseCandidate(false)
+    , mIsConnected(false)
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
     , mScheduler(scheduler)
@@ -1233,7 +1235,10 @@ void PeerCandidate::onReceivedFromRemote()
     Task::cancelHelper(mTaskConnectTimeout);
     Task::cancelHelper(mTaskConnectionRestoreTimeout);
 
-    emitOnConnected();
+    if (!mIsConnected) {
+        mIsConnected = true;
+        emitOnConnected();
+    }
 }
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
@@ -1278,6 +1283,8 @@ void PeerCandidate::updateConnectionLostTimeout()
 void PeerCandidate::onConnectionLostTimeout()
 {
     Task::cancelHelper(mTaskConnectionLostTimeout);
+
+    mIsConnected = false;
 
     emitOnConnecting();
 

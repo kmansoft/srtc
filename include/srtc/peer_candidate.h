@@ -132,7 +132,8 @@ private:
 	std::list<ByteBuffer> mRawSendQueue;
 	std::list<FrameToSend> mFrameSendQueue;
 
-	bool mSentUseCandidate = { false };
+	bool mSentUseCandidate;
+    bool mIsConnected;
 
 	ByteBuffer mProtectedBuf;
 

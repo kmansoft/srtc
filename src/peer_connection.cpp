@@ -41,7 +41,7 @@ namespace srtc
 PeerConnection::PeerConnection(Direction direction)
     : mDirection(direction)
     , mEventLoop(EventLoop::factory())
-    , mIsJitterBuffersCreated(false)
+    , mConnectionState(ConnectionState::Inactive)
 #ifdef NDEBUG
 #else
     , mLosePacketsRandomGenerator(0, 99)
@@ -446,13 +446,6 @@ void PeerConnection::networkThreadWorkerFunc()
     // Loop scheduler
     mLoopScheduler = std::make_shared<LoopScheduler>();
 
-    // We will be polling
-    std::shared_ptr<EventLoop> eventLoop;
-    {
-        std::lock_guard lock(mMutex);
-        eventLoop = mEventLoop;
-    }
-
     // We are connecting
     startConnecting();
 
@@ -482,7 +475,7 @@ void PeerConnection::networkThreadWorkerFunc()
         }
 
         std::vector<void*> udataList;
-        eventLoop->wait(udataList, timeout);
+        mEventLoop->wait(udataList, timeout);
 
         std::list<FrameToSend> frameSendQueue;
 
@@ -551,19 +544,21 @@ void PeerConnection::networkThreadWorkerFunc()
     mJitterBufferAudio.reset();
 }
 
-bool PeerConnection::setConnectionState(ConnectionState state)
+void PeerConnection::setConnectionState(ConnectionState state)
 {
+    // std::printf("setConnectionState %d\n", static_cast<int>(state));
+
     {
         std::lock_guard lock1(mMutex);
 
         if (mConnectionState == state) {
-            // Already set
-            return false;
+            // Already the same
+            return;
         }
 
         if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
             // There is no escape
-            return false;
+            return;
         }
 
         mConnectionState = state;
@@ -580,8 +575,6 @@ bool PeerConnection::setConnectionState(ConnectionState state)
             mConnectionStateListener(state);
         }
     }
-
-    return true;
 }
 
 void PeerConnection::startConnecting()
@@ -685,7 +678,6 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connecting);
 
-    mIsJitterBuffersCreated = false;
     mJitterBufferVideo.reset();
     mJitterBufferAudio.reset();
 }
@@ -722,17 +714,14 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 {
-    if (!setConnectionState(ConnectionState::Connected)) {
-        // Already connected
-        return;
-    }
+    setConnectionState(ConnectionState::Connected);
 
-    if (mDirection == Direction::Subscribe && !mIsJitterBuffersCreated) {
-        mIsJitterBuffersCreated = true;
-
+    if (mDirection == Direction::Subscribe && !mJitterBufferVideo && !mJitterBufferAudio) {
         // We should have the rtt from ice
         const auto rtt = candidate->getIceRtt();
         assert(rtt.has_value());
+
+        LOG(SRTC_LOG_V, "Creating jitter buffers, rtt = %.2f ms", rtt.value());
 
         std::lock_guard lock(mMutex);
 
