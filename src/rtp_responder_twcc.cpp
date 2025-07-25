@@ -69,6 +69,8 @@ void RtpResponderTWCC::onMediaPacket(const std::shared_ptr<RtpPacket>& packet)
     if (!seq.has_value()) {
         return;
     }
+
+    std::printf("Extracted TWCC seq = %u\n", seq.value());
 }
 
 uint8_t RtpResponderTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
