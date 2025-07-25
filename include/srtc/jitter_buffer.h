@@ -4,6 +4,7 @@
 #include "srtc/encoded_frame.h"
 #include "srtc/extended_value.h"
 #include "srtc/srtc.h"
+#include "srtc/pool_allocator.h"
 
 #include <chrono>
 #include <cstdint>
@@ -79,6 +80,8 @@ private:
     const size_t mCapacityMask;
     const std::chrono::milliseconds mLength;
     const std::chrono::milliseconds mNackDelay;
+
+    PoolAllocator<Item> mItemAllocator;
 
     std::chrono::steady_clock::time_point mLastPacketTime;
 

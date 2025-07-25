@@ -49,6 +49,7 @@ add_library(srtc
         include/srtc/peer_candidate.h
         include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
+        include/srtc/pool_allocator.h
         include/srtc/random_generator.h
         include/srtc/replay_protection.h
         include/srtc/rtcp_packet.h
@@ -102,6 +103,7 @@ add_library(srtc
         src/packetizer_opus.cpp
         src/peer_candidate.cpp
         src/peer_connection.cpp
+        src/pool_allocator.cpp
         src/random_generator.cpp
         src/replay_protection.cpp
         src/replay_protection.cpp
@@ -305,6 +307,7 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             test/test_srtp_key_derivation.cpp
             test/test_srtp_crypto.cpp
             test/test_util.cpp
+            test/test_allocator.cpp
     )
 
     target_include_directories(
