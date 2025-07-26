@@ -36,7 +36,7 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 	}
 
     if (!frame->data.empty()) {
-        const auto first = frame->data.data()[0];
+        const auto first = frame->data.front();
         const auto type = first & 0x1F;
 
         if (type == 1 && !mIsSeenKeyFrame) {

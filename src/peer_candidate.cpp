@@ -532,16 +532,16 @@ void PeerCandidate::run()
         mRawReceiveQueue.erase(mRawReceiveQueue.begin());
 
         if (is_stun_message(data.buf)) {
-            LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
+            LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.front(), mUniqueId);
             onReceivedStunMessage(data);
         } else if (mDtlsSsl && is_dtls_message(data.buf)) {
-            LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.data()[0], mUniqueId);
+            LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.front(), mUniqueId);
             onReceivedDtlsMessage(std::move(data.buf));
         } else if (is_rtc_message(data.buf)) {
-            LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.data()[0]);
+            LOG(SRTC_LOG_V, "Received RTP/RTCP message size = %zd, id = %d", data.buf.size(), data.buf.front());
             onReceivedRtcMessage(std::move(data.buf));
         } else {
-            LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.data()[0]);
+            LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.front());
         }
     }
 

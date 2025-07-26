@@ -87,7 +87,7 @@ void ByteBuffer::free()
 void ByteBuffer::assign(const uint8_t* src, size_t size)
 {
 	delete[] mBuf;
-	if (size) {
+	if (size > 0) {
 		mBuf = new uint8_t[size];
 		std::memcpy(mBuf, src, size);
 	} else {
@@ -110,16 +110,21 @@ void ByteBuffer::reserve(size_t size)
 
 void ByteBuffer::append(const uint8_t* src, size_t size)
 {
-	ensureCapacity(mLen + size);
+    if (size > 0) {
+        ensureCapacity(mLen + size);
 
-	std::memcpy(mBuf + mLen, src, size);
-	mLen += size;
+        std::memcpy(mBuf + mLen, src, size);
+        mLen += size;
+    }
 }
 
 void ByteBuffer::append(const ByteBuffer& buf)
 {
 	if (buf.mLen > 0) {
-		append(buf.mBuf, buf.mLen);
+        ensureCapacity(mLen + buf.mLen);
+
+        std::memcpy(mBuf + mLen, buf.mBuf, buf.mLen);
+        mLen += buf.mLen;
 	}
 }
 
@@ -134,6 +139,12 @@ void ByteBuffer::padding(uint8_t c, size_t size)
 uint8_t* ByteBuffer::data() const
 {
 	return mBuf;
+}
+
+uint8_t ByteBuffer::front() const
+{
+    assert(mLen > 0);
+    return mBuf[0];
 }
 
 size_t ByteBuffer::size() const
@@ -165,7 +176,9 @@ void ByteBuffer::ensureCapacity(size_t capacity)
 		const auto newCap = std::max(capacity + 128, mCap * 3 / 2);
 		const auto newBuf = new uint8_t[newCap];
 
-		std::memcpy(newBuf, mBuf, mLen);
+        if (mBuf && mLen > 0) {
+            std::memcpy(newBuf, mBuf, mLen);
+        }
 
 		delete[] mBuf;
 		mBuf = newBuf;

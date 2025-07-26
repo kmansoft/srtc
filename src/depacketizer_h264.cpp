@@ -142,7 +142,7 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, ByteBuffer&& fr
     if (!frame.empty()) {
         if ((mHaveBits & kHaveAll) != kHaveAll) {
             // Wait to emit until we have a key frame
-            const auto type = static_cast<h264::NaluType>(frame.data()[0] & 0x1F);
+            const auto type = static_cast<h264::NaluType>(frame.front() & 0x1F);
             switch (type) {
             case h264::NaluType::NonKeyFrame:
                 LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");

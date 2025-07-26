@@ -165,7 +165,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 			// Send codec-specific data first as a STAP-A
 			// https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
 			if (!mSPS.empty() && !mPPS.empty() && !addedParameters) {
-				const uint8_t nri = std::max(mSPS.data()[0] & 0x60, mPPS.data()[0] & 0x60);
+				const uint8_t nri = std::max(mSPS.front() & 0x60, mPPS.front() & 0x60);
 
 				ByteBuffer payload;
 				ByteWriter writer(payload);

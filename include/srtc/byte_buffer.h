@@ -35,6 +35,7 @@ public:
     void padding(uint8_t c, size_t size);
 
     [[nodiscard]] uint8_t* data() const;
+    [[nodiscard]] uint8_t front() const;
     [[nodiscard]] size_t size() const;
     [[nodiscard]] size_t capacity() const;
 
