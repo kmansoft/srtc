@@ -309,36 +309,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
-#if 0
-	auto count_not_received = 0u;
-	auto count_small_delta = 0u;
-	auto count_large_delta = 0u;
-
-	for (uint16_t i = 0; i < packet_status_count; ++i) {
-		const auto symbol = tempList[i].status;
-		switch (symbol) {
-		case twcc::kSTATUS_NOT_RECEIVED:
-			count_not_received += 1;
-			break;
-		case twcc::kSTATUS_RECEIVED_SMALL_DELTA:
-			count_small_delta += 1;
-			break;
-		case twcc::kSTATUS_RECEIVED_LARGE_DELTA:
-			count_large_delta += 1;
-			break;
-		default:
-			break;
-		}
-	}
-
-	std::printf("TWCC packets base = %u, count = %u, not received = %u, small delta = %u, large delta = %u\n",
-				base_seq_number,
-				packet_status_count,
-				count_not_received,
-				count_small_delta,
-				count_large_delta);
-#endif
-
+    // Resolve time deltas to absolute times
     twcc::PublishPacket* prev_ptr = nullptr;
 
     for (uint16_t i = 0; i < packet_status_count; i += 1) {
