@@ -309,6 +309,11 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
+    // We should have read everything
+    if (reader.remaining() > 0) {
+        LOG(SRTC_LOG_W, "After reading TWCC feedback, there are %zu bytes left", reader.remaining());
+    }
+
     // Resolve time deltas to absolute times
     twcc::PublishPacket* prev_ptr = nullptr;
 
