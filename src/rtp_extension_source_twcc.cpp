@@ -198,20 +198,20 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         return;
     }
 
-    const auto header =
-        std::make_shared<twcc::FeedbackHeader>(base_seq_number,
-                                               packet_status_count,
-                                               static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8),
-                                               static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFFu));
+    const auto reference_time = static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8);
+    const auto fb_pkt_count = static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFFu);
+    (void) fb_pkt_count;
 
-    const auto tempList = mTempPacketBuffer.ensure(header->packet_status_count);
-    std::memset(tempList, 0, sizeof(TempPacket) * header->packet_status_count);
+    const auto reference_time_micros = 64 * 1000 * static_cast<int64_t>(reference_time);
+
+    const auto tempList = mTempPacketBuffer.ensure(packet_status_count);
+    std::memset(tempList, 0, sizeof(TempPacket) * packet_status_count);
 
     // Be careful, this can wrap (and that's OK)
-    const auto past_end_seq_number = static_cast<uint16_t>(header->base_seq_number + header->packet_status_count);
+    const auto past_end_seq_number = static_cast<uint16_t>(base_seq_number + packet_status_count);
 
     // Read the chunks
-    for (uint16_t seq_number = header->base_seq_number; seq_number != past_end_seq_number; /* do not increment */) {
+    for (uint16_t seq_number = base_seq_number; seq_number != past_end_seq_number; /* do not increment */) {
         if (reader.remaining() < 2) {
             LOG(SRTC_LOG_E, "RTCP TWCC packet too small while reading chunk header");
             return;
@@ -235,14 +235,14 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                     "RTCP TWCC packet: run_length %u, symbol %d, packet_status_count %u, packet size %lu",
                     runLength,
                     symbol,
-                    header->packet_status_count,
+                    packet_status_count,
                     reader.size());
             }
 
             for (unsigned int j = 0; j < runLength; ++j) {
-                const auto index = (seq_number + 0x10000 - header->base_seq_number) & 0xffff;
+                const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
-                assert(index < header->packet_status_count);
+                assert(index < packet_status_count);
                 tempList[index].status = symbol;
 
                 seq_number += 1;
@@ -256,9 +256,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                 const auto symbol = ((chunkHeader >> (shift - 1)) & 0x01) ? twcc::kSTATUS_RECEIVED_SMALL_DELTA
                                                                           : twcc::kSTATUS_NOT_RECEIVED;
 
-                const auto index = (seq_number + 0x10000 - header->base_seq_number) & 0xffff;
+                const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
-                assert(index < header->packet_status_count);
+                assert(index < packet_status_count);
                 tempList[index].status = symbol;
 
                 seq_number += 1;
@@ -271,9 +271,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
             for (uint16_t shift = 14; shift != 0; shift -= 2) {
                 const auto symbol = (chunkHeader >> (shift - 2)) & 0x03;
 
-                const auto index = (seq_number + 0x10000 - header->base_seq_number) & 0xffff;
+                const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
-                assert(index < header->packet_status_count);
+                assert(index < packet_status_count);
                 tempList[index].status = symbol;
 
                 seq_number += 1;
@@ -288,9 +288,9 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     }
 
     // Read the time deltas
-    for (uint16_t i = 0; i < header->packet_status_count; ++i) {
+    for (uint16_t i = 0; i < packet_status_count; ++i) {
         const auto symbol = tempList[i].status;
-        const auto ptr = mPacketHistory->get(header->base_seq_number + i);
+        const auto ptr = mPacketHistory->get(base_seq_number + i);
 
         if (symbol == twcc::kSTATUS_RECEIVED_SMALL_DELTA) {
             if (reader.remaining() < 1) {
@@ -322,7 +322,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	auto count_small_delta = 0u;
 	auto count_large_delta = 0u;
 
-	for (uint16_t i = 0; i < header->packet_status_count; ++i) {
+	for (uint16_t i = 0; i < packet_status_count; ++i) {
 		const auto symbol = tempList[i].status;
 		switch (symbol) {
 		case twcc::kSTATUS_NOT_RECEIVED:
@@ -340,8 +340,8 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 	}
 
 	std::printf("TWCC packets base = %u, count = %u, not received = %u, small delta = %u, large delta = %u\n",
-				header->base_seq_number,
-				header->packet_status_count,
+				base_seq_number,
+				packet_status_count,
 				count_not_received,
 				count_small_delta,
 				count_large_delta);
@@ -350,17 +350,17 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     twcc::PublishPacket* prev_ptr = nullptr;
 
     if (isReceivedWithTime(tempList[0].status)) {
-        const auto curr_seq = header->base_seq_number;
+        const auto curr_seq = base_seq_number;
         const auto curr_ptr = mPacketHistory->get(curr_seq);
         if (curr_ptr) {
             prev_ptr = curr_ptr;
-            prev_ptr->received_time_micros = header->reference_time_micros + tempList[0].delta_micros;
+            prev_ptr->received_time_micros = reference_time_micros + tempList[0].delta_micros;
             prev_ptr->received_time_present = true;
         }
     }
-    for (size_t i = 1; i < header->packet_status_count && prev_ptr; i += 1) {
+    for (size_t i = 1; i < packet_status_count && prev_ptr; i += 1) {
         if (isReceivedWithTime(tempList[i].status)) {
-            const uint16_t curr_seq = header->base_seq_number + i;
+            const uint16_t curr_seq = base_seq_number + i;
             const auto curr_ptr = mPacketHistory->get(curr_seq);
             if (curr_ptr) {
                 curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
@@ -373,7 +373,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
-    mPacketHistory->update(header);
+    mPacketHistory->update();
 
     // If we are probing, and it starts causing increased delays or high packet loss, stop
     if (mIsProbing && mPacketHistory->shouldStopProbing()) {
