@@ -231,15 +231,6 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                 break;
             }
 
-            if (runLength > 1000) {
-                LOG(SRTC_LOG_E,
-                    "RTCP TWCC packet: run_length %u, symbol %d, packet_status_count %u, packet size %lu",
-                    runLength,
-                    symbol,
-                    packet_status_count,
-                    reader.size());
-            }
-
             for (unsigned int j = 0; j < runLength; ++j) {
                 const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
@@ -350,27 +341,19 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 
     twcc::PublishPacket* prev_ptr = nullptr;
 
-    if (isReceivedWithTime(tempList[0].status)) {
-        const auto curr_seq = base_seq_number;
+    for (uint16_t i = 0; i < packet_status_count; i += 1) {
+        const auto curr_seq = static_cast<uint16_t>(base_seq_number + i);
         const auto curr_ptr = mPacketHistory->get(curr_seq);
-        if (curr_ptr) {
-            prev_ptr = curr_ptr;
-            prev_ptr->received_time_micros = reference_time_micros + tempList[0].delta_micros;
-            prev_ptr->received_time_present = true;
-        }
-    }
-    for (size_t i = 1; i < packet_status_count && prev_ptr; i += 1) {
+
         if (isReceivedWithTime(tempList[i].status)) {
-            const uint16_t curr_seq = base_seq_number + i;
-            const auto curr_ptr = mPacketHistory->get(curr_seq);
-            if (curr_ptr) {
+            if (!prev_ptr) {
+                curr_ptr->received_time_micros = reference_time_micros + tempList[i].delta_micros;
+            } else {
                 curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
-                curr_ptr->received_time_present = true;
             }
 
+            curr_ptr->received_time_present = true;
             prev_ptr = curr_ptr;
-        } else {
-            break;
         }
     }
 
