@@ -4,6 +4,11 @@
 
 #include <memory>
 
+namespace srtc::twcc
+{
+class SubscribePacketHistory;
+}; // namespace srtc::twcc
+
 namespace srtc
 {
 
@@ -24,6 +29,8 @@ public:
     void onMediaPacket(const std::shared_ptr<RtpPacket>& packet);
 
 private:
+    const std::unique_ptr<twcc::SubscribePacketHistory> mPacketHistory;
+
     uint8_t mVideoExtTWCC;
     uint8_t mAudioExtTWCC;
 

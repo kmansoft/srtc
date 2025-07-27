@@ -9,7 +9,6 @@
 
 #include "srtc/srtc.h"
 #include "srtc/temp_buffer.h"
-#include "srtc/twcc_common.h"
 #include "srtc/util.h"
 
 namespace srtc

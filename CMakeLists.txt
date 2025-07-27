@@ -84,6 +84,7 @@ add_library(srtc
         include/srtc/track_stats.h
         include/srtc/twcc_common.h
         include/srtc/twcc_publish.h
+        include/srtc/twcc_subscribe.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
         include/srtc/x509_hash.h
@@ -138,6 +139,7 @@ add_library(srtc
         src/track_selector.cpp
         src/track_stats.cpp
         src/twcc_publish.cpp
+        src/twcc_subscribe.cpp
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp

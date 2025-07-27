@@ -7,6 +7,7 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
+#include "srtc/twcc_common.h"
 #include "srtc/twcc_publish.h"
 
 #include <cassert>
@@ -200,7 +201,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 
     const auto reference_time = static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8);
     const auto fb_pkt_count = static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFFu);
-    (void) fb_pkt_count;
+    (void)fb_pkt_count;
 
     const auto reference_time_micros = 64 * 1000 * static_cast<int64_t>(reference_time);
 

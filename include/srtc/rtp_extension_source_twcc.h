@@ -31,67 +31,67 @@ class RealScheduler;
 class RtpExtensionSourceTWCC : public RtpExtensionSource
 {
 public:
-	RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
-						   uint8_t nAudioExtTWCC,
-						   const std::shared_ptr<RealScheduler>& scheduler);
-	~RtpExtensionSourceTWCC() override;
+    RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
+                           uint8_t nAudioExtTWCC,
+                           const std::shared_ptr<RealScheduler>& scheduler);
+    ~RtpExtensionSourceTWCC() override;
 
-	static std::shared_ptr<RtpExtensionSourceTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
-														   const std::shared_ptr<SdpAnswer>& answer,
-														   const std::shared_ptr<RealScheduler>& scheduler);
+    static std::shared_ptr<RtpExtensionSourceTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
+                                                           const std::shared_ptr<SdpAnswer>& answer,
+                                                           const std::shared_ptr<RealScheduler>& scheduler);
 
-	void onPeerConnected();
+    void onPeerConnected();
 
-	[[nodiscard]] uint8_t getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize) override;
+    [[nodiscard]] uint8_t getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize) override;
 
-	[[nodiscard]] bool wantsExtension(const std::shared_ptr<Track>& track,
-									  bool isKeyFrame,
-									  int packetNumber) const override;
+    [[nodiscard]] bool wantsExtension(const std::shared_ptr<Track>& track,
+                                      bool isKeyFrame,
+                                      int packetNumber) const override;
 
-	void addExtension(RtpExtensionBuilder& builder,
-					  const std::shared_ptr<Track>& track,
-					  bool isKeyFrame,
-					  int packetNumber) override;
+    void addExtension(RtpExtensionBuilder& builder,
+                      const std::shared_ptr<Track>& track,
+                      bool isKeyFrame,
+                      int packetNumber) override;
 
-	void onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
-	void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t generatedSize, size_t encryptedSize);
-	void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
+    void onBeforeGeneratingRtpPacket(const std::shared_ptr<RtpPacket>& packet);
+    void onBeforeSendingRtpPacket(const std::shared_ptr<RtpPacket>& packet, size_t generatedSize, size_t encryptedSize);
+    void onPacketWasNacked(const std::shared_ptr<RtpPacket>& packet);
 
-	void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
+    void onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader);
 
-	[[nodiscard]] std::optional<uint16_t> getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const;
+    [[nodiscard]] std::optional<uint16_t> getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const;
 
-	[[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
-													 float bandwidthScale,
-													 unsigned int defaultValue) const;
-	void updatePublishConnectionStats(PublishConnectionStats& stats) const;
+    [[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+                                                     float bandwidthScale,
+                                                     unsigned int defaultValue) const;
+    void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
-	const uint8_t mVideoExtTWCC;
-	const uint8_t mAudioExtTWCC;
-	uint16_t mNextPacketSEQ;
-	std::unique_ptr<twcc::PublishPacketHistory> mPacketHistory;
+    const uint8_t mVideoExtTWCC;
+    const uint8_t mAudioExtTWCC;
+    uint16_t mNextPacketSEQ;
+    std::unique_ptr<twcc::PublishPacketHistory> mPacketHistory;
 
-	struct TempPacket {
-		int32_t delta_micros;
-		uint8_t status;
-	};
-	FixedTempBuffer<TempPacket> mTempPacketBuffer;
+    struct TempPacket {
+        int32_t delta_micros;
+        uint8_t status;
+    };
+    FixedTempBuffer<TempPacket> mTempPacketBuffer;
 
-	[[nodiscard]] uint8_t getExtensionId(const std::shared_ptr<Track>& track) const;
+    [[nodiscard]] uint8_t getExtensionId(const std::shared_ptr<Track>& track) const;
 
-	// Probing
-	bool mIsConnected;
-	bool mIsProbing;
-	unsigned int mProbingPacketCount;
+    // Probing
+    bool mIsConnected;
+    bool mIsProbing;
+    unsigned int mProbingPacketCount;
 
-	std::weak_ptr<Task> mTaskStartProbing;
-	std::weak_ptr<Task> mTaskEndProbing;
+    std::weak_ptr<Task> mTaskStartProbing;
+    std::weak_ptr<Task> mTaskEndProbing;
 
-	void onStartProbing();
-	void onEndProbing();
+    void onStartProbing();
+    void onEndProbing();
 
-	ScopedScheduler mScheduler;
+    ScopedScheduler mScheduler;
 };
 
 } // namespace srtc

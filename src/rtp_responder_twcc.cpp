@@ -6,6 +6,7 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
+#include "srtc/twcc_subscribe.h"
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
@@ -23,7 +24,8 @@ namespace srtc
 {
 
 RtpResponderTWCC::RtpResponderTWCC(uint8_t nVideoExtTWCC, uint8_t nAudioExtTWCC)
-    : mVideoExtTWCC(nVideoExtTWCC)
+    : mPacketHistory(std::make_unique<twcc::SubscribePacketHistory>(getStableTimeMicros()))
+    , mVideoExtTWCC(nVideoExtTWCC)
     , mAudioExtTWCC(nAudioExtTWCC)
 {
 }
@@ -59,16 +61,19 @@ std::shared_ptr<RtpResponderTWCC> RtpResponderTWCC::factory(const std::shared_pt
 void RtpResponderTWCC::onMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
     const auto track = packet->getTrack();
-    const auto nExtId = getExtensionId(track);
-    if (nExtId == 0) {
+    const auto ext_id = getExtensionId(track);
+    if (ext_id == 0) {
         return;
     }
 
     const auto& extension = packet->getExtension();
-    const auto seq = extension.findU16(nExtId);
+    const auto seq = extension.findU16(ext_id);
     if (!seq.has_value()) {
         return;
     }
+
+    const auto now = getStableTimeMicros();
+    mPacketHistory->saveIncomingPacket(seq.value(), now);
 }
 
 uint8_t RtpResponderTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
