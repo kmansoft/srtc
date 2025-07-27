@@ -16,6 +16,7 @@
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
+#include "srtc/rtp_responder_twcc.h"
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
@@ -28,7 +29,6 @@
 #include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/rtp_responder_twcc.h"
 #include "srtc/x509_certificate.h"
 
 #include <cassert>
@@ -252,7 +252,12 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 {
     assert(mListener);
 
-    LOG(SRTC_LOG_V, "Constructor for %p #%d", static_cast<void*>(this), mUniqueId);
+    LOG(SRTC_LOG_V,
+        "Constructor for %p #%d, host = %s, delay = %ld ms",
+        static_cast<void*>(this),
+        mUniqueId,
+        to_string(host.addr).c_str(),
+        static_cast<long>(startDelay.count()));
 
     initOpenSSL();
 
