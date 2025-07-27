@@ -82,6 +82,7 @@ add_library(srtc
         include/srtc/track.h
         include/srtc/track_selector.h
         include/srtc/track_stats.h
+        include/srtc/twcc_common.h
         include/srtc/twcc_publish.h
         include/srtc/util.h
         include/srtc/x509_certificate.h
