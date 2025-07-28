@@ -38,12 +38,17 @@ public:
     explicit Builder();
     ~Builder();
 
-    void setBaseSeq(uint16_t seq);
     void setReferenceTime(int64_t ref_time_micros);
 
-    void addNotReceivedRun(uint16_t count);
-    void addSmallDeltaRun(uint16_t count, const bool* received, const int32_t* delta_micros);
-    void addLargeDeltaRun(uint16_t count, const bool* received, const int32_t* delta_micros);
+    void addNotReceivedRun(srtc::twcc::SubscribePacket* first_packet, uint16_t count);
+    void addSmallDeltaRun(srtc::twcc::SubscribePacket* first_packet,
+                          uint16_t count,
+                          const bool* received,
+                          const int32_t* delta_micros);
+    void addLargeDeltaRun(srtc::twcc::SubscribePacket* first_packet,
+                          uint16_t count,
+                          const bool* received,
+                          const int32_t* delta_micros);
 
     [[nodiscard]] bool empty() const;
     [[nodiscard]] size_t size() const;
@@ -60,6 +65,8 @@ private:
 
     srtc::ByteBuffer mBufTimestmaps;
     srtc::ByteWriter mWriterTimestamps;
+
+    void initBaseSeq(srtc::twcc::SubscribePacket* first_packet);
 };
 
 Builder::Builder()
@@ -73,11 +80,6 @@ Builder::Builder()
 
 Builder::~Builder() = default;
 
-void Builder::setBaseSeq(uint16_t seq)
-{
-    mBaseSeq = seq;
-}
-
 void Builder::setReferenceTime(int64_t ref_time_micros)
 {
     // Ref time is represented as units of 64 millis
@@ -85,10 +87,12 @@ void Builder::setReferenceTime(int64_t ref_time_micros)
     mRefTimeMicros = ref_time_micros;
 }
 
-void Builder::addNotReceivedRun(uint16_t count)
+void Builder::addNotReceivedRun(srtc::twcc::SubscribePacket* first_packet, uint16_t count)
 {
     // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.3
     assert(count <= 8191);
+
+    initBaseSeq(first_packet);
 
     const auto header =
         static_cast<uint16_t>((srtc::twcc::kCHUNK_RUN_LENGTH << 15) | (srtc::twcc::kSTATUS_NOT_RECEIVED << 13) | count);
@@ -97,10 +101,15 @@ void Builder::addNotReceivedRun(uint16_t count)
     mPacketStatusCount += count;
 }
 
-void Builder::addSmallDeltaRun(uint16_t count, const bool* received, const int32_t* delta_micros)
+void Builder::addSmallDeltaRun(srtc::twcc::SubscribePacket* first_packet,
+                               uint16_t count,
+                               const bool* received,
+                               const int32_t* delta_micros)
 {
     // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
     assert(count <= 14);
+
+    initBaseSeq(first_packet);
 
     auto header = static_cast<uint16_t>((srtc::twcc::kCHUNK_STATUS_VECTOR << 15) | (0 << 14));
     for (uint16_t i = 0; i < count; i += 1) {
@@ -122,10 +131,15 @@ void Builder::addSmallDeltaRun(uint16_t count, const bool* received, const int32
     mPacketStatusCount += count;
 }
 
-void Builder::addLargeDeltaRun(uint16_t count, const bool* received, const int32_t* delta_micros)
+void Builder::addLargeDeltaRun(srtc::twcc::SubscribePacket* first_packet,
+                               uint16_t count,
+                               const bool* received,
+                               const int32_t* delta_micros)
 {
     // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
     assert(count <= 7);
+
+    initBaseSeq(first_packet);
 
     auto header = static_cast<uint16_t>((srtc::twcc::kCHUNK_STATUS_VECTOR << 15) | (1 << 14));
     for (uint16_t i = 0; i < 2 * count; i += 2) {
@@ -177,6 +191,13 @@ srtc::ByteBuffer Builder::generate(uint8_t fb_count) const
     writer.write(mBufTimestmaps);
 
     return buf;
+}
+
+void Builder::initBaseSeq(srtc::twcc::SubscribePacket* first_packet)
+{
+    if (mPacketStatusCount == 0) {
+        mBaseSeq = static_cast<uint16_t>(first_packet->seq_ext);
+    }
 }
 
 } // namespace
@@ -375,11 +396,11 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
         packet = mPacketList[index];
 
         if (packet->received_time_micros == 0) {
-            // Not received
+            // A run of not received
             count = peekNotReceivedRun();
             assert(count >= 1 && count <= 8191);
 
-            builder->addNotReceivedRun(count);
+            builder->addNotReceivedRun(packet, count);
             advance(count);
         } else {
             if (curr_time == 0) {
@@ -389,11 +410,11 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
 
             if ((count = peekSmallDeltaRun(curr_time, received, delta_micros)) > 0) {
                 // A run of small deltas and some possibly not received
-                builder->addSmallDeltaRun(count, received, delta_micros);
+                builder->addSmallDeltaRun(packet, count, received, delta_micros);
                 advance(count);
             } else if ((count = peekLargeDeltaRun(curr_time, received, delta_micros)) > 0) {
                 // A run of large deltas and some possibly not received
-                builder->addLargeDeltaRun(count, received, delta_micros);
+                builder->addLargeDeltaRun(packet, count, received, delta_micros);
                 advance(count);
             } else {
                 // The delta is too large even for the large delta encoding (unlikely but can happen), we have to start
@@ -401,8 +422,8 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
                 if (!builder->empty()) {
                     list.push_back(builder->generate(mFbCount++));
                     builder = std::make_unique<Builder>();
+                    curr_time = 0;
                 }
-                curr_time = 0;
             }
         }
 
@@ -477,11 +498,11 @@ void SubscribePacketHistory::deletePacket(SubscribePacket* packet)
 
 uint16_t SubscribePacketHistory::peekNotReceivedRun() const
 {
-    uint64_t seq = mMinSeq;
-    uint64_t max = std::min(seq + 8192, mMaxSeq);
+    uint64_t cur = mMinSeq;
+    uint64_t end = std::min(cur + 8191, mMaxSeq);
 
-    while (seq < max) {
-        const auto index = static_cast<size_t>(seq & kMaxPacketMask);
+    while (cur < end) {
+        const auto index = static_cast<size_t>(cur & kMaxPacketMask);
         const auto packet = mPacketList[index];
 
         assert(packet);
@@ -490,24 +511,24 @@ uint16_t SubscribePacketHistory::peekNotReceivedRun() const
             break;
         }
 
-        seq += 1;
+        cur += 1;
     }
 
-    return static_cast<uint16_t>(seq - mMinSeq);
+    return static_cast<uint16_t>(cur - mMinSeq);
 }
 
 uint16_t SubscribePacketHistory::peekSmallDeltaRun(int64_t& curr_time, bool* received, int32_t* delta_micros) const
 {
-    uint64_t seq = mMinSeq;
-    uint64_t max = std::min(seq + 14, mMaxSeq);
+    uint64_t cur = mMinSeq;
+    uint64_t end = std::min(cur + 14, mMaxSeq);
 
-    while (seq < max) {
-        const auto index = static_cast<size_t>(seq & kMaxPacketMask);
+    while (cur < end) {
+        const auto index = static_cast<size_t>(cur & kMaxPacketMask);
         const auto packet = mPacketList[index];
 
         assert(packet);
 
-        const auto out = seq - mMinSeq;
+        const auto out = cur - mMinSeq;
 
         if (packet->received_time_micros == 0) {
             // Not received
@@ -523,24 +544,24 @@ uint16_t SubscribePacketHistory::peekSmallDeltaRun(int64_t& curr_time, bool* rec
             break;
         }
 
-        seq += 1;
+        cur += 1;
     }
 
-    return static_cast<uint16_t>(seq - mMinSeq);
+    return static_cast<uint16_t>(cur - mMinSeq);
 }
 
 uint16_t SubscribePacketHistory::peekLargeDeltaRun(int64_t& curr_time, bool* received, int32_t* delta_micros) const
 {
-    uint64_t seq = mMinSeq;
-    uint64_t max = std::min(seq + 7, mMaxSeq);
+    uint64_t cur = mMinSeq;
+    uint64_t end = std::min(cur + 7, mMaxSeq);
 
-    while (seq < max) {
-        const auto index = static_cast<size_t>(seq & kMaxPacketMask);
+    while (cur < end) {
+        const auto index = static_cast<size_t>(cur & kMaxPacketMask);
         const auto packet = mPacketList[index];
 
         assert(packet);
 
-        const auto out = seq - mMinSeq;
+        const auto out = cur - mMinSeq;
 
         if (packet->received_time_micros == 0) {
             // Not received
@@ -556,10 +577,10 @@ uint16_t SubscribePacketHistory::peekLargeDeltaRun(int64_t& curr_time, bool* rec
             break;
         }
 
-        seq += 1;
+        cur += 1;
     }
 
-    return static_cast<uint16_t>(seq - mMinSeq);
+    return static_cast<uint16_t>(cur - mMinSeq);
 }
 
 } // namespace srtc::twcc
