@@ -1,5 +1,6 @@
 #include "srtc/rtp_responder_twcc.h"
 #include "srtc/logging.h"
+#include "srtc/rtcp_packet.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/rtp_std_extensions.h"
@@ -74,6 +75,30 @@ void RtpResponderTWCC::onMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 
     const auto now = getStableTimeMicros();
     mPacketHistory->saveIncomingPacket(seq.value(), now);
+}
+
+std::vector<std::shared_ptr<RtcpPacket>> RtpResponderTWCC::run(const std::shared_ptr<Track>& track)
+{
+    std::vector<std::shared_ptr<RtcpPacket>> list;
+
+    const auto now_micros = getStableTimeMicros();
+    if (mPacketHistory->isTimeToGenerate(now_micros)) {
+        const auto raw_list = mPacketHistory->generate(now_micros);
+
+        for (const auto& raw : raw_list) {
+            ByteBuffer payload;
+            ByteWriter writer(payload);
+
+            const auto ssrc = track->getSSRC();
+            writer.writeU32(ssrc);
+            writer.write(raw);
+
+            list.push_back(
+                std::make_shared<RtcpPacket>(ssrc, 15 /* TWCC */, RtcpPacket::kFeedback, std::move(payload)));
+        }
+    }
+
+    return list;
 }
 
 uint8_t RtpResponderTWCC::getExtensionId(const std::shared_ptr<Track>& track) const

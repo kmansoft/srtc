@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-
 #include <memory>
+#include <vector>
 
 namespace srtc::twcc
 {
@@ -15,6 +15,7 @@ namespace srtc
 class SdpOffer;
 class SdpAnswer;
 class RtpPacket;
+class RtcpPacket;
 class Track;
 
 class RtpResponderTWCC final
@@ -27,6 +28,8 @@ public:
                                                      const std::shared_ptr<SdpAnswer>& answer);
 
     void onMediaPacket(const std::shared_ptr<RtpPacket>& packet);
+
+    [[nodiscard]] std::vector<std::shared_ptr<RtcpPacket>> run(const std::shared_ptr<Track>& track);
 
 private:
     const std::unique_ptr<twcc::SubscribePacketHistory> mPacketHistory;
