@@ -119,13 +119,15 @@ void Builder::addSmallDeltaRun(srtc::twcc::SubscribePacket* first_packet,
     mWriterHeaders.writeU16(header);
 
     for (uint16_t i = 0; i < count; i += 1) {
-        int32_t delta = delta_micros[i];
+        if (received[i]) {
+            int32_t delta = delta_micros[i];
 
-        assert(delta >= kMinSmallDeltaMicros);
-        assert(delta <= kMaxSmallDeltaMicros);
+            assert(delta >= kMinSmallDeltaMicros);
+            assert(delta <= kMaxSmallDeltaMicros);
 
-        const auto delta_encoded = static_cast<uint8_t>(delta / 250);
-        mWriterTimestamps.writeU8(delta_encoded);
+            const auto delta_encoded = static_cast<uint8_t>(delta / 250);
+            mWriterTimestamps.writeU8(delta_encoded);
+        }
     }
 
     mPacketStatusCount += count;
@@ -149,13 +151,15 @@ void Builder::addLargeDeltaRun(srtc::twcc::SubscribePacket* first_packet,
     mWriterHeaders.writeU16(header);
 
     for (uint16_t i = 0; i < count; i += 1) {
-        int32_t delta = delta_micros[i];
+        if (received[i]) {
+            int32_t delta = delta_micros[i];
 
-        assert(delta >= kMinLargeDeltaMicros);
-        assert(delta <= kMaxLargeDeltaMicros);
+            assert(delta >= kMinLargeDeltaMicros);
+            assert(delta <= kMaxLargeDeltaMicros);
 
-        const auto delta_encoded = static_cast<int32_t>(delta / 250);
-        mWriterTimestamps.writeU16(delta_encoded);
+            const auto delta_encoded = static_cast<int32_t>(delta / 250);
+            mWriterTimestamps.writeU16(delta_encoded);
+        }
     }
 
     mPacketStatusCount += count;
@@ -168,7 +172,7 @@ bool Builder::empty() const
 
 size_t Builder::size() const
 {
-    return 2 * 3 + mBufHeaders.size() + mBufTimestmaps.size();
+    return 3 * sizeof(uint16_t) + mBufHeaders.size() + mBufTimestmaps.size();
 }
 
 srtc::ByteBuffer Builder::generate(uint8_t fb_count) const
