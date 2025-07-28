@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstdio>
+#include <cstdint>
 
 namespace
 {
