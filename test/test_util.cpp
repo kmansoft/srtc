@@ -8,8 +8,6 @@
 
 TEST(TestUtil, TestCompressNackList)
 {
-    std::cout << "TestUtil TestNackCompress" << std::endl;
-
     size_t n;
     uint16_t seq_list[16];
     uint16_t blp_list[16];

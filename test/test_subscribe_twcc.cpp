@@ -8,10 +8,18 @@
 #include <cstring>
 #include <unordered_map>
 
+#include <openssl/rand.h>
+
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
 namespace
 {
+
+struct PacketInfo {
+    uint16_t seq;
+    bool received_time_present;
+    int64_t received_time_micros;
+};
 
 class PacketMap
 {
@@ -22,16 +30,12 @@ public:
     void setAsReceived(uint16_t seq, int64_t received_time_micros);
     void setAsNotReceived(uint16_t seq);
 
+    [[nodiscard]] size_t size() const;
+
     [[nodiscard]] bool isReceived(uint16_t seq, int64_t received_time_micros) const;
     [[nodiscard]] bool isNotReceived(uint16_t seq) const;
 
 private:
-    struct PacketInfo {
-        uint16_t seq;
-        bool received_time_present;
-        int64_t received_time_micros;
-    };
-
     std::unordered_map<uint16_t, PacketInfo*> mImpl;
 
     void setImpl(PacketInfo* info);
@@ -72,6 +76,11 @@ void PacketMap::setImpl(PacketInfo* info)
 {
     assert(mImpl.find(info->seq) == mImpl.end());
     mImpl.insert({ info->seq, info });
+}
+
+size_t PacketMap::size() const
+{
+    return mImpl.size();
 }
 
 bool PacketMap::isReceived(uint16_t seq, int64_t received_time_micros) const
@@ -269,6 +278,13 @@ void processReport(PacketMap& packetMap,
     }
 }
 
+uint32_t randomU32()
+{
+    uint32_t value;
+    RAND_bytes((unsigned char*)&value, sizeof(value));
+    return value;
+}
+
 } // namespace
 
 TEST(TWCCResponder, SimpleSmall)
@@ -361,4 +377,59 @@ TEST(TWCCResponder, NotReceivedGap)
         ASSERT_TRUE(packet_map.isNotReceived(seq));
     }
     ASSERT_TRUE(packet_map.isReceived(20104, 2064000 + 4 * kStep));
+}
+
+TEST(TWCCResponder, Stress)
+{
+    constexpr auto kBaseSeq = 10000u;
+    constexpr auto kPacketCount = 2000u;
+    constexpr auto kStep = 250; // microseconds
+
+    for (size_t iteration = 0; iteration < 100; iteration += 1) {
+        const auto reference = std::make_unique<PacketInfo[]>(kPacketCount);
+
+        // Generate packets
+        int64_t packet_time = 2064000;
+        for (size_t i = 0; i < kPacketCount; i += 1) {
+            const auto ptr = reference.get() + i;
+            ptr->seq = kBaseSeq + i;
+
+            if (i != 0 && i != kPacketCount - 1 && (randomU32() % 100) >= 90) {
+                ptr->received_time_present = false;
+                ptr->received_time_micros = 0;
+            } else {
+                ptr->received_time_present = true;
+                ptr->received_time_micros = packet_time;
+
+                packet_time += kStep * (1 + randomU32() % 300);
+            }
+        }
+
+        // Save them into the TWCC responder
+        const auto history = std::make_shared<srtc::twcc::SubscribePacketHistory>(0);
+        for (size_t i = 0; i < kPacketCount; i += 1) {
+            const auto ptr = reference.get() + i;
+
+            if (ptr->received_time_present) {
+                history->saveIncomingPacket(ptr->seq, ptr->received_time_micros);
+            }
+        }
+
+        // Extract into a map
+        PacketMap packet_map;
+        processReport(packet_map, history, 0);
+
+        // Validate
+        ASSERT_EQ(kPacketCount, packet_map.size());
+
+        for (size_t i = 0; i < kPacketCount; i += 1) {
+            const auto ptr = reference.get() + i;
+
+            if (ptr->received_time_present) {
+                ASSERT_TRUE(packet_map.isReceived(ptr->seq, ptr->received_time_micros));
+            } else {
+                ASSERT_TRUE(packet_map.isNotReceived(ptr->seq));
+            }
+        }
+    }
 }
