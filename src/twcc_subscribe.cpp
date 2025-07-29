@@ -186,7 +186,7 @@ srtc::ByteBuffer Builder::generate(uint8_t fb_count) const
 
     const auto reference_time = mRefTimeMicros / kReferenceTimeUnits;
     const auto reference_time_and_fb_pkt_count = static_cast<uint32_t>((reference_time << 8) | fb_count);
-    writer.writeU16(reference_time_and_fb_pkt_count);
+    writer.writeU32(reference_time_and_fb_pkt_count);
 
     // Individual packet headers
     writer.write(mBufHeaders);
