@@ -338,3 +338,27 @@ TEST(TWCCResponder, SimpleLarge)
     ASSERT_TRUE(packet_map.isNotReceived(20010));
     ASSERT_TRUE(packet_map.isReceived(20011, 2064000 + 13 * kStep));
 }
+
+TEST(TWCCResponder, NotReceivedGap)
+{
+    constexpr auto kStep = 250; // microseconds
+
+    const auto history = std::make_shared<srtc::twcc::SubscribePacketHistory>(1000000);
+
+    history->saveIncomingPacket(20001, 3064000 + 1 * kStep);
+    history->saveIncomingPacket(20002, 3064000 + 2 * kStep);
+    history->saveIncomingPacket(20003, 3064000 + 3 * kStep);
+    // A gap of not received
+    history->saveIncomingPacket(20104, 3064000 + 4 * kStep);
+
+    PacketMap packet_map;
+    processReport(packet_map, history, 0);
+
+    ASSERT_TRUE(packet_map.isReceived(20001, 2064000 + 1 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20002, 2064000 + 2 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20003, 2064000 + 3 * kStep));
+    for (uint16_t seq = 20004; seq < 20104; seq += 1) {
+        ASSERT_TRUE(packet_map.isNotReceived(seq));
+    }
+    ASSERT_TRUE(packet_map.isReceived(20104, 2064000 + 4 * kStep));
+}
