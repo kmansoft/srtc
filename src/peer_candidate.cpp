@@ -632,7 +632,7 @@ void PeerCandidate::addSendRaw(ByteBuffer&& buf)
 void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 {
     stun::StunMessage incomingMessage = {};
-    incomingMessage.buffer = data.buf.data();
+    incomingMessage.buffer = const_cast<uint8_t*>(data.buf.data());
     incomingMessage.buffer_len = data.buf.size();
 
     const auto stunMessageClass = stun::stun_message_get_class(&incomingMessage);

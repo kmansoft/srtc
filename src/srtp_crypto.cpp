@@ -442,7 +442,10 @@ bool SrtpCrypto::unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rol
     }
 
     // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kAESGCM_TagSize, encryptedData + encryptedSize - digestSize)) {
+    if (!EVP_CIPHER_CTX_ctrl(ctx,
+                             EVP_CTRL_GCM_SET_TAG,
+                             kAESGCM_TagSize,
+                             const_cast<uint8_t*>(encryptedData + encryptedSize - digestSize))) {
         goto fail;
     }
 
@@ -868,10 +871,11 @@ bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer
     }
 
     // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx,
-                             EVP_CTRL_GCM_SET_TAG,
-                             kAESGCM_TagSize,
-                             encryptedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize)) {
+    if (!EVP_CIPHER_CTX_ctrl(
+            ctx,
+            EVP_CTRL_GCM_SET_TAG,
+            kAESGCM_TagSize,
+            const_cast<uint8_t*>(encryptedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize))) {
         goto fail;
     }
 
