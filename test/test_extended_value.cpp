@@ -8,8 +8,6 @@
 
 TEST(ExtendedValue, TestSimple)
 {
-    std::cout << "ExtendedValue TestSimple" << std::endl;
-
     {
         srtc::ExtendedValue<uint16_t> e1;
         ASSERT_EQ(e1.extend(0xFF), 0x100FF);

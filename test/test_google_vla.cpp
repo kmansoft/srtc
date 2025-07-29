@@ -11,8 +11,6 @@
 
 TEST(GoogleVLA, LEB128)
 {
-    std::cout << "LEB128" << std::endl;
-
     const std::pair<uint32_t, const char*> gTestData[] = { { 0, "00" },      { 1, "01" },      { 127, "7f" },
                                                            { 128, "80:01" }, { 500, "f4:03" }, { 1500, "dc:0b" },
                                                            { 2500, "c4:13" } };
@@ -31,8 +29,6 @@ TEST(GoogleVLA, LEB128)
 
 TEST(GoogleVLA, VLA)
 {
-    std::cout << "VLA" << std::endl;
-
     const std::vector<srtc::SimulcastLayer> kLayerList = { { "low", 320, 180, 15, 500 },
                                                            { "mid", 640, 360, 15, 1500 },
                                                            { "high", 1280, 720, 15, 2500 } };
