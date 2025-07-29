@@ -1,6 +1,7 @@
 #include "srtc/twcc_publish.h"
 #include "srtc/logging.h"
 #include "srtc/track.h"
+#include "srtc/twcc_common.h"
 
 #include <algorithm>
 #include <cassert>
@@ -13,6 +14,9 @@ namespace
 
 constexpr auto kMaxPacketCount = 2048u;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
+
+static_assert((kMaxPacketCount & kMaxPacketMask) == 0); // Power of 2
+
 constexpr auto kMaxRecentEnough = std::chrono::milliseconds(3000);
 
 constexpr auto kActualCalculateMinPackets = 30u;
@@ -171,7 +175,7 @@ void PublishPacketHistory::update()
         }
         ptr->reported_checked = true;
 
-        if (ptr->reported_status == twcc::kSTATUS_NOT_RECEIVED) {
+        if (ptr->reported_status == kSTATUS_NOT_RECEIVED) {
             ptr->reported_as_not_received = true;
         }
 
@@ -558,8 +562,8 @@ PublishPacket* PublishPacketHistory::findMostRecentReceivedPacket() const
         const auto index = seq & kMaxPacketMask;
         const auto ptr = mPacketList + index;
 
-        if (ptr->reported_status == twcc::kSTATUS_RECEIVED_SMALL_DELTA ||
-            ptr->reported_status == twcc::kSTATUS_RECEIVED_LARGE_DELTA) {
+        if (ptr->reported_status == kSTATUS_RECEIVED_SMALL_DELTA ||
+            ptr->reported_status == kSTATUS_RECEIVED_LARGE_DELTA) {
             return ptr;
         }
         if (seq == mMinSeq) {

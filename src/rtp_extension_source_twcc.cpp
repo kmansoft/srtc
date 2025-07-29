@@ -7,6 +7,7 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
+#include "srtc/twcc_common.h"
 #include "srtc/twcc_publish.h"
 
 #include <cassert>
@@ -200,7 +201,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
 
     const auto reference_time = static_cast<int32_t>(reference_time_and_fb_pkt_count >> 8);
     const auto fb_pkt_count = static_cast<uint8_t>(reference_time_and_fb_pkt_count & 0xFFu);
-    (void) fb_pkt_count;
+    (void)fb_pkt_count;
 
     const auto reference_time_micros = 64 * 1000 * static_cast<int64_t>(reference_time);
 
@@ -228,15 +229,6 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
             if (remaining < runLength || remaining > 0xFFFF) {
                 LOG(SRTC_LOG_E, "RTCP TWCC packet: run_length %u is too large, remaining %u", runLength, remaining);
                 break;
-            }
-
-            if (runLength > 1000) {
-                LOG(SRTC_LOG_E,
-                    "RTCP TWCC packet: run_length %u, symbol %d, packet_status_count %u, packet size %lu",
-                    runLength,
-                    symbol,
-                    packet_status_count,
-                    reader.size());
             }
 
             for (unsigned int j = 0; j < runLength; ++j) {
@@ -317,59 +309,27 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         }
     }
 
-#if 0
-	auto count_not_received = 0u;
-	auto count_small_delta = 0u;
-	auto count_large_delta = 0u;
+    // We should have read everything
+    if (reader.remaining() > 0) {
+        LOG(SRTC_LOG_W, "After reading TWCC feedback, there are %zu bytes left", reader.remaining());
+    }
 
-	for (uint16_t i = 0; i < packet_status_count; ++i) {
-		const auto symbol = tempList[i].status;
-		switch (symbol) {
-		case twcc::kSTATUS_NOT_RECEIVED:
-			count_not_received += 1;
-			break;
-		case twcc::kSTATUS_RECEIVED_SMALL_DELTA:
-			count_small_delta += 1;
-			break;
-		case twcc::kSTATUS_RECEIVED_LARGE_DELTA:
-			count_large_delta += 1;
-			break;
-		default:
-			break;
-		}
-	}
-
-	std::printf("TWCC packets base = %u, count = %u, not received = %u, small delta = %u, large delta = %u\n",
-				base_seq_number,
-				packet_status_count,
-				count_not_received,
-				count_small_delta,
-				count_large_delta);
-#endif
-
+    // Resolve time deltas to absolute times
     twcc::PublishPacket* prev_ptr = nullptr;
 
-    if (isReceivedWithTime(tempList[0].status)) {
-        const auto curr_seq = base_seq_number;
+    for (uint16_t i = 0; i < packet_status_count; i += 1) {
+        const auto curr_seq = static_cast<uint16_t>(base_seq_number + i);
         const auto curr_ptr = mPacketHistory->get(curr_seq);
-        if (curr_ptr) {
-            prev_ptr = curr_ptr;
-            prev_ptr->received_time_micros = reference_time_micros + tempList[0].delta_micros;
-            prev_ptr->received_time_present = true;
-        }
-    }
-    for (size_t i = 1; i < packet_status_count && prev_ptr; i += 1) {
+
         if (isReceivedWithTime(tempList[i].status)) {
-            const uint16_t curr_seq = base_seq_number + i;
-            const auto curr_ptr = mPacketHistory->get(curr_seq);
-            if (curr_ptr) {
+            if (!prev_ptr) {
+                curr_ptr->received_time_micros = reference_time_micros + tempList[i].delta_micros;
+            } else {
                 curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
-                curr_ptr->received_time_present = true;
             }
 
+            curr_ptr->received_time_present = true;
             prev_ptr = curr_ptr;
-        } else {
-            break;
         }
     }
 

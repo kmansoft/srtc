@@ -79,8 +79,6 @@ std::string toHex(const srtc::CryptoBytes& bytes)
 
 TEST(KeyDerivation, TestRfc)
 {
-    std::cout << "KeyDerivation TestRfc" << std::endl;
-
     initLibSRTP();
 
     srtc::CryptoBytes masterKey;
@@ -94,7 +92,6 @@ TEST(KeyDerivation, TestRfc)
     ASSERT_TRUE(outputLabel0.size() == 16);
 
     const auto outputLabel0Str = toHex(outputLabel0);
-    std::cout << outputLabel0Str << std::endl;
     ASSERT_EQ(outputLabel0Str, "C61E7A93744F39EE10734AFE3FF7A087");
 
     srtc::CryptoBytes outputLabel1;
@@ -102,7 +99,6 @@ TEST(KeyDerivation, TestRfc)
     ASSERT_TRUE(outputLabel1.size() == 32);
 
     const auto outputLabel1Str = toHex(outputLabel1);
-    std::cout << outputLabel1Str << std::endl;
     ASSERT_EQ(outputLabel1Str, "CEBE321F6FF7716B6FD4AB49AF256A156D38BAA48F0A0ACF3C34E2359E6CDBCE");
 
     srtc::CryptoBytes outputLabel2;
@@ -110,15 +106,11 @@ TEST(KeyDerivation, TestRfc)
     ASSERT_TRUE(outputLabel2.size() == 14);
 
     const auto outputLabel2Str = toHex(outputLabel2);
-    std::cout << outputLabel2Str << std::endl;
     ASSERT_EQ(outputLabel2Str, "30CBBC08863D8C85D49DB34A9AE1");
 }
 
 TEST(KeyDerivation, TestSimpleInbound)
 {
-
-    std::cout << "KeyDerivation TestSimpleInbound" << std::endl;
-
     initLibSRTP();
 
     const uint8_t kMasterKey[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -155,7 +147,6 @@ TEST(KeyDerivation, TestSimpleInbound)
     ASSERT_TRUE(srtc::KeyDerivation::generate(masterKey, masterSalt, srtc::KeyDerivation::kLabelRtcpSalt, outputLabel5, 12));
 
     const auto outputLabel5Str = toHex(outputLabel5);
-    std::cout << outputLabel5Str << std::endl;
     ASSERT_EQ(outputLabel5Str, "531B07167D1305116AFFD2B4");
 
     // Cleanup

@@ -158,18 +158,22 @@ ssize_t Socket::send(const void* ptr, size_t len)
     if (r == -1) {
 #ifdef _WIN32
         const auto error = GetLastError();
-        char errorMessage[1024];
+        char message[1024];
         FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                        NULL,
                        error,
                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                       errorMessage,
-                       sizeof(errorMessage),
+                       message,
+                       sizeof(message),
                        NULL);
+        LOG(SRTC_LOG_E, "Cannot send on a socket: %s", message);
 #else
-        const auto errorMessage = strerror(errno);
+        const auto e = errno;
+        if (e != EINTR && e != EAGAIN) {
+            const auto message = strerror(e);
+            LOG(SRTC_LOG_E, "Cannot send on a socket: %s", message);
+        }
 #endif
-        LOG(SRTC_LOG_E, "Cannot send on a socket: %s", errorMessage);
     }
 
     return r;

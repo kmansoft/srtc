@@ -26,8 +26,6 @@ uint32_t randomU32()
 
 TEST(Extension, Convert)
 {
-	std::cout << "Extension Convert" << std::endl;
-
 	srtc::ByteBuffer one;
 	srtc::ByteWriter one_w(one);
 

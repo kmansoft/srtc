@@ -8,8 +8,6 @@
 
 TEST(ExtendedValue, TestSimple)
 {
-    std::cout << "ExtendedValue TestSimple" << std::endl;
-
     {
         srtc::ExtendedValue<uint16_t> e1;
         ASSERT_EQ(e1.extend(0xFF), 0x100FF);
@@ -37,8 +35,6 @@ TEST(ExtendedValue, TestSimple)
 
 TEST(ExtendedValue, TestRollover16)
 {
-    std::cout << "ExtendedValue TestRollover16" << std::endl;
-
     srtc::ExtendedValue<uint16_t> e1;
 
     ASSERT_EQ(e1.extend(0xFF00u), 0x1FF00ul);
@@ -76,8 +72,6 @@ TEST(ExtendedValue, TestRollover16)
 
 TEST(ExtendedValue, TestRollover32)
 {
-    std::cout << "ExtendedValue TestRollover32" << std::endl;
-
     srtc::ExtendedValue<uint32_t> e1;
 
     ASSERT_EQ(e1.extend(0xFFFFFF00u), 0x01FFFFFF00ul);

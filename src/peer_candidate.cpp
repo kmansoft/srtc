@@ -587,6 +587,17 @@ void PeerCandidate::run()
             }
         }
     }
+
+    // TWCC
+    if (mResponderTWCC) {
+        const auto track = mTrackList.front();
+        const auto list = mResponderTWCC->run(track);
+        if (!list.empty()) {
+            for (const auto& packet : list) {
+                sendRtcpPacket(track, packet);
+            }
+        }
+    }
 }
 
 void PeerCandidate::startConnecting()
