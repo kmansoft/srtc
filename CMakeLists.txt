@@ -311,6 +311,7 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
             test/test_srtp_crypto.cpp
             test/test_util.cpp
             test/test_allocator.cpp
+            test/test_subscribe_twcc.cpp
     )
 
     target_include_directories(
