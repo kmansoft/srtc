@@ -566,15 +566,15 @@ bool SrtpCrypto::unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t roll
 
     // Decrypt the body
     if (!EVP_DecryptUpdate(ctx,
-                           encryptedData + headerSize,
-                           &len,
                            plainData + headerSize,
+                           &len,
+                           encryptedData + headerSize,
                            static_cast<int>(encryptedSize - headerSize - digestSize))) {
         goto fail;
     }
     plain_len = len;
 
-    final_ret = EVP_DecryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
+    final_ret = EVP_DecryptFinal_ex(ctx, plainData + headerSize + len, &len);
     if (final_ret > 0) {
         plain_len += len;
     }

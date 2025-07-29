@@ -260,9 +260,7 @@ TEST(SrtpCrypto, ReceiveMedia)
     srtc::initOpenSSL();
 
     static constexpr uint16_t kOpenSslProfileList[] = {
-        //SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM,
-        SRTP_AES128_CM_SHA1_80,
-        // SRTP_AES128_CM_SHA1_32
+        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
     };
 
     for (const auto openSSlProfile : kOpenSslProfileList) {
@@ -412,8 +410,7 @@ TEST(SrtpCrypto, ReceiveMedia)
             ASSERT_EQ(
                 srtp_err_status_ok,
                 srtp_protect(
-                    srtp, sourcePacket.buf.data(), sourcePacket.buf.size(), encryptedPacket.data(), &encryptedLen, 0)
-                );
+                    srtp, sourcePacket.buf.data(), sourcePacket.buf.size(), encryptedPacket.data(), &encryptedLen, 0));
             encryptedPacket.resize(encryptedLen);
 
             // Decrypt using our crypto
