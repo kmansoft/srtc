@@ -390,8 +390,6 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
     bool received[14] = {};
     int32_t delta_micros[14] = {};
 
-    uint64_t total_count = mMaxSeq - mMinSeq;
-
     while (mMinSeq < mMaxSeq) {
         size_t index;
         SubscribePacket* packet;
@@ -450,25 +448,11 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
 
     mLastGeneratedMicros = now_micros;
 
-#ifdef NDEBUG
-    (void)total_count;
-#else
-    if (total_count > 0) {
-        std::printf("TWCC generated for %" PRIu64 " incoming packets, RTCP packet count = %zu, min = %u, max = %u\n",
-                    total_count,
-                    list.size(),
-                    static_cast<uint16_t>(mMinSeq),
-                    static_cast<uint16_t>(mMaxSeq));
-    }
-#endif
-
     return list;
 }
 
 void SubscribePacketHistory::deleteMinPacket()
 {
-    std::printf("TWCC deleting min = %u\n", static_cast<uint16_t>(mMinSeq));
-
     assert(mMinSeq < mMaxSeq);
 
     const auto index = static_cast<size_t>(mMinSeq & kMaxPacketMask);
@@ -481,8 +465,6 @@ void SubscribePacketHistory::deleteMinPacket()
 
 void SubscribePacketHistory::advance(uint64_t count)
 {
-    std::printf("TWCC deleting %u packets, min = %u\n", static_cast<uint16_t>(count), static_cast<uint16_t>(mMinSeq));
-
     for (uint64_t i = 0; i < count; i += 1) {
         assert(mMinSeq < mMaxSeq);
 
