@@ -144,9 +144,9 @@ void Builder::addLargeDeltaRun(srtc::twcc::SubscribePacket* first_packet,
     initBaseSeq(first_packet);
 
     auto header = static_cast<uint16_t>((srtc::twcc::kCHUNK_STATUS_VECTOR << 15) | (1 << 14));
-    for (uint16_t i = 0; i < 2 * count; i += 2) {
+    for (uint16_t i = 0; i < count; i += 1) {
         const auto symbol = received[i] ? srtc::twcc::kSTATUS_RECEIVED_LARGE_DELTA : srtc::twcc::kSTATUS_NOT_RECEIVED;
-        header |= (symbol << (14 - i - 2));
+        header |= (symbol << (14 - i * 2 - 2));
     }
     mWriterHeaders.writeU16(header);
 
@@ -408,26 +408,31 @@ std::list<ByteBuffer> SubscribePacketHistory::generate(int64_t now_micros)
             advance(count);
         } else {
             if (curr_time == 0) {
-                curr_time = kReferenceTimeUnits * (packet->received_time_micros / kReferenceTimeUnits);
+                curr_time = (packet->received_time_micros / kReferenceTimeUnits) * kReferenceTimeUnits;
                 builder->setReferenceTime(curr_time);
             }
 
-            if ((count = peekSmallDeltaRun(curr_time, received, delta_micros)) > 0) {
+            int64_t packet_time_small = curr_time;
+            int64_t packet_time_large = curr_time;
+
+            if (count = peekSmallDeltaRun(packet_time_small, received, delta_micros);
+                count == 14 || mMinSeq + count == mMaxSeq) {
                 // A run of small deltas and some possibly not received
                 builder->addSmallDeltaRun(packet, count, received, delta_micros);
                 advance(count);
-            } else if ((count = peekLargeDeltaRun(curr_time, received, delta_micros)) > 0) {
+                curr_time = packet_time_small;
+            } else if (count = peekLargeDeltaRun(packet_time_large, received, delta_micros);
+                       count == 7 || mMinSeq + count == mMaxSeq) {
                 // A run of large deltas and some possibly not received
                 builder->addLargeDeltaRun(packet, count, received, delta_micros);
                 advance(count);
-            } else {
+                curr_time = packet_time_large;
+            } else if (!builder->empty()) {
                 // The delta is too large even for the large delta encoding (unlikely but can happen), we have to start
                 // a new packet which will use the new time as its reference time
-                if (!builder->empty()) {
-                    list.push_back(builder->generate(mFbCount++));
-                    builder = std::make_unique<Builder>();
-                    curr_time = 0;
-                }
+                list.push_back(builder->generate(mFbCount++));
+                builder = std::make_unique<Builder>();
+                curr_time = 0;
             }
         }
 

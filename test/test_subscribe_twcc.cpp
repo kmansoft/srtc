@@ -304,3 +304,37 @@ TEST(TWCCResponder, SimpleSmall)
     ASSERT_TRUE(packet_map.isNotReceived(20010));
     ASSERT_TRUE(packet_map.isReceived(20011, 2064000 + 13 * kStep));
 }
+
+TEST(TWCCResponder, SimpleLarge)
+{
+    constexpr auto kStep = 300 * 250; // microseconds, too large to fit in a one byte delta
+
+    const auto history = std::make_shared<srtc::twcc::SubscribePacketHistory>(1000000);
+
+    history->saveIncomingPacket(20001, 3064000 + 1 * kStep);
+    history->saveIncomingPacket(20002, 3064000 + 2 * kStep);
+    history->saveIncomingPacket(20003, 3064000 + 3 * kStep);
+    // 20004 is not received
+    history->saveIncomingPacket(20005, 3064000 + 5 * kStep);
+    history->saveIncomingPacket(20006, 3064000 + 6 * kStep);
+    history->saveIncomingPacket(20007, 3064000 + 10 * kStep);
+    history->saveIncomingPacket(20008, 3064000 + 11 * kStep);
+    // 20009 is not received
+    // 20010 is not received
+    history->saveIncomingPacket(20011, 3064000 + 13 * kStep);
+
+    PacketMap packet_map;
+    processReport(packet_map, history, 0);
+
+    ASSERT_TRUE(packet_map.isReceived(20001, 2064000 + 1 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20002, 2064000 + 2 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20003, 2064000 + 3 * kStep));
+    ASSERT_TRUE(packet_map.isNotReceived(20004));
+    ASSERT_TRUE(packet_map.isReceived(20005, 2064000 + 5 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20006, 2064000 + 6 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20007, 2064000 + 10 * kStep));
+    ASSERT_TRUE(packet_map.isReceived(20008, 2064000 + 11 * kStep));
+    ASSERT_TRUE(packet_map.isNotReceived(20009));
+    ASSERT_TRUE(packet_map.isNotReceived(20010));
+    ASSERT_TRUE(packet_map.isReceived(20011, 2064000 + 13 * kStep));
+}
