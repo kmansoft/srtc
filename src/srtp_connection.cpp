@@ -176,6 +176,7 @@ bool SrtpConnection::unprotectReceiveControl(const ByteBuffer& packetData, ByteB
 	}
 
 	if (!mCrypto->unprotectReceiveControl(packetData, output)) {
+        LOG(SRTC_LOG_E, "Error decrypting control");
 		return false;
 	}
 
@@ -238,6 +239,7 @@ bool SrtpConnection::unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuf
 	}
 
 	if (!mCrypto->unprotectReceiveMedia(packetData, rolloverCount, output)) {
+        LOG(SRTC_LOG_E, "Error decrypting media");
 		return false;
 	}
 
