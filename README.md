@@ -23,13 +23,12 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 
 #### State of subscribe
 
-- Just merged the initial piece of work.
-- The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
 - Sends nacks, understands RTX.
 - Sends PLI (key frame requests).
-- Sends Receiver Reports.
-- Does not support TWCC reporting (yet).
-- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to fix this.
+- Sends receiver reports.
+- Sends TWCC reports if negotiated in the SDP.
+- The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
+- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to work on this.
 - No speed up / slow down for audio samples (yet).
 
 ### API design 
@@ -79,7 +78,8 @@ Tested on Linux, MacOS, Windows with Pion and Amazon IVS.
 If not using the provided `.h264` files, you can convert an `.mp4` to raw H.264 with FFMPEG. Make sure to use the `baseline` profile.
 
 ```bash
-ffmpeg -i /path/to/a.mp4 -c:v libx264 -profile:v baseline -level 3.0 -preset medium -an -f h264 out.h264
+ffmpeg -i /path/to/a.mp4 -c:v libx264 -profile:v baseline -level 3.0 \
+    -preset medium -an -f h264 out.h264
 ```
 
 Build the project using CMake.
@@ -211,7 +211,7 @@ This library is my side project.
 
 - Releases. This is done.
 
-- Start implementing subscribing. Started, the initial piece of work has been merged.
+- Start implementing subscribing. In progress.
   
 - Support for more codecs, but I currently only have access to systems which support H264. If you'd
 like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
