@@ -275,8 +275,21 @@ int main(int argc, char* argv[])
         }
     }
 
+    uint32_t frameCount = 0;
+    std::chrono::steady_clock::time_point frameReportTime;
+
     peerConnection->setSubscribeEncodedFrameListener(
-        [mediaWriterAudio, mediaWriterVideo](const std::shared_ptr<EncodedFrame>& frame) {
+        [&frameCount, &frameReportTime, mediaWriterAudio, mediaWriterVideo](
+            const std::shared_ptr<EncodedFrame>& frame) {
+
+            const auto now = std::chrono::steady_clock::now();
+            if (frameCount++ == 0) {
+                frameReportTime = now;
+            } else if (now - frameReportTime >= std::chrono::seconds(5)) {
+                frameReportTime = now;
+                std::cout << "*** Received " << frameCount << " frames of audio / video media" << std::endl;
+            }
+
             const auto mediaType = frame->track->getMediaType();
             if (mediaType == srtc::MediaType::Audio) {
                 if (mediaWriterAudio) {
