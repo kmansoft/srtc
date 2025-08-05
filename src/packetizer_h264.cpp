@@ -120,6 +120,10 @@ void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
 			}
 		}
 	}
+
+    if (target != 2) {
+        LOG(SRTC_LOG_E, "Codec specific data did not contain SPS and PPS");
+    }
 }
 
 bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
