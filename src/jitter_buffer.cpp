@@ -367,7 +367,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 mDepacketizer->extract(mTempFrameList, item->payload);
 
                 // Append to result frame list
-                appendToResult(result, item, mTempFrameList, item->marker);
+                appendToResult(result, item, item, now, mTempFrameList);
 
                 // Cleanup
                 mItemList[index] = nullptr;
@@ -386,10 +386,10 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     // Append to result frame list
                     const auto maxIndex = maxSeq & mCapacityMask;
-                    const auto maxPacket = mItemList[maxIndex];
-                    assert(maxPacket);
+                    const auto maxItem = mItemList[maxIndex];
+                    assert(maxItem);
 
-                    appendToResult(result, item, mTempFrameList, maxPacket->marker);
+                    appendToResult(result, item, maxItem, now, mTempFrameList);
 
                     // Clean up
                     deleteItemList(seq, maxSeq);
@@ -524,8 +524,9 @@ void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
 
 void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
                                   Item* item,
-                                  std::vector<srtc::ByteBuffer>& list,
-                                  bool marker)
+                                  Item* last,
+                                  const std::chrono::steady_clock::time_point& now,
+                                  std::vector<srtc::ByteBuffer>& list)
 {
     if (!list.empty()) {
         // Check that we're not trying to go backwards
@@ -546,7 +547,9 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
             frame->track = mTrack;
             frame->seq_ext = item->seq_ext;
             frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-            frame->marker = marker && i == list.size() - 1;
+            frame->marker = last->marker && i == list.size() - 1;
+            frame->first_to_last_packet_millis = diff_millis(last->when_received, item->when_received);
+            frame->wait_time_millis = diff_millis(now, last->when_received);
             frame->data = std::move(list[i]);
 
             assert(!frame->data.empty());

@@ -70,8 +70,9 @@ private:
     void deleteItemList(uint64_t start, uint64_t max);
     void appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
                         Item* item,
-                        std::vector<srtc::ByteBuffer>& list,
-                        bool marker);
+                        Item* last,
+                        const std::chrono::steady_clock::time_point& now,
+                        std::vector<srtc::ByteBuffer>& list);
 
     [[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
     [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now);

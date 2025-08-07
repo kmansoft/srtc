@@ -16,6 +16,8 @@ struct EncodedFrame {
 	uint64_t seq_ext;
 	uint64_t rtp_timestamp_ext;
     bool marker;
+    int64_t first_to_last_packet_millis;
+    int64_t wait_time_millis;
 
 	ByteBuffer data;
 };
