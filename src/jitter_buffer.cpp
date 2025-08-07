@@ -57,7 +57,8 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
 {
     assert((mCapacity & mCapacityMask) == 0 && "capacity should be a power of 2");
 
-    LOG(SRTC_LOG_V, "Constructed for %s with length = %ld, nack delay = %ld",
+    LOG(SRTC_LOG_V,
+        "Constructed for %s with length = %ld, nack delay = %ld",
         to_string(mTrack->getMediaType()).c_str(),
         static_cast<long>(length.count()),
         static_cast<long>(nackDelay.count()));
@@ -193,14 +194,17 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             lost->rtp_timestamp_ext = 0;
 
             const auto index = lost->seq_ext & mCapacityMask;
+            assert(mItemList[index] == nullptr);
             mItemList[index] = lost;
         }
 
         mMinSeq -= 1;
         assert(mMinSeq == seq_ext);
 
-        const auto index = seq_ext & mCapacityMask;
         item = newItem();
+
+        const auto index = seq_ext & mCapacityMask;
+        assert(mItemList[index] == nullptr);
         mItemList[index] = item;
     } else if (seq_ext >= mMaxSeq) {
         // Above max
@@ -229,6 +233,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             lost->rtp_timestamp_ext = 0;
 
             const auto index = lost->seq_ext & mCapacityMask;
+            assert(mItemList[index] == nullptr);
             mItemList[index] = lost;
 
 #ifdef NDEBUG
@@ -252,6 +257,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
         item = newItem();
         const auto index = seq_ext & mCapacityMask;
+        assert(mItemList[index] == nullptr);
         mItemList[index] = item;
     } else {
         // Somewhere in the middle, we should already have an item there
@@ -272,6 +278,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     item->seq_ext = seq_ext;
     item->rtp_timestamp_ext = rtp_timestamp_ext;
+    item->marker = packet->getMarker();
 
     item->payload = std::move(payload);
 }
@@ -318,7 +325,7 @@ int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
         if (when_dequeue.has_value() && when_request.has_value() && when_abandon.has_value()) {
             break;
         }
-        if (item->when_dequeue > cutoff && item->when_nack_abandon > cutoff) {
+        if (item->when_dequeue > cutoff && item->when_nack_request > cutoff && item->when_nack_abandon > cutoff) {
             break;
         }
     }
@@ -360,7 +367,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 mDepacketizer->extract(mTempFrameList, item->payload);
 
                 // Append to result frame list
-                appendToResult(result, item, mTempFrameList);
+                appendToResult(result, item, mTempFrameList, item->marker);
 
                 // Cleanup
                 mItemList[index] = nullptr;
@@ -378,7 +385,11 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                     mDepacketizer->extract(mTempFrameList, mTempBufferList);
 
                     // Append to result frame list
-                    appendToResult(result, item, mTempFrameList);
+                    const auto maxIndex = maxSeq & mCapacityMask;
+                    const auto maxPacket = mItemList[maxIndex];
+                    assert(maxPacket);
+
+                    appendToResult(result, item, mTempFrameList, maxPacket->marker);
 
                     // Clean up
                     deleteItemList(seq, maxSeq);
@@ -513,7 +524,8 @@ void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
 
 void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
                                   Item* item,
-                                  std::vector<srtc::ByteBuffer>& list)
+                                  std::vector<srtc::ByteBuffer>& list,
+                                  bool marker)
 {
     if (!list.empty()) {
         // Check that we're not trying to go backwards
@@ -528,13 +540,14 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
 
         mLastFrameTimeStamp = item->rtp_timestamp_ext;
 
-        for (auto& buf : list) {
+        for (size_t i = 0; i < list.size(); i++) {
             const auto frame = std::make_shared<EncodedFrame>();
 
             frame->track = mTrack;
             frame->seq_ext = item->seq_ext;
             frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
-            frame->data = std::move(buf);
+            frame->marker = marker && i == list.size() - 1;
+            frame->data = std::move(list[i]);
 
             assert(!frame->data.empty());
 

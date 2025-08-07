@@ -3,8 +3,8 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/encoded_frame.h"
 #include "srtc/extended_value.h"
-#include "srtc/srtc.h"
 #include "srtc/pool_allocator.h"
+#include "srtc/srtc.h"
 
 #include <chrono>
 #include <cstdint>
@@ -57,6 +57,7 @@ private:
 
         uint64_t seq_ext = 0;
         uint64_t rtp_timestamp_ext = 0; // only when received
+        bool marker = false;            // same
 
         ByteBuffer payload;
     };
@@ -69,7 +70,8 @@ private:
     void deleteItemList(uint64_t start, uint64_t max);
     void appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
                         Item* item,
-                        std::vector<srtc::ByteBuffer>& list);
+                        std::vector<srtc::ByteBuffer>& list,
+                        bool marker);
 
     [[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
     [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now);

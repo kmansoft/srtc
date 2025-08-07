@@ -15,6 +15,7 @@ struct EncodedFrame {
 
 	uint64_t seq_ext;
 	uint64_t rtp_timestamp_ext;
+    bool marker;
 
 	ByteBuffer data;
 };
