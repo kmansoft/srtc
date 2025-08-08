@@ -18,7 +18,6 @@ protected:
 private:
 	const std::shared_ptr<srtc::Track> mTrack;
 	FILE* mFile;
-	size_t m_outPacketCount;
-	size_t m_outByteCount;
-	bool mIsSeenKeyFrame;
+	size_t mOutFrameCount;
+	size_t mOutByteCount;
 };

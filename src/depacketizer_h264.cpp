@@ -1,5 +1,4 @@
 #include "srtc/depacketizer_h264.h"
-#include "srtc/byte_buffer.h"
 #include "srtc/h264.h"
 #include "srtc/logging.h"
 #include "srtc/util.h"
@@ -17,6 +16,8 @@ constexpr auto kHaveKey = 0x04u;
 
 constexpr auto kHaveAll = kHaveSPS | kHavePPS | kHaveKey;
 
+const uint8_t kAnnexB[4] = { 0, 0, 0, 1 };
+
 } // namespace
 
 namespace srtc
@@ -25,12 +26,11 @@ namespace srtc
 DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
     : Depacketizer(track)
     , mHaveBits(0)
+    , mLastRtpTimestamp(0)
 {
 }
 
-DepacketizerH264::~DepacketizerH264()
-{
-}
+DepacketizerH264::~DepacketizerH264() = default;
 
 PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& packet)
 {
@@ -67,13 +67,15 @@ PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& packet)
 void DepacketizerH264::reset()
 {
     mHaveBits = 0;
+    mFrameBuffer.clear();
+    mLastRtpTimestamp = 0;
 }
 
-void DepacketizerH264::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
+void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
 {
     out.clear();
 
-    ByteReader reader(packet);
+    ByteReader reader(packet->payload);
     if (reader.remaining() >= 1) {
         // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
         const auto value = reader.readU8();
@@ -87,36 +89,37 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
                     break;
                 }
 
-                ByteBuffer buf(packet.data() + reader.position(), size);
-                extractImpl(out, std::move(buf));
+                ByteBuffer buf(packet->payload.data() + reader.position(), size);
+                extractImpl(out, packet, std::move(buf));
 
                 reader.skip(size);
             }
         } else {
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
-            extractImpl(out, std::move(packet));
+            extractImpl(out, packet, packet->payload.copy());
         }
     }
 }
 
-void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList)
+void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
     out.clear();
 
-#ifndef NDEBUG
+#ifdef NDEBUG
+#else
     assert(!packetList.empty());
-    assert(getPacketKind(*packetList[0]) == PacketKind::Start);
+    assert(getPacketKind(packetList.front()->payload) == PacketKind::Start);
     for (size_t i = 1; i < packetList.size() - 1; i += 1) {
-        assert(getPacketKind(*packetList[i]) == PacketKind::Middle);
+        assert(getPacketKind(packetList[i]->payload) == PacketKind::Middle);
     }
-    assert(getPacketKind(*packetList[packetList.size() - 1]) == PacketKind::End);
+    assert(getPacketKind(packetList.back()->payload) == PacketKind::End);
 #endif
 
     ByteBuffer buf;
     ByteWriter w(buf);
 
     for (const auto packet : packetList) {
-        ByteReader reader(*packet);
+        ByteReader reader(packet->payload);
 
         if (reader.remaining() > 2) {
             const auto indicator = reader.readU8();
@@ -130,38 +133,54 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<B
             }
 
             const auto pos = reader.position();
-            w.write(packet->data() + pos, packet->size() - pos);
+            w.write(packet->payload.data() + pos, packet->payload.size() - pos);
         }
     }
 
-    extractImpl(out, std::move(buf));
+    extractImpl(out, packetList.back(), std::move(buf));
 }
 
-void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, ByteBuffer&& frame)
+void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame)
 {
-    if (!frame.empty()) {
-        if ((mHaveBits & kHaveAll) != kHaveAll) {
-            // Wait to emit until we have a key frame
-            const auto type = static_cast<h264::NaluType>(frame.front() & 0x1F);
-            switch (type) {
-            case h264::NaluType::NonKeyFrame:
-                LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
-                return;
-            case h264::NaluType::SPS:
-                mHaveBits |= kHaveSPS;
-                break;
-            case h264::NaluType::PPS:
-                mHaveBits |= kHavePPS;
-                break;
-            case h264::NaluType::KeyFrame:
-                mHaveBits |= kHaveKey;
-                break;
-            default:
-                break;
-            }
-        }
+    if (frame.empty()) {
+        return;
+    }
 
-        out.emplace_back(std::move(frame));
+    if ((mHaveBits & kHaveAll) != kHaveAll) {
+        // Wait to emit until we have a key frame
+        const auto type = static_cast<h264::NaluType>(frame.front() & 0x1F);
+        switch (type) {
+        case h264::NaluType::NonKeyFrame:
+            LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
+            return;
+        case h264::NaluType::SPS:
+            mHaveBits |= kHaveSPS;
+            break;
+        case h264::NaluType::PPS:
+            mHaveBits |= kHavePPS;
+            break;
+        case h264::NaluType::KeyFrame:
+            mHaveBits |= kHaveKey;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (mLastRtpTimestamp != packet->rtp_timestamp_ext) {
+        mLastRtpTimestamp = packet->rtp_timestamp_ext;
+        mFrameBuffer.clear();
+    }
+
+    mFrameBuffer.append(kAnnexB, sizeof(kAnnexB));
+    mFrameBuffer.append(frame);
+
+    if (packet->marker) {
+        const auto dump = bin_to_hex(mFrameBuffer.data(), std::min<size_t>(mFrameBuffer.size(), 64));
+        std::printf("H264 Out = %s\n", dump.c_str());
+
+        out.push_back(std::move(mFrameBuffer));
+        mFrameBuffer.clear();
     }
 }
 

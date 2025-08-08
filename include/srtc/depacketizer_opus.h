@@ -15,8 +15,8 @@ public:
 
     void reset() override;
 
-    void extract(std::vector<ByteBuffer>& out, ByteBuffer& packet) override;
-    void extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList) override;
+    void extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet) override;
+    void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
 };
 
 } // namespace srtc

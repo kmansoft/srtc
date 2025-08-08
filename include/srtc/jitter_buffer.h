@@ -3,6 +3,7 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/encoded_frame.h"
 #include "srtc/extended_value.h"
+#include "srtc/jitter_buffer_item.h"
 #include "srtc/pool_allocator.h"
 #include "srtc/srtc.h"
 
@@ -44,33 +45,15 @@ public:
     [[nodiscard]] std::vector<uint16_t> processNack();
 
 private:
-    struct Item {
-        std::chrono::steady_clock::time_point when_received;
-        std::chrono::steady_clock::time_point when_dequeue;
-        std::chrono::steady_clock::time_point when_nack_request;
-        std::chrono::steady_clock::time_point when_nack_abandon;
-
-        bool received = false;
-        bool nack_needed = false;
-
-        PacketKind kind = PacketKind::Standalone;
-
-        uint64_t seq_ext = 0;
-        uint64_t rtp_timestamp_ext = 0; // only when received
-        bool marker = false;            // same
-
-        ByteBuffer payload;
-    };
-
     void freeEverything();
-    [[nodiscard]] Item* newItem();
-    void deleteItem(Item* item);
+    [[nodiscard]] JitterBufferItem* newItem();
+    void deleteItem(JitterBufferItem* item);
 
-    void extractBufferList(std::vector<ByteBuffer*>& out, uint64_t start, uint64_t max);
+    void extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max);
     void deleteItemList(uint64_t start, uint64_t max);
     void appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
-                        Item* item,
-                        Item* last,
+                        JitterBufferItem* item,
+                        JitterBufferItem* last,
                         const std::chrono::steady_clock::time_point& now,
                         std::vector<srtc::ByteBuffer>& list);
 
@@ -84,11 +67,11 @@ private:
     const std::chrono::milliseconds mLength;
     const std::chrono::milliseconds mNackDelay;
 
-    PoolAllocator<Item> mItemAllocator;
+    PoolAllocator<JitterBufferItem> mItemAllocator;
 
     std::chrono::steady_clock::time_point mLastPacketTime;
 
-    Item** mItemList;
+    JitterBufferItem** mItemList;
     uint64_t mMinSeq;
     uint64_t mMaxSeq;
 
@@ -99,7 +82,7 @@ private:
     uint64_t mBaseRtpTimestamp;
 
     std::vector<ByteBuffer> mTempFrameList;
-    std::vector<ByteBuffer*> mTempBufferList;
+    std::vector<const JitterBufferItem*> mTempBufferList;
 
     std::optional<uint64_t> mLastFrameTimeStamp;
 };

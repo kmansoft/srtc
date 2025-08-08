@@ -60,13 +60,6 @@ struct PublishConnectionStats {
     float bandwidth_suggested_kbit_per_second;
 };
 
-enum class PacketKind {
-    Standalone = 0,
-    Start = 1,
-    Middle = 2,
-    End = 3
-};
-
 #if defined(__clang__) || defined(__GNUC__)
 
 #if defined __has_attribute && __has_attribute(guarded_by)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "srtc/depacketizer.h"
+#include "srtc/byte_buffer.h"
 
 namespace srtc
 {
@@ -15,13 +16,15 @@ public:
 
     void reset() override;
 
-    void extract(std::vector<ByteBuffer>& out, ByteBuffer& packet) override;
-    void extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList) override;
+    void extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet) override;
+    void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
 
 private:
     uint8_t mHaveBits;
+    ByteBuffer mFrameBuffer;
+    uint64_t mLastRtpTimestamp;
 
-    void extractImpl(std::vector<ByteBuffer>& out, ByteBuffer&& frame);
+    void extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame);
 };
 
 } // namespace srtc

@@ -6,9 +6,8 @@ MediaWriterH26x::MediaWriterH26x(const std::string& filename, const std::shared_
     : MediaWriter(filename)
     , mTrack(track)
     , mFile(nullptr)
-    , mIsSeenKeyFrame(false)
-    , m_outPacketCount(0)
-    , m_outByteCount(0)
+    , mOutFrameCount(0)
+    , mOutByteCount(0)
 {
 }
 
@@ -18,7 +17,7 @@ MediaWriterH26x::~MediaWriterH26x()
         fclose(mFile);
         mFile = nullptr;
 
-        std::printf("H26x: Wrote %zu frames, %zu bytes to %s\n", m_outPacketCount, m_outByteCount, mFilename.c_str());
+        std::printf("H26x: Wrote %zu frames, %zu bytes to %s\n", mOutFrameCount, mOutByteCount, mFilename.c_str());
     }
 }
 
@@ -36,27 +35,11 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
     }
 
     if (!frame->data.empty()) {
-        const auto first = frame->data.front();
-        const auto type = first & 0x1F;
-
-        if (type == 1 && !mIsSeenKeyFrame) {
-            std::printf("H26x: no key frame yet\n");
-            return;
-        } else if (!mIsSeenKeyFrame) {
-            if (type == 5 || type == 7 || type == 8) {
-                std::printf("H26x: Start writing output on a key frame\n");
-                mIsSeenKeyFrame = true;
-            }
-        }
-
         const auto& data = frame->data;
 
-        static constexpr uint8_t kAnnexB[] = { 0, 0, 0, 1 };
-
-        fwrite(kAnnexB, sizeof(kAnnexB), 1, mFile);
         fwrite(data.data(), data.size(), 1, mFile);
 
-        m_outPacketCount += 1;
-        m_outByteCount += data.size();
+        mOutFrameCount += 1;
+        mOutByteCount += data.size();
     }
 }

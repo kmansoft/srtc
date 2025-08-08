@@ -37,9 +37,7 @@ size_t find_next_nalu(const uint8_t* buf, size_t pos, size_t end)
 
 } // namespace
 
-namespace srtc
-{
-namespace h264
+namespace srtc::h264
 {
 
 NaluParser::NaluParser(const ByteBuffer& buf)
@@ -111,5 +109,4 @@ size_t NaluParser::currDataSize() const
     return mNext - mPos - mSkip;
 }
 
-} // namespace h264
-} // namespace srtc
+} // namespace srtc::h264

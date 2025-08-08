@@ -2,14 +2,12 @@
 #include "srtc/depacketizer.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_packet.h"
-#include "srtc/srtc.h"
 #include "srtc/track.h"
 
 #include <cassert>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
-#include <limits>
 
 #define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
@@ -128,7 +126,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // First packet
         mMinSeq = seq_ext;
         mMaxSeq = mMinSeq + 1;
-        mItemList = new Item*[mCapacity];
+        mItemList = new JitterBufferItem*[mCapacity];
         mBaseTime = std::chrono::steady_clock::now();
         mBaseRtpTimestamp = rtp_timestamp_ext;
 
@@ -163,7 +161,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto when_nack_request = now + mNackDelay;
     const auto when_nack_abandon = when_dequeue;
 
-    Item* item = nullptr;
+    JitterBufferItem* item = nullptr;
 
     if (seq_ext < mMinSeq) {
         // Before min
@@ -364,7 +362,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
         if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->kind == PacketKind::Standalone) {
                 // A standalone packet, which is ready to be extracted, possibly into multiple frames
-                mDepacketizer->extract(mTempFrameList, item->payload);
+                mDepacketizer->extract(mTempFrameList, item);
 
                 // Append to result frame list
                 appendToResult(result, item, item, now, mTempFrameList);
@@ -489,17 +487,17 @@ void JitterBuffer::freeEverything()
     }
 }
 
-JitterBuffer::Item* JitterBuffer::newItem()
+JitterBufferItem* JitterBuffer::newItem()
 {
     return mItemAllocator.create();
 }
 
-void JitterBuffer::deleteItem(Item* item)
+void JitterBuffer::deleteItem(JitterBufferItem* item)
 {
     mItemAllocator.destroy(item);
 }
 
-void JitterBuffer::extractBufferList(std::vector<ByteBuffer*>& out, uint64_t start, uint64_t max)
+void JitterBuffer::extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
 {
     out.clear();
 
@@ -507,7 +505,7 @@ void JitterBuffer::extractBufferList(std::vector<ByteBuffer*>& out, uint64_t sta
         const auto index = seq & mCapacityMask;
         auto item = mItemList[index];
         assert(item);
-        out.push_back(&item->payload);
+        out.push_back(item);
     }
 }
 
@@ -523,8 +521,8 @@ void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
 }
 
 void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
-                                  Item* item,
-                                  Item* last,
+                                  JitterBufferItem* item,
+                                  JitterBufferItem* last,
                                   const std::chrono::steady_clock::time_point& now,
                                   std::vector<srtc::ByteBuffer>& list)
 {

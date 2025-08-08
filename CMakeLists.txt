@@ -41,6 +41,7 @@ add_library(srtc
         include/srtc/extended_value.h
         include/srtc/h264.h
         include/srtc/ice_agent.h
+        include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
         include/srtc/logging.h
         include/srtc/packetizer.h

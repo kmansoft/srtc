@@ -1,5 +1,4 @@
 #include "srtc/depacketizer_opus.h"
-#include "srtc/byte_buffer.h"
 
 #include <cassert>
 
@@ -22,18 +21,18 @@ void DepacketizerOpus::reset()
     // Nothing
 }
 
-void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, ByteBuffer& packet)
+void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
 {
-    assert(getPacketKind(packet) == PacketKind::Standalone);
+    assert(getPacketKind(packet->payload) == PacketKind::Standalone);
 
     out.clear();
 
-    if (!packet.empty()) {
-        out.emplace_back(std::move(packet));
+    if (!packet->payload.empty()) {
+        out.emplace_back(packet->payload.copy());
     }
 }
 
-void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<ByteBuffer*>& packetList)
+void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
     // Opus packets are always standalone
     out.clear();
