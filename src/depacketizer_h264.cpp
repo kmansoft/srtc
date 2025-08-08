@@ -176,9 +176,6 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
     mFrameBuffer.append(frame);
 
     if (packet->marker) {
-        const auto dump = bin_to_hex(mFrameBuffer.data(), std::min<size_t>(mFrameBuffer.size(), 64));
-        std::printf("H264 Out = %s\n", dump.c_str());
-
         out.push_back(std::move(mFrameBuffer));
         mFrameBuffer.clear();
     }
