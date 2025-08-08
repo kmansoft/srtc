@@ -167,7 +167,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     if (seq_ext < mMinSeq) {
         // Before min
-        if (mMaxSeq - seq_ext > mCapacity) {
+        if (mMaxSeq > seq_ext + mCapacity) {
             LOG(SRTC_LOG_E,
                 "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
                 static_cast<uint16_t>(seq_ext),
@@ -208,7 +208,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         mItemList[index] = item;
     } else if (seq_ext >= mMaxSeq) {
         // Above max
-        if (seq_ext - mMinSeq > mCapacity) {
+        if (seq_ext > mMinSeq + mCapacity) {
             LOG(SRTC_LOG_E,
                 "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
                 static_cast<uint16_t>(seq_ext),
@@ -219,7 +219,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             return;
         }
 
-        while (mMaxSeq <= seq_ext - 1) {
+        while (mMaxSeq + 1 <= seq_ext) {
             const auto lost = newItem();
             lost->when_received = std::chrono::steady_clock::time_point::min();
             lost->when_dequeue = std::chrono::steady_clock::time_point::max();
@@ -253,7 +253,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         }
 
         mMaxSeq += 1;
-        assert(mMaxSeq - 1 == seq_ext);
+        assert(mMaxSeq == seq_ext + 1);
 
         item = newItem();
         const auto index = seq_ext & mCapacityMask;
