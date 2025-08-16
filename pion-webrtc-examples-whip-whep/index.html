@@ -13,13 +13,14 @@
         }
         button {
           min-width: 120px;
-          min-height: 32px;
+          min-height: 36px;
         }
         h3 {
           margin-top: 12px;
         }
         video {
           width: 800;
+          min-height: 400;
           max-height: 600;
         }
     </style>
@@ -29,6 +30,7 @@
     <div class="container">
       <button onclick="window.doWHIP()">Publish</button>
       <button onclick="window.doWHEP()">Subscribe</button>
+
       <h3>Video</h3>
       <video id="videoPlayer" autoplay muted controls> </video>
 
@@ -38,16 +40,30 @@
   </body>
 
   <script>
-    let peerConnection = new RTCPeerConnection()
+    let peerConnection
 
-    peerConnection.oniceconnectionstatechange = () => {
-      let el = document.createElement('p')
-      el.appendChild(document.createTextNode(peerConnection.iceConnectionState))
+    function resetPeerConnection() {
+      let elStates = document.getElementById('iceConnectionStates');
+      elStates.innerHTML = ''
 
-      document.getElementById('iceConnectionStates').appendChild(el);
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+
+      peerConnection = new RTCPeerConnection();
+
+      peerConnection.oniceconnectionstatechange = () => {
+        let el = document.createElement('p')
+        el.appendChild(document.createTextNode(peerConnection.iceConnectionState))
+
+        elStates.appendChild(el);
+      }
     }
 
     window.doWHEP = () => {
+      resetPeerConnection();
+
       peerConnection.addTransceiver('video', { direction: 'recvonly' })
       peerConnection.addTransceiver('audio', { direction: 'recvonly' })
 
@@ -62,7 +78,7 @@
           method: 'POST',
           body: offer.sdp,
           headers: {
-            Authorization: `Bearer none`,
+            'Authorization': 'Bearer none',
             'Content-Type': 'application/sdp'
           }
         }).then(r => r.text())
@@ -76,6 +92,8 @@
     }
 
     window.doWHIP = () => {
+      resetPeerConnection();
+
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
           document.getElementById('videoPlayer').srcObject = stream
@@ -88,7 +106,7 @@
               method: 'POST',
               body: offer.sdp,
               headers: {
-                Authorization: `Bearer none`,
+                'Authorization': 'Bearer none',
                 'Content-Type': 'application/sdp'
               }
             }).then(r => r.text())
