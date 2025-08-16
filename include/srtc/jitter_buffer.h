@@ -49,6 +49,10 @@ private:
     [[nodiscard]] JitterBufferItem* newItem();
     void deleteItem(JitterBufferItem* item);
 
+    [[nodiscard]] JitterBufferItem* newLostItem(const std::chrono::steady_clock::time_point& when_nack_request,
+                                                const std::chrono::steady_clock::time_point& when_nack_abandon,
+                                                uint64_t seq_ext);
+
     void extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max);
     void deleteItemList(uint64_t start, uint64_t max);
     void appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,

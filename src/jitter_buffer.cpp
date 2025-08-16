@@ -8,6 +8,7 @@
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 #define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
@@ -20,7 +21,7 @@ constexpr auto kNoPacketsResetDelay = std::chrono::milliseconds(2000);
 // time out and go to process actual logic like de-queuing frames or sending nacks, we need to use millisecond precision
 // as well. If we don't, we might have a timeout = 0, but the actual logic won't run because it's 12 nanoseconds in the
 // future or something. Then we'll end up cycling the event loop with 0 millisecond timeout value several times, which
-// is bad for optimization.
+// is bad for performance.
 
 int diff_millis(const std::chrono::steady_clock::time_point& when, const std::chrono::steady_clock::time_point& now)
 {
@@ -168,7 +169,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     if (seq_ext < mMinSeq) {
         // Before min
-        if (mMaxSeq > seq_ext + mCapacity) {
+        if (seq_ext + mCapacity < mMaxSeq) {
             LOG(SRTC_LOG_E,
                 "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
                 static_cast<uint16_t>(seq_ext),
@@ -179,34 +180,33 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             return;
         }
 
-        while (seq_ext + 1 < mMinSeq) {
-            mMinSeq -= 1;
+        for (auto seq_lost = mMinSeq - 1; seq_lost > seq_ext; seq_lost -= 1) {
+            const auto item_lost = newLostItem(when_nack_request, when_nack_abandon, seq_lost);
 
-            const auto lost = newItem();
-            lost->when_received = std::chrono::steady_clock::time_point::min();
-            lost->when_dequeue = std::chrono::steady_clock::time_point::max();
-            lost->when_nack_request = when_nack_request;
-            lost->when_nack_abandon = when_nack_abandon;
-
-            lost->received = false;
-            lost->nack_needed = true;
-
-            lost->seq_ext = mMinSeq;
-            lost->rtp_timestamp_ext = 0;
-
-            const auto index = lost->seq_ext & mCapacityMask;
+            const auto index = item_lost->seq_ext & mCapacityMask;
             assert(mItemList[index] == nullptr);
-            mItemList[index] = lost;
+            mItemList[index] = item_lost;
+
+#ifdef NDEBUG
+#else
+            const auto diff_request = diff_millis(item_lost->when_nack_request, now);
+            const auto diff_abandon = diff_millis(item_lost->when_nack_abandon, now);
+
+            LOG(SRTC_LOG_V,
+                "Storing NACK for item_lost SEQ = %u, NEW_SEQ = %u, diff_request = %d, diff_abandon = %d",
+                static_cast<uint16_t>(item_lost->seq_ext),
+                seq,
+                diff_request,
+                diff_abandon);
+#endif
         }
 
-        mMinSeq -= 1;
-        assert(mMinSeq == seq_ext);
-
         item = newItem();
-
         const auto index = seq_ext & mCapacityMask;
         assert(mItemList[index] == nullptr);
         mItemList[index] = item;
+
+        mMinSeq = seq_ext;
     } else if (seq_ext >= mMaxSeq) {
         // Above max
         if (seq_ext > mMinSeq + mCapacity) {
@@ -220,46 +220,33 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             return;
         }
 
-        while (mMaxSeq + 1 <= seq_ext) {
-            const auto lost = newItem();
-            lost->when_received = std::chrono::steady_clock::time_point::min();
-            lost->when_dequeue = std::chrono::steady_clock::time_point::max();
-            lost->when_nack_request = when_nack_request;
-            lost->when_nack_abandon = when_nack_abandon;
+        for (auto seq_lost = mMaxSeq; seq_lost < seq_ext; seq_lost += 1) {
+            const auto item_lost = newLostItem(when_nack_request, when_nack_abandon, seq_ext);
 
-            lost->received = false;
-            lost->nack_needed = true;
-
-            lost->seq_ext = mMaxSeq;
-            lost->rtp_timestamp_ext = 0;
-
-            const auto index = lost->seq_ext & mCapacityMask;
+            const auto index = item_lost->seq_ext & mCapacityMask;
             assert(mItemList[index] == nullptr);
-            mItemList[index] = lost;
+            mItemList[index] = item_lost;
 
 #ifdef NDEBUG
 #else
-            const auto diff_request = diff_millis(lost->when_nack_request, now);
-            const auto diff_abandon = diff_millis(lost->when_nack_abandon, now);
+            const auto diff_request = diff_millis(item_lost->when_nack_request, now);
+            const auto diff_abandon = diff_millis(item_lost->when_nack_abandon, now);
 
             LOG(SRTC_LOG_V,
-                "Storing NACK for lost SEQ = %u, NEW_SEQ = %u, diff_request = %d, diff_abandon = %d",
-                static_cast<uint16_t>(lost->seq_ext),
+                "Storing NACK for item_lost SEQ = %u, NEW_SEQ = %u, diff_request = %d, diff_abandon = %d",
+                static_cast<uint16_t>(item_lost->seq_ext),
                 seq,
                 diff_request,
                 diff_abandon);
 #endif
-
-            mMaxSeq += 1;
         }
-
-        mMaxSeq += 1;
-        assert(mMaxSeq == seq_ext + 1);
 
         item = newItem();
         const auto index = seq_ext & mCapacityMask;
         assert(mItemList[index] == nullptr);
         mItemList[index] = item;
+
+        mMaxSeq = seq_ext + 1;
     } else {
         // Somewhere in the middle, we should already have an item there
         const auto index = seq_ext & mCapacityMask;
@@ -498,6 +485,26 @@ JitterBufferItem* JitterBuffer::newItem()
 void JitterBuffer::deleteItem(JitterBufferItem* item)
 {
     mItemAllocator.destroy(item);
+}
+
+JitterBufferItem* JitterBuffer::newLostItem(const std::chrono::steady_clock::time_point& when_nack_request,
+                                            const std::chrono::steady_clock::time_point& when_nack_abandon,
+                                            uint64_t seq_lost)
+{
+    const auto item_lost = newItem();
+
+    item_lost->when_received = std::chrono::steady_clock::time_point::min();
+    item_lost->when_dequeue = std::chrono::steady_clock::time_point::max();
+    item_lost->when_nack_request = when_nack_request;
+    item_lost->when_nack_abandon = when_nack_abandon;
+
+    item_lost->received = false;
+    item_lost->nack_needed = true;
+
+    item_lost->seq_ext = seq_lost;
+    item_lost->rtp_timestamp_ext = 0;
+
+    return item_lost;
 }
 
 void JitterBuffer::extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
