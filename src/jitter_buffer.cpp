@@ -126,8 +126,11 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // First packet
         mMinSeq = seq_ext;
         mMaxSeq = mMinSeq + 1;
+
         mItemList = new JitterBufferItem*[mCapacity];
-        mBaseTime = std::chrono::steady_clock::now();
+        std::memset(mItemList, 0, sizeof(JitterBufferItem*) * mCapacity);
+
+        mBaseTime = now;
         mBaseRtpTimestamp = rtp_timestamp_ext;
 
         const auto item = newItem();
