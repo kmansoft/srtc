@@ -249,6 +249,10 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
     , mScheduler(scheduler)
+#ifdef NDEBUG
+#else
+    , mLosePacketsRandomGenerator(0, 99)
+#endif
 {
     assert(mListener);
 
@@ -813,6 +817,27 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
                 }
             }
         } else {
+#ifdef NDEBUG
+#else
+            {
+                const auto config = mOffer->getConfig();
+                const auto randomValue = mLosePacketsRandomGenerator.next();
+
+                // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
+                const auto seq = ntohs(*reinterpret_cast<const uint16_t*>(buf.data() + 2));
+                const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(buf.data() + 8));
+
+                if (ssrc == mAnswer->getVideoSingleTrack()->getSSRC()) {
+                    if (config.debug_drop_packets && randomValue < 5) {
+                        if (mLosePacketHistory.shouldLosePacket(ssrc, seq)) {
+                            LOG(SRTC_LOG_V, "Dropping incoming packet with SSRC = %u, SEQ = %u", ssrc, seq);
+                            return;
+                        }
+                    }
+                }
+            }
+#endif
+
             if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
                 LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 

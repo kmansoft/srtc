@@ -42,10 +42,6 @@ PeerConnection::PeerConnection(Direction direction)
     : mDirection(direction)
     , mEventLoop(EventLoop::factory())
     , mConnectionState(ConnectionState::Inactive)
-#ifdef NDEBUG
-#else
-    , mLosePacketsRandomGenerator(0, 99)
-#endif
 {
     std::call_once(gInitFlag, [] {
         // Just in case we need something
@@ -799,22 +795,7 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
 #else
     {
         std::lock_guard lock(mMutex);
-
-        const auto config = mSdpOffer->getConfig();
-        const auto randomValue = mLosePacketsRandomGenerator.next();
-
-        // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-        if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getSSRC()) {
-            if (config.debug_drop_packets && randomValue < 5) {
-                if (mLosePacketHistory.shouldLosePacket(packet->getSSRC(), packet->getSequence())) {
-                    LOG(SRTC_LOG_V,
-                        "Dropping incoming packet with SSRC = %u, SEQ = %u",
-                        packet->getSSRC(),
-                        packet->getSequence());
-                    return;
-                }
-            }
-        } else if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
+        if (packet->getSSRC() == mSdpAnswer->getVideoSingleTrack()->getRtxSSRC()) {
             ByteReader reader(packet->getPayload());
             const auto seq = reader.remaining() >= 2 ? reader.readU16() : 0;
             LOG(SRTC_LOG_V, "Received packet from RTX, SEQ = %u", seq);

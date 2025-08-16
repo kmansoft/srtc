@@ -198,54 +198,6 @@ private:
     std::shared_ptr<LoopScheduler> mLoopScheduler;
     std::shared_ptr<PeerCandidate> mSelectedCandidate;
     std::list<std::shared_ptr<PeerCandidate>> mConnectingCandidateList;
-
-#ifdef NDEBUG
-#else
-    struct LosePacketsItem {
-        uint32_t ssrc;
-        uint16_t seq;
-
-        LosePacketsItem(uint32_t ssrc, uint16_t seq)
-            : ssrc(ssrc)
-            , seq(seq)
-        {
-        }
-    };
-
-    class LosePacketsHistory
-    {
-        std::list<LosePacketsItem> history;
-
-    public:
-        [[nodiscard]] bool shouldLosePacket(uint32_t ssrc, uint16_t seq)
-        {
-            if (didLosePacket(ssrc, seq)) {
-                return false;
-            }
-
-            while (history.size() > 256) {
-                history.pop_front();
-            }
-            history.emplace_back(ssrc, seq);
-
-            return true;
-        }
-
-        [[nodiscard]] bool didLosePacket(uint32_t ssrc, uint16_t seq)
-        {
-            for (const auto& item : history) {
-                if (item.ssrc == ssrc && item.seq == seq) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    };
-
-    RandomGenerator<uint32_t> mLosePacketsRandomGenerator;
-    LosePacketsHistory mLosePacketHistory;
-#endif
 };
 
 } // namespace srtc

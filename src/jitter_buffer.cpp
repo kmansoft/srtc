@@ -221,7 +221,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         }
 
         for (auto seq_lost = mMaxSeq; seq_lost < seq_ext; seq_lost += 1) {
-            const auto item_lost = newLostItem(when_nack_request, when_nack_abandon, seq_ext);
+            const auto item_lost = newLostItem(when_nack_request, when_nack_abandon, seq_lost);
 
             const auto index = item_lost->seq_ext & mCapacityMask;
             assert(mItemList[index] == nullptr);
