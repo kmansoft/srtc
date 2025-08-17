@@ -480,7 +480,7 @@ int main(int argc, char* argv[])
                    connectionState == PeerConnection::ConnectionState::Failed;
         });
 
-        if (connectionState == PeerConnection::ConnectionState::Failed) {
+        if (connectionState != PeerConnection::ConnectionState::Connected) {
             std::cout << "*** Failed to connect" << std::endl;
             exit(1);
         }
