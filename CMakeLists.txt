@@ -11,6 +11,8 @@ endif ()
 
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
 option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
+option(SRTC_BUILD_TOOL_PUBLISH "Build the publish command line tool" ON)
+option(SRTC_BUILD_TOOL_SUBSCRIBE "Build the subscribe command line tool" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -354,98 +356,102 @@ endif ()
 
 if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
 
-    # Publish
+    # Publish tool
 
-    add_executable(srtc_publish
-            tools/srtc_publish.cpp
-            tools/http_whip_whep.h
-    )
-
-    add_dependencies(srtc_publish srtc)
-
-    if (WIN32)
-        target_sources(srtc_publish
-                PRIVATE
-                tools/http_whip_whep_win.cpp
+    if (SRTC_BUILD_TOOL_PUBLISH)
+        add_executable(srtc_publish
+                tools/srtc_publish.cpp
+                tools/http_whip_whep.h
         )
 
-        target_link_libraries(
-                srtc_publish
-                PRIVATE
-                srtc
-                winmm
-        )
-    else ()
-        find_package(CURL REQUIRED)
+        add_dependencies(srtc_publish srtc)
 
-        target_sources(srtc_publish
-                PRIVATE
-                tools/http_whip_whep_curl.cpp
-        )
+        if (WIN32)
+            target_sources(srtc_publish
+                    PRIVATE
+                    tools/http_whip_whep_win.cpp
+            )
 
-        target_include_directories(srtc_publish
-                PRIVATE
-                ${CURL_INCLUDE_DIRS}
-        )
+            target_link_libraries(
+                    srtc_publish
+                    PRIVATE
+                    srtc
+                    winmm
+            )
+        else ()
+            find_package(CURL REQUIRED)
 
-        target_link_libraries(
-                srtc_publish
-                PRIVATE
-                srtc
-                CURL::libcurl
-        )
+            target_sources(srtc_publish
+                    PRIVATE
+                    tools/http_whip_whep_curl.cpp
+            )
+
+            target_include_directories(srtc_publish
+                    PRIVATE
+                    ${CURL_INCLUDE_DIRS}
+            )
+
+            target_link_libraries(
+                    srtc_publish
+                    PRIVATE
+                    srtc
+                    CURL::libcurl
+            )
+        endif ()
     endif ()
 
-    # Subscribe
+    # Subscribe tool
 
-    add_subdirectory(tools/libogg)
-
-    add_executable(srtc_subscribe
-            tools/srtc_subscribe.cpp
-            tools/http_whip_whep.h
-            tools/media_writer.h
-            tools/media_writer.cpp
-            tools/media_writer_h26x.h
-            tools/media_writer_h26x.cpp
-            tools/media_writer_ogg.h
-            tools/media_writer_ogg.cpp
-    )
-
-    add_dependencies(srtc_subscribe srtc ogg)
-
-    target_link_libraries(srtc_subscribe PRIVATE ogg)
-
-    if (WIN32)
-        target_sources(srtc_subscribe
-                PRIVATE
-                tools/http_whip_whep_win.cpp
+    if (SRTC_BUILD_TOOL_SUBSCRIBE)
+        add_executable(srtc_subscribe
+                tools/srtc_subscribe.cpp
+                tools/http_whip_whep.h
+                tools/media_writer.h
+                tools/media_writer.cpp
+                tools/media_writer_h26x.h
+                tools/media_writer_h26x.cpp
+                tools/media_writer_ogg.h
+                tools/media_writer_ogg.cpp
         )
 
-        target_link_libraries(
-                srtc_subscribe
-                PRIVATE
-                srtc
-                winmm
-        )
-    else ()
-        find_package(CURL REQUIRED)
+        add_subdirectory(tools/libogg)
 
-        target_sources(srtc_subscribe
-                PRIVATE
-                tools/http_whip_whep_curl.cpp
-        )
+        add_dependencies(srtc_subscribe srtc ogg)
 
-        target_include_directories(srtc_subscribe
-                PRIVATE
-                ${CURL_INCLUDE_DIRS}
-        )
+        target_link_libraries(srtc_subscribe PRIVATE ogg)
 
-        target_link_libraries(
-                srtc_subscribe
-                PRIVATE
-                srtc
-                CURL::libcurl
-        )
+        if (WIN32)
+            target_sources(srtc_subscribe
+                    PRIVATE
+                    tools/http_whip_whep_win.cpp
+            )
+
+            target_link_libraries(
+                    srtc_subscribe
+                    PRIVATE
+                    srtc
+                    winmm
+            )
+        else ()
+            find_package(CURL REQUIRED)
+
+            target_sources(srtc_subscribe
+                    PRIVATE
+                    tools/http_whip_whep_curl.cpp
+            )
+
+            target_include_directories(srtc_subscribe
+                    PRIVATE
+                    ${CURL_INCLUDE_DIRS}
+            )
+
+            target_link_libraries(
+                    srtc_subscribe
+                    PRIVATE
+                    srtc
+                    CURL::libcurl
+            )
+        endif ()
     endif ()
 
 endif ()
