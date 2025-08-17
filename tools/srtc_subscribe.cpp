@@ -217,13 +217,13 @@ int main(int argc, char* argv[])
 
     const auto [offer, offerCreateError] = peerConnection->createSubscribeOffer(offerConfig, videoConfig, audioConfig);
     if (offerCreateError.isError()) {
-        std::cout << "Error: cannot create offer: " << offerCreateError.mMessage << std::endl;
+        std::cout << "Error: cannot create offer: " << offerCreateError.message << std::endl;
         exit(1);
     }
 
     const auto [offerString, offerStringError] = offer->generate();
     if (offerStringError.isError()) {
-        std::cout << "Error: cannot generate offer: " << offerStringError.mMessage << std::endl;
+        std::cout << "Error: cannot generate offer: " << offerStringError.message << std::endl;
         exit(1);
     }
     if (gPrintSDP) {
@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
     // Answer
     const auto [answer, answerError] = peerConnection->parseSubscribeAnswer(offer, answerString, nullptr);
     if (answerError.isError()) {
-        std::cout << "Error: cannot parse answer: " << answerError.mMessage << std::endl;
+        std::cout << "Error: cannot parse answer: " << answerError.message << std::endl;
         exit(1);
     }
 

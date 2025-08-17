@@ -750,7 +750,7 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
         if (const auto track = mVideoSingleTrack) {
             const auto [depacketizer, error] = Depacketizer::make(track);
             if (error.isError()) {
-                LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.mMessage.c_str());
+                LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.message.c_str());
             } else {
                 mJitterBufferVideo =
                     std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
@@ -759,7 +759,7 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
         if (const auto track = mAudioTrack) {
             const auto [depacketizer, error] = Depacketizer::make(track);
             if (error.isError()) {
-                LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.mMessage.c_str());
+                LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.message.c_str());
             } else {
                 mJitterBufferAudio =
                     std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
@@ -772,7 +772,7 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
 {
-    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s", static_cast<int>(error.mCode), error.mMessage.c_str());
+    LOG(SRTC_LOG_E, "Candidate failed to connect: %d %s", static_cast<int>(error.code), error.message.c_str());
 
     // We are connecting
     for (auto iter = mConnectingCandidateList.begin(); iter != mConnectingCandidateList.end();) {

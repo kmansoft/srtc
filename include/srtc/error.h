@@ -15,20 +15,20 @@ public:
 
 	[[nodiscard]] bool isOk() const
 	{
-		return mCode == Code::OK;
+		return code == Code::OK;
 	}
 
 	[[nodiscard]] bool isError() const
 	{
-		return mCode != Code::OK;
+		return code != Code::OK;
 	}
 
 	static const Error OK;
 
 	Error(Code code, const std::string& message);
 
-	const Code mCode;
-	const std::string mMessage;
+	const Code code;
+	const std::string message;
 };
 
 } // namespace srtc
