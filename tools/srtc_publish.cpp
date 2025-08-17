@@ -3,6 +3,7 @@
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
+#include "srtc/util.h"
 
 #include "http_whip_whep.h"
 
@@ -235,7 +236,8 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                     }
 
                     if (!frame.empty()) {
-                        peerConnection->publishVideoSingleFrame(std::move(frame));
+                        const auto pts_usec = srtc::getStableTimeMicros();
+                        peerConnection->publishVideoSingleFrame(pts_usec, std::move(frame));
                         frame.clear();
                     }
                     frameCount += 1;
@@ -264,7 +266,8 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
         }
 
         if (!frame.empty()) {
-            peerConnection->publishVideoSingleFrame(std::move(frame));
+            const auto pts_usec = srtc::getStableTimeMicros();
+            peerConnection->publishVideoSingleFrame(pts_usec, std::move(frame));
             frame.clear();
         }
 
