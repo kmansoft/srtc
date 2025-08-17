@@ -141,6 +141,7 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
 std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
                                                                const std::shared_ptr<RtpExtensionSource>& twcc,
                                                                size_t mediaProtectionOverhead,
+                                                               int64_t pts_usec,
                                                                const srtc::ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
@@ -154,7 +155,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
     const auto timeSource = track->getRtpTimeSource();
     const auto packetSource = track->getRtpPacketSource();
 
-    const auto frameTimestamp = timeSource->getCurrTimestamp();
+    const auto frameTimestamp = timeSource->getFrameTimestamp(pts_usec);
 
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naluType = parser.currType();

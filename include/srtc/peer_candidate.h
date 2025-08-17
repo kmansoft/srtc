@@ -56,6 +56,7 @@ public:
 	void receiveFromSocket();
 
 	struct FrameToSend {
+        int64_t pts_usec;
 		std::shared_ptr<Track> track;
 		std::shared_ptr<Packetizer> packetizer;
 		ByteBuffer buf;				 // possibly empty

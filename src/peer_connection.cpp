@@ -288,13 +288,13 @@ Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& 
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ mVideoSingleTrack, mVideoSinglePacketizer, {}, std::move(list) });
+    mFrameSendQueue.push_back({ 0, mVideoSingleTrack, mVideoSinglePacketizer, {}, std::move(list) });
     mEventLoop->interrupt();
 
     return Error::OK;
 }
 
-Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
+Error PeerConnection::publishVideoSingleFrame(int64_t pts_usec, ByteBuffer&& buf)
 {
     if (mDirection != Direction::Publish) {
         return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
@@ -313,7 +313,7 @@ Error PeerConnection::publishVideoSingleFrame(ByteBuffer&& buf)
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ mVideoSingleTrack, mVideoSinglePacketizer, std::move(buf) });
+    mFrameSendQueue.push_back({ pts_usec, mVideoSingleTrack, mVideoSinglePacketizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -342,13 +342,13 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ layer.track, layer.packetizer, {}, std::move(list) });
+    mFrameSendQueue.push_back({ 0, layer.track, layer.packetizer, {}, std::move(list) });
     mEventLoop->interrupt();
 
     return Error::OK;
 }
 
-Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf)
+Error PeerConnection::publishVideoSimulcastFrame(int64_t pts_usec, const std::string& layerName, ByteBuffer&& buf)
 {
     if (mDirection != Direction::Publish) {
         return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
@@ -375,13 +375,13 @@ Error PeerConnection::publishVideoSimulcastFrame(const std::string& layerName, B
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ layer.track, layer.packetizer, std::move(buf) });
+    mFrameSendQueue.push_back({ pts_usec, layer.track, layer.packetizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
 }
 
-Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
+Error PeerConnection::publishAudioFrame(int64_t pts_usec, ByteBuffer&& buf)
 {
     if (mDirection != Direction::Publish) {
         return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
@@ -400,7 +400,7 @@ Error PeerConnection::publishAudioFrame(ByteBuffer&& buf)
         return { Error::Code::InvalidData, "There is no audio packetizer" };
     }
 
-    mFrameSendQueue.push_back({ mAudioTrack, mAudioPacketizer, std::move(buf) });
+    mFrameSendQueue.push_back({ pts_usec, mAudioTrack, mAudioPacketizer, std::move(buf) });
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -503,7 +503,7 @@ void PeerConnection::networkThreadWorkerFunc()
         if (mSelectedCandidate) {
             for (auto& item : frameSendQueue) {
                 mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
-                    item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
+                    item.pts_usec, item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
             }
         }
 

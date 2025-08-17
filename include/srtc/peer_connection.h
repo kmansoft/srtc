@@ -82,12 +82,12 @@ public:
 
     // Publishing media
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
-    Error publishVideoSingleFrame(ByteBuffer&& buf);
+    Error publishVideoSingleFrame(int64_t pts_usec, ByteBuffer&& buf);
 
     Error setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list);
-    Error publishVideoSimulcastFrame(const std::string& layerName, ByteBuffer&& buf);
+    Error publishVideoSimulcastFrame(int64_t pts_usec, const std::string& layerName, ByteBuffer&& buf);
 
-    Error publishAudioFrame(ByteBuffer&& buf);
+    Error publishAudioFrame(int64_t pts_usec, ByteBuffer&& buf);
 
     // Subscribing
     using SubscribeEncodedFrameListener = std::function<void(const std::shared_ptr<EncodedFrame>&)>;
@@ -143,6 +143,7 @@ private:
     const std::shared_ptr<EventLoop> mEventLoop;
 
     struct FrameToSend {
+        int64_t pts_usec;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
         ByteBuffer buf;              // possibly empty

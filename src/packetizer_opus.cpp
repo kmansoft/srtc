@@ -19,6 +19,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
 	[[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
 	const std::shared_ptr<RtpExtensionSource>& twcc,
 	[[maybe_unused]] size_t mediaProtectionOverhead,
+    int64_t pts_usec,
 	const srtc::ByteBuffer& frame)
 {
 	std::list<std::shared_ptr<RtpPacket>> result;
@@ -30,7 +31,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
 	const auto timeSource = track->getRtpTimeSource();
 	const auto packetSource = track->getRtpPacketSource();
 
-	const auto frameTimestamp = timeSource->getCurrTimestamp();
+	const auto frameTimestamp = timeSource->getFrameTimestamp(pts_usec);
 
 	auto payload = frame.copy();
 	if (payload.size() > RtpPacket::kMaxPayloadSize) {

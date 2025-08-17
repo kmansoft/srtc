@@ -31,6 +31,7 @@ public:
     virtual std::list<std::shared_ptr<RtpPacket>> generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
                                                            const std::shared_ptr<RtpExtensionSource>& twcc,
                                                            size_t mediaProtectionOverhead,
+                                                           int64_t pts_usec,
                                                            const ByteBuffer& frame) = 0;
 
     static std::pair<std::shared_ptr<Packetizer>, Error> make(const std::shared_ptr<Track>& track);

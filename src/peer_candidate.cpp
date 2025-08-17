@@ -314,7 +314,7 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
             getNtpTime(ntp);
 
             const auto timeSource = track->getRtpTimeSource();
-            const auto rtpTime = timeSource->getCurrTimestamp();
+            const auto rtpTime = timeSource->getCurrentTimestamp();
 
             w.writeU32(ntp.seconds);
             w.writeU32(ntp.fraction);
@@ -510,6 +510,7 @@ void PeerCandidate::run()
             const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
                                                               mExtensionSourceTWCC,
                                                               mSrtpConnection->getMediaProtectionOverhead(),
+                                                              item.pts_usec,
                                                               item.buf);
 
             // Flush any packets from the same track which we haven't sent yet
