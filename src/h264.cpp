@@ -21,17 +21,20 @@ bool is_nalu_3(const uint8_t* buf, size_t pos, size_t end)
     return false;
 }
 
-size_t find_next_nalu(const uint8_t* buf, size_t pos, size_t end)
+size_t find_next_nalu(const uint8_t* buf, size_t pos, size_t end, size_t& out_skip)
 {
     while (pos < end) {
         if (is_nalu_4(buf, pos, end)) {
+            out_skip = 4;
             return pos;
         } else if (is_nalu_3(buf, pos, end)) {
+            out_skip = 3;
             return pos;
         }
         pos += 1;
     }
 
+    out_skip = 0;
     return end;
 }
 
@@ -43,14 +46,12 @@ namespace srtc::h264
 NaluParser::NaluParser(const ByteBuffer& buf)
     : mBuf(buf.data())
     , mSize(buf.size())
-    , mPos(find_next_nalu(mBuf, 0, mSize))
 {
-    if (is_nalu_4(mBuf, mPos, mSize)) {
-        mSkip = 4;
-    } else {
-        mSkip = 3;
-    }
-    mNext = find_next_nalu(mBuf, mPos + mSkip, mSize);
+    mSkip = 0;
+    mNextSkip = 0;
+
+    mPos = find_next_nalu(mBuf, 0, mSize, mSkip);
+    mNextPos = find_next_nalu(mBuf, mPos + mSkip, mSize, mNextSkip);
 }
 
 NaluParser::operator bool() const
@@ -65,23 +66,15 @@ bool NaluParser::isAtStart() const
 
 bool NaluParser::isAtEnd() const
 {
-    return mNext >= mSize;
+    return mNextPos >= mSize;
 }
 
 void NaluParser::next()
 {
-    mPos = mNext;
-    if (is_nalu_4(mBuf, mPos, mSize)) {
-        mSkip = 4;
-    } else {
-        mSkip = 3;
-    }
-    mNext = find_next_nalu(mBuf, mNext + mSkip, mSize);
-}
+    mPos = mNextPos;
+    mSkip = mNextSkip;
 
-uint8_t NaluParser::currRefIdc() const
-{
-    return mBuf[mPos + mSkip] >> 5;
+    mNextPos = find_next_nalu(mBuf, mNextPos + mSkip, mSize, mNextSkip);
 }
 
 NaluType NaluParser::currType() const
@@ -96,7 +89,7 @@ const uint8_t* NaluParser::currNalu() const
 
 size_t NaluParser::currNaluSize() const
 {
-    return mNext - mPos;
+    return mNextPos - mPos;
 }
 
 const uint8_t* NaluParser::currData() const
@@ -106,7 +99,7 @@ const uint8_t* NaluParser::currData() const
 
 size_t NaluParser::currDataSize() const
 {
-    return mNext - mPos - mSkip;
+    return mNextPos - mPos - mSkip;
 }
 
 } // namespace srtc::h264

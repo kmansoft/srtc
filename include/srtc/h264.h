@@ -33,7 +33,6 @@ public:
 
     void next();
 
-    [[nodiscard]] uint8_t currRefIdc() const;
     [[nodiscard]] NaluType currType() const;
     [[nodiscard]] const uint8_t* currNalu() const;
     [[nodiscard]] size_t currNaluSize() const;
@@ -44,8 +43,9 @@ private:
     const uint8_t* const mBuf;
     const size_t mSize;
     size_t mPos;
-    size_t mNext;
     size_t mSkip;
+    size_t mNextPos;
+    size_t mNextSkip;
 };
 
 } // namespace srtc::h264

@@ -108,21 +108,23 @@ void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
     mSPS.clear();
     mPPS.clear();
 
-    int index = 0;
     for (const auto& item : csd) {
         for (NaluParser parser(item); parser; parser.next()) {
-            if (index == 0) {
+            switch (parser.currType()) {
+            case NaluType::SPS:
                 mSPS.assign(parser.currData(), parser.currDataSize());
-                index += 1;
-            } else if (index == 1) {
+                break;
+            case NaluType::PPS:
                 mPPS.assign(parser.currData(), parser.currDataSize());
-                index += 1;
+                break;
+            default:
+                break;
             }
         }
     }
 
-    if (index != 2) {
-        LOG(SRTC_LOG_E, "Wrong NALU count in codec specific data");
+    if (mSPS.empty() || mPPS.empty()) {
+        LOG(SRTC_LOG_E, "Could not extract SPS and PPS from codec specific data");
     }
 }
 
@@ -179,10 +181,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 writer.writeU8(nri | STAP_A);
 
                 writer.writeU16(static_cast<uint16_t>(mSPS.size()));
-                writer.write(mSPS.data(), mSPS.size());
+                writer.write(mSPS);
 
                 writer.writeU16(static_cast<uint16_t>(mPPS.size()));
-                writer.write(mPPS.data(), mPPS.size());
+                writer.write(mPPS);
 
                 RtpExtension extension = buildExtension(track, simulcast, twcc, true, 0);
 
