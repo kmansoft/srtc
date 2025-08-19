@@ -822,7 +822,7 @@ bool SrtpCrypto::unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& p
 bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer& plain)
 {
     const auto encryptedSize = packet.size();
-    if (encryptedSize <= 4 + 4 + 16 + 4) {
+    if (encryptedSize < 4 + 4 + 16 + 4) {
         // 4 byte RTCP header
         // 4 byte SSRC
         // ... ciphertext
@@ -940,7 +940,7 @@ bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer&
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
 
     const auto encryptedSize = packet.size();
-    if (encryptedSize <= 4 + 4 + 4 + digestSize) {
+    if (encryptedSize < 4 + 4 + 4 + digestSize) {
         // 4 byte RTCP header
         // 4 byte SSRC
         // ... ciphertext
