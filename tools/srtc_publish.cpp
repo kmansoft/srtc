@@ -13,13 +13,6 @@
 #include <memory>
 #include <string>
 
-#ifdef _WIN32
-#define NOMINMAX
-#include <Windows.h>
-#else
-#include <unistd.h>
-#endif
-
 // Program options
 
 static std::string gInputFile = "sintel.h264";
@@ -64,11 +57,7 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
         for (const auto& frame : media.frame_list) {
             if (pts_usec.has_value()) {
                 const auto delta_usec = frame.pts_usec - pts_usec.value();
-#ifdef _WIN32
-                Sleep(delta_usec / 1000);
-#else
-                usleep(delta_usec);
-#endif
+                std::this_thread::sleep_for(std::chrono::microseconds(delta_usec));
             }
             pts_usec = frame.pts_usec;
 

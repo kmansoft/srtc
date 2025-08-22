@@ -2,8 +2,8 @@
 
 #include "srtc/h264.h"
 
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 
 MediaReaderH264::MediaReaderH264(const std::string& filename)
     : MediaReader(filename)
@@ -48,7 +48,7 @@ LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
                 if (!frame.empty()) {
                     LoadedFrame loaded_frame = {};
                     loaded_frame.pts_usec = pts_usec;
-                    pts_usec += 1000 * 40;  // 25 fps
+                    pts_usec += 1000 * 40; // 25 fps
 
                     if (frame_nalu_type == srtc::h264::NaluType::KeyFrame) {
                         loaded_frame.csd.push_back(sps.copy());
@@ -85,41 +85,32 @@ LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
 
 void MediaReaderH264::printInfo(const srtc::ByteBuffer& data) const
 {
-    uint32_t naluCount = 0;
-    uint32_t parameterCount = 0;
-    uint32_t frameCount = 0;
+    uint32_t nalu_count = 0;
+    uint32_t parameter_count = 0;
+    uint32_t frame_count = 0;
 
     for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
-        const auto naluType = parser.currType();
+        nalu_count += 1;
 
-        switch (naluType) {
+        switch (parser.currType()) {
         default:
-            break;
-        case srtc::h264::NaluType::KeyFrame:
-        case srtc::h264::NaluType::NonKeyFrame:
-            naluCount += 1;
             break;
         case srtc::h264::NaluType::SPS:
         case srtc::h264::NaluType::PPS:
-            parameterCount += 1;
-            break;
-        }
-
-        switch (naluType) {
-        default:
+            parameter_count += 1;
             break;
         case srtc::h264::NaluType::KeyFrame:
         case srtc::h264::NaluType::NonKeyFrame:
             srtc::h264::BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
             const auto first_mb_in_slice = br.readUnsignedExpGolomb();
             if (first_mb_in_slice == 0) {
-                frameCount += 1;
+                frame_count += 1;
             }
             break;
         }
     }
 
-    std::cout << "*** NALU count:      " << std::setw(4) << naluCount << std::endl;
-    std::cout << "*** Parameter count: " << std::setw(4) << parameterCount << std::endl;
-    std::cout << "*** Frame count:     " << std::setw(4) << frameCount << std::endl;
+    std::cout << "*** NALU count:      " << std::setw(4) << nalu_count << std::endl;
+    std::cout << "*** Parameter count: " << std::setw(4) << parameter_count << std::endl;
+    std::cout << "*** Frame count:     " << std::setw(4) << frame_count << std::endl;
 }
