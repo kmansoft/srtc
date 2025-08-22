@@ -48,5 +48,25 @@ private:
     size_t mNextSkip;
 };
 
+class BitReader
+{
+private:
+    const uint8_t* const data;
+    const size_t dataSize;
+    size_t bitPos;
+
+public:
+    BitReader(const uint8_t* buffer, size_t size)
+        : data(buffer)
+        , dataSize(size)
+        , bitPos(0)
+    {
+    }
+
+    uint32_t readBit();
+    uint32_t readBits(size_t n);
+    uint32_t readUnsignedExpGolomb();
+};
+
 } // namespace srtc::h264
 
