@@ -1,3 +1,6 @@
+#include "media_reader.h"
+#include "media_reader_h264.h"
+
 #include <iostream>
 
 #ifdef _WIN32
@@ -8,9 +11,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
-
-#include "media_reader.h"
-#include "media_reader_h264.h"
 
 MediaReader::MediaReader(const std::string& filename)
     : mFileName(filename)
