@@ -61,15 +61,15 @@ srtc::ByteBuffer MediaReader::loadFile() const
 
 #ifdef _WIN32
     const auto h =
-        CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        CreateFileA(mFileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) {
-        std::cout << "*** Cannot open input file " << fileName << std::endl;
+        std::cout << "*** Cannot open input file " << mFileName << std::endl;
         exit(1);
     }
 
     DWORD bytesRead = {};
     if (!ReadFile(h, buf.data(), sz, &bytesRead, NULL) || bytesRead != sz) {
-        std::cout << "*** Cannot read input file " << fileName << std::endl;
+        std::cout << "*** Cannot read input file " << mFileName << std::endl;
         exit(1);
     }
 
