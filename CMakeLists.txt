@@ -362,6 +362,10 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
         add_executable(srtc_publish
                 tools/srtc_publish.cpp
                 tools/http_whip_whep.h
+                tools/media_reader.h
+                tools/media_reader.cpp
+                tools/media_reader_h264.h
+                tools/media_reader_h264.cpp
         )
 
         add_dependencies(srtc_publish srtc)
