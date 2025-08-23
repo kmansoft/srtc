@@ -22,6 +22,12 @@ public:
     [[nodiscard]] uint32_t readUInt(uint64_t size);
     [[nodiscard]] std::string readString(uint64_t size);
 
+    [[nodiscard]] uint32_t readVInt32();
+    [[nodiscard]] uint64_t readVInt64();
+
+    [[nodiscard]] int32_t readFixedInt32();
+    [[nodiscard]] uint8_t readFixedUInt8();
+
 private:
     const uint8_t* const mData;
     const size_t mSize;
@@ -105,6 +111,44 @@ std::string WebmReader::readString(uint64_t size)
     mPos += size;
 
     return r;
+}
+
+uint32_t WebmReader::readVInt32()
+{
+    return static_cast<uint32_t>(readVIntImpl(true));
+}
+
+uint64_t WebmReader::readVInt64()
+{
+    return readVIntImpl(true);
+}
+
+int32_t WebmReader::readFixedInt32()
+{
+    if (remaining() < 2) {
+        std::cout << "*** Attempt to read a fixed int32 value past end of webm block" << std::endl;
+        exit(1);
+    }
+
+    uint8_t b[2] = {};
+    std::memcpy(b, mData + mPos, 2);
+    mPos += 2;
+
+    return static_cast<int32_t>((b[0] << 8) | b[1]);
+}
+
+uint8_t WebmReader::readFixedUInt8()
+{
+    if (remaining() < 1) {
+        std::cout << "*** Attempt to read a fixed uint8 value past end of webm block" << std::endl;
+        exit(1);
+    }
+
+    uint8_t b[1] = {};
+    std::memcpy(b, mData + mPos, 1);
+    mPos += 1;
+
+    return b[0];
 }
 
 uint32_t WebmReader::readID()
@@ -194,33 +238,51 @@ constexpr uint32_t kID_EMBLVersion = 0x4286;
 constexpr uint32_t kID_DocType = 0x4282;
 constexpr uint32_t kID_Segment = 0x18538067;
 constexpr uint32_t kID_Tracks = 0x1654AE6B;
+constexpr uint32_t kID_Cluster = 0x1F43B675;
 constexpr uint32_t kID_TrackEntry = 0xAE;
 constexpr uint32_t kID_TrackNumber = 0xD7;
 constexpr uint32_t kID_TrackType = 0x83;
 constexpr uint32_t kID_CodecID = 0x86;
+constexpr uint32_t kID_Timecode = 0xE7;
+constexpr uint32_t kID_SimpleBlock = 0xA3;
 
-MediaReaderVP8::MediaReaderVP8(const std::string& filename)
-    : MediaReader(filename)
-    , mTrackNumVP8(0)
+class WebmLoader
+{
+public:
+    WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media);
+    ~WebmLoader();
+
+    void process();
+
+private:
+    const srtc::ByteBuffer& mData;
+    const LoadedMedia& mLoadedMedia;
+
+    uint32_t mTrackNumberVP8;
+
+    void parseTracksElement(const uint8_t* data, uint64_t size);
+    void parseClusterElement(const uint8_t* data, uint64_t size);
+    void parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t cluster_timecode);
+};
+
+WebmLoader::WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media)
+    : mData(data)
+    , mLoadedMedia(loaded_media)
+    , mTrackNumberVP8(0)
 {
 }
 
-MediaReaderVP8::~MediaReaderVP8() = default;
+WebmLoader::~WebmLoader() = default;
 
-LoadedMedia MediaReaderVP8::loadMedia(bool print_info)
+void WebmLoader::process()
 {
-    const auto data = loadFile();
-
-    LoadedMedia loaded_media = {};
-    loaded_media.codec = srtc::Codec::VP8;
-
     // Parse overall structure to validate the header and find the segment
 
-    uint32_t segment_offset = 0;
+    const uint8_t* segment_data = nullptr;
     uint64_t segment_size = 0;
 
     {
-        WebmReader file_reader(data.data(), data.size());
+        WebmReader file_reader(mData.data(), mData.size());
 
         uint32_t header_id;
         uint64_t header_size;
@@ -278,7 +340,7 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info)
             file_reader.readBlockHeader(file_item_id, file_item_size);
 
             if (file_item_id == kID_Segment) {
-                segment_offset = file_reader.position();
+                segment_data = file_reader.curr();
                 segment_size = file_item_size;
                 break;
             } else {
@@ -286,7 +348,7 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info)
             }
         }
 
-        if (segment_offset == 0 || segment_size == 0) {
+        if (segment_data == nullptr || segment_size == 0) {
             std::cout << "Segment entry not found in the webm file" << std::endl;
             exit(1);
         }
@@ -295,7 +357,7 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info)
     // Parse the segment
 
     {
-        WebmReader segment_reader(data.data() + segment_offset, segment_size);
+        WebmReader segment_reader(segment_data, segment_size);
 
         while (segment_reader.remaining() > 0) {
             uint32_t segment_item_id;
@@ -304,19 +366,16 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info)
 
             if (segment_item_id == kID_Tracks) {
                 parseTracksElement(segment_reader.curr(), segment_item_size);
+            } else if (segment_item_id == kID_Cluster) {
+                parseClusterElement(segment_reader.curr(), segment_item_size);
             }
 
             segment_reader.skip(segment_item_size);
         }
     }
-
-    // For now
-    exit(16);
-
-    return loaded_media;
 }
 
-void MediaReaderVP8::parseTracksElement(const uint8_t* data, uint64_t size)
+void WebmLoader::parseTracksElement(const uint8_t* data, uint64_t size)
 {
     WebmReader tracks_reader(data, size);
     while (tracks_reader.remaining() > 0) {
@@ -353,14 +412,89 @@ void MediaReaderVP8::parseTracksElement(const uint8_t* data, uint64_t size)
 
             if (track_number.has_value() && track_type.has_value() && track_type.value() == 1 &&
                 track_codec_id == "V_VP8") {
-                mTrackNumVP8 = track_number.value();
+                mTrackNumberVP8 = track_number.value();
             }
         }
         tracks_reader.skip(tracks_item_size);
     }
 
-    if (mTrackNumVP8 == 0) {
+    if (mTrackNumberVP8 == 0) {
         std::cout << "Cannot find a VP8 track in this the webm file" << std::endl;
         exit(1);
     }
+}
+
+void WebmLoader::parseClusterElement(const uint8_t* data, uint64_t size)
+{
+    uint32_t timecode = 0;
+
+    WebmReader cluster_reader(data, size);
+    while (cluster_reader.remaining() > 0) {
+        uint32_t cluster_item_id;
+        uint64_t cluster_item_size;
+        cluster_reader.readBlockHeader(cluster_item_id, cluster_item_size);
+
+        if (cluster_item_id == kID_Timecode) {
+            timecode = cluster_reader.readUInt(cluster_item_size);
+        } else if (cluster_item_id == kID_SimpleBlock) {
+            parseSimpleBlock(cluster_reader.curr(), cluster_item_size, timecode);
+            cluster_reader.skip(cluster_item_size);
+        } else {
+            cluster_reader.skip(cluster_item_size);
+        }
+    }
+}
+
+void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t cluster_timecode)
+{
+    WebmReader block_reader(data, size);
+
+    const auto track_number = block_reader.readVInt32();
+    if (track_number != mTrackNumberVP8) {
+        return;
+    }
+
+    const auto frame_offset = block_reader.readFixedInt32();
+    const auto frame_flags = block_reader.readFixedUInt8();
+
+    static uint32_t frame_number = 0;
+    frame_number += 1;
+
+    if ((frame_flags & 0x80) == 0x80) {
+        // A key frame
+        char fname[128];
+        std::snprintf(fname, sizeof(fname), "key-frame-%u.vp8", frame_number);
+
+        const auto file = std::fopen(fname, "wb");
+        if (file) {
+            std::fwrite(block_reader.curr(), block_reader.remaining(), 1, file);
+            std::fclose(file);
+        }
+    }
+}
+
+/////
+
+MediaReaderVP8::MediaReaderVP8(const std::string& filename)
+    : MediaReader(filename)
+{
+}
+
+MediaReaderVP8::~MediaReaderVP8() = default;
+
+LoadedMedia MediaReaderVP8::loadMedia(bool print_info) const
+{
+    const auto data = loadFile();
+
+    LoadedMedia loaded_media = {};
+    loaded_media.codec = srtc::Codec::VP8;
+
+    WebmLoader loader(data, loaded_media);
+
+    loader.process();
+
+    // For now
+    exit(16);
+
+    return loaded_media;
 }
