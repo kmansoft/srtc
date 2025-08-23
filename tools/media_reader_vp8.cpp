@@ -1,7 +1,9 @@
 #include "media_reader_vp8.h"
 
-#include <cassert>
+#include "srtc/util.h"
+
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 
@@ -253,12 +255,16 @@ public:
     ~WebmLoader();
 
     void process();
+    void printInfo();
 
 private:
     const srtc::ByteBuffer& mData;
     const LoadedMedia& mLoadedMedia;
 
     uint32_t mTrackNumberVP8;
+
+    uint32_t mAllFrameCountVP8;
+    uint32_t mKeyFrameCountVP8;
 
     void parseTracksElement(const uint8_t* data, uint64_t size);
     void parseClusterElement(const uint8_t* data, uint64_t size);
@@ -269,6 +275,8 @@ WebmLoader::WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media)
     : mData(data)
     , mLoadedMedia(loaded_media)
     , mTrackNumberVP8(0)
+    , mAllFrameCountVP8(0)
+    , mKeyFrameCountVP8(0)
 {
 }
 
@@ -375,6 +383,12 @@ void WebmLoader::process()
     }
 }
 
+void WebmLoader::printInfo()
+{
+    std::cout << "*** Frame count:     " << std::setw(4) << mAllFrameCountVP8 << std::endl;
+    std::cout << "*** Key frame count: " << std::setw(4) << mKeyFrameCountVP8 << std::endl;
+}
+
 void WebmLoader::parseTracksElement(const uint8_t* data, uint64_t size)
 {
     WebmReader tracks_reader(data, size);
@@ -454,13 +468,20 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
         return;
     }
 
+    mAllFrameCountVP8 += 1;
+
     const auto frame_offset = block_reader.readFixedInt32();
     const auto frame_flags = block_reader.readFixedUInt8();
 
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
+        mKeyFrameCountVP8 += 1;
+
         static uint32_t key_frame_number = 0;
         key_frame_number += 1;
+
+        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
+        std::printf("Key frame: %s\n", dump.c_str());
 
         char fname[128];
         std::snprintf(fname, sizeof(fname), "key-frame-%u.ivf", key_frame_number);
@@ -468,20 +489,20 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
         const auto file = std::fopen(fname, "wb");
         if (file) {
             // Write IVF header (32 bytes)
-            std::fwrite("DKIF", 4, 1, file);  // signature
-            
+            std::fwrite("DKIF", 4, 1, file); // signature
+
             uint16_t version = 0;
             uint16_t header_len = 32;
             std::fwrite(&version, 2, 1, file);
             std::fwrite(&header_len, 2, 1, file);
-            
-            std::fwrite("VP80", 4, 1, file);  // codec fourcc
-            
+
+            std::fwrite("VP80", 4, 1, file); // codec fourcc
+
             uint16_t width = 1280;
             uint16_t height = 720;
             std::fwrite(&width, 2, 1, file);
             std::fwrite(&height, 2, 1, file);
-            
+
             uint32_t frame_rate_num = 30;
             uint32_t frame_rate_den = 1;
             uint32_t frame_count = 1;
@@ -490,13 +511,13 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
             std::fwrite(&frame_rate_den, 4, 1, file);
             std::fwrite(&frame_count, 4, 1, file);
             std::fwrite(&unused, 4, 1, file);
-            
+
             // Write frame header (12 bytes)
             const auto frame_size = static_cast<uint32_t>(block_reader.remaining());
             uint64_t timestamp = 0;
             std::fwrite(&frame_size, 4, 1, file);
             std::fwrite(&timestamp, 8, 1, file);
-            
+
             // Write VP8 frame data
             std::fwrite(block_reader.curr(), block_reader.remaining(), 1, file);
             std::fclose(file);
@@ -523,6 +544,10 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info) const
     WebmLoader loader(data, loaded_media);
 
     loader.process();
+
+    if (print_info) {
+        loader.printInfo();
+    }
 
     // For now
     exit(16);
