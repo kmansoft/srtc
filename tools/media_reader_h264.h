@@ -5,10 +5,10 @@
 class MediaReaderH264 : public MediaReader
 {
 public:
-    MediaReaderH264(const std::string& filename);
+    explicit MediaReaderH264(const std::string& filename);
     ~MediaReaderH264() override;
 
-    LoadedMedia loadMedia(bool print_info) const override;
+    [[nodiscard]] LoadedMedia loadMedia(bool print_info) override;
 
 private:
     void printInfo(const srtc::ByteBuffer& buf) const;

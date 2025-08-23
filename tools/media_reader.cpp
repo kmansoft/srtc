@@ -1,5 +1,6 @@
 #include "media_reader.h"
 #include "media_reader_h264.h"
+#include "media_reader_vp8.h"
 
 #include <iostream>
 
@@ -40,6 +41,8 @@ std::shared_ptr<MediaReader> MediaReader::create(const std::string& filename)
 
     if (ext == ".h264") {
         return std::make_shared<MediaReaderH264>(filename);
+    } else if (ext == ".webm") {
+        return std::make_shared<MediaReaderVP8>(filename);
     }
 
     std::cout << "*** Cannot determine media type for " << filename << std::endl;
@@ -55,6 +58,8 @@ srtc::ByteBuffer MediaReader::loadFile() const
     }
 
     const auto sz = static_cast<size_t>(statbuf.st_size);
+
+    std::cout << "*** Loading " << mFileName << std::endl;
 
     srtc::ByteBuffer buf(sz);
     buf.resize(sz);

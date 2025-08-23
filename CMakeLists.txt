@@ -366,6 +366,8 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/media_reader.cpp
                 tools/media_reader_h264.h
                 tools/media_reader_h264.cpp
+                tools/media_reader_vp8.h
+                tools/media_reader_vp8.cpp
         )
 
         add_dependencies(srtc_publish srtc)

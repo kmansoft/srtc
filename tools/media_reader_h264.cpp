@@ -12,7 +12,7 @@ MediaReaderH264::MediaReaderH264(const std::string& filename)
 
 MediaReaderH264::~MediaReaderH264() = default;
 
-LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
+LoadedMedia MediaReaderH264::loadMedia(bool print_info)
 {
     const auto data = loadFile();
 
