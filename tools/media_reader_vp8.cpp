@@ -457,16 +457,47 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
     const auto frame_offset = block_reader.readFixedInt32();
     const auto frame_flags = block_reader.readFixedUInt8();
 
-    static uint32_t frame_number = 0;
-    frame_number += 1;
-
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
+        static uint32_t key_frame_number = 0;
+        key_frame_number += 1;
+
         char fname[128];
-        std::snprintf(fname, sizeof(fname), "key-frame-%u.vp8", frame_number);
+        std::snprintf(fname, sizeof(fname), "key-frame-%u.ivf", key_frame_number);
 
         const auto file = std::fopen(fname, "wb");
         if (file) {
+            // Write IVF header (32 bytes)
+            std::fwrite("DKIF", 4, 1, file);  // signature
+            
+            uint16_t version = 0;
+            uint16_t header_len = 32;
+            std::fwrite(&version, 2, 1, file);
+            std::fwrite(&header_len, 2, 1, file);
+            
+            std::fwrite("VP80", 4, 1, file);  // codec fourcc
+            
+            uint16_t width = 1280;
+            uint16_t height = 720;
+            std::fwrite(&width, 2, 1, file);
+            std::fwrite(&height, 2, 1, file);
+            
+            uint32_t frame_rate_num = 30;
+            uint32_t frame_rate_den = 1;
+            uint32_t frame_count = 1;
+            uint32_t unused = 0;
+            std::fwrite(&frame_rate_num, 4, 1, file);
+            std::fwrite(&frame_rate_den, 4, 1, file);
+            std::fwrite(&frame_count, 4, 1, file);
+            std::fwrite(&unused, 4, 1, file);
+            
+            // Write frame header (12 bytes)
+            const auto frame_size = static_cast<uint32_t>(block_reader.remaining());
+            uint64_t timestamp = 0;
+            std::fwrite(&frame_size, 4, 1, file);
+            std::fwrite(&timestamp, 8, 1, file);
+            
+            // Write VP8 frame data
             std::fwrite(block_reader.curr(), block_reader.remaining(), 1, file);
             std::fclose(file);
         }
