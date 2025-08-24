@@ -17,6 +17,8 @@ protected:
     explicit PacketizerVideo(const std::shared_ptr<Track>& track);
     ~PacketizerVideo() override;
 
+    static size_t getBasicPacketSize(size_t mediaProtectionOverhead);
+
     static uint8_t getPadding(const std::shared_ptr<srtc::Track>& track,
                               const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
                               const std::shared_ptr<srtc::RtpExtensionSource>& twcc,

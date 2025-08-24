@@ -50,6 +50,7 @@ add_library(srtc
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_opus.h
         include/srtc/packetizer_video.h
+        include/srtc/packetizer_vp8.h
         include/srtc/peer_candidate.h
         include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
@@ -108,6 +109,7 @@ add_library(srtc
         src/packetizer_h264.cpp
         src/packetizer_opus.cpp
         src/packetizer_video.cpp
+        src/packetizer_vp8.cpp
         src/peer_candidate.cpp
         src/peer_connection.cpp
         src/pool_allocator.cpp

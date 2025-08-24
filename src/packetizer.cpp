@@ -1,6 +1,7 @@
 #include "srtc/packetizer.h"
 #include "srtc/packetizer_h264.h"
 #include "srtc/packetizer_opus.h"
+#include "srtc/packetizer_vp8.h"
 #include "srtc/track.h"
 
 namespace srtc
@@ -26,6 +27,8 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::make(const std::shared
 {
     const auto codec = track->getCodec();
     switch (codec) {
+    case Codec::VP8:
+        return { std::make_shared<PacketizerVP8>(track), Error::OK };
     case Codec::H264:
         return { std::make_shared<PacketizerH264>(track), Error::OK };
     case Codec::Opus:

@@ -20,6 +20,11 @@ PacketizerVideo::PacketizerVideo(const std::shared_ptr<Track>& track)
 
 PacketizerVideo::~PacketizerVideo() = default;
 
+size_t PacketizerVideo::getBasicPacketSize(size_t mediaProtectionOverhead)
+{
+    return RtpPacket::kMaxPayloadSize - RtpPacket::kHeaderSize - mediaProtectionOverhead;
+}
+
 uint8_t PacketizerVideo::getPadding(const std::shared_ptr<srtc::Track>& track,
                                     const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
                                     const std::shared_ptr<srtc::RtpExtensionSource>& twcc,

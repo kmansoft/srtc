@@ -126,7 +126,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             uint8_t padding = getPadding(track, simulcast, twcc, naluDataSize);
             RtpExtension extension = buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, 0);
 
-            auto basicPacketSize = RtpPacket::kMaxPayloadSize - RtpPacket::kHeaderSize - mediaProtectionOverhead;
+            const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
 
             if (packetSize >= naluDataSize) {
@@ -164,7 +164,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                             buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, packetNumber);
                     }
 
-                    packetSize = adjustPacketSize(basicPacketSize, padding, extension) - 2 /*  FU_A headers */;
+                    // The "-2" is for FU_A headers
+                    packetSize = adjustPacketSize(basicPacketSize - 2, padding, extension);
                     if (packetNumber == 0 && packetSize >= dataSize) {
                         // The frame now fits in one packet, but a FU-A cannot
                         // have both start and end
