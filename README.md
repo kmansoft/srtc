@@ -7,7 +7,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
-- Supports H264 (any profile ID) for video and Opus for audio. Would be easy to add H265 and other codecs.
+- Supports H264 (any profile ID) for video and Opus for audio. Currently working on VP8.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Support for IPv4 and IPv6.
@@ -213,6 +213,4 @@ This library is my side project.
 
 - Start implementing subscribing. In progress.
   
-- Support for more codecs, but I currently only have access to systems which support H264. If you'd
-like to see support for H265 / VP8 / VP8 / AV1 packetization, feel free to point me to a WHIP / WebRTC server which
-supports those.
+- Support for more codecs. If you'd  like to see support for H265 and/or AV1, feel free to point me to a WebRTC server which supports those.
