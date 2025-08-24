@@ -17,6 +17,16 @@ protected:
 
 private:
     const std::shared_ptr<srtc::Track> mTrack;
-    size_t mOutFrameCount;
+    size_t mOutAllFrameCount;
+    size_t mOutKeyFrameCount;
     size_t mOutByteCount;
+
+    struct VP8Frame {
+        int64_t pts_usec;
+        srtc::ByteBuffer data;
+    };
+    std::vector<VP8Frame> mFrameList;
+    uint64_t mBaseRtpTimestamp;
+
+
 };

@@ -3,8 +3,6 @@
 #include "srtc/logging.h"
 #include "srtc/util.h"
 
-#include <cassert>
-
 #define LOG(level, ...) srtc::log(level, "DepacketizerH264", __VA_ARGS__)
 
 namespace
@@ -32,9 +30,9 @@ DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
 
 DepacketizerH264::~DepacketizerH264() = default;
 
-PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& packet)
+PacketKind DepacketizerH264::getPacketKind(const JitterBufferItem* packet) const
 {
-    ByteReader reader(packet);
+    ByteReader reader(packet->payload);
     if (reader.remaining() >= 1) {
         // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
         const auto value = reader.readU8();
@@ -104,16 +102,6 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const JitterBufferI
 void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
     out.clear();
-
-#ifdef NDEBUG
-#else
-    assert(!packetList.empty());
-    assert(getPacketKind(packetList.front()->payload) == PacketKind::Start);
-    for (size_t i = 1; i < packetList.size() - 1; i += 1) {
-        assert(getPacketKind(packetList[i]->payload) == PacketKind::Middle);
-    }
-    assert(getPacketKind(packetList.back()->payload) == PacketKind::End);
-#endif
 
     ByteBuffer buf;
     ByteWriter w(buf);

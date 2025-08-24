@@ -146,7 +146,7 @@
     window.doWHIP = () => {
       resetPeerConnection();
 
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      navigator.mediaDevices.getUserMedia({ video: { frameRate: 30, width: 1280, height: 720}, audio: true, })
         .then(stream => {
           document.getElementById('videoPlayer').srcObject = stream
           stream.getTracks().forEach(track => peerConnection.addTrack(track, stream))

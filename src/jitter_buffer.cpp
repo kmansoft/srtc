@@ -262,13 +262,14 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     item->received = true;
     item->nack_needed = false;
 
-    item->kind = mDepacketizer->getPacketKind(payload);
-
     item->seq_ext = seq_ext;
     item->rtp_timestamp_ext = rtp_timestamp_ext;
     item->marker = packet->getMarker();
 
     item->payload = std::move(payload);
+
+    item->kind = PacketKind::Standalone;
+    item->kind = mDepacketizer->getPacketKind(item);
 }
 
 int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
@@ -368,6 +369,16 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 if (findMultiPacketSequence(maxSeq)) {
                     // Create a list of buffers
                     extractBufferList(mTempBufferList, seq, maxSeq);
+
+#ifdef NDEBUG
+#else
+                    assert(!mTempBufferList.empty());
+                    assert(mDepacketizer->getPacketKind(mTempBufferList.front()) == PacketKind::Start);
+                    for (size_t i = 1; i < mTempBufferList.size() - 1; i += 1) {
+                        assert(mDepacketizer->getPacketKind(mTempBufferList[i]) == PacketKind::Middle);
+                    }
+                    assert(mDepacketizer->getPacketKind(mTempBufferList.back()) == PacketKind::End);
+#endif
 
                     // Extract, possibly into multiple frames (theoretical)
                     mDepacketizer->extract(mTempFrameList, mTempBufferList);

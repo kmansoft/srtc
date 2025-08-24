@@ -257,7 +257,7 @@ public:
     ~WebmLoader();
 
     void process();
-    void printInfo();
+    void printInfo() const;
 
 private:
     const srtc::ByteBuffer& mData;
@@ -391,7 +391,7 @@ void WebmLoader::process()
     }
 }
 
-void WebmLoader::printInfo()
+void WebmLoader::printInfo() const
 {
     std::cout << "*** Frame count:     " << std::setw(4) << mAllFrameCountVP8 << std::endl;
     std::cout << "*** Key frame count: " << std::setw(4) << mKeyFrameCountVP8 << std::endl;

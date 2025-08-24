@@ -3,25 +3,28 @@
 MediaWriterVP8::MediaWriterVP8(const std::string& filename, const std::shared_ptr<srtc::Track>& track)
     : MediaWriter(filename)
     , mTrack(track)
-    , mOutFrameCount(0)
+    , mOutAllFrameCount(0)
+    , mOutKeyFrameCount(0)
     , mOutByteCount(0)
+    , mBaseRtpTimestamp(0)
 {
     checkExtension({ ".webm" });
 }
 
 MediaWriterVP8::~MediaWriterVP8()
 {
-    if (mOutFrameCount > 0 && mOutByteCount > 0) {
-        std::printf("VP8: Wrote %zu frames, %zu bytes to %s\n", mOutFrameCount, mOutByteCount, mFilename.c_str());
+    if (mOutAllFrameCount > 0 && mOutByteCount > 0) {
+        std::printf("VP8: Wrote %zu frames, %zu key frames, %zu bytes to %s\n",
+                    mOutAllFrameCount,
+                    mOutKeyFrameCount,
+                    mOutByteCount,
+                    mFilename.c_str());
     }
 }
 
 void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 {
-    mOutFrameCount += 1;
-    mOutByteCount += frame->data.size();
-
-#if 1
+    // Check if it's a key frame
     const auto frameData = frame->data.data();
     const auto frameSize = frame->data.size();
 
@@ -29,19 +32,22 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
         return;
     }
 
-    // Check if it's a key frame
     const auto tag = frameData[0] | (frameData[1] << 8) | (frameData[2] << 16);
     const auto tagFrameType = tag & 0x01;
 
     if (tagFrameType == 0 && frameSize > 10) {
-        // Decode key frame data
+        // Maintain key frame count
+        mOutKeyFrameCount += 1;
+
+#if 0
+        // Write key frames into a file
         const auto frame_width_data = frameData + 6;
         const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
         const auto frame_height_data = frameData + 8;
         const auto frame_height = ((frame_height_data[1] << 8) | frame_height_data[0]) & 0x3FFF;
 
         char fname[128];
-        std::snprintf(fname, sizeof(fname), "sub-key-frame-%zu.ivf", mOutFrameCount);
+        std::snprintf(fname, sizeof(fname), "sub-key-frame-%zu.ivf", mOutKeyFrameCount);
 
         const auto file = std::fopen(fname, "wb");
         if (file) {
@@ -81,6 +87,23 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
             // Close
             std::fclose(file);
         }
-    }
 #endif
+    }
+
+    // Calculate pts
+    int64_t pts_usec = 0;
+    if (mOutAllFrameCount == 0) {
+        mBaseRtpTimestamp = frame->rtp_timestamp_ext;
+    } else {
+        pts_usec = static_cast<int64_t>(frame->rtp_timestamp_ext - mBaseRtpTimestamp) * 1000 / 90;
+    }
+
+    mOutAllFrameCount += 1;
+    mOutByteCount += frame->data.size();
+
+    VP8Frame outFrame;
+    outFrame.pts_usec = pts_usec;
+    outFrame.data = std::move(frame->data);
+
+    mFrameList.push_back(std::move(outFrame));
 }

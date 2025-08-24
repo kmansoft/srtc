@@ -37,6 +37,7 @@ add_library(srtc
         include/srtc/depacketizer.h
         include/srtc/depacketizer_h264.h
         include/srtc/depacketizer_opus.h
+        include/srtc/depacketizer_vp8.h
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
@@ -98,6 +99,7 @@ add_library(srtc
         src/depacketizer.cpp
         src/depacketizer_h264.cpp
         src/depacketizer_opus.cpp
+        src/depacketizer_vp8.cpp
         src/error.cpp
         src/extension_map.cpp
         src/extended_value.cpp
