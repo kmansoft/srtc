@@ -20,8 +20,7 @@
         }
         video {
           width: 800;
-          min-height: 400;
-          max-height: 600;
+          height: 600;
         }
     </style>
   </head>
@@ -34,17 +33,22 @@
       <h3>Video</h3>
       <video id="videoPlayer" autoplay muted controls> </video>
 
-      <h3>ICE Connection States</h3>
-      <div id="iceConnectionStates"></div>
+      <h3>Logging</h3>
+      <pre id="messageLog"></pre>
     </div>
   </body>
 
   <script>
+    const elMessageLog = document.getElementById('messageLog');
     let peerConnection
 
+    function printToLog(message) {
+      const el = document.createTextNode(message + "\n")
+      elMessageLog.appendChild(el)
+    }
+
     function resetPeerConnection() {
-      let elStates = document.getElementById('iceConnectionStates');
-      elStates.innerHTML = ''
+      elMessageLog.innerHTML = ''
 
       if (peerConnection) {
         peerConnection.close();
@@ -54,10 +58,7 @@
       peerConnection = new RTCPeerConnection();
 
       peerConnection.oniceconnectionstatechange = () => {
-        let el = document.createElement('p')
-        el.appendChild(document.createTextNode(peerConnection.iceConnectionState))
-
-        elStates.appendChild(el);
+        printToLog(peerConnection.iceConnectionState);
       }
     }
 
