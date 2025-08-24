@@ -561,6 +561,8 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
 
             // Write VP8 frame data
             std::fwrite(frame_data, frame_size, 1, file);
+
+            // Close
             std::fclose(file);
         }
 #endif

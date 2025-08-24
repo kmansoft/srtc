@@ -8,6 +8,7 @@
 
 #include "media_writer_h26x.h"
 #include "media_writer_ogg.h"
+#include "media_writer_vp8.h"
 
 #include "http_whip_whep.h"
 
@@ -200,12 +201,16 @@ int main(int argc, char* argv[])
     offerConfig.cname = "foo";
     offerConfig.debug_drop_packets = gDropPackets;
 
-    SubVideoCodec videoCodec = {};
-    videoCodec.codec = Codec::H264;
-    videoCodec.profile_level_id = 0x42e01f;
+    SubVideoCodec videoCodecVP8 = {};
+    videoCodecVP8.codec = Codec::VP8;
+
+    SubVideoCodec videoCodecH264 = {};
+    videoCodecH264.codec = Codec::H264;
+    videoCodecH264.profile_level_id = 0x42e01f;
 
     SubVideoConfig videoConfig = {};
-    videoConfig.codec_list.push_back(videoCodec);
+    videoConfig.codec_list.push_back(videoCodecVP8);
+    videoConfig.codec_list.push_back(videoCodecH264);
 
     SubAudioCodec audioCodec = {};
     audioCodec.codec = Codec::Opus;
@@ -266,6 +271,9 @@ int main(int argc, char* argv[])
         if (!track) {
             std::cout << "Saving audio output is requested, but there is no video track" << std::endl;
             exit(1);
+        } else if (track->getCodec() == srtc::Codec::VP8) {
+            mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, track);
+            mediaWriterVideo->start();
         } else if (track->getCodec() == srtc::Codec::H264) {
             mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
@@ -281,7 +289,6 @@ int main(int argc, char* argv[])
     peerConnection->setSubscribeEncodedFrameListener(
         [&frameCount, &frameReportTime, mediaWriterAudio, mediaWriterVideo](
             const std::shared_ptr<EncodedFrame>& frame) {
-
             const auto now = std::chrono::steady_clock::now();
             if (frameCount++ == 0) {
                 frameReportTime = now;

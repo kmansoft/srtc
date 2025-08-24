@@ -13,4 +13,4 @@ out
 deps
 CMakeSettings.json
 output.*
-key-*.ivf
+*.ivf
