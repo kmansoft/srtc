@@ -1,12 +1,12 @@
 #pragma once
 
 #include "srtc/byte_buffer.h"
-#include "srtc/packetizer.h"
+#include "srtc/packetizer_video.h"
 
 namespace srtc
 {
 
-class PacketizerH264 final : public Packetizer
+class PacketizerH264 final : public PacketizerVideo
 {
 public:
     explicit PacketizerH264(const std::shared_ptr<Track>& track);

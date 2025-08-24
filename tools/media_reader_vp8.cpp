@@ -495,38 +495,37 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
         return;
     }
 
+    const auto frame_offset = block_reader.readFixedInt16();
+    const auto frame_flags = block_reader.readFixedUInt8();
+
+    const auto frame_data = block_reader.curr();
+    const auto frame_size = block_reader.remaining();
+
     mAllFrameCountVP8 += 1;
 
     LoadedFrame loaded_frame = {};
     loaded_frame.pts_usec = mCurrPTS;
-    loaded_frame.frame = { data, size };
+    loaded_frame.frame = { frame_data, frame_size };
 
     mLoadedMedia.frame_list.push_back(std::move(loaded_frame));
 
     mCurrPTS += 40 * 1000; // for now assume 25 fps, later we'll use the actual frame timestamps from the file
 
-    const auto frame_offset = block_reader.readFixedInt16();
-    const auto frame_flags = block_reader.readFixedUInt8();
-
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
         mKeyFrameCountVP8 += 1;
-
 
         const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
         std::printf("Key frame %2u, size = %zu: %s\n", mKeyFrameCountVP8, block_reader.remaining(), dump.c_str());
 
         // Decode key frame data
-        const auto frame_data = block_reader.curr();
-        const auto frame_size = block_reader.remaining();
-
         const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
         const auto tag_frame_type = tag & 0x01;
         const auto tag_version = (tag >> 1) & 0x07;
         const auto tag_show_frame = (tag >> 4) & 0x01;
         const auto tag_first_partition_size = tag >> 5;
 
-        std::printf("  Partition size = %u\n", tag_first_partition_size);
+        std::printf("Tag frame type = %d\n", tag_frame_type);
 
         const auto frame_width_data = frame_data + 6;
         const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
@@ -572,6 +571,17 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
             std::fwrite(frame_data, frame_size, 1, file);
             std::fclose(file);
         }
+    } else if (mAllFrameCountVP8 < 10) {
+        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
+        std::printf("NonKey frame %2u, size = %zu: %s\n", mAllFrameCountVP8, block_reader.remaining(), dump.c_str());
+
+        const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
+        const auto tag_frame_type = tag & 0x01;
+        const auto tag_version = (tag >> 1) & 0x07;
+        const auto tag_show_frame = (tag >> 4) & 0x01;
+        const auto tag_first_partition_size = tag >> 5;
+
+        std::printf("Tag frame type = %d\n", tag_frame_type);
     }
 }
 
