@@ -261,7 +261,7 @@ public:
 
 private:
     const srtc::ByteBuffer& mData;
-    const LoadedMedia& mLoadedMedia;
+    LoadedMedia& mLoadedMedia;
 
     uint32_t mTimecodeScaleNS;
 
@@ -269,6 +269,8 @@ private:
 
     uint32_t mAllFrameCountVP8;
     uint32_t mKeyFrameCountVP8;
+
+    int64_t mCurrPTS;
 
     void parseSegmentInformationElement(const uint8_t* data, uint64_t size);
     void parseTracksElement(const uint8_t* data, uint64_t size);
@@ -283,6 +285,7 @@ WebmLoader::WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media)
     , mTimecodeScaleNS(1000000)
     , mAllFrameCountVP8(0)
     , mKeyFrameCountVP8(0)
+    , mCurrPTS(0)
 {
 }
 
@@ -494,12 +497,21 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
 
     mAllFrameCountVP8 += 1;
 
+    LoadedFrame loaded_frame = {};
+    loaded_frame.pts_usec = mCurrPTS;
+    loaded_frame.frame = { data, size };
+
+    mLoadedMedia.frame_list.push_back(std::move(loaded_frame));
+
+    mCurrPTS += 40 * 1000; // for now assume 25 fps, later we'll use the actual frame timestamps from the file
+
     const auto frame_offset = block_reader.readFixedInt16();
     const auto frame_flags = block_reader.readFixedUInt8();
 
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
         mKeyFrameCountVP8 += 1;
+
 
         const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
         std::printf("Key frame %2u, size = %zu: %s\n", mKeyFrameCountVP8, block_reader.remaining(), dump.c_str());
@@ -586,9 +598,6 @@ LoadedMedia MediaReaderVP8::loadMedia(bool print_info) const
     if (print_info) {
         loader.printInfo();
     }
-
-    // For now
-    exit(16);
 
     return loaded_media;
 }

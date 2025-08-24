@@ -111,7 +111,9 @@ std::optional<uint32_t> parse_u32(const std::string& s, int radix = 10)
 
 std::optional<srtc::Codec> parse_codec(const std::string& s)
 {
-    if (s == "H264") {
+    if (s == "VP8") {
+        return srtc::Codec::VP8;
+    } else if (s == "H264") {
         return srtc::Codec::H264;
     } else if (s == "opus") {
         return srtc::Codec::Opus;
