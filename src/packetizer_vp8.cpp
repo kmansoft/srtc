@@ -8,7 +8,6 @@ namespace srtc
 
 PacketizerVP8::PacketizerVP8(const std::shared_ptr<Track>& track)
     : PacketizerVideo(track)
-    , mCurrPictureID(0)
 {
 }
 
@@ -56,9 +55,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
     const auto tagFrameType = tag & 0x01;
 
     // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
-    const auto pictureID = mCurrPictureID;
-    mCurrPictureID += 1;
-
     auto dataPtr = frame.data();
     auto dataSize = frame.size();
 
@@ -71,18 +67,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
         auto padding = getPadding(track, simulcast, twcc, dataSize);
         RtpExtension extension = buildExtension(track, simulcast, twcc, tagFrameType == 0, packetNumber);
 
-        // The "-3" is for VP8 payload descriptor
-        const auto packetSize = adjustPacketSize(basicPacketSize - 3, padding, extension);
+        // The "-1" is for VP8 payload descriptor
+        const auto packetSize = adjustPacketSize(basicPacketSize - 1, padding, extension);
 
         ByteBuffer payload;
         ByteWriter writer(payload);
 
         // |X|R|N|S|R| PID |
-        writer.writeU8((1 << 7) | (tagFrameType << 5) | ((packetNumber == 0 ? 1 : 0) << 4));
-        // |I|L|T|K| RSV   |
-        writer.writeU8((1 << 7));
-        // |M| PictureID   |
-        writer.writeU8(pictureID & 0x7F);
+        writer.writeU8((tagFrameType << 5) | ((packetNumber == 0 ? 1 : 0) << 4));
 
         // Payload
         const auto writeNow = std::min(dataSize, packetSize);

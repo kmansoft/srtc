@@ -18,8 +18,6 @@ public:
                                                                  size_t mediaProtectionOverhead,
                                                                  int64_t pts_usec,
                                                                  const ByteBuffer& frame) override;
-private:
-    uint64_t mCurrPictureID;
 };
 
 } // namespace srtc

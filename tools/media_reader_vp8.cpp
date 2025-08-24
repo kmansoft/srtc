@@ -511,7 +511,11 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
         mKeyFrameCountVP8 += 1;
 
         const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
-        std::printf("Key frame %2u, size = %zu: %s\n", mKeyFrameCountVP8, block_reader.remaining(), dump.c_str());
+        std::printf("Key frame %4u of %4u, size = %zu: %s\n",
+                    mKeyFrameCountVP8,
+                    mAllFrameCountVP8,
+                    block_reader.remaining(),
+                    dump.c_str());
 
         // Decode key frame data
         const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
