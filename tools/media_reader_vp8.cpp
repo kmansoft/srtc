@@ -510,22 +510,15 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
         // A key frame
         mKeyFrameCountVP8 += 1;
 
-        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
-        std::printf("Key frame %4u of %4u, size = %zu: %s\n",
-                    mKeyFrameCountVP8,
-                    mAllFrameCountVP8,
-                    block_reader.remaining(),
-                    dump.c_str());
+//        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
+//        std::printf("Key frame %4u of %4u, size = %zu: %s\n",
+//                    mKeyFrameCountVP8,
+//                    mAllFrameCountVP8,
+//                    block_reader.remaining(),
+//                    dump.c_str());
 
+#if 0
         // Decode key frame data
-        const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
-        const auto tag_frame_type = tag & 0x01;
-        const auto tag_version = (tag >> 1) & 0x07;
-        const auto tag_show_frame = (tag >> 4) & 0x01;
-        const auto tag_first_partition_size = tag >> 5;
-
-        std::printf("Tag frame type = %d\n", tag_frame_type);
-
         const auto frame_width_data = frame_data + 6;
         const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
         const auto frame_height_data = frame_data + 8;
@@ -570,17 +563,7 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
             std::fwrite(frame_data, frame_size, 1, file);
             std::fclose(file);
         }
-    } else if (mAllFrameCountVP8 < 10) {
-        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
-        std::printf("NonKey frame %2u, size = %zu: %s\n", mAllFrameCountVP8, block_reader.remaining(), dump.c_str());
-
-        const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
-        const auto tag_frame_type = tag & 0x01;
-        const auto tag_version = (tag >> 1) & 0x07;
-        const auto tag_show_frame = (tag >> 4) & 0x01;
-        const auto tag_first_partition_size = tag >> 5;
-
-        std::printf("Tag frame type = %d\n", tag_frame_type);
+#endif
     }
 }
 
