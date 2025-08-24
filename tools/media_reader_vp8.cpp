@@ -27,7 +27,7 @@ public:
     [[nodiscard]] uint32_t readVInt32();
     [[nodiscard]] uint64_t readVInt64();
 
-    [[nodiscard]] int32_t readFixedInt32();
+    [[nodiscard]] int16_t readFixedInt16();
     [[nodiscard]] uint8_t readFixedUInt8();
 
 private:
@@ -125,10 +125,10 @@ uint64_t WebmReader::readVInt64()
     return readVIntImpl(true);
 }
 
-int32_t WebmReader::readFixedInt32()
+int16_t WebmReader::readFixedInt16()
 {
     if (remaining() < 2) {
-        std::cout << "*** Attempt to read a fixed int32 value past end of webm block" << std::endl;
+        std::cout << "*** Attempt to read a fixed int16 value past end of webm block" << std::endl;
         exit(1);
     }
 
@@ -136,7 +136,7 @@ int32_t WebmReader::readFixedInt32()
     std::memcpy(b, mData + mPos, 2);
     mPos += 2;
 
-    return static_cast<int32_t>((b[0] << 8) | b[1]);
+    return static_cast<int16_t>((b[0] << 8) | b[1]);
 }
 
 uint8_t WebmReader::readFixedUInt8()
@@ -240,6 +240,8 @@ constexpr uint32_t kID_EMBLVersion = 0x4286;
 constexpr uint32_t kID_DocType = 0x4282;
 constexpr uint32_t kID_Segment = 0x18538067;
 constexpr uint32_t kID_Tracks = 0x1654AE6B;
+constexpr uint32_t kID_SegmentInformation = 0x1549A966;
+constexpr uint32_t kID_TimecodeScale = 0x2AD7B1;
 constexpr uint32_t kID_Cluster = 0x1F43B675;
 constexpr uint32_t kID_TrackEntry = 0xAE;
 constexpr uint32_t kID_TrackNumber = 0xD7;
@@ -261,11 +263,14 @@ private:
     const srtc::ByteBuffer& mData;
     const LoadedMedia& mLoadedMedia;
 
+    uint32_t mTimecodeScaleNS;
+
     uint32_t mTrackNumberVP8;
 
     uint32_t mAllFrameCountVP8;
     uint32_t mKeyFrameCountVP8;
 
+    void parseSegmentInformationElement(const uint8_t* data, uint64_t size);
     void parseTracksElement(const uint8_t* data, uint64_t size);
     void parseClusterElement(const uint8_t* data, uint64_t size);
     void parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t cluster_timecode);
@@ -275,6 +280,7 @@ WebmLoader::WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media)
     : mData(data)
     , mLoadedMedia(loaded_media)
     , mTrackNumberVP8(0)
+    , mTimecodeScaleNS(1000000)
     , mAllFrameCountVP8(0)
     , mKeyFrameCountVP8(0)
 {
@@ -372,7 +378,9 @@ void WebmLoader::process()
             uint64_t segment_item_size;
             segment_reader.readBlockHeader(segment_item_id, segment_item_size);
 
-            if (segment_item_id == kID_Tracks) {
+            if (segment_item_id == kID_SegmentInformation) {
+                parseSegmentInformationElement(segment_reader.curr(), segment_item_size);
+            } else if (segment_item_id == kID_Tracks) {
                 parseTracksElement(segment_reader.curr(), segment_item_size);
             } else if (segment_item_id == kID_Cluster) {
                 parseClusterElement(segment_reader.curr(), segment_item_size);
@@ -387,6 +395,22 @@ void WebmLoader::printInfo()
 {
     std::cout << "*** Frame count:     " << std::setw(4) << mAllFrameCountVP8 << std::endl;
     std::cout << "*** Key frame count: " << std::setw(4) << mKeyFrameCountVP8 << std::endl;
+}
+
+void WebmLoader::parseSegmentInformationElement(const uint8_t* data, uint64_t size)
+{
+    WebmReader info_reader(data, size);
+    while (info_reader.remaining() > 0) {
+        uint32_t info_item_id;
+        uint64_t info_item_size;
+        info_reader.readBlockHeader(info_item_id, info_item_size);
+
+        if (info_item_id == kID_TimecodeScale) {
+            mTimecodeScaleNS = info_reader.readUInt(info_item_size);
+        } else {
+            info_reader.skip(info_item_size);
+        }
+    }
 }
 
 void WebmLoader::parseTracksElement(const uint8_t* data, uint64_t size)
@@ -470,21 +494,35 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
 
     mAllFrameCountVP8 += 1;
 
-    const auto frame_offset = block_reader.readFixedInt32();
+    const auto frame_offset = block_reader.readFixedInt16();
     const auto frame_flags = block_reader.readFixedUInt8();
 
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
         mKeyFrameCountVP8 += 1;
 
-        static uint32_t key_frame_number = 0;
-        key_frame_number += 1;
-
         const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
-        std::printf("Key frame: %s\n", dump.c_str());
+        std::printf("Key frame %2u, size = %zu: %s\n", mKeyFrameCountVP8, block_reader.remaining(), dump.c_str());
+
+        // Decode key frame data
+        const auto frame_data = block_reader.curr();
+        const auto frame_size = block_reader.remaining();
+
+        const auto tag = frame_data[0] | (frame_data[1] << 8) | (frame_data[2] << 16);
+        const auto tag_frame_type = tag & 0x01;
+        const auto tag_version = (tag >> 1) & 0x07;
+        const auto tag_show_frame = (tag >> 4) & 0x01;
+        const auto tag_first_partition_size = tag >> 5;
+
+        std::printf("  Partition size = %u\n", tag_first_partition_size);
+
+        const auto frame_width_data = frame_data + 6;
+        const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
+        const auto frame_height_data = frame_data + 8;
+        const auto frame_height = ((frame_height_data[1] << 8) | frame_height_data[0]) & 0x3FFF;
 
         char fname[128];
-        std::snprintf(fname, sizeof(fname), "key-frame-%u.ivf", key_frame_number);
+        std::snprintf(fname, sizeof(fname), "key-frame-%u.ivf", mKeyFrameCountVP8);
 
         const auto file = std::fopen(fname, "wb");
         if (file) {
@@ -498,8 +536,8 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
 
             std::fwrite("VP80", 4, 1, file); // codec fourcc
 
-            uint16_t width = 1280;
-            uint16_t height = 720;
+            uint16_t width = frame_width;
+            uint16_t height = frame_height;
             std::fwrite(&width, 2, 1, file);
             std::fwrite(&height, 2, 1, file);
 
@@ -513,13 +551,13 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
             std::fwrite(&unused, 4, 1, file);
 
             // Write frame header (12 bytes)
-            const auto frame_size = static_cast<uint32_t>(block_reader.remaining());
+            const auto frame_size_u32 = static_cast<uint32_t>(frame_size);
             uint64_t timestamp = 0;
-            std::fwrite(&frame_size, 4, 1, file);
+            std::fwrite(&frame_size_u32, 4, 1, file);
             std::fwrite(&timestamp, 8, 1, file);
 
             // Write VP8 frame data
-            std::fwrite(block_reader.curr(), block_reader.remaining(), 1, file);
+            std::fwrite(frame_data, frame_size, 1, file);
             std::fclose(file);
         }
     }
