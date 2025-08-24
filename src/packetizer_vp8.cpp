@@ -64,7 +64,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
     while (dataSize > 0) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
 
-        auto padding = getPadding(track, simulcast, twcc, dataSize);
+        const auto padding = getPadding(track, simulcast, twcc, dataSize);
         RtpExtension extension = buildExtension(track, simulcast, twcc, tagFrameType == 0, packetNumber);
 
         // The "-1" is for VP8 payload descriptor
