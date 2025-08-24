@@ -270,8 +270,6 @@ private:
     uint32_t mAllFrameCountVP8;
     uint32_t mKeyFrameCountVP8;
 
-    int64_t mCurrPTS;
-
     void parseSegmentInformationElement(const uint8_t* data, uint64_t size);
     void parseTracksElement(const uint8_t* data, uint64_t size);
     void parseClusterElement(const uint8_t* data, uint64_t size);
@@ -285,7 +283,6 @@ WebmLoader::WebmLoader(const srtc::ByteBuffer& data, LoadedMedia& loaded_media)
     , mTimecodeScaleNS(1000000)
     , mAllFrameCountVP8(0)
     , mKeyFrameCountVP8(0)
-    , mCurrPTS(0)
 {
 }
 
@@ -504,12 +501,10 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
     mAllFrameCountVP8 += 1;
 
     LoadedFrame loaded_frame = {};
-    loaded_frame.pts_usec = mCurrPTS;
+    loaded_frame.pts_usec = (static_cast<int64_t>(cluster_timecode) + frame_offset) * mTimecodeScaleNS / 1000;
     loaded_frame.frame = { frame_data, frame_size };
 
     mLoadedMedia.frame_list.push_back(std::move(loaded_frame));
-
-    mCurrPTS += 40 * 1000; // for now assume 25 fps, later we'll use the actual frame timestamps from the file
 
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
