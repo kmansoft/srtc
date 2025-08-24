@@ -30,11 +30,11 @@ protected:
 public:
     static std::shared_ptr<MediaReader> create(const std::string& filename);
 
-    virtual LoadedMedia loadMedia(bool print_info) const = 0;
+    [[nodiscard]] virtual LoadedMedia loadMedia(bool print_info) const = 0;
     virtual ~MediaReader();
 
 protected:
     const std::string mFileName;
 
-    srtc::ByteBuffer loadFile() const;
+    [[nodiscard]] srtc::ByteBuffer loadFile() const;
 };

@@ -22,7 +22,8 @@ typedef int SocketHandle;
 #endif
 
 enum class Codec {
-    H264 = 1,
+    VP8 = 1,
+    H264 = 2,
     Opus = 100,
     Rtx = 200
 };

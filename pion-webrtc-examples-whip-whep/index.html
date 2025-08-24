@@ -20,9 +20,22 @@
         }
         video {
           width: 800;
-          min-height: 400;
-          max-height: 600;
+          height: 600;
         }
+
+      .row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+      }
+      .cell {
+          flex: 1 1 200px;
+      }
+
+      pre {
+        min-width: 200px;
+      }
+
     </style>
   </head>
 
@@ -31,20 +44,58 @@
       <button onclick="window.doWHIP()">Publish</button>
       <button onclick="window.doWHEP()">Subscribe</button>
 
-      <h3>Video</h3>
-      <video id="videoPlayer" autoplay muted controls> </video>
+      <div class="row">
+        <div class="cell">
+          <h3>Video</h3>
+          <video id="videoPlayer" autoplay muted controls> </video>
+        </div>
 
-      <h3>ICE Connection States</h3>
-      <div id="iceConnectionStates"></div>
+        <div class="cell">
+          <h3>Logging</h3>
+          <pre id="messageLog"></pre>
+        </div>
+      </div>
     </div>
   </body>
 
   <script>
+    const elMessageLog = document.getElementById('messageLog');
     let peerConnection
 
+    function printToLog(message) {
+      const el = document.createTextNode(message + "\n")
+      elMessageLog.appendChild(el)
+    }
+
+    async function getVideoCodec(peerConnection) {
+      const stats = await peerConnection.getStats();
+      
+      for (const [id, stat] of stats) {
+        // Look for outbound video streams
+        if (stat.type === 'outbound-rtp' && stat.kind === 'video') {
+          console.log('Outbound video codec:', stat.codecId);
+
+          // Get detailed codec info
+          const codecStats = stats.get(stat.codecId);
+          if (codecStats) {
+            printToLog("Codec: " + codecStats.mimeType);
+          }
+        }
+        
+        // Look for inbound video streams
+        if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
+          console.log('Inbound video codec:', stat.codecId);
+          
+          const codecStats = stats.get(stat.codecId);
+          if (codecStats) {
+            printToLog("Codec: " + codecStats.mimeType);
+          }
+        }
+      }
+    }
+
     function resetPeerConnection() {
-      let elStates = document.getElementById('iceConnectionStates');
-      elStates.innerHTML = ''
+      elMessageLog.innerHTML = ''
 
       if (peerConnection) {
         peerConnection.close();
@@ -54,10 +105,11 @@
       peerConnection = new RTCPeerConnection();
 
       peerConnection.oniceconnectionstatechange = () => {
-        let el = document.createElement('p')
-        el.appendChild(document.createTextNode(peerConnection.iceConnectionState))
+        printToLog(peerConnection.iceConnectionState);
 
-        elStates.appendChild(el);
+        if (peerConnection.iceConnectionState == "connected") {
+          getVideoCodec(peerConnection);
+        }
       }
     }
 

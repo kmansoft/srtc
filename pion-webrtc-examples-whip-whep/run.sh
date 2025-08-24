@@ -2,4 +2,4 @@
 
 #export PIONS_LOG_TRACE=all
 
-go run main.go
+go run main.go "$@"

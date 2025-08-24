@@ -303,8 +303,15 @@ int main(int argc, char* argv[])
         });
 
     // Connect the peer connection
-    peerConnection->setOffer(offer);
-    peerConnection->setAnswer(answer);
+    if (const auto offerSetError = peerConnection->setOffer(offer); offerSetError.isError()) {
+        std::cout << "Error: cannot set offer: " << offerSetError.message << std::endl;
+        exit(1);
+    }
+
+    if (const auto answerSetError = peerConnection->setAnswer(answer); answerSetError.isError()) {
+        std::cout << "Error: cannot set answer: " << answerSetError.message << std::endl;
+        exit(1);
+    }
 
     // Wait for connection to either be connected or fail
     {

@@ -13,91 +13,13 @@
 
 #define LOG(level, ...) srtc::log(level, "H264_pktzr", __VA_ARGS__)
 
-namespace
-{
-
-constexpr size_t kMinPayloadSize = 600;
-
-uint8_t getPadding(const std::shared_ptr<srtc::Track>& track,
-                   const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
-                   const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
-                   size_t remainingDataSize)
-{
-    if (remainingDataSize < 300) {
-        return 0;
-    }
-
-    uint8_t padding = 0;
-
-    if (simulcast) {
-        const auto p = simulcast->getPadding(track, remainingDataSize);
-        padding = std::max(padding, p);
-    }
-
-    if (twcc) {
-        const auto p = twcc->getPadding(track, remainingDataSize);
-        padding = std::max(padding, p);
-    }
-
-    return padding;
-}
-
-srtc::RtpExtension buildExtension(const std::shared_ptr<srtc::Track>& track,
-                                  const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
-                                  const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
-                                  bool isKeyFrame,
-                                  int packetNumber)
-{
-    srtc::RtpExtension extension;
-
-    const auto wantsSimulcast = simulcast && simulcast->wantsExtension(track, isKeyFrame, packetNumber);
-    const auto wantsTWCC = twcc && twcc->wantsExtension(track, isKeyFrame, packetNumber);
-
-    if (wantsSimulcast || wantsTWCC) {
-        srtc::RtpExtensionBuilder builder;
-
-        if (wantsSimulcast) {
-            simulcast->addExtension(builder, track, isKeyFrame, packetNumber);
-        }
-        if (wantsTWCC) {
-            twcc->addExtension(builder, track, isKeyFrame, packetNumber);
-        }
-
-        extension = builder.build();
-    }
-
-    return extension;
-}
-
-size_t adjustPacketSize(size_t basicPacketSize, size_t padding, const srtc::RtpExtension& extension)
-{
-    auto sizeLessPadding = basicPacketSize;
-    if (padding > 0 && padding <= basicPacketSize / 2) {
-        sizeLessPadding -= padding;
-    }
-
-    const auto extensionSize = extension.size();
-    if (extensionSize == 0) {
-        return sizeLessPadding;
-    }
-
-    // We need to be careful with unsigned math
-    if (extensionSize + kMinPayloadSize > basicPacketSize) {
-        return sizeLessPadding;
-    }
-
-    return sizeLessPadding - extensionSize;
-}
-
-} // namespace
-
 namespace srtc
 {
 
 using namespace h264;
 
 PacketizerH264::PacketizerH264(const std::shared_ptr<Track>& track)
-    : Packetizer(track)
+    : PacketizerVideo(track)
 {
 }
 
@@ -204,7 +126,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             uint8_t padding = getPadding(track, simulcast, twcc, naluDataSize);
             RtpExtension extension = buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, 0);
 
-            auto basicPacketSize = RtpPacket::kMaxPayloadSize - RtpPacket::kHeaderSize - mediaProtectionOverhead;
+            const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
 
             if (packetSize >= naluDataSize) {
@@ -242,7 +164,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                             buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, packetNumber);
                     }
 
-                    packetSize = adjustPacketSize(basicPacketSize, padding, extension) - 2 /*  FU_A headers */;
+                    // The "-2" is for FU_A headers
+                    packetSize = adjustPacketSize(basicPacketSize - 2, padding, extension);
                     if (packetNumber == 0 && packetSize >= dataSize) {
                         // The frame now fits in one packet, but a FU-A cannot
                         // have both start and end
