@@ -9,6 +9,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,13 +32,24 @@ var (
 			},
 		},
 	}
+
+	gVideoCodecMime = webrtc.MimeTypeH264
 )
 
 // nolint:gocognit
 func main() {
+	flagIsVP8Mode := false
+	flag.BoolVar(&flagIsVP8Mode, "vp8", false, "Use the VP8 codec (default is H264)")
+	flag.Parse()
+
+	if flagIsVP8Mode {
+		fmt.Println("Using VP8 for video")
+		gVideoCodecMime = webrtc.MimeTypeVP8
+	}
+
 	// Everything below is the Pion WebRTC API! Thanks for using it ❤️.
 	var err error
-	if videoTrack, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "pion"); err != nil {
+	if videoTrack, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: gVideoCodecMime}, "video", "pion"); err != nil {
 		panic(err)
 	}
 	if audioTrack, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion"); err != nil {
@@ -75,7 +87,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set up the codecs you want to use.
 	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: gVideoCodecMime, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
 		PayloadType:        96,
 	}, webrtc.RTPCodecTypeVideo); err != nil {
 		panic(err)
@@ -156,7 +168,7 @@ func whipHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-                // Remove any extensions before forwarding
+				// Remove any extensions before forwarding
 				pkt.Header.Extensions = nil
 				pkt.Header.Extension = false
 
@@ -200,7 +212,7 @@ func whepHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set up the codecs you want to use.
 	if err = m.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: gVideoCodecMime, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
 		PayloadType:        96,
 	}, webrtc.RTPCodecTypeVideo); err != nil {
 		panic(err)
