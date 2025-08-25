@@ -1,5 +1,5 @@
 #include "srtc/packetizer_h264.h"
-#include "srtc/h264.h"
+#include "srtc/codec_h264.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_extension_builder.h"

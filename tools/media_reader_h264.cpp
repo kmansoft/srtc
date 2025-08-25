@@ -1,6 +1,6 @@
 #include "media_reader_h264.h"
 
-#include "srtc/h264.h"
+#include "srtc/codec_h264.h"
 
 #include <iomanip>
 #include <iostream>
@@ -27,7 +27,7 @@ LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
 
     srtc::ByteBuffer sps, pps;
     srtc::ByteBuffer frame;
-    srtc::h264::NaluType frame_nalu_type = {};
+    uint8_t frame_nalu_type = {};
 
     for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
         const auto nalu_type = parser.currType();

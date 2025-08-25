@@ -1,5 +1,5 @@
+#include "srtc/codec_h264.h"
 #include "srtc/encoded_frame.h"
-#include "srtc/h264.h"
 #include "srtc/logging.h"
 #include "srtc/peer_connection.h"
 #include "srtc/sdp_answer.h"

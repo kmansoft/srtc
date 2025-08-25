@@ -1,5 +1,5 @@
 #include "srtc/depacketizer_h264.h"
-#include "srtc/h264.h"
+#include "srtc/codec_h264.h"
 #include "srtc/logging.h"
 #include "srtc/util.h"
 
@@ -136,7 +136,7 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
 
     if ((mHaveBits & kHaveAll) != kHaveAll) {
         // Wait to emit until we have a key frame
-        const auto type = static_cast<h264::NaluType>(frame.front() & 0x1F);
+        const auto type = frame.front() & 0x1F;
         switch (type) {
         case h264::NaluType::NonKeyFrame:
             LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");

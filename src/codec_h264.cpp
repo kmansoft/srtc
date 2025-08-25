@@ -1,4 +1,4 @@
-#include "srtc/h264.h"
+#include "srtc/codec_h264.h"
 
 namespace
 {
@@ -77,9 +77,9 @@ void NaluParser::next()
     mNextPos = find_next_nalu(mBuf, mNextPos + mSkip, mSize, mNextSkip);
 }
 
-NaluType NaluParser::currType() const
+uint8_t NaluParser::currType() const
 {
-    return static_cast<NaluType>(mBuf[mPos + mSkip] & 0x1F);
+    return mBuf[mPos + mSkip] & 0x1F;
 }
 
 const uint8_t* NaluParser::currNalu() const

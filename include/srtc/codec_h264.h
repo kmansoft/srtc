@@ -14,12 +14,12 @@ constexpr uint8_t FU_A = 28;
 
 // T-REC-H.264-201304-S
 
-enum class NaluType : uint8_t {
-    NonKeyFrame = 1,
-    KeyFrame = 5,
-    SEI = 6,
-    SPS = 7,
-    PPS = 8
+struct NaluType {
+    static constexpr uint8_t NonKeyFrame = 1;
+    static constexpr uint8_t KeyFrame = 5;
+    static constexpr uint8_t SEI = 6;
+    static constexpr uint8_t SPS = 7;
+    static constexpr uint8_t PPS = 8;
 };
 
 class NaluParser
@@ -33,7 +33,7 @@ public:
 
     void next();
 
-    [[nodiscard]] NaluType currType() const;
+    [[nodiscard]] uint8_t currType() const;
     [[nodiscard]] const uint8_t* currNalu() const;
     [[nodiscard]] size_t currNaluSize() const;
     [[nodiscard]] const uint8_t* currData() const;

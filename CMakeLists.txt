@@ -42,7 +42,7 @@ add_library(srtc
         include/srtc/event_loop.h
         include/srtc/extension_map.h
         include/srtc/extended_value.h
-        include/srtc/h264.h
+        include/srtc/codec_h264.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
@@ -103,7 +103,7 @@ add_library(srtc
         src/error.cpp
         src/extension_map.cpp
         src/extended_value.cpp
-        src/h264.cpp
+        src/codec_h264.cpp
         src/ice_agent.cpp
         src/jitter_buffer.cpp
         src/logging.cpp
