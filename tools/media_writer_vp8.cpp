@@ -99,12 +99,13 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 void MediaWriterVP8::writeWebM()
 {
     if (mFrameList.empty()) {
+        std::printf("VP8: Have not seen any video frames, won't write %s\n", mFilename.c_str());
         return;
     }
 
     FILE* file = std::fopen(mFilename.c_str(), "wb");
     if (!file) {
-        std::printf("Failed to create %s\n", mFilename.c_str());
+        std::printf("VP8: Failed to create %s\n", mFilename.c_str());
         return;
     }
 
@@ -130,7 +131,10 @@ void MediaWriterVP8::writeWebM()
     long segment_data_size = ftell(temp_file);
     segment_content.resize(segment_data_size);
     fseek(temp_file, 0, SEEK_SET);
-    fread(segment_content.data(), segment_data_size, 1, temp_file);
+    if (fread(segment_content.data(), 1, segment_data_size, temp_file) != segment_data_size) {
+        std::printf("VP8: Failed to read temporary file\n");
+        exit(1);
+    }
     fclose(temp_file);
 
     // Write Segment with known size

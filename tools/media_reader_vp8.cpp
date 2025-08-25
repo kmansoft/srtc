@@ -235,6 +235,8 @@ uint64_t WebmReader::readVIntImpl(bool remove_marker)
 
 /////
 
+const uint8_t kEMBL_Header[] = { 0x1A, 0x45, 0xDF, 0xA3 };
+
 constexpr uint32_t kID_Header = 0x1A45DFA3;
 constexpr uint32_t kID_EMBLVersion = 0x4286;
 constexpr uint32_t kID_DocType = 0x4282;
@@ -290,6 +292,12 @@ WebmLoader::~WebmLoader() = default;
 
 void WebmLoader::process()
 {
+    // Validate the header
+    if (mData.size() < 4 || std::memcmp(mData.data(), kEMBL_Header, 4) != 0) {
+        std::cout << "Invalid webm file header" << std::endl;
+        exit(1);
+    }
+
     // Parse overall structure to validate the header and find the segment
 
     const uint8_t* segment_data = nullptr;
