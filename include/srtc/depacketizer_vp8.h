@@ -1,16 +1,15 @@
 #pragma once
 
-#include "srtc/byte_buffer.h"
 #include "srtc/depacketizer.h"
 
 namespace srtc
 {
 
-class DepacketizerH264 final : public Depacketizer
+class DepacketizerVP8 final : public Depacketizer
 {
 public:
-    explicit DepacketizerH264(const std::shared_ptr<Track>& track);
-    ~DepacketizerH264() override;
+    explicit DepacketizerVP8(const std::shared_ptr<Track>& track);
+    ~DepacketizerVP8() override;
 
     [[nodiscard]] PacketKind getPacketKind(const JitterBufferItem* packet) const override;
 
@@ -20,9 +19,7 @@ public:
     void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
 
 private:
-    uint8_t mHaveBits;
-    ByteBuffer mFrameBuffer;
-    uint64_t mLastRtpTimestamp;
+    bool mSeenKeyFrame;
 
     void extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame);
 };

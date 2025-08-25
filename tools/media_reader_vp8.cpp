@@ -132,11 +132,11 @@ int16_t WebmReader::readFixedInt16()
         exit(1);
     }
 
-    uint8_t b[2] = {};
-    std::memcpy(b, mData + mPos, 2);
+    // Read big-endian 16-bit value
+    uint16_t value = (mData[mPos] << 8) | mData[mPos + 1];
     mPos += 2;
 
-    return static_cast<int16_t>((b[0] << 8) | b[1]);
+    return static_cast<int16_t>(value);
 }
 
 uint8_t WebmReader::readFixedUInt8()
@@ -213,7 +213,7 @@ uint64_t WebmReader::readVIntImpl(bool remove_marker)
         const auto id_byte_2 = mData[mPos++];
         const auto id_byte_3 = mData[mPos++];
         return (id_byte_0 << 24) | (id_byte_1 << 16) | (id_byte_2 << 8) | id_byte_3;
-    } else if (id_byte_0 == 1) {
+    } else if ((id_byte_0 & 0xFF) == 0x01) {
         // Eight byte
         if (remaining() < 7) {
             std::cout << "*** Attempt to read an eight byte value past end of webm block" << std::endl;
@@ -234,6 +234,8 @@ uint64_t WebmReader::readVIntImpl(bool remove_marker)
 }
 
 /////
+
+const uint8_t kEMBL_Header[] = { 0x1A, 0x45, 0xDF, 0xA3 };
 
 constexpr uint32_t kID_Header = 0x1A45DFA3;
 constexpr uint32_t kID_EMBLVersion = 0x4286;
@@ -257,7 +259,7 @@ public:
     ~WebmLoader();
 
     void process();
-    void printInfo();
+    void printInfo() const;
 
 private:
     const srtc::ByteBuffer& mData;
@@ -290,6 +292,12 @@ WebmLoader::~WebmLoader() = default;
 
 void WebmLoader::process()
 {
+    // Validate the header
+    if (mData.size() < 4 || std::memcmp(mData.data(), kEMBL_Header, 4) != 0) {
+        std::cout << "Invalid webm file header" << std::endl;
+        exit(1);
+    }
+
     // Parse overall structure to validate the header and find the segment
 
     const uint8_t* segment_data = nullptr;
@@ -391,7 +399,7 @@ void WebmLoader::process()
     }
 }
 
-void WebmLoader::printInfo()
+void WebmLoader::printInfo() const
 {
     std::cout << "*** Frame count:     " << std::setw(4) << mAllFrameCountVP8 << std::endl;
     std::cout << "*** Key frame count: " << std::setw(4) << mKeyFrameCountVP8 << std::endl;
@@ -509,61 +517,6 @@ void WebmLoader::parseSimpleBlock(const uint8_t* data, uint64_t size, uint32_t c
     if ((frame_flags & 0x80) == 0x80) {
         // A key frame
         mKeyFrameCountVP8 += 1;
-
-//        const auto dump = srtc::bin_to_hex(block_reader.curr(), std::min<size_t>(block_reader.remaining(), 16));
-//        std::printf("Key frame %4u of %4u, size = %zu: %s\n",
-//                    mKeyFrameCountVP8,
-//                    mAllFrameCountVP8,
-//                    block_reader.remaining(),
-//                    dump.c_str());
-
-#if 0
-        // Decode key frame data
-        const auto frame_width_data = frame_data + 6;
-        const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
-        const auto frame_height_data = frame_data + 8;
-        const auto frame_height = ((frame_height_data[1] << 8) | frame_height_data[0]) & 0x3FFF;
-
-        char fname[128];
-        std::snprintf(fname, sizeof(fname), "key-frame-%u.ivf", mKeyFrameCountVP8);
-
-        const auto file = std::fopen(fname, "wb");
-        if (file) {
-            // Write IVF header (32 bytes)
-            std::fwrite("DKIF", 4, 1, file); // signature
-
-            uint16_t version = 0;
-            uint16_t header_len = 32;
-            std::fwrite(&version, 2, 1, file);
-            std::fwrite(&header_len, 2, 1, file);
-
-            std::fwrite("VP80", 4, 1, file); // codec fourcc
-
-            uint16_t width = frame_width;
-            uint16_t height = frame_height;
-            std::fwrite(&width, 2, 1, file);
-            std::fwrite(&height, 2, 1, file);
-
-            uint32_t frame_rate_num = 30;
-            uint32_t frame_rate_den = 1;
-            uint32_t frame_count = 1;
-            uint32_t unused = 0;
-            std::fwrite(&frame_rate_num, 4, 1, file);
-            std::fwrite(&frame_rate_den, 4, 1, file);
-            std::fwrite(&frame_count, 4, 1, file);
-            std::fwrite(&unused, 4, 1, file);
-
-            // Write frame header (12 bytes)
-            const auto frame_size_u32 = static_cast<uint32_t>(frame_size);
-            uint64_t timestamp = 0;
-            std::fwrite(&frame_size_u32, 4, 1, file);
-            std::fwrite(&timestamp, 8, 1, file);
-
-            // Write VP8 frame data
-            std::fwrite(frame_data, frame_size, 1, file);
-            std::fclose(file);
-        }
-#endif
     }
 }
 

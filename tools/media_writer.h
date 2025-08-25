@@ -8,6 +8,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 class MediaWriter
 {
@@ -22,6 +23,9 @@ public:
 
 	void start();
 	void send(const std::shared_ptr<srtc::EncodedFrame>& frame);
+
+protected:
+    void checkExtension(const std::initializer_list<const char*>& expected);
 
 private:
 	std::mutex mMutex;
