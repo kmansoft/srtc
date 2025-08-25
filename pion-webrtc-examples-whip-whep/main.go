@@ -308,7 +308,10 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 	// Create answer
 	answer, err := peerConnection.CreateAnswer(nil)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error creating answer: %v\n", err)
+		w.WriteHeader(http.StatusBadRequest)
+		peerConnection.Close()
+		return
 	} else if err = peerConnection.SetLocalDescription(answer); err != nil {
 		panic(err)
 	}
