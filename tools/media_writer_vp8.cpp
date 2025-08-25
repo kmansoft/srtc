@@ -492,13 +492,13 @@ void MediaWriterVP8::writeVarIntToBuffer(std::vector<uint8_t>& buffer, uint64_t 
 
 int MediaWriterVP8::getVarIntWidth(uint64_t value)
 {
-    if (value < 127) return 1;                    // 2^7 - 1
-    if (value < 16383) return 2;                  // 2^14 - 1  
-    if (value < 2097151) return 3;                // 2^21 - 1
-    if (value < 268435455) return 4;              // 2^28 - 1
-    if (value < 34359738367ULL) return 5;         // 2^35 - 1
-    if (value < 4398046511103ULL) return 6;       // 2^42 - 1
-    if (value < 562949953421311ULL) return 7;     // 2^49 - 1
+    if (value <= 127) return 1;                   // 2^7 - 1
+    if (value <= 16383) return 2;                 // 2^14 - 1  
+    if (value <= 2097151) return 3;               // 2^21 - 1
+    if (value <= 268435455) return 4;             // 2^28 - 1
+    if (value <= 34359738367ULL) return 5;        // 2^35 - 1
+    if (value <= 4398046511103ULL) return 6;      // 2^42 - 1
+    if (value <= 562949953421311ULL) return 7;    // 2^49 - 1
     return 8;
 }
 
