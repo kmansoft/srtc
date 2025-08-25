@@ -105,7 +105,7 @@ Should output:
 ```bash
 Usage: ./build/srtc_publish [options]
 Options:
-  -f, --file <path>    Path to H.264 file (default: sintel.h264)
+  -f, --file <path>    Path to a H.264 or VP8 (webm) file (default: sintel.h264)
   -u, --url <url>      WHIP server URL (default: http://localhost:8080/whip)
   -t, --token <token>  WHIP authorization token
   -l, --loop           Loop the file
