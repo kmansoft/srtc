@@ -7,7 +7,8 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
-- Supports H264 (any profile ID) and VP8 for video and Opus for audio.
+- Video codecs: VP8, H264 (any profile ID), more are coming.
+- Audo codec: Opus.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Support for IPv4 and IPv6.
@@ -28,7 +29,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Sends receiver reports.
 - Sends TWCC reports if negotiated in the SDP.
 - The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
-- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. I'm going to work on this.
+- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. Both are reported to the application though, so it could be handled there.
 - No speed up / slow down for audio samples (yet).
 
 ### API design 
