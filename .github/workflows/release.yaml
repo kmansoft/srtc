@@ -187,6 +187,7 @@ jobs:
             artifacts/srtc_subscribe-macos/srtc_subscribe-macos.tar.gz
             artifacts/srtc_publish-windows/srtc_publish-windows.zip
             artifacts/srtc_subscribe-windows/srtc_subscribe-windows.zip
+            artifacts/video-files/sintel-vp8.webm
             artifacts/video-files/sintel.h264
             artifacts/video-files/sintel_with_slices.h264
           draft: false

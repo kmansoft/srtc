@@ -149,7 +149,7 @@ First please run the Pion WebRTC server like this to use VP8 (by default it uses
 To send video to Pion, run the publish sample like this:
 
 ```bash
-./build/srtc_publish[.exe] -f sintel.webm
+./build/srtc_publish[.exe] -f sintel-vp8.webm
 ```
 
 ### A command line tool for subscribing
