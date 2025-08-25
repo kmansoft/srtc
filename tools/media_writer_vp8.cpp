@@ -3,8 +3,12 @@
 #include <cstdlib>
 #include <cstring>
 
+namespace
+{
+
 // Cross-platform byte swapping
-inline uint16_t bswap16(uint16_t x) {
+inline uint16_t bswap16(uint16_t x)
+{
 #ifdef _MSC_VER
     return _byteswap_ushort(x);
 #else
@@ -12,7 +16,8 @@ inline uint16_t bswap16(uint16_t x) {
 #endif
 }
 
-inline uint32_t bswap32(uint32_t x) {
+inline uint32_t bswap32(uint32_t x)
+{
 #ifdef _MSC_VER
     return _byteswap_ulong(x);
 #else
@@ -20,13 +25,16 @@ inline uint32_t bswap32(uint32_t x) {
 #endif
 }
 
-inline uint64_t bswap64(uint64_t x) {
+inline uint64_t bswap64(uint64_t x)
+{
 #ifdef _MSC_VER
     return _byteswap_uint64(x);
 #else
     return __builtin_bswap64(x);
 #endif
 }
+
+} // namespace
 
 MediaWriterVP8::MediaWriterVP8(const std::string& filename, const std::shared_ptr<srtc::Track>& track)
     : MediaWriter(filename)
@@ -68,62 +76,13 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
     if (tagFrameType == 0 && frameSize > 10) {
         // Maintain key frame count
         mOutKeyFrameCount += 1;
-
-#if 0
-        // Write key frames into a file
-        const auto frame_width_data = frameData + 6;
-        const auto frame_width = ((frame_width_data[1] << 8) | frame_width_data[0]) & 0x3FFF;
-        const auto frame_height_data = frameData + 8;
-        const auto frame_height = ((frame_height_data[1] << 8) | frame_height_data[0]) & 0x3FFF;
-
-        char fname[128];
-        std::snprintf(fname, sizeof(fname), "sub-key-frame-%zu.ivf", mOutKeyFrameCount);
-
-        const auto file = std::fopen(fname, "wb");
-        if (file) {
-            // Write IVF header (32 bytes)
-            std::fwrite("DKIF", 4, 1, file); // signature
-
-            uint16_t version = 0;
-            uint16_t header_len = 32;
-            std::fwrite(&version, 2, 1, file);
-            std::fwrite(&header_len, 2, 1, file);
-
-            std::fwrite("VP80", 4, 1, file); // codec fourcc
-
-            uint16_t width = frame_width;
-            uint16_t height = frame_height;
-            std::fwrite(&width, 2, 1, file);
-            std::fwrite(&height, 2, 1, file);
-
-            uint32_t frame_rate_num = 30;
-            uint32_t frame_rate_den = 1;
-            uint32_t frame_count = 1;
-            uint32_t unused = 0;
-            std::fwrite(&frame_rate_num, 4, 1, file);
-            std::fwrite(&frame_rate_den, 4, 1, file);
-            std::fwrite(&frame_count, 4, 1, file);
-            std::fwrite(&unused, 4, 1, file);
-
-            // Write frame header (12 bytes)
-            const auto frame_size_u32 = static_cast<uint32_t>(frameSize);
-            uint64_t timestamp = 0;
-            std::fwrite(&frame_size_u32, 4, 1, file);
-            std::fwrite(&timestamp, 8, 1, file);
-
-            // Write VP8 frame data
-            std::fwrite(frameData, frameSize, 1, file);
-
-            // Close
-            std::fclose(file);
-        }
-#endif
     }
 
     // Calculate pts
     int64_t pts_usec = 0;
     if (mOutAllFrameCount == 0) {
         mBaseRtpTimestamp = frame->rtp_timestamp_ext;
+        std::printf("VP8: Started buffering video frames, will save when exiting from Ctrl+C\n");
     } else {
         pts_usec = static_cast<int64_t>(frame->rtp_timestamp_ext - mBaseRtpTimestamp) * 1000 / 90;
     }
@@ -146,7 +105,7 @@ void MediaWriterVP8::writeWebM()
 
     FILE* file = std::fopen(mFilename.c_str(), "wb");
     if (!file) {
-        std::printf("Failed to create output.webm\n");
+        std::printf("Failed to create %s\n", mFilename.c_str());
         return;
     }
 
@@ -161,26 +120,25 @@ void MediaWriterVP8::writeWebM()
     // Write Segment header with proper size calculation
     // First write to temporary buffer to calculate size
     std::vector<uint8_t> segment_content;
-    
+
     // Create temporary file for size calculation
     FILE* temp_file = tmpfile();
     writeSegmentInfo(temp_file, duration_ns);
     writeTracks(temp_file);
     writeClusters(temp_file);
-    
+
     // Get size and copy data
     long segment_data_size = ftell(temp_file);
     segment_content.resize(segment_data_size);
     fseek(temp_file, 0, SEEK_SET);
     fread(segment_content.data(), segment_data_size, 1, temp_file);
     fclose(temp_file);
-    
+
     // Write Segment with known size
     uint32_t segment_id = 0x18538067;
     writeEBMLElement(file, segment_id, segment_content.data(), segment_data_size);
 
     std::fclose(file);
-    std::printf("WebM file written: output.webm\n");
 }
 
 void MediaWriterVP8::writeEBMLHeader(FILE* file)
@@ -369,16 +327,16 @@ void MediaWriterVP8::writeClusters(FILE* file)
 
         // Timecode (0xE7) - in milliseconds
         uint64_t timecode_ms = frame.pts_usec / 1000;
-        
+
         // Create temporary buffer for timecode element
         std::vector<uint8_t> timecode_data;
         int tc_width = getVarIntWidth(timecode_ms);
         for (int j = tc_width - 1; j >= 0; j--) {
             timecode_data.push_back((timecode_ms >> (j * 8)) & 0xFF);
         }
-        
+
         // Write timecode element header manually
-        cluster_data.push_back(0xE7);  // Timecode ID
+        cluster_data.push_back(0xE7); // Timecode ID
         writeVarIntToBuffer(cluster_data, timecode_data.size());
         cluster_data.insert(cluster_data.end(), timecode_data.begin(), timecode_data.end());
 
@@ -492,13 +450,20 @@ void MediaWriterVP8::writeVarIntToBuffer(std::vector<uint8_t>& buffer, uint64_t 
 
 int MediaWriterVP8::getVarIntWidth(uint64_t value)
 {
-    if (value <= 127) return 1;                   // 2^7 - 1
-    if (value <= 16383) return 2;                 // 2^14 - 1  
-    if (value <= 2097151) return 3;               // 2^21 - 1
-    if (value <= 268435455) return 4;             // 2^28 - 1
-    if (value <= 34359738367ULL) return 5;        // 2^35 - 1
-    if (value <= 4398046511103ULL) return 6;      // 2^42 - 1
-    if (value <= 562949953421311ULL) return 7;    // 2^49 - 1
+    if (value <= 127)
+        return 1; // 2^7 - 1
+    if (value <= 16383)
+        return 2; // 2^14 - 1
+    if (value <= 2097151)
+        return 3; // 2^21 - 1
+    if (value <= 268435455)
+        return 4; // 2^28 - 1
+    if (value <= 34359738367ULL)
+        return 5; // 2^35 - 1
+    if (value <= 4398046511103ULL)
+        return 6; // 2^42 - 1
+    if (value <= 562949953421311ULL)
+        return 7; // 2^49 - 1
     return 8;
 }
 
@@ -508,32 +473,30 @@ bool MediaWriterVP8::extractVP8Dimensions(uint16_t& width, uint16_t& height) con
     for (const auto& frame : mFrameList) {
         if (isKeyFrame(frame) && frame.data.size() >= 10) {
             const auto* frameData = frame.data.data();
-            
+
             // VP8 keyframe structure (RFC 6386 Section 9.1)
             // Skip the 3-byte frame tag
             const auto* uncompressed_data_chunk = frameData + 3;
-            
+
             // Skip start code (3 bytes: 0x9d 0x01 0x2a for keyframes)
-            if (frame.data.size() >= 6 && 
-                uncompressed_data_chunk[0] == 0x9d && 
-                uncompressed_data_chunk[1] == 0x01 && 
+            if (frame.data.size() >= 6 && uncompressed_data_chunk[0] == 0x9d && uncompressed_data_chunk[1] == 0x01 &&
                 uncompressed_data_chunk[2] == 0x2a) {
-                
+
                 if (frame.data.size() >= 10) {
                     // Width and height are at bytes 6-7 and 8-9 respectively
                     const auto* width_data = frameData + 6;
                     const auto* height_data = frameData + 8;
-                    
+
                     // Extract 14-bit width and height (little-endian)
                     width = ((width_data[1] << 8) | width_data[0]) & 0x3FFF;
                     height = ((height_data[1] << 8) | height_data[0]) & 0x3FFF;
-                    
+
                     return true;
                 }
             }
         }
     }
-    
+
     // No keyframe found or unable to extract dimensions
     return false;
 }
