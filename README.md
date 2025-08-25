@@ -7,7 +7,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
-- Supports H264 (any profile ID) for video and Opus for audio. Currently working on VP8.
+- Supports H264 (any profile ID) and VP8 for video and Opus for audio.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Support for IPv4 and IPv6.
@@ -138,6 +138,20 @@ current directory is the `srtc` directory. This will load a video file and send 
 
 Switch back to the browser, after a second or two (keyframe delay) you should see the video being sent by `srtc`.
 
+#### Using a VP8 input file
+
+First please run the Pion WebRTC server like this to use VP8 (by default it uses H264):
+
+```bash
+./run.sh -vp8
+```
+
+To send video to Pion, run the publish sample like this:
+
+```bash
+./build/srtc_publish[.exe] -f sintel.webm
+```
+
 ### A command line tool for subscribing
 
 ```bash
@@ -155,7 +169,7 @@ Options:
   -q, --quiet          Suppress progress reporting
   -s, --sdp            Print SDP offer and answer
   --oa <filename>      Save audio to a file (ogg format for opus)
-  --oa <filename>      Save video to a file (h264 format)
+  --ov <filename>      Save video to a file (h264 or webm format)
   -d, --drop           Drop some packets at random (test NACK and RTX handling)
   -h, --help           Show this help message
 ```
@@ -168,6 +182,23 @@ VLC, you can use the below option to adjust playback speed:
 ```bash
       --rate <float>             Playback speed
 ```
+
+#### Running in VP8 mode
+
+Run the Pion server like this, just like for publishing:
+
+```bash
+./run.sh -vp8
+```
+
+And then subscribe like this:
+
+```bash
+./build/srtc_subscribe[.exe] --ov output.webm
+```
+
+The resulting webm file will not contain any audio, just video - if you'd like to capture audio as well,
+please add `--oa output.ogg`.
 
 ### An Android demo / sample
 

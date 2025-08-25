@@ -6,32 +6,31 @@
 namespace
 {
 
-// Cross-platform byte swapping
-inline uint16_t bswap16(uint16_t x)
+// Write multi-byte values in big-endian byte order
+inline void writeBE16(std::vector<uint8_t>& data, uint16_t value)
 {
-#ifdef _MSC_VER
-    return _byteswap_ushort(x);
-#else
-    return __builtin_bswap16(x);
-#endif
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back(value & 0xFF);
 }
 
-inline uint32_t bswap32(uint32_t x)
+inline void writeBE32(std::vector<uint8_t>& data, uint32_t value)
 {
-#ifdef _MSC_VER
-    return _byteswap_ulong(x);
-#else
-    return __builtin_bswap32(x);
-#endif
+    data.push_back((value >> 24) & 0xFF);
+    data.push_back((value >> 16) & 0xFF);
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back(value & 0xFF);
 }
 
-inline uint64_t bswap64(uint64_t x)
+inline void writeBE64(std::vector<uint8_t>& data, uint64_t value)
 {
-#ifdef _MSC_VER
-    return _byteswap_uint64(x);
-#else
-    return __builtin_bswap64(x);
-#endif
+    data.push_back((value >> 56) & 0xFF);
+    data.push_back((value >> 48) & 0xFF);
+    data.push_back((value >> 40) & 0xFF);
+    data.push_back((value >> 32) & 0xFF);
+    data.push_back((value >> 24) & 0xFF);
+    data.push_back((value >> 16) & 0xFF);
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back(value & 0xFF);
 }
 
 } // namespace
@@ -191,13 +190,10 @@ void MediaWriterVP8::writeSegmentInfo(FILE* file, uint64_t duration_ns)
 
     // TimecodeScale (0x2AD7B1) = 1000000 (1ms)
     uint32_t timecode_scale = 1000000;
-    uint8_t timecode_header[] = { 0x2A, 0xD7, 0xB1, 0x83 };
+    uint8_t timecode_header[] = { 0x2A, 0xD7, 0xB1, 0x84 }; // 4-byte size
     info_data.insert(info_data.end(), timecode_header, timecode_header + sizeof(timecode_header));
 
-    timecode_scale = bswap32(timecode_scale);
-    info_data.insert(info_data.end(),
-                     reinterpret_cast<uint8_t*>(&timecode_scale) + 1,
-                     reinterpret_cast<uint8_t*>(&timecode_scale) + 4);
+    writeBE32(info_data, timecode_scale);
 
     // MuxingApp (0x4D80) = "srtc"
     const char* muxing_app = "srtc";
@@ -219,10 +215,7 @@ void MediaWriterVP8::writeSegmentInfo(FILE* file, uint64_t duration_ns)
 
         uint64_t duration_bits;
         memcpy(&duration_bits, &duration_ms, 8);
-        duration_bits = bswap64(duration_bits);
-        info_data.insert(info_data.end(),
-                         reinterpret_cast<uint8_t*>(&duration_bits),
-                         reinterpret_cast<uint8_t*>(&duration_bits) + 8);
+        writeBE64(info_data, duration_bits);
     }
 
     writeEBMLElement(file, info_id, info_data.data(), info_data.size());
@@ -265,18 +258,14 @@ void MediaWriterVP8::writeTracks(FILE* file)
     extractVP8Dimensions(frame_width, frame_height);
 
     // PixelWidth (0xB0)
-    uint16_t pixel_width = bswap16(frame_width);
     uint8_t width_header[] = { 0xB0, 0x82 };
     video_data.insert(video_data.end(), width_header, width_header + sizeof(width_header));
-    video_data.insert(
-        video_data.end(), reinterpret_cast<uint8_t*>(&pixel_width), reinterpret_cast<uint8_t*>(&pixel_width) + 2);
+    writeBE16(video_data, frame_width);
 
     // PixelHeight (0xBA)
-    uint16_t pixel_height = bswap16(frame_height);
     uint8_t height_header[] = { 0xBA, 0x82 };
     video_data.insert(video_data.end(), height_header, height_header + sizeof(height_header));
-    video_data.insert(
-        video_data.end(), reinterpret_cast<uint8_t*>(&pixel_height), reinterpret_cast<uint8_t*>(&pixel_height) + 2);
+    writeBE16(video_data, frame_height);
 
     // Write Video element
     uint8_t video_header[] = { 0xE0 };
@@ -396,14 +385,19 @@ void MediaWriterVP8::writeEBMLElement(FILE* file, uint32_t id, const void* data,
 {
     // Write element ID (big endian, variable length)
     if (id & 0xFF000000) {
-        uint32_t id_be = bswap32(id);
-        std::fwrite(&id_be, 4, 1, file);
+        uint8_t bytes[4] = { static_cast<uint8_t>((id >> 24) & 0xFF),
+                             static_cast<uint8_t>((id >> 16) & 0xFF),
+                             static_cast<uint8_t>((id >> 8) & 0xFF),
+                             static_cast<uint8_t>(id & 0xFF) };
+        std::fwrite(bytes, 4, 1, file);
     } else if (id & 0x00FF0000) {
-        uint32_t id_be = bswap32(id << 8);
-        std::fwrite(&id_be, 3, 1, file);
+        uint8_t bytes[3] = { static_cast<uint8_t>((id >> 16) & 0xFF),
+                             static_cast<uint8_t>((id >> 8) & 0xFF),
+                             static_cast<uint8_t>(id & 0xFF) };
+        std::fwrite(bytes, 3, 1, file);
     } else if (id & 0x0000FF00) {
-        uint16_t id_be = bswap16(static_cast<uint16_t>(id));
-        std::fwrite(&id_be, 2, 1, file);
+        uint8_t bytes[2] = { static_cast<uint8_t>((id >> 8) & 0xFF), static_cast<uint8_t>(id & 0xFF) };
+        std::fwrite(bytes, 2, 1, file);
     } else {
         const auto id_byte = static_cast<uint8_t>(id);
         std::fwrite(&id_byte, 1, 1, file);

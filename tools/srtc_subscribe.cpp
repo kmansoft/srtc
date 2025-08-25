@@ -65,7 +65,7 @@ void printUsage(const char* programName)
     std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
-    std::cout << "  --oa <filename>      Save video to a file (h264 format)" << std::endl;
+    std::cout << "  --ov <filename>      Save video to a file (h264 or webm format)" << std::endl;
     std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }

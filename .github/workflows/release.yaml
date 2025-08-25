@@ -155,7 +155,7 @@ jobs:
       - name: Package
         run: |
           mkdir -p release
-          cp ${{ github.workspace }}/*.h264 release/
+          cp ${{ github.workspace }}/*.h264 ${{ github.workspace }}/*.webm release/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
