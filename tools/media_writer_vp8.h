@@ -28,5 +28,15 @@ private:
     std::vector<VP8Frame> mFrameList;
     uint64_t mBaseRtpTimestamp;
 
-
+    void writeWebM();
+    static void writeEBMLHeader(FILE* file);
+    static void writeSegmentInfo(FILE* file, uint64_t duration_ns);
+    void writeTracks(FILE* file);
+    void writeClusters(FILE* file);
+    static void writeEBMLElement(FILE* file, uint32_t id, const void* data, size_t size);
+    static void writeVarInt(FILE* file, uint64_t value);
+    static void writeVarIntToBuffer(std::vector<uint8_t>& buffer, uint64_t value);
+    static int getVarIntWidth(uint64_t value);
+    static bool isKeyFrame(const VP8Frame& frame);
+    bool extractVP8Dimensions(uint16_t& width, uint16_t& height) const;
 };
