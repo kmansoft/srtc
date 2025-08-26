@@ -38,10 +38,10 @@ PacketKind DepacketizerH264::getPacketKind(const JitterBufferItem* packet) const
         const auto value = reader.readU8();
         const auto type = value & 0x1F;
 
-        if (type == h264::STAP_A) {
+        if (type == h264::kPacket_STAP_A) {
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
             return PacketKind::Standalone;
-        } else if (type == h264::FU_A) {
+        } else if (type == h264::kPacket_FU_A) {
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
             if (reader.remaining() >= 1) {
                 const auto header = reader.readU8();
@@ -79,7 +79,7 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const JitterBufferI
         const auto value = reader.readU8();
         const auto type = value & 0x1F;
 
-        if (type == h264::STAP_A) {
+        if (type == h264::kPacket_STAP_A) {
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
             while (reader.remaining() >= 2) {
                 const auto size = reader.readU16();

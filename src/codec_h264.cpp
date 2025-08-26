@@ -102,6 +102,15 @@ size_t NaluParser::currDataSize() const
     return mNextPos - mPos - mSkip;
 }
 
+//////////
+
+bool isParameterNalu(uint8_t naluType)
+{
+    return naluType == NaluType::SPS || naluType == NaluType::PPS;
+}
+
+//////////
+
 uint32_t BitReader::readBit()
 {
     if ((bitPos >> 3) >= dataSize)

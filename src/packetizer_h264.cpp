@@ -9,6 +9,7 @@
 #include "srtc/rtp_time_source.h"
 #include "srtc/track.h"
 
+#include <cassert>
 #include <list>
 
 #define LOG(level, ...) srtc::log(level, "H264_pktzr", __VA_ARGS__)
@@ -21,6 +22,7 @@ using namespace h264;
 PacketizerH264::PacketizerH264(const std::shared_ptr<Track>& track)
     : PacketizerVideo(track)
 {
+    assert(track->getCodec() == Codec::H264);
 }
 
 PacketizerH264::~PacketizerH264() = default;
@@ -93,18 +95,20 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
         } else if (naluType == NaluType::KeyFrame) {
             // Send codec-specific data first as a STAP-A
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
-            if (!mSPS.empty() && !mPPS.empty() && !addedParameters) {
+            if (!addedParameters && !mSPS.empty() && !mPPS.empty()) {
                 const uint8_t nri = std::max(mSPS.front() & 0x60, mPPS.front() & 0x60);
 
                 ByteBuffer payload;
                 ByteWriter writer(payload);
 
                 // nri is already shifted left
-                writer.writeU8(nri | STAP_A);
+                writer.writeU8(nri | kPacket_STAP_A);
 
+                // SPS
                 writer.writeU16(static_cast<uint16_t>(mSPS.size()));
                 writer.write(mSPS);
 
+                // PPS
                 writer.writeU16(static_cast<uint16_t>(mPPS.size()));
                 writer.write(mPPS);
 
@@ -118,7 +122,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             addedParameters = true;
         }
 
-        if (naluType == NaluType::SEI || naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
+        if (!isParameterNalu(naluType)) {
             // Now the frame itself
             const auto naluDataPtr = parser.currData();
             const auto naluDataSize = parser.currDataSize();
@@ -146,7 +150,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                                                       padding,
                                                       std::move(extension),
                                                       std::move(payload)));
-            } else {
+            } else if (naluDataSize > 1) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
 
@@ -167,8 +171,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     // The "-2" is for FU_A headers
                     packetSize = adjustPacketSize(basicPacketSize - 2, padding, extension);
                     if (packetNumber == 0 && packetSize >= dataSize) {
-                        // The frame now fits in one packet, but a FU-A cannot
-                        // have both start and end
+                        // The frame now fits in one packet, but a FU-A cannot have both start and end
                         packetSize = dataSize - 10;
                     }
 
@@ -176,7 +179,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     ByteWriter writer(payload);
 
                     // nri is already shifted left
-                    const uint8_t fuIndicator = nri | FU_A;
+                    const uint8_t fuIndicator = nri | kPacket_FU_A;
                     writer.writeU8(fuIndicator);
 
                     const auto isStart = packetNumber == 0;

@@ -940,7 +940,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
             const auto octet_count = rtcpReader.readU32();
 
             LOG(SRTC_LOG_V,
-                "*** Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
+                "Sender Report: ssrc = %u, ntp_h = %u, ntp_l = %u, packet_count = %u, octet_count = %u, media = %s",
                 ssrc,
                 ntp_high,
                 ntp_low,

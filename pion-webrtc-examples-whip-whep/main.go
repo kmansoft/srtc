@@ -38,13 +38,25 @@ var (
 
 // nolint:gocognit
 func main() {
-	flagIsVP8Mode := false
-	flag.BoolVar(&flagIsVP8Mode, "vp8", false, "Use the VP8 codec (default is H264)")
+	flagCodec := ""
+	flag.StringVar(&flagCodec, "codec", "", "The codec to use: vp8, h264, h265 (default is h264)")
 	flag.Parse()
 
-	if flagIsVP8Mode {
-		fmt.Println("Using VP8 for video")
-		gVideoCodecMime = webrtc.MimeTypeVP8
+	if flagCodec != "" {
+		switch flagCodec {
+		case "vp8":
+			fmt.Println("Using VP8 for video")
+			gVideoCodecMime = webrtc.MimeTypeVP8
+		case "h264":
+			fmt.Println("Using H264 for video")
+			gVideoCodecMime = webrtc.MimeTypeH264
+		case "h265":
+			fmt.Println("Using H265 for video")
+			gVideoCodecMime = webrtc.MimeTypeH265
+		default:
+			fmt.Printf("Invalid codec name %s\n", flagCodec)
+			return
+		}
 	}
 
 	// Everything below is the Pion WebRTC API! Thanks for using it ❤️.
