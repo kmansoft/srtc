@@ -57,27 +57,5 @@ bool isParameterNalu(uint8_t naluType);
 bool isKeyFrameNalu(uint8_t nalu_type);
 bool isFrameStart(const uint8_t* frame, size_t size);
 
-//////////
-
-class BitReader
-{
-public:
-    BitReader(const uint8_t* buffer, size_t size)
-        : data(buffer)
-        , dataSize(size)
-        , bitPos(0)
-    {
-    }
-
-    uint32_t readBit();
-    uint32_t readBits(size_t n);
-    uint32_t readUnsignedExpGolomb();
-
-private:
-    const uint8_t* const data;
-    const size_t dataSize;
-    size_t bitPos;
-};
-
 } // namespace srtc::h265
 

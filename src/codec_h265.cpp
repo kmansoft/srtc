@@ -122,55 +122,12 @@ bool isFrameStart(const uint8_t* frame, size_t size)
     }
 
     const auto nalu_type = (frame[0] >> 1) & 0x3F;
-    if (nalu_type >= 16 && nalu_type <= 21) {
-        // IDR, CRA, BLA - always starts new frame
-        return true;
-    } else if (nalu_type <= 9) {
+    if (nalu_type <= 21) {
         // Regular slice - check first_slice_segment_in_pic_flag
-        // Parse slice header to get this bit
         return (frame[2] & 0x80) != 0;
     } else {
         // Non-slice NAL unit
         return false;
     }
 }
-
-//////////
-
-uint32_t BitReader::readBit()
-{
-    if ((bitPos >> 3) >= dataSize)
-        return 0;
-
-    uint8_t byte = data[bitPos >> 3];
-    uint32_t bit = (byte >> (7 - (bitPos & 7))) & 1;
-    bitPos++;
-    return bit;
-}
-
-uint32_t BitReader::readBits(size_t n)
-{
-    uint32_t value = 0;
-    for (size_t i = 0; i < n; i++) {
-        value = (value << 1) | readBit();
-    }
-    return value;
-}
-
-uint32_t BitReader::readUnsignedExpGolomb()
-{
-    // Count leading zeros
-    int leadingZeros = 0;
-    while (readBit() == 0 && leadingZeros < 32) {
-        leadingZeros++;
-    }
-
-    if (leadingZeros == 0)
-        return 0;
-
-    // Read remaining bits
-    uint32_t remainingBits = readBits(leadingZeros);
-    return (1 << leadingZeros) - 1 + remainingBits;
-}
-
 } // namespace srtc::h265
