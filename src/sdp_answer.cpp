@@ -115,6 +115,8 @@ std::optional<srtc::Codec> parse_codec(const std::string& s)
         return srtc::Codec::VP8;
     } else if (s == "H264") {
         return srtc::Codec::H264;
+    } else if (s == "H265") {
+        return srtc::Codec::H265;
     } else if (s == "opus") {
         return srtc::Codec::Opus;
     } else if (s == "rtx") {

@@ -1,5 +1,6 @@
 #include "media_reader.h"
 #include "media_reader_h264.h"
+#include "media_reader_h265.h"
 #include "media_reader_vp8.h"
 
 #include <iostream>
@@ -41,6 +42,8 @@ std::shared_ptr<MediaReader> MediaReader::create(const std::string& filename)
 
     if (ext == ".h264") {
         return std::make_shared<MediaReaderH264>(filename);
+    } else if (ext == ".h265") {
+        return std::make_shared<MediaReaderH265>(filename);
     } else if (ext == ".webm") {
         return std::make_shared<MediaReaderVP8>(filename);
     }

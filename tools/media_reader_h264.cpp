@@ -85,32 +85,44 @@ LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
 
 void MediaReaderH264::printInfo(const srtc::ByteBuffer& data) const
 {
-    uint32_t nalu_count = 0;
-    uint32_t parameter_count = 0;
-    uint32_t frame_count = 0;
+    uint32_t all_nalu_count = 0;
+    uint32_t frame_nalu_count = 0;
+    uint32_t sps_count = 0;
+    uint32_t pps_count = 0;
+    uint32_t all_frame_count = 0;
+    uint32_t key_frame_count = 0;
 
     for (srtc::h264::NaluParser parser(data); parser; parser.next()) {
-        nalu_count += 1;
+        all_nalu_count += 1;
 
         switch (parser.currType()) {
         default:
             break;
         case srtc::h264::NaluType::SPS:
+            sps_count += 1;
+            break;
         case srtc::h264::NaluType::PPS:
-            parameter_count += 1;
+            pps_count += 1;
             break;
         case srtc::h264::NaluType::KeyFrame:
         case srtc::h264::NaluType::NonKeyFrame:
+            frame_nalu_count += 1;
             srtc::h264::BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
             const auto first_mb_in_slice = br.readUnsignedExpGolomb();
             if (first_mb_in_slice == 0) {
-                frame_count += 1;
+                all_frame_count += 1;
+                if (parser.currType() == srtc::h264::NaluType::KeyFrame) {
+                    key_frame_count += 1;
+                }
             }
             break;
         }
     }
 
-    std::cout << "*** NALU count:      " << std::setw(4) << nalu_count << std::endl;
-    std::cout << "*** Parameter count: " << std::setw(4) << parameter_count << std::endl;
-    std::cout << "*** Frame count:     " << std::setw(4) << frame_count << std::endl;
+    std::cout << "*** NALU count (all):   " << std::setw(4) << all_nalu_count << std::endl;
+    std::cout << "*** NALU count (frame): " << std::setw(4) << frame_nalu_count << std::endl;
+    std::cout << "*** SPS count:          " << std::setw(4) << sps_count << std::endl;
+    std::cout << "*** PPS count:          " << std::setw(4) << pps_count << std::endl;
+    std::cout << "*** Frame count (all):  " << std::setw(4) << all_frame_count << std::endl;
+    std::cout << "*** Frame count (key):  " << std::setw(4) << key_frame_count << std::endl;
 }

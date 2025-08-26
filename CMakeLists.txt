@@ -43,6 +43,7 @@ add_library(srtc
         include/srtc/extension_map.h
         include/srtc/extended_value.h
         include/srtc/codec_h264.h
+        include/srtc/codec_h265.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
@@ -104,6 +105,7 @@ add_library(srtc
         src/extension_map.cpp
         src/extended_value.cpp
         src/codec_h264.cpp
+        src/codec_h265.cpp
         src/ice_agent.cpp
         src/jitter_buffer.cpp
         src/logging.cpp
@@ -374,6 +376,8 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/media_reader_h264.cpp
                 tools/media_reader_vp8.h
                 tools/media_reader_vp8.cpp
+                tools/media_reader_h265.h
+                tools/media_reader_h265.cpp
         )
 
         add_dependencies(srtc_publish srtc)
