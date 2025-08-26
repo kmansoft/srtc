@@ -43,15 +43,19 @@ func main() {
 	flag.Parse()
 
 	if flagCodec != "" {
-		if flagCodec == "vp8" {
+		switch flagCodec {
+		case "vp8":
 			fmt.Println("Using VP8 for video")
 			gVideoCodecMime = webrtc.MimeTypeVP8
-		} else if flagCodec == "h264" {
+		case "h264":
 			fmt.Println("Using H264 for video")
 			gVideoCodecMime = webrtc.MimeTypeH264
-		} else if flagCodec == "h265" {
+		case "h265":
 			fmt.Println("Using H265 for video")
 			gVideoCodecMime = webrtc.MimeTypeH265
+		default:
+			fmt.Printf("Invalid codec name %s\n", flagCodec)
+			return
 		}
 	}
 
