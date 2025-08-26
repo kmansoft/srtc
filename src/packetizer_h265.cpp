@@ -1,5 +1,5 @@
-#include "srtc/packetizer_h264.h"
-#include "srtc/codec_h264.h"
+#include "srtc/packetizer_h265.h"
+#include "srtc/codec_h265.h"
 #include "srtc/logging.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_extension_builder.h"
@@ -12,29 +12,32 @@
 #include <cassert>
 #include <list>
 
-#define LOG(level, ...) srtc::log(level, "H264_pktzr", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "H265_pktzr", __VA_ARGS__)
 
 namespace srtc
 {
+using namespace h265;
 
-using namespace h264;
-
-PacketizerH264::PacketizerH264(const std::shared_ptr<Track>& track)
+PacketizerH265::PacketizerH265(const std::shared_ptr<Track>& track)
     : PacketizerVideo(track)
 {
-    assert(track->getCodec() == Codec::H264);
+    assert(track->getCodec() == Codec::H265);
 }
 
-PacketizerH264::~PacketizerH264() = default;
+PacketizerH265::~PacketizerH265() = default;
 
-void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
+void PacketizerH265::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
 {
+    mVPS.clear();
     mSPS.clear();
     mPPS.clear();
 
     for (const auto& item : csd) {
         for (NaluParser parser(item); parser; parser.next()) {
             switch (parser.currType()) {
+            case NaluType::VPS:
+                mVPS.assign(parser.currData(), parser.currDataSize());
+                break;
             case NaluType::SPS:
                 mSPS.assign(parser.currData(), parser.currDataSize());
                 break;
@@ -47,16 +50,16 @@ void PacketizerH264::setCodecSpecificData(const std::vector<ByteBuffer>& csd)
         }
     }
 
-    if (mSPS.empty() || mPPS.empty()) {
-        LOG(SRTC_LOG_E, "Could not extract SPS and PPS from codec specific data");
+    if (mVPS.empty() || mSPS.empty() || mPPS.empty()) {
+        LOG(SRTC_LOG_E, "Could not extract VPS, SPS, and PPS from codec specific data");
     }
 }
 
-bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
+bool PacketizerH265::isKeyFrame(const ByteBuffer& frame) const
 {
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naluType = parser.currType();
-        if (naluType == NaluType::KeyFrame) {
+        if (isKeyFrameNalu(naluType)) {
             return true;
         }
     }
@@ -64,15 +67,15 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
+std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
                                                                const std::shared_ptr<RtpExtensionSource>& twcc,
                                                                size_t mediaProtectionOverhead,
                                                                int64_t pts_usec,
-                                                               const srtc::ByteBuffer& frame)
+                                                               const ByteBuffer& frame)
 {
     std::list<std::shared_ptr<RtpPacket>> result;
 
-    // https://datatracker.ietf.org/doc/html/rfc6184
+    // https://datatracker.ietf.org/doc/html/rfc7798
 
     bool addedParameters = false;
 
@@ -86,23 +89,29 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
     for (NaluParser parser(frame); parser; parser.next()) {
         const auto naluType = parser.currType();
 
-        if (naluType == NaluType::SPS) {
+        if (naluType == NaluType::VPS) {
+            // Update VPS
+            mVPS.assign(parser.currData(), parser.currDataSize());
+        } else if (naluType == NaluType::SPS) {
             // Update SPS
             mSPS.assign(parser.currData(), parser.currDataSize());
         } else if (naluType == NaluType::PPS) {
             // Update PPS
             mPPS.assign(parser.currData(), parser.currDataSize());
-        } else if (naluType == NaluType::KeyFrame) {
-            // Send codec-specific data first as a STAP-A
-            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
-            if (!addedParameters && !mSPS.empty() && !mPPS.empty()) {
-                const uint8_t nri = std::max(mSPS.front() & 0x60, mPPS.front() & 0x60);
-
+        } else if (isKeyFrameNalu(naluType)) {
+            // Send codec-specific data first as an AP
+            // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+            if (!addedParameters && !mVPS.empty() && !mSPS.empty() && !mPPS.empty()) {
                 ByteBuffer payload;
                 ByteWriter writer(payload);
 
-                // nri is already shifted left
-                writer.writeU8(nri | kPacket_STAP_A);
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4
+                writer.writeU8(kPacket_AP << 1);
+                writer.writeU8(0);
+
+                // VPS
+                writer.writeU16(static_cast<uint16_t>(mVPS.size()));
+                writer.write(mVPS);
 
                 // SPS
                 writer.writeU16(static_cast<uint16_t>(mSPS.size()));
@@ -128,13 +137,13 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
             const auto naluDataSize = parser.currDataSize();
 
             uint8_t padding = getPadding(track, simulcast, twcc, naluDataSize);
-            RtpExtension extension = buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, 0);
+            RtpExtension extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
 
             if (packetSize >= naluDataSize) {
-                // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
                 const auto marker = parser.isAtEnd();
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
@@ -150,13 +159,13 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                                                       padding,
                                                       std::move(extension),
                                                       std::move(payload)));
-            } else if (naluDataSize > 1) {
-                // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
-                const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
+            } else if (naluDataSize > 2) {
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+                auto dataPtr = naluDataPtr + 2;
+                auto dataSize = naluDataSize - 2;
 
-                // The "+1" is to skip the NALU type
-                auto dataPtr = naluDataPtr + 1;
-                auto dataSize = naluDataSize - 1;
+                uint8_t layerId = ((naluDataPtr[0] & 0x01) << 5) | ((naluDataPtr[1] >> 3) & 0x1F);
+                uint8_t temporalId = naluDataPtr[1] & 0x07;
 
                 auto packetNumber = 0;
                 while (dataSize > 0) {
@@ -164,28 +173,27 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
 
                     if (packetNumber > 0) {
                         padding = getPadding(track, simulcast, twcc, naluDataSize);
-                        extension =
-                            buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, packetNumber);
+                        extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), packetNumber);
                     }
 
-                    // The "-2" is for FU_A headers
-                    packetSize = adjustPacketSize(basicPacketSize - 2, padding, extension);
+                    // The "-3" is for FU headers
+                    packetSize = adjustPacketSize(basicPacketSize - 3, padding, extension);
                     if (packetNumber == 0 && packetSize >= dataSize) {
-                        // The frame now fits in one packet, but a FU-A cannot have both start and end
+                        // The frame now fits in one packet, but a FU cannot have both start and end
                         packetSize = dataSize - 10;
                     }
 
                     ByteBuffer payload;
                     ByteWriter writer(payload);
 
-                    // nri is already shifted left
-                    const uint8_t fuIndicator = nri | kPacket_FU_A;
-                    writer.writeU8(fuIndicator);
+                    // The payload header contains a copy of the layer id and temporal id
+                    uint16_t payloadHeader = (kPacket_FU << 9) | (layerId << 3) | temporalId;
+                    writer.writeU16(payloadHeader);
 
                     const auto isStart = packetNumber == 0;
                     const auto isEnd = dataSize <= packetSize;
                     const uint8_t fuHeader =
-                        (isStart ? (1 << 7) : 0) | (isEnd ? (1 << 6) : 0) | static_cast<uint8_t>(naluType);
+                        (isStart ? (1 << 7) : 0) | (isEnd ? (1 << 6) : 0) | static_cast<uint8_t>(naluType & 0x3F);
                     writer.writeU8(fuHeader);
 
                     const auto marker = isEnd && parser.isAtEnd();

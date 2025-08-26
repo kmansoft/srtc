@@ -47,7 +47,7 @@ LoadedMedia MediaReaderH265::loadMedia(bool print_info) const
                     loaded_frame.pts_usec = pts_usec;
                     pts_usec += 1000 * 40; // 25 fps
 
-                    if (srtc::h265::isKeyFrame(frame_nalu_type)) {
+                    if (srtc::h265::isKeyFrameNalu(frame_nalu_type)) {
                         loaded_frame.csd.push_back(vps.copy());
                         loaded_frame.csd.push_back(sps.copy());
                         loaded_frame.csd.push_back(pps.copy());
@@ -68,7 +68,7 @@ LoadedMedia MediaReaderH265::loadMedia(bool print_info) const
         LoadedFrame loaded_frame = {};
         loaded_frame.pts_usec = pts_usec;
 
-        if (srtc::h265::isKeyFrame(frame_nalu_type)) {
+        if (srtc::h265::isKeyFrameNalu(frame_nalu_type)) {
             loaded_frame.csd.push_back(vps.copy());
             loaded_frame.csd.push_back(sps.copy());
             loaded_frame.csd.push_back(pps.copy());
@@ -111,7 +111,7 @@ void MediaReaderH265::printInfo(const srtc::ByteBuffer& buf) const
             frame_nalu_count += 1;
             if (srtc::h265::isFrameStart(parser.currData(), parser.currDataSize())) {
                 all_frame_count += 1;
-                if (srtc::h265::isKeyFrame(nalu_type)) {
+                if (srtc::h265::isKeyFrameNalu(nalu_type)) {
                     key_frame_count += 1;
                 }
             }

@@ -7,10 +7,13 @@
 namespace srtc::h264
 {
 
-// https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
+// https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
 
-constexpr uint8_t STAP_A = 24;
-constexpr uint8_t FU_A = 28;
+constexpr uint8_t kPacket_STAP_A = 24;
+
+// https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
+
+constexpr uint8_t kPacket_FU_A = 28;
 
 // T-REC-H.264-201304-S
 
@@ -47,6 +50,12 @@ private:
     size_t mNextPos;
     size_t mNextSkip;
 };
+
+//////////
+
+bool isParameterNalu(uint8_t naluType);
+
+//////////
 
 class BitReader
 {

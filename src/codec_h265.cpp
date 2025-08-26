@@ -104,7 +104,12 @@ size_t NaluParser::currDataSize() const
 
 //////////
 
-bool isKeyFrame(uint8_t nalu_type)
+bool isParameterNalu(uint8_t naluType)
+{
+    return naluType == NaluType::VPS || naluType == NaluType::SPS || naluType == NaluType::PPS;
+}
+
+bool isKeyFrameNalu(uint8_t nalu_type)
 {
     return nalu_type == srtc::h265::NaluType::KeyFrame19 || nalu_type == srtc::h265::NaluType::KeyFrame20 ||
            nalu_type == srtc::h265::NaluType::KeyFrame21;

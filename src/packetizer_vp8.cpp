@@ -3,12 +3,15 @@
 #include "srtc/rtp_time_source.h"
 #include "srtc/track.h"
 
+#include <cassert>
+
 namespace srtc
 {
 
 PacketizerVP8::PacketizerVP8(const std::shared_ptr<Track>& track)
     : PacketizerVideo(track)
 {
+    assert(track->getCodec() == Codec::VP8);
 }
 
 PacketizerVP8::~PacketizerVP8() = default;

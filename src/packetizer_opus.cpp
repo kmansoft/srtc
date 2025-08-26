@@ -5,12 +5,15 @@
 #include "srtc/rtp_time_source.h"
 #include "srtc/track.h"
 
+#include <cassert>
+
 namespace srtc
 {
 
 PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
 	: Packetizer(track)
 {
+    assert(track->getCodec() == Codec::Opus);
 }
 
 PacketizerOpus::~PacketizerOpus() = default;
