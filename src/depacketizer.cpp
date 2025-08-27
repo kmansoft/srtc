@@ -1,5 +1,6 @@
 #include "srtc/depacketizer.h"
 #include "srtc/depacketizer_h264.h"
+#include "srtc/depacketizer_h265.h"
 #include "srtc/depacketizer_opus.h"
 #include "srtc/depacketizer_vp8.h"
 #include "srtc/track.h"
@@ -22,6 +23,8 @@ std::pair<std::shared_ptr<Depacketizer>, Error> Depacketizer::make(const std::sh
         return { std::make_shared<DepacketizerVP8>(track), Error::OK };
     case Codec::H264:
         return { std::make_shared<DepacketizerH264>(track), Error::OK };
+    case Codec::H265:
+        return { std::make_shared<DepacketizerH265>(track), Error::OK };
     case Codec::Opus:
         return { std::make_shared<DepacketizerOpus>(track), Error::OK };
     default:
