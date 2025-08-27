@@ -179,6 +179,10 @@ private:
     std::shared_ptr<Packetizer> mVideoSinglePacketizer;
     std::shared_ptr<Packetizer> mAudioPacketizer;
 
+    // Depacketizers
+    std::shared_ptr<Depacketizer> mVideoDepacketizer;
+    std::shared_ptr<Depacketizer> mAudioDepacketizer;
+
     // Jitter buffers
     std::shared_ptr<JitterBuffer> mJitterBufferVideo;
     std::shared_ptr<JitterBuffer> mJitterBufferAudio;

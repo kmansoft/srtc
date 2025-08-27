@@ -208,9 +208,13 @@ int main(int argc, char* argv[])
     videoCodecH264.codec = Codec::H264;
     videoCodecH264.profile_level_id = 0x42e01f;
 
+    SubVideoCodec videoCodecH265 = {};
+    videoCodecH265.codec = Codec::H265;
+
     SubVideoConfig videoConfig = {};
     videoConfig.codec_list.push_back(videoCodecVP8);
     videoConfig.codec_list.push_back(videoCodecH264);
+    videoConfig.codec_list.push_back(videoCodecH265);
 
     SubAudioCodec audioCodec = {};
     audioCodec.codec = Codec::Opus;
@@ -257,7 +261,10 @@ int main(int argc, char* argv[])
         if (!track) {
             std::cout << "Saving audio output is requested, but there is no audio track" << std::endl;
             exit(1);
-        } else if (track->getCodec() == srtc::Codec::Opus) {
+        }
+
+        const auto codec = track->getCodec();
+        if (codec == srtc::Codec::Opus) {
             mediaWriterAudio = std::make_shared<MediaWriterOgg>(gOutputAudioFilename, track);
             mediaWriterAudio->start();
         } else {
@@ -271,10 +278,13 @@ int main(int argc, char* argv[])
         if (!track) {
             std::cout << "Saving audio output is requested, but there is no video track" << std::endl;
             exit(1);
-        } else if (track->getCodec() == srtc::Codec::VP8) {
+        }
+
+        const auto codec = track->getCodec();
+        if (codec == srtc::Codec::VP8) {
             mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
-        } else if (track->getCodec() == srtc::Codec::H264) {
+        } else if (codec == srtc::Codec::H264 || codec == srtc::Codec::H265) {
             mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
         } else {

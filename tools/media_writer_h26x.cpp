@@ -9,7 +9,7 @@ MediaWriterH26x::MediaWriterH26x(const std::string& filename, const std::shared_
     , mOutFrameCount(0)
     , mOutByteCount(0)
 {
-    checkExtension({ ".h264" });
+    checkExtension({ ".h264", ".h265" });
 }
 
 MediaWriterH26x::~MediaWriterH26x()

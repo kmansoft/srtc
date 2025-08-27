@@ -222,6 +222,20 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
             }
         } else if (mDirection == Direction::Subscribe) {
             // Jitter buffers are created when we connect because we have to know the rtt
+            if (mVideoSingleTrack) {
+                const auto [depacketizer, error] = Depacketizer::make(mVideoSingleTrack);
+                if (error.isError()) {
+                    return error;
+                }
+                mVideoDepacketizer = depacketizer;
+            }
+            if (mAudioTrack) {
+                const auto [depacketizer, error] = Depacketizer::make(mAudioTrack);
+                if (error.isError()) {
+                    return error;
+                }
+                mAudioDepacketizer = depacketizer;
+            }
         }
 
         // We are started
@@ -748,22 +762,18 @@ void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
         }
 
         if (const auto track = mVideoSingleTrack) {
-            const auto [depacketizer, error] = Depacketizer::make(track);
-            if (error.isError()) {
-                LOG(SRTC_LOG_E, "Cannot create depacketizer for video: %s", error.message.c_str());
-            } else {
-                mJitterBufferVideo =
-                    std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
-            }
+            assert(mVideoDepacketizer);
+            mVideoDepacketizer->reset();
+
+            mJitterBufferVideo =
+                std::make_shared<JitterBuffer>(track, mVideoDepacketizer, kJitterBufferSize, length, nackDelay);
         }
         if (const auto track = mAudioTrack) {
-            const auto [depacketizer, error] = Depacketizer::make(track);
-            if (error.isError()) {
-                LOG(SRTC_LOG_E, "Cannot create depacketizer for audio: %s", error.message.c_str());
-            } else {
-                mJitterBufferAudio =
-                    std::make_shared<JitterBuffer>(track, depacketizer, kJitterBufferSize, length, nackDelay);
-            }
+            assert(mAudioDepacketizer);
+            mAudioDepacketizer->reset();
+
+            mJitterBufferAudio =
+                std::make_shared<JitterBuffer>(track, mAudioDepacketizer, kJitterBufferSize, length, nackDelay);
         }
     }
 
