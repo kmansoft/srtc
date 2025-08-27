@@ -10,7 +10,7 @@ namespace
 
 constexpr auto kHaveSPS = 0x01u;
 constexpr auto kHavePPS = 0x02u;
-constexpr auto kHaveKey = 0x04u;
+constexpr auto kHaveKey = 0x10u;
 
 constexpr auto kHaveAll = kHaveSPS | kHavePPS | kHaveKey;
 
