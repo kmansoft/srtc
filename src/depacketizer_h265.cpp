@@ -46,10 +46,10 @@ PacketKind DepacketizerH265::getPacketKind(const ByteBuffer& payload, bool marke
             // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
             if (reader.remaining() >= 2) {
                 reader.skip(1);
-                const auto header = reader.readU8();
-                if ((header & (1 << 7)) != 0) {
+                const auto fuHeader = reader.readU8();
+                if ((fuHeader & (1 << 7)) != 0) {
                     return PacketKind::Start;
-                } else if ((header & (1 << 6)) != 0) {
+                } else if ((fuHeader & (1 << 6)) != 0) {
                     return PacketKind::End;
                 } else {
                     return PacketKind::Middle;
@@ -101,7 +101,7 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const JitterBufferI
                 reader.skip(size);
             }
         } else {
-            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
+            // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
             extractImpl(out, packet, packet->payload.copy());
         }
     }
