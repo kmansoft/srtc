@@ -12,7 +12,7 @@
 #include <cassert>
 #include <list>
 
-#define LOG(level, ...) srtc::log(level, "Packetizer_h265", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "Packetizer_H265", __VA_ARGS__)
 
 namespace srtc
 {

@@ -3,7 +3,7 @@
 #include "srtc/logging.h"
 #include "srtc/util.h"
 
-#define LOG(level, ...) srtc::log(level, "DepacketizerH265", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "Depacketizer_H265", __VA_ARGS__)
 
 namespace
 {
