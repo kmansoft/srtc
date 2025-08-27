@@ -11,7 +11,7 @@ public:
     explicit DepacketizerVP8(const std::shared_ptr<Track>& track);
     ~DepacketizerVP8() override;
 
-    [[nodiscard]] PacketKind getPacketKind(const JitterBufferItem* packet) const override;
+    [[nodiscard]] PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const override;
 
     void reset() override;
 

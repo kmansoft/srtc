@@ -95,14 +95,14 @@ DepacketizerVP8::DepacketizerVP8(const std::shared_ptr<Track>& track)
 
 DepacketizerVP8::~DepacketizerVP8() = default;
 
-PacketKind DepacketizerVP8::getPacketKind(const JitterBufferItem* packet) const
+PacketKind DepacketizerVP8::getPacketKind(const ByteBuffer& payload, bool marker) const
 {
     // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
 
     // |X|R|N|S|R| PID |
 
-    const auto data = packet->payload.data();
-    const auto size = packet->payload.size();
+    const auto data = payload.data();
+    const auto size = payload.size();
 
     if (size >= 1) {
         const auto firstByte = data[0];
@@ -110,11 +110,11 @@ PacketKind DepacketizerVP8::getPacketKind(const JitterBufferItem* packet) const
         const auto pid = firstByte & 0x07;
 
         if (start && pid == 0) {
-            if (packet->marker) {
+            if (marker) {
                 return PacketKind::Standalone;
             }
             return PacketKind::Start;
-        } else if (packet->marker) {
+        } else if (marker) {
             return PacketKind::End;
         } else {
             return PacketKind::Middle;

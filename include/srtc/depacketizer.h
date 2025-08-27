@@ -20,7 +20,7 @@ public:
     explicit Depacketizer(const std::shared_ptr<Track>& track);
     virtual ~Depacketizer();
 
-    [[nodiscard]] virtual PacketKind getPacketKind(const JitterBufferItem* packet) const = 0;
+    [[nodiscard]] virtual PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const = 0;
 
     virtual void reset() = 0;
 

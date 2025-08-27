@@ -11,7 +11,7 @@ DepacketizerOpus::DepacketizerOpus(const std::shared_ptr<Track>& track)
 }
 DepacketizerOpus::~DepacketizerOpus() = default;
 
-PacketKind DepacketizerOpus::getPacketKind(const JitterBufferItem* packet) const
+PacketKind DepacketizerOpus::getPacketKind(const ByteBuffer& payload, bool marker) const
 {
     return PacketKind::Standalone;
 }
@@ -23,7 +23,7 @@ void DepacketizerOpus::reset()
 
 void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
 {
-    assert(getPacketKind(packet) == PacketKind::Standalone);
+    assert(getPacketKind(packet->payload, packet->marker) == PacketKind::Standalone);
 
     out.clear();
 

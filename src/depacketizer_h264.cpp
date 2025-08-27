@@ -30,9 +30,9 @@ DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
 
 DepacketizerH264::~DepacketizerH264() = default;
 
-PacketKind DepacketizerH264::getPacketKind(const JitterBufferItem* packet) const
+PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& payload, bool marker) const
 {
-    ByteReader reader(packet->payload);
+    ByteReader reader(payload);
     if (reader.remaining() >= 1) {
         // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
         const auto value = reader.readU8();

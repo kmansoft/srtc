@@ -268,8 +268,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     item->payload = std::move(payload);
 
-    item->kind = PacketKind::Standalone;
-    item->kind = mDepacketizer->getPacketKind(item);
+    item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
 }
 
 int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
@@ -373,11 +372,14 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 #ifdef NDEBUG
 #else
                     assert(!mTempBufferList.empty());
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.front()) == PacketKind::Start);
+                    assert(mDepacketizer->getPacketKind(mTempBufferList.front()->payload,
+                                                        mTempBufferList.front()->marker) == PacketKind::Start);
                     for (size_t i = 1; i < mTempBufferList.size() - 1; i += 1) {
-                        assert(mDepacketizer->getPacketKind(mTempBufferList[i]) == PacketKind::Middle);
+                        assert(mDepacketizer->getPacketKind(mTempBufferList[i]->payload, mTempBufferList[i]->marker) ==
+                               PacketKind::Middle);
                     }
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.back()) == PacketKind::End);
+                    assert(mDepacketizer->getPacketKind(mTempBufferList.back()->payload,
+                                                        mTempBufferList.back()->marker) == PacketKind::End);
 #endif
 
                     // Extract, possibly into multiple frames (theoretical)

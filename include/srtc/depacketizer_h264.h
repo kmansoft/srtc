@@ -12,7 +12,7 @@ public:
     explicit DepacketizerH264(const std::shared_ptr<Track>& track);
     ~DepacketizerH264() override;
 
-    [[nodiscard]] PacketKind getPacketKind(const JitterBufferItem* packet) const override;
+    [[nodiscard]] PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const override;
 
     void reset() override;
 

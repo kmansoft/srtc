@@ -11,7 +11,7 @@ public:
     explicit DepacketizerOpus(const std::shared_ptr<Track>& track);
     ~DepacketizerOpus() override;
 
-    [[nodiscard]] PacketKind getPacketKind(const JitterBufferItem* packet) const override;
+    [[nodiscard]] PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const override;
 
     void reset() override;
 
