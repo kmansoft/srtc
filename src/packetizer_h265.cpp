@@ -161,11 +161,11 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                                                       std::move(payload)));
             } else if (naluDataSize > 2) {
                 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-                auto dataPtr = naluDataPtr + 2;
-                auto dataSize = naluDataSize - 2;
-
                 uint8_t layerId = ((naluDataPtr[0] & 0x01) << 5) | ((naluDataPtr[1] >> 3) & 0x1F);
                 uint8_t temporalId = naluDataPtr[1] & 0x07;
+
+                auto dataPtr = naluDataPtr + 2;
+                auto dataSize = naluDataSize - 2;
 
                 auto packetNumber = 0;
                 while (dataSize > 0) {
