@@ -15,10 +15,6 @@
 #include <list>
 
 #define LOG(level, ...) srtc::log(level, "Packetizer_AV1", __VA_ARGS__)
-#include "srtc/packetizer_av1.h"
-
-#include <iostream>
-#include <unistd.h>
 
 namespace
 {
