@@ -47,6 +47,9 @@ func main() {
 		case "vp8":
 			fmt.Println("Using VP8 for video")
 			gVideoCodecMime = webrtc.MimeTypeVP8
+		case "av1":
+			fmt.Println("Using AV1 for video")
+			gVideoCodecMime = webrtc.MimeTypeAV1
 		case "h264":
 			fmt.Println("Using H264 for video")
 			gVideoCodecMime = webrtc.MimeTypeH264

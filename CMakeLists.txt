@@ -376,12 +376,17 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/http_whip_whep.h
                 tools/media_reader.h
                 tools/media_reader.cpp
+                tools/media_reader_av1.h
+                tools/media_reader_av1.cpp
                 tools/media_reader_h264.h
                 tools/media_reader_h264.cpp
-                tools/media_reader_vp8.h
-                tools/media_reader_vp8.cpp
                 tools/media_reader_h265.h
                 tools/media_reader_h265.cpp
+                tools/media_reader_vp8.h
+                tools/media_reader_vp8.cpp
+                tools/media_reader_webm.h
+                tools/media_reader_webm.cpp
+                tools/media_reader_webm.cpp
         )
 
         add_dependencies(srtc_publish srtc)
