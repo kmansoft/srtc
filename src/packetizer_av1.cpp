@@ -99,8 +99,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
     // The "-4" is for 2 byte LEB128 size, 1 byte of OBU header and 1 byte of extension
     const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead) - 4;
 
-    std::unique_ptr<ByteBuffer> payload;
-    std::unique_ptr<ByteWriter> writer;
+    ByteBuffer payload;
+    ByteWriter writer(payload);
 
     for (av1::ObuParser parser(frame); parser; parser.next()) {
         const auto obuType = parser.currType();
@@ -115,27 +115,23 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
         while (obuSize > 0) {
             auto writeNow = std::min<size_t>(obuSize, basicPacketSize);
 
-            if (payload) {
-                const auto packetSizeSoFar = payload->size();
+            if (!payload.empty()) {
+                const auto packetSizeSoFar = payload.size();
                 if (packetSizeSoFar < basicPacketSize - 100u) {
                     writeNow = std::min<size_t>(obuSize, basicPacketSize - packetSizeSoFar);
                 } else {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
                     result.push_back(std::make_shared<RtpPacket>(
-                        track, false, rollover, sequence, frameTimestamp, 0, std::move(*payload)));
+                        track, false, rollover, sequence, frameTimestamp, 0, std::move(payload)));
 
-                    payload.reset();
-                    writer.reset();
+                    payload.clear();
                 }
             }
 
-            if (!payload) {
-                payload = std::make_unique<ByteBuffer>();
-                writer = std::make_unique<ByteWriter>(*payload);
-
+            if (payload.empty()) {
                 // https://aomediacodec.github.io/av1-rtp-spec/#aggregation-header
                 // |Z|Y|0 0|N|-|-|-|
-                writer->writeU8(((isContinuation ? 1 : 0) << 7) | (isNewCodedVideoSequence ? 1 : 0) << 3);
+                writer.writeU8(((isContinuation ? 1 : 0) << 7) | (isNewCodedVideoSequence ? 1 : 0) << 3);
                 isNewCodedVideoSequence = false;
             }
 
@@ -144,32 +140,31 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
 
             // Calculate and write size = obu_header() + obu_extension_header() + payload size
             const auto writeSize = (isFirstPacketFromOBU ? 1 : 0) + (isNeedHeaderExtension ? 1 : 0) + writeNow;
-            writer->writeLEB128(writeSize);
+            writer.writeLEB128(writeSize);
 
             if (isFirstPacketFromOBU) {
                 // https://aomediacodec.github.io/av1-spec/#obu-header-syntax
-                writer->writeU8((obuType << 3) | ((isNeedHeaderExtension ? 1 : 0) << 2));
+                writer.writeU8((obuType << 3) | ((isNeedHeaderExtension ? 1 : 0) << 2));
 
                 if (isNeedHeaderExtension) {
                     // https://aomediacodec.github.io/av1-spec/#obu-extension-header-syntax
-                    writer->writeU8((temporalId << 5) | (spatialId << 3));
+                    writer.writeU8((temporalId << 5) | (spatialId << 3));
                 }
             }
 
             // Payload
-            writer->write(obuData, writeNow);
+            writer.write(obuData, writeNow);
 
             // Was this partial?
             isContinuation = writeNow < obuSize;
             if (isContinuation) {
-                payload->data()[0] |= (1 << 6);
+                payload.data()[0] |= (1 << 6);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(std::make_shared<RtpPacket>(
-                    track, false, rollover, sequence, frameTimestamp, 0, std::move(*payload)));
+                    track, false, rollover, sequence, frameTimestamp, 0, std::move(payload)));
 
-                payload.reset();
-                writer.reset();
+                payload.clear();
             }
 
             // Advance
@@ -178,10 +173,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
         }
     }
 
-    if (payload) {
+    if (!payload.empty()) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
         result.push_back(
-            std::make_shared<RtpPacket>(track, true, rollover, sequence, frameTimestamp, 0, std::move(*payload)));
+            std::make_shared<RtpPacket>(track, true, rollover, sequence, frameTimestamp, 0, std::move(payload)));
     }
 
     for (const auto& item : result) {
