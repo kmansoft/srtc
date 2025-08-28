@@ -155,7 +155,7 @@ jobs:
       - name: Package
         run: |
           mkdir -p release
-          cp ${{ github.workspace }}/*.h264 ${{ github.workspace }}/*.webm release/
+          cp ${{ github.workspace }}/*.h264 ${{ github.workspace }}/*.h265 ${{ github.workspace }}/*.webm release/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -190,6 +190,8 @@ jobs:
             artifacts/video-files/sintel-vp8.webm
             artifacts/video-files/sintel.h264
             artifacts/video-files/sintel_with_slices.h264
+            artifacts/video-files/sintel.h265
+            artifacts/video-files/sintel_with_slices.h265
           draft: false
           prerelease: false
           generate_release_notes: true
