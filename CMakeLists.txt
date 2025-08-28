@@ -50,6 +50,7 @@ add_library(srtc
         include/srtc/jitter_buffer.h
         include/srtc/logging.h
         include/srtc/packetizer.h
+        include/srtc/packetizer_av1.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_h265.h
         include/srtc/packetizer_opus.h
@@ -113,6 +114,7 @@ add_library(srtc
         src/jitter_buffer.cpp
         src/logging.cpp
         src/packetizer.cpp
+        src/packetizer_av1.cpp
         src/packetizer_h264.cpp
         src/packetizer_h265.cpp
         src/packetizer_opus.cpp
@@ -158,6 +160,8 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        include/srtc/codec_av1.h
+        src/codec_av1.cpp
 )
 
 if (APPLE)
