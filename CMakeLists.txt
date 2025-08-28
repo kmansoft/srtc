@@ -36,6 +36,7 @@ add_library(srtc
         include/srtc/byte_buffer.h
         include/srtc/depacketizer.h
         include/srtc/depacketizer_h264.h
+        include/srtc/depacketizer_h265.h
         include/srtc/depacketizer_opus.h
         include/srtc/depacketizer_vp8.h
         include/srtc/error.h
@@ -100,6 +101,7 @@ add_library(srtc
         src/byte_buffer.cpp
         src/depacketizer.cpp
         src/depacketizer_h264.cpp
+        src/depacketizer_h265.cpp
         src/depacketizer_opus.cpp
         src/depacketizer_vp8.cpp
         src/error.cpp

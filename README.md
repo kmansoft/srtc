@@ -7,7 +7,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
-- Video codecs: VP8, H264 (any profile ID), more are coming.
+- Video codecs: VP8, H264 (any profile id), H265. AV1 is coming.
 - Audo codec: Opus.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
@@ -144,13 +144,27 @@ Switch back to the browser, after a second or two (keyframe delay) you should se
 First please run the Pion WebRTC server like this to use VP8 (by default it uses H264):
 
 ```bash
-./run.sh -vp8
+./run.sh -codec vp8
 ```
 
 To send video to Pion, run the publish sample like this:
 
 ```bash
 ./build/srtc_publish[.exe] -f sintel-vp8.webm
+```
+
+#### Using an H265 input file
+
+First please run the Pion WebRTC server like this to use H265 (by default it uses H264):
+
+```bash
+./run.sh -codec h265
+```
+
+To send video to Pion, run the publish sample like this:
+
+```bash
+./build/srtc_publish[.exe] -f sintel.h265
 ```
 
 ### A command line tool for subscribing
@@ -186,10 +200,10 @@ VLC, you can use the below option to adjust playback speed:
 
 #### Running in VP8 mode
 
-Run the Pion server like this, just like for publishing:
+Run the Pion server like this, just like for publishing, and use the web page to publish media.
 
 ```bash
-./run.sh -vp8
+./run.sh -codec vp8
 ```
 
 And then subscribe like this:
@@ -200,6 +214,20 @@ And then subscribe like this:
 
 The resulting webm file will not contain any audio, just video - if you'd like to capture audio as well,
 please add `--oa output.ogg`.
+
+#### Running in H265 mode
+
+Run the Pion server like this, just like for publishing, and use the web page to publish media.
+
+```bash
+./run.sh -codec h265
+```
+
+And then subscribe like this:
+
+```bash
+./build/srtc_subscribe[.exe] --ov output.h265
+```
 
 ### An Android demo / sample
 

@@ -3,14 +3,14 @@
 #include "srtc/logging.h"
 #include "srtc/util.h"
 
-#define LOG(level, ...) srtc::log(level, "DepacketizerH264", __VA_ARGS__)
+#define LOG(level, ...) srtc::log(level, "Depacketizer_H264", __VA_ARGS__)
 
 namespace
 {
 
 constexpr auto kHaveSPS = 0x01u;
 constexpr auto kHavePPS = 0x02u;
-constexpr auto kHaveKey = 0x04u;
+constexpr auto kHaveKey = 0x10u;
 
 constexpr auto kHaveAll = kHaveSPS | kHavePPS | kHaveKey;
 
