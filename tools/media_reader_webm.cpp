@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 #include <cstring>
+#include <optional>
 
 WebmReader::WebmReader(const uint8_t* data, size_t size)
     : mData(data)
