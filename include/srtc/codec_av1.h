@@ -26,6 +26,8 @@ public:
 
     void next();
 
+    [[nodiscard]] bool isAtEnd() const;
+
     [[nodiscard]] uint8_t currType() const;
     [[nodiscard]] const uint8_t* currData() const;
     [[nodiscard]] size_t currSize() const;

@@ -52,6 +52,15 @@ void ObuParser::next()
     }
 }
 
+bool ObuParser::isAtEnd() const
+{
+    if (mCurrData == nullptr) {
+        return true;
+    }
+
+    return mCurrData + mCurrSize >= mEnd;
+}
+
 uint8_t ObuParser::currType() const
 {
     return mCurrType;
