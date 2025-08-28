@@ -20,6 +20,31 @@
 #include <iostream>
 #include <unistd.h>
 
+namespace
+{
+
+#if 0
+
+void dumpFrame(int64_t pts_usec, const srtc::ByteBuffer& frame)
+{
+    static uint32_t n = 0;
+
+    for (srtc::av1::ObuParser parser(frame); parser; parser.next()) {
+        const auto obuType = parser.currType();
+        const auto isFrame = srtc::av1::isFrameObuType(obuType);
+        const auto isKeyFrame = isFrame && srtc::av1::isKeyFrameObu(parser.currData(), parser.currSize());
+        std::cout << "AV1 " << std::setw(4) << n << ", pts = " << std::setw(8) << pts_usec
+                  << ", OBU type = " << static_cast<int>(obuType) << ", size = " << std::setw(5) << parser.currSize()
+                  << ", key = " << isKeyFrame << ", end = " << parser.isAtEnd() << std::endl;
+    }
+
+    n += 1;
+}
+
+#endif
+
+} // namespace
+
 namespace srtc
 {
 
@@ -52,21 +77,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
 {
     std::list<std::shared_ptr<RtpPacket>> result;
 
-    static uint32_t n = 0;
-
-    for (av1::ObuParser parser(frame); parser; parser.next()) {
-        const auto obuType = parser.currType();
-        const auto isFrame = av1::isFrameObuType(obuType);
-        const auto isKeyFrame = isFrame && av1::isKeyFrameObu(parser.currData(), parser.currSize());
-        std::cout << "AV1 " << std::setw(4) << n << ", pts = " << std::setw(8) << pts_usec
-                  << ", OBU type = " << static_cast<int>(obuType) << ", size = " << std::setw(5) << parser.currSize()
-                  << ", key = " << isKeyFrame << ", end = " << parser.isAtEnd() << std::endl;
-    }
-
-    n += 1;
-
-    //////////
-
     const auto track = getTrack();
 
     const auto timeSource = track->getRtpTimeSource();
@@ -84,12 +94,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
         }
     }
 
-    if (!isNewCodedVideoSequence) {
-        // Debugging - only send key frames
-        return result;
-    }
-
     bool isContinuation = false;
+
+    // The "-4" is for 2 byte LEB128 size, 1 byte of OBU header and 1 byte of extension
+    const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead) - 4;
 
     std::unique_ptr<ByteBuffer> payload;
     std::unique_ptr<ByteWriter> writer;
@@ -105,11 +113,12 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
         const auto isNeedHeaderExtension = temporalId != 0 || spatialId != 0;
 
         while (obuSize > 0) {
-            auto writeNow = std::min<size_t>(obuSize, 1200u);
+            auto writeNow = std::min<size_t>(obuSize, basicPacketSize);
 
             if (payload) {
-                if (payload->size() < 1000u) {
-                    writeNow = std::min<size_t>(obuSize, 1200u - payload->size());
+                const auto packetSizeSoFar = payload->size();
+                if (packetSizeSoFar < basicPacketSize - 100u) {
+                    writeNow = std::min<size_t>(obuSize, basicPacketSize - packetSizeSoFar);
                 } else {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
                     result.push_back(std::make_shared<RtpPacket>(
@@ -119,6 +128,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
                     writer.reset();
                 }
             }
+
             if (!payload) {
                 payload = std::make_unique<ByteBuffer>();
                 writer = std::make_unique<ByteWriter>(*payload);
@@ -129,16 +139,21 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
                 isNewCodedVideoSequence = false;
             }
 
+            // When splitting an OBU across multiple packets, only the first packet has the OBU headers
+            const auto isFirstPacketFromOBU = obuData == parser.currData();
+
             // Calculate and write size = obu_header() + obu_extension_header() + payload size
-            const auto writeSize = 1 + (isNeedHeaderExtension ? 1 : 0) + writeNow;
+            const auto writeSize = (isFirstPacketFromOBU ? 1 : 0) + (isNeedHeaderExtension ? 1 : 0) + writeNow;
             writer->writeLEB128(writeSize);
 
-            // https://aomediacodec.github.io/av1-spec/#obu-header-syntax
-            writer->writeU8((obuType << 3) | ((isNeedHeaderExtension ? 1 : 0) << 2));
+            if (isFirstPacketFromOBU) {
+                // https://aomediacodec.github.io/av1-spec/#obu-header-syntax
+                writer->writeU8((obuType << 3) | ((isNeedHeaderExtension ? 1 : 0) << 2));
 
-            if (isNeedHeaderExtension) {
-                // https://aomediacodec.github.io/av1-spec/#obu-extension-header-syntax
-                writer->writeU8((temporalId << 5) | (spatialId << 3));
+                if (isNeedHeaderExtension) {
+                    // https://aomediacodec.github.io/av1-spec/#obu-extension-header-syntax
+                    writer->writeU8((temporalId << 5) | (spatialId << 3));
+                }
             }
 
             // Payload
