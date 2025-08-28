@@ -49,7 +49,7 @@ private:
 
 //////////
 
-bool isFrameObuType(uint8_t obu_type);
+bool isFrameObuType(uint8_t obuType);
 bool isKeyFrameObu(const uint8_t* data, size_t size);
 
 } // namespace srtc::av1

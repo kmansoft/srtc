@@ -153,9 +153,9 @@ static constexpr uint8_t AV1_KEY_FRAME = 0;
 static constexpr uint8_t AV1_INTRA_ONLY_FRAME = 2;
 // static constexpr uint8_t AV1_SWITCH_FRAME = 3;
 
-bool isFrameObuType(uint8_t obu_type)
+bool isFrameObuType(uint8_t obuType)
 {
-    return obu_type == ObuType::FrameHeader || obu_type == ObuType::Frame || obu_type == ObuType::RedundantFrame;
+    return obuType == ObuType::FrameHeader || obuType == ObuType::Frame || obuType == ObuType::RedundantFrame;
 }
 
 bool isKeyFrameObu(const uint8_t* data, size_t size)
