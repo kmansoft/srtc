@@ -167,7 +167,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                 auto dataPtr = naluDataPtr + 2;
                 auto dataSize = naluDataSize - 2;
 
-                auto packetNumber = 0;
+                auto packetNumber = 0u;
                 while (dataSize > 0) {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 

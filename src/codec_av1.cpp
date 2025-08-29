@@ -158,24 +158,24 @@ bool isFrameObuType(uint8_t obuType)
     return obuType == ObuType::FrameHeader || obuType == ObuType::Frame || obuType == ObuType::RedundantFrame;
 }
 
-bool isKeyFrameObu(const uint8_t* data, size_t size)
+bool isKeyFrameObu(uint8_t obuType, const uint8_t* data, size_t size)
 {
-    if (size < 1) {
-        return false;
+    if (isFrameObuType(obuType) && size > 1) {
+        // https://aomediacodec.github.io/av1-spec/#frame-header-obu-syntax
+        // https://aomediacodec.github.io/av1-spec/#frame-obu-syntax
+        // https://aomediacodec.github.io/av1-spec/#uncompressed-header-syntax
+        const auto header = data[0];
+        if ((header & 0x80) != 0) {
+            // Show existing frame
+            return false;
+        }
+
+        // https://aomediacodec.github.io/av1-spec/#uncompressed-header-semantics
+        const auto frame_type = (header >> 5) & 0x03;
+        return frame_type == AV1_KEY_FRAME || frame_type == AV1_INTRA_ONLY_FRAME;
     }
 
-    // https://aomediacodec.github.io/av1-spec/#frame-header-obu-syntax
-    // https://aomediacodec.github.io/av1-spec/#frame-obu-syntax
-    // https://aomediacodec.github.io/av1-spec/#uncompressed-header-syntax
-    const auto header = data[0];
-    if ((header & 0x80) != 0) {
-        // Show existing frame
-        return false;
-    }
-
-    // https://aomediacodec.github.io/av1-spec/#uncompressed-header-semantics
-    const auto frame_type = (header >> 5) & 0x03;
-    return frame_type == AV1_KEY_FRAME || frame_type == AV1_INTRA_ONLY_FRAME;
+    return false;
 }
 
 } // namespace srtc::av1

@@ -13,6 +13,7 @@ struct ObuType {
     // https://aomediacodec.github.io/av1-spec/#obu-header-semantics
 
     static constexpr uint8_t SequenceHeader = 1;
+    static constexpr uint8_t TemporalDelimiter = 2;
     static constexpr uint8_t FrameHeader = 3;
     static constexpr uint8_t Frame = 6;
     static constexpr uint8_t RedundantFrame = 7;
@@ -50,6 +51,6 @@ private:
 //////////
 
 bool isFrameObuType(uint8_t obuType);
-bool isKeyFrameObu(const uint8_t* data, size_t size);
+bool isKeyFrameObu(uint8_t obuType, const uint8_t* data, size_t size);
 
 } // namespace srtc::av1

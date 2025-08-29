@@ -63,7 +63,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
 
     const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
 
-    auto packetNumber = 0;
+    auto packetNumber = 0u;
     while (dataSize > 0) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
 
