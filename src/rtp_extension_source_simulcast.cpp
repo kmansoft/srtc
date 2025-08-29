@@ -46,7 +46,7 @@ bool RtpExtensionSourceSimulcast::shouldAdd(const std::shared_ptr<Track>& track,
 {
 	if (mIsExtensionsValid && track->isSimulcast()) {
 		const auto stats = track->getStats();
-		return stats->getSentBytes() < 100 || packetizer->isKeyFrame(frame);
+		return stats->getSentPackets() < 100 || packetizer->isKeyFrame(frame);
 	}
 	return false;
 }
@@ -77,7 +77,7 @@ uint8_t RtpExtensionSourceSimulcast::getPadding([[maybe_unused]] const std::shar
 
 bool RtpExtensionSourceSimulcast::wantsExtension(const std::shared_ptr<Track>& track,
 												 bool isKeyFrame,
-												 int packetNumber) const
+												 unsigned int packetNumber) const
 {
 	return !mCurGoogleVLA.empty();
 }
@@ -85,7 +85,7 @@ bool RtpExtensionSourceSimulcast::wantsExtension(const std::shared_ptr<Track>& t
 void RtpExtensionSourceSimulcast::addExtension(RtpExtensionBuilder& builder,
 											   const std::shared_ptr<Track>& track,
 											   bool isKeyFrame,
-											   int packetNumber)
+											   unsigned int packetNumber)
 {
 	builder.addStringValue(mVideoExtMediaId, mCurMediaId);
 	builder.addStringValue(mVideoExtStreamId, mCurLayerName);

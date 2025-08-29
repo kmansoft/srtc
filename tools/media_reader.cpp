@@ -1,4 +1,6 @@
 #include "media_reader.h"
+
+#include "media_reader_av1.h"
 #include "media_reader_h264.h"
 #include "media_reader_h265.h"
 #include "media_reader_vp8.h"
@@ -45,7 +47,13 @@ std::shared_ptr<MediaReader> MediaReader::create(const std::string& filename)
     } else if (ext == ".h265") {
         return std::make_shared<MediaReaderH265>(filename);
     } else if (ext == ".webm") {
-        return std::make_shared<MediaReaderVP8>(filename);
+        std::string name = index_sep == std::string::npos ? filename : filename.substr(index_sep + 1);
+        if (name.find("-av1") != std::string::npos) {
+            return std::make_shared<MediaReaderAV1>(filename);
+        }
+        if (name.find("-vp8") != std::string::npos) {
+            return std::make_shared<MediaReaderVP8>(filename);
+        }
     }
 
     std::cout << "*** Cannot determine media type for " << filename << std::endl;

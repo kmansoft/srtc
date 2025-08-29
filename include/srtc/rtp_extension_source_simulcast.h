@@ -42,12 +42,12 @@ public:
 
 	[[nodiscard]] bool wantsExtension(const std::shared_ptr<Track>& track,
 									  bool isKeyFrame,
-									  int packetNumber) const override;
+									  unsigned int packetNumber) const override;
 
 	void addExtension(RtpExtensionBuilder& builder,
 					  const std::shared_ptr<Track>& track,
 					  bool isKeyFrame,
-					  int packetNumber) override;
+					  unsigned int packetNumber) override;
 
 	void updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const;
 

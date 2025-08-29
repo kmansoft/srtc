@@ -103,7 +103,7 @@ void printUsage(const char* programName)
 {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  -f, --file <path>    Path to H.264 file (default: " << gInputFile << ")" << std::endl;
+    std::cout << "  -f, --file <path>    Path to input file, H264/H265/WEBM (default: " << gInputFile << ")" << std::endl;
     std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
     std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
     std::cout << "  -l, --loop           Loop the file" << std::endl;

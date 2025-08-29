@@ -53,7 +53,7 @@ srtc::RtpExtension PacketizerVideo::buildExtension(const std::shared_ptr<srtc::T
                                                    const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
                                                    const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
                                                    bool isKeyFrame,
-                                                   int packetNumber)
+                                                   unsigned int packetNumber)
 {
     srtc::RtpExtension extension;
 

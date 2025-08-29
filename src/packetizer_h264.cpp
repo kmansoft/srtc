@@ -138,18 +138,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 const auto marker = parser.isAtEnd();
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
-                result.push_back(
-                    extension.empty()
-                        ? std::make_shared<RtpPacket>(
-                              track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
-                        : std::make_shared<RtpPacket>(track,
-                                                      marker,
-                                                      rollover,
-                                                      sequence,
-                                                      frameTimestamp,
-                                                      padding,
-                                                      std::move(extension),
-                                                      std::move(payload)));
+                result.push_back(std::make_shared<RtpPacket>(track,
+                                                             marker,
+                                                             rollover,
+                                                             sequence,
+                                                             frameTimestamp,
+                                                             padding,
+                                                             std::move(extension),
+                                                             std::move(payload)));
             } else if (naluDataSize > 1) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
                 const auto nri = static_cast<uint8_t>(naluDataPtr[0] & 0x60);
@@ -158,7 +154,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                 auto dataPtr = naluDataPtr + 1;
                 auto dataSize = naluDataSize - 1;
 
-                auto packetNumber = 0;
+                auto packetNumber = 0u;
                 while (dataSize > 0) {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
@@ -193,18 +189,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared
                     const auto writeNow = std::min(dataSize, packetSize);
                     writer.write(dataPtr, writeNow);
 
-                    result.push_back(
-                        extension.empty()
-                            ? std::make_shared<RtpPacket>(
-                                  track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
-                            : std::make_shared<RtpPacket>(track,
-                                                          marker,
-                                                          rollover,
-                                                          sequence,
-                                                          frameTimestamp,
-                                                          padding,
-                                                          std::move(extension),
-                                                          std::move(payload)));
+                    result.push_back(std::make_shared<RtpPacket>(track,
+                                                                 marker,
+                                                                 rollover,
+                                                                 sequence,
+                                                                 frameTimestamp,
+                                                                 padding,
+                                                                 std::move(extension),
+                                                                 std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

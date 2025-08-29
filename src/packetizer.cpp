@@ -1,4 +1,5 @@
 #include "srtc/packetizer.h"
+#include "srtc/packetizer_av1.h"
 #include "srtc/packetizer_h264.h"
 #include "srtc/packetizer_h265.h"
 #include "srtc/packetizer_opus.h"
@@ -34,6 +35,8 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::make(const std::shared
         return { std::make_shared<PacketizerH264>(track), Error::OK };
     case Codec::H265:
         return { std::make_shared<PacketizerH265>(track), Error::OK };
+    case Codec::AV1:
+        return { std::make_shared<PacketizerAV1>(track), Error::OK };
     case Codec::Opus:
         return { std::make_shared<PacketizerOpus>(track), Error::OK };
     default:

@@ -120,7 +120,7 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
 
 bool RtpExtensionSourceTWCC::wantsExtension(const std::shared_ptr<Track>& track,
                                             [[maybe_unused]] bool isKeyFrame,
-                                            [[maybe_unused]] int packetNumber) const
+                                            [[maybe_unused]] unsigned int packetNumber) const
 {
     return getExtensionId(track) != 0;
 }
@@ -128,7 +128,7 @@ bool RtpExtensionSourceTWCC::wantsExtension(const std::shared_ptr<Track>& track,
 void RtpExtensionSourceTWCC::addExtension(RtpExtensionBuilder& builder,
                                           const std::shared_ptr<Track>& track,
                                           [[maybe_unused]] bool isKeyFrame,
-                                          [[maybe_unused]] int packetNumber)
+                                          [[maybe_unused]] unsigned int packetNumber)
 {
     // Because of pacing, we don't assign a sequence number here, we do it before generating. But we still want to
     // write a placeholder so that packet size measurement works correctly.

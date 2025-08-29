@@ -113,17 +113,24 @@ std::optional<srtc::Codec> parse_codec(const std::string& s)
 {
     if (s == "VP8") {
         return srtc::Codec::VP8;
-    } else if (s == "H264") {
-        return srtc::Codec::H264;
-    } else if (s == "H265") {
-        return srtc::Codec::H265;
-    } else if (s == "opus") {
-        return srtc::Codec::Opus;
-    } else if (s == "rtx") {
-        return srtc::Codec::Rtx;
-    } else {
-        return {};
     }
+    if (s == "H264") {
+        return srtc::Codec::H264;
+    }
+    if (s == "H265") {
+        return srtc::Codec::H265;
+    }
+    if (s == "AV1") {
+        return srtc::Codec::AV1;
+    }
+    if (s == "opus") {
+        return srtc::Codec::Opus;
+    }
+    if (s == "rtx") {
+        return srtc::Codec::Rtx;
+    }
+
+    return {};
 }
 
 std::vector<std::string> split_list(const std::string& line)

@@ -18,12 +18,12 @@ public:
 
 	[[nodiscard]] virtual bool wantsExtension(const std::shared_ptr<Track>& track,
 											  bool isKeyFrame,
-											  int packetNumber) const = 0;
+											  unsigned int packetNumber) const = 0;
 
 	virtual void addExtension(RtpExtensionBuilder& builder,
 							  const std::shared_ptr<Track>& track,
 							  bool isKeyFrame,
-							  int packetNumber) = 0;
+							  unsigned int packetNumber) = 0;
 };
 
 } // namespace srtc

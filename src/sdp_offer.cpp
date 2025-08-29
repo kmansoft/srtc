@@ -13,6 +13,8 @@ namespace
 const char* codec_to_string(srtc::Codec codec)
 {
     switch (codec) {
+    case srtc::Codec::AV1:
+        return "AV1/90000";
     case srtc::Codec::VP8:
         return "VP8/90000";
     case srtc::Codec::H264:
