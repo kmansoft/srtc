@@ -127,7 +127,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
 
             if (!payload.empty()) {
                 const auto payloadSizeSoFar = payload.size();
-                if (payloadSizeSoFar < usablePayloadSize - 100u) {
+                if (payloadSizeSoFar + 100u < usablePayloadSize) {
                     writeNow = std::min<size_t>(obuCurrSize, usablePayloadSize - payloadSizeSoFar);
                 } else {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
