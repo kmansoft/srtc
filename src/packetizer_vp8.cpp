@@ -85,17 +85,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
 
         // Make a packet
         const auto marker = dataSize <= packetSize;
-        result.push_back(extension.empty()
-                             ? std::make_shared<RtpPacket>(
-                                   track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
-                             : std::make_shared<RtpPacket>(track,
-                                                           marker,
-                                                           rollover,
-                                                           sequence,
-                                                           frameTimestamp,
-                                                           padding,
-                                                           std::move(extension),
-                                                           std::move(payload)));
+        result.push_back(std::make_shared<RtpPacket>(
+            track, marker, rollover, sequence, frameTimestamp, padding, std::move(extension), std::move(payload)));
 
         // Advance
         dataPtr += writeNow;

@@ -147,18 +147,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                 const auto marker = parser.isAtEnd();
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
-                result.push_back(
-                    extension.empty()
-                        ? std::make_shared<RtpPacket>(
-                              track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
-                        : std::make_shared<RtpPacket>(track,
-                                                      marker,
-                                                      rollover,
-                                                      sequence,
-                                                      frameTimestamp,
-                                                      padding,
-                                                      std::move(extension),
-                                                      std::move(payload)));
+                result.push_back(std::make_shared<RtpPacket>(track,
+                                                             marker,
+                                                             rollover,
+                                                             sequence,
+                                                             frameTimestamp,
+                                                             padding,
+                                                             std::move(extension),
+                                                             std::move(payload)));
             } else if (naluDataSize > 2) {
                 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
                 uint8_t layerId = ((naluDataPtr[0] & 0x01) << 5) | ((naluDataPtr[1] >> 3) & 0x1F);
@@ -201,18 +197,14 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                     const auto writeNow = std::min(dataSize, packetSize);
                     writer.write(dataPtr, writeNow);
 
-                    result.push_back(
-                        extension.empty()
-                            ? std::make_shared<RtpPacket>(
-                                  track, marker, rollover, sequence, frameTimestamp, padding, std::move(payload))
-                            : std::make_shared<RtpPacket>(track,
-                                                          marker,
-                                                          rollover,
-                                                          sequence,
-                                                          frameTimestamp,
-                                                          padding,
-                                                          std::move(extension),
-                                                          std::move(payload)));
+                    result.push_back(std::make_shared<RtpPacket>(track,
+                                                                 marker,
+                                                                 rollover,
+                                                                 sequence,
+                                                                 frameTimestamp,
+                                                                 padding,
+                                                                 std::move(extension),
+                                                                 std::move(payload)));
 
                     dataPtr += writeNow;
                     dataSize -= writeNow;

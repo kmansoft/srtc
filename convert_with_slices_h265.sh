@@ -4,6 +4,5 @@ ffmpeg -i sintel_trailer-720p.mp4 \
 	-c:v libx265 \
 	-x265-params "slices=4" \
 	-crf 23 \
-	-g 30 \
 	-c:a copy \
 	sintel_with_slices.h265

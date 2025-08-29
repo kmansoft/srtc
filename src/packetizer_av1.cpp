@@ -108,27 +108,27 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             continue;
         }
 
-        auto obuData = parser.currData();
-        auto obuSize = parser.currSize();
+        auto obuCurrData = parser.currData();
+        auto obuCurrSize = parser.currSize();
 
         // Temporal and spatial ids
         const auto temporalId = parser.currTemporalId();
         const auto spatialId = parser.currSpatialId();
         const auto isNeedHeaderExtension = temporalId != 0 || spatialId != 0;
 
-        while (obuSize > 0) {
+        while (obuCurrSize > 0) {
             if (payload.empty()) {
                 extension = buildExtension(track, simulcast, twcc, isNewCodedVideoSequence, packetNumber);
                 padding = getPadding(track, simulcast, twcc, basicPacketSize);
                 usablePayloadSize = adjustPacketSize(basicPacketSize, padding, extension);
             }
 
-            auto writeNow = std::min<size_t>(obuSize, usablePayloadSize);
+            auto writeNow = std::min<size_t>(obuCurrSize, usablePayloadSize);
 
             if (!payload.empty()) {
                 const auto payloadSizeSoFar = payload.size();
                 if (payloadSizeSoFar < usablePayloadSize - 100u) {
-                    writeNow = std::min<size_t>(obuSize, usablePayloadSize - payloadSizeSoFar);
+                    writeNow = std::min<size_t>(obuCurrSize, usablePayloadSize - payloadSizeSoFar);
                 } else {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
                     result.push_back(std::make_shared<RtpPacket>(track,
@@ -154,7 +154,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             }
 
             // When splitting an OBU across multiple packets, only the first packet has the OBU headers
-            const auto isFirstPacketFromOBU = obuData == parser.currData();
+            const auto isFirstPacketFromOBU = obuCurrData == parser.currData();
 
             // Calculate and write size = obu_header() + obu_extension_header() + payload size
             const auto writeSize = (isFirstPacketFromOBU ? 1 : 0) + (isNeedHeaderExtension ? 1 : 0) + writeNow;
@@ -171,10 +171,10 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             }
 
             // Payload
-            writer.write(obuData, writeNow);
+            writer.write(obuCurrData, writeNow);
 
             // Was this partial?
-            isContinuation = writeNow < obuSize;
+            isContinuation = writeNow < obuCurrSize;
             if (isContinuation) {
                 payload.data()[0] |= (1 << 6);
 
@@ -193,8 +193,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             }
 
             // Advance
-            obuData += writeNow;
-            obuSize -= writeNow;
+            obuCurrData += writeNow;
+            obuCurrSize -= writeNow;
         }
     }
 
