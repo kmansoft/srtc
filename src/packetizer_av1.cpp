@@ -204,12 +204,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             track, true, rollover, sequence, frameTimestamp, padding, std::move(extension), std::move(payload)));
     }
 
-    for (const auto& item : result) {
-        std::cout << "Payload size = " << std::setw(4) << item->getPayloadSize() << ", ext = " << std::setw(4)
-                  << item->getExtension().size() << ", padding = " << std::setw(4)
-                  << static_cast<uint16_t>(item->getPaddingSize()) << std::endl;
-    }
-
     return result;
 }
 

@@ -143,8 +143,6 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
         stats->incrementSentPackets(1);
         stats->incrementSentBytes(protectedData.size());
 
-        std::printf("Pacer: sending %zu bytes\n", protectedData.size());
-
         // Record in TWCC
         if (mTWCC) {
             mTWCC->onBeforeSendingRtpPacket(packet, packetData.buf.size(), protectedData.size());
