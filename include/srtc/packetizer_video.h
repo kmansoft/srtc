@@ -28,7 +28,7 @@ protected:
                                              const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
                                              const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
                                              bool isKeyFrame,
-                                             int packetNumber);
+                                             unsigned int packetNumber);
 
     static size_t adjustPacketSize(size_t basicPacketSize, size_t padding, const srtc::RtpExtension& extension);
 };

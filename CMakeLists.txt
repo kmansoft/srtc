@@ -50,6 +50,7 @@ add_library(srtc
         include/srtc/jitter_buffer.h
         include/srtc/logging.h
         include/srtc/packetizer.h
+        include/srtc/packetizer_av1.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_h265.h
         include/srtc/packetizer_opus.h
@@ -113,6 +114,7 @@ add_library(srtc
         src/jitter_buffer.cpp
         src/logging.cpp
         src/packetizer.cpp
+        src/packetizer_av1.cpp
         src/packetizer_h264.cpp
         src/packetizer_h265.cpp
         src/packetizer_opus.cpp
@@ -158,6 +160,8 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        include/srtc/codec_av1.h
+        src/codec_av1.cpp
 )
 
 if (APPLE)
@@ -376,12 +380,17 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/http_whip_whep.h
                 tools/media_reader.h
                 tools/media_reader.cpp
+                tools/media_reader_av1.h
+                tools/media_reader_av1.cpp
                 tools/media_reader_h264.h
                 tools/media_reader_h264.cpp
-                tools/media_reader_vp8.h
-                tools/media_reader_vp8.cpp
                 tools/media_reader_h265.h
                 tools/media_reader_h265.cpp
+                tools/media_reader_vp8.h
+                tools/media_reader_vp8.cpp
+                tools/media_reader_webm.h
+                tools/media_reader_webm.cpp
+                tools/media_reader_webm.cpp
         )
 
         add_dependencies(srtc_publish srtc)
