@@ -98,7 +98,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
 
     if (mTrack->getMediaType() == MediaType::Video) {
-        std::printf("Consume seq = %llu, size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
+        std::printf(
+            "Consume seq = %" PRIu64 ", size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
 
         if (payload.size() < 800 && packet->getMarker()) {
             std::printf("A small packet with a marker\n");
@@ -626,7 +627,7 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
             }
         }
 
-        std::printf("item seq=%10llu, type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
+        std::printf("item seq=%10" PRIu64 ", type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
     }
 
     for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
