@@ -94,6 +94,8 @@ void MediaWriterOgg::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
             fwrite(m_og.body, 1, m_og.body_len, mFile);
         }
 
+        fflush(mFile);
+
         m_packetno = 1;
     }
 

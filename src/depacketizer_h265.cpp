@@ -141,10 +141,6 @@ bool DepacketizerH265::isFrameStart(const ByteBuffer& payload) const
         const auto nalUnitHeader = reader.readU16();
         const auto type = (nalUnitHeader >> 9) & 0x3Fu;
 
-        if (reader.remaining() < 100) {
-            std::printf("Small packet: %8zu, type = %u\n", reader.remaining(), type);
-        }
-
         if (type == h265::kPacket_AP) {
             // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
             while (reader.remaining() >= 2) {

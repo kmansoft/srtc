@@ -39,6 +39,7 @@ void MediaWriterH26x::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
         const auto& data = frame->data;
 
         fwrite(data.data(), data.size(), 1, mFile);
+        fflush(mFile);
 
         mOutFrameCount += 1;
         mOutByteCount += data.size();

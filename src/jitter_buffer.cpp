@@ -100,10 +100,6 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     if (mTrack->getMediaType() == MediaType::Video) {
         std::printf(
             "Consume seq = %" PRIu64 ", size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
-
-        if (payload.size() < 800 && packet->getMarker()) {
-            std::printf("A small packet with a marker\n");
-        }
     }
 
     // Is this packet too late?
@@ -278,6 +274,34 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     item->payload = std::move(payload);
 
     item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
+
+    for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
+        const char* label = "?";
+        const auto debug_index = debug_seq & mCapacityMask;
+        const auto debug_item = mItemList[debug_index];
+        assert(debug_item);
+
+        if (!debug_item->received) {
+            label = "fill";
+        } else {
+            switch (debug_item->kind) {
+            case PacketKind::Start:
+                label = "start";
+                break;
+            case PacketKind::Middle:
+                label = "middle";
+                break;
+            case PacketKind::End:
+                label = "end";
+                break;
+            case PacketKind::Standalone:
+                label = "standalone";
+                break;
+            }
+        }
+
+        std::printf("item seq=%10" PRIu64 ", type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
+    }
 }
 
 int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
@@ -601,34 +625,6 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
     assert(item);
     assert(item->received);
     assert(item->kind == PacketKind::Start);
-
-    for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
-        const char* label = "?";
-        const auto debug_index = debug_seq & mCapacityMask;
-        const auto debug_item = mItemList[debug_index];
-        assert(debug_item);
-
-        if (!debug_item->received) {
-            label = "fill";
-        } else {
-            switch (debug_item->kind) {
-            case PacketKind::Start:
-                label = "start";
-                break;
-            case PacketKind::Middle:
-                label = "middle";
-                break;
-            case PacketKind::End:
-                label = "end";
-                break;
-            case PacketKind::Standalone:
-                label = "standalone";
-                break;
-            }
-        }
-
-        std::printf("item seq=%10" PRIu64 ", type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
-    }
 
     for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
         index = seq & mCapacityMask;
