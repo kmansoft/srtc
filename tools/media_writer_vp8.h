@@ -25,6 +25,7 @@ private:
     struct VP8Frame {
         int64_t pts_usec;
         srtc::ByteBuffer data;
+        bool is_keyframe;
     };
     std::vector<VP8Frame> mFrameList;
     uint64_t mBaseRtpTimestamp;
@@ -37,6 +38,5 @@ private:
     static void writeEBMLElement(FILE* file, uint32_t id, const void* data, size_t size);
     static void writeVarInt(FILE* file, uint64_t value);
     static int getVarIntWidth(uint64_t value);
-    static bool isKeyFrame(const VP8Frame& frame);
     bool extractVP8Dimensions(uint16_t& width, uint16_t& height) const;
 };

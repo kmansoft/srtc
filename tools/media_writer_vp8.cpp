@@ -65,8 +65,9 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
 
     const auto tag = frameData[0] | (frameData[1] << 8) | (frameData[2] << 16);
     const auto tagFrameType = tag & 0x01;
+    bool is_keyframe = (tagFrameType == 0 && frameSize > 10);
 
-    if (tagFrameType == 0 && frameSize > 10) {
+    if (is_keyframe) {
         // Maintain key frame count
         mOutKeyFrameCount += 1;
     }
@@ -86,6 +87,7 @@ void MediaWriterVP8::write(const std::shared_ptr<srtc::EncodedFrame>& frame)
     VP8Frame outFrame;
     outFrame.pts_usec = pts_usec;
     outFrame.data = std::move(frame->data);
+    outFrame.is_keyframe = is_keyframe;
 
     mFrameList.push_back(std::move(outFrame));
 }
@@ -328,7 +330,7 @@ void MediaWriterVP8::writeClusters(FILE* file)
 
         // Flags - keyframe detection
         uint8_t flags = 0x00;
-        if (i == 0 || isKeyFrame(frame)) {
+        if (i == 0 || frame.is_keyframe) {
             flags |= 0x80; // Keyframe
         }
         block_writer.writeU8(flags);
@@ -346,18 +348,6 @@ void MediaWriterVP8::writeClusters(FILE* file)
     }
 }
 
-bool MediaWriterVP8::isKeyFrame(const VP8Frame& frame)
-{
-    if (frame.data.size() < 3) {
-        return false;
-    }
-
-    const auto* frameData = frame.data.data();
-    const auto tag = frameData[0] | (frameData[1] << 8) | (frameData[2] << 16);
-    const auto tagFrameType = tag & 0x01;
-
-    return tagFrameType == 0;
-}
 
 void MediaWriterVP8::writeEBMLElement(FILE* file, uint32_t id, const void* data, size_t size)
 {
@@ -429,7 +419,7 @@ bool MediaWriterVP8::extractVP8Dimensions(uint16_t& width, uint16_t& height) con
 {
     // Find first keyframe
     for (const auto& frame : mFrameList) {
-        if (isKeyFrame(frame) && frame.data.size() >= 10) {
+        if (frame.is_keyframe && frame.data.size() >= 10) {
             const auto* frameData = frame.data.data();
 
             // VP8 keyframe structure (RFC 6386 Section 9.1)
