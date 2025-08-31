@@ -9,15 +9,16 @@
 namespace srtc::av1
 {
 
-struct ObuType {
-    // https://aomediacodec.github.io/av1-spec/#obu-header-semantics
+namespace ObuType
+{
+// https://aomediacodec.github.io/av1-spec/#obu-header-semantics
 
-    static constexpr uint8_t SequenceHeader = 1;
-    static constexpr uint8_t TemporalDelimiter = 2;
-    static constexpr uint8_t FrameHeader = 3;
-    static constexpr uint8_t Frame = 6;
-    static constexpr uint8_t RedundantFrame = 7;
-};
+static constexpr uint8_t SequenceHeader = 1;
+static constexpr uint8_t TemporalDelimiter = 2;
+static constexpr uint8_t FrameHeader = 3;
+static constexpr uint8_t Frame = 6;
+static constexpr uint8_t RedundantFrame = 7;
+}; // namespace ObuType
 
 class ObuParser
 {

@@ -17,13 +17,14 @@ constexpr uint8_t kPacket_FU_A = 28;
 
 // T-REC-H.264-201304-S
 
-struct NaluType {
-    static constexpr uint8_t NonKeyFrame = 1;
-    static constexpr uint8_t KeyFrame = 5;
-    static constexpr uint8_t SEI = 6;
-    static constexpr uint8_t SPS = 7;
-    static constexpr uint8_t PPS = 8;
-};
+namespace NaluType
+{
+static constexpr uint8_t NonKeyFrame = 1;
+static constexpr uint8_t KeyFrame = 5;
+static constexpr uint8_t SEI = 6;
+static constexpr uint8_t SPS = 7;
+static constexpr uint8_t PPS = 8;
+}; // namespace NaluType
 
 class NaluParser
 {
@@ -78,4 +79,3 @@ public:
 };
 
 } // namespace srtc::h264
-

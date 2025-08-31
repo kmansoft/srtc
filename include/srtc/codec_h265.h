@@ -13,15 +13,16 @@ constexpr uint8_t kPacket_AP = 48;
 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
 constexpr uint8_t kPacket_FU = 49;
 
-struct NaluType {
-    static constexpr uint8_t KeyFrame19 = 19;   // IDR_W_RADL
-    static constexpr uint8_t KeyFrame20 = 20;   // IDR_N_LP
-    static constexpr uint8_t KeyFrame21 = 21;   // CRA_NUT
+namespace NaluType
+{
+static constexpr uint8_t KeyFrame19 = 19; // IDR_W_RADL
+static constexpr uint8_t KeyFrame20 = 20; // IDR_N_LP
+static constexpr uint8_t KeyFrame21 = 21; // CRA_NUT
 
-    static constexpr uint8_t VPS = 32;
-    static constexpr uint8_t SPS = 33;
-    static constexpr uint8_t PPS = 34;
-};
+static constexpr uint8_t VPS = 32;
+static constexpr uint8_t SPS = 33;
+static constexpr uint8_t PPS = 34;
+}; // namespace NaluType
 
 //////////
 
@@ -58,4 +59,3 @@ bool isKeyFrameNalu(uint8_t nalu_type);
 bool isFrameStart(const uint8_t* frame, size_t size);
 
 } // namespace srtc::h265
-
