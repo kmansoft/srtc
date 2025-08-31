@@ -1,5 +1,7 @@
 #include "media_writer_webm.h"
 
+#include <cstring>
+
 namespace
 {
 

@@ -3,6 +3,7 @@
 #include "srtc/byte_buffer.h"
 
 #include <cstdio>
+#include <string>
 #include <vector>
 
 class MediaWriterWebm
