@@ -1,11 +1,11 @@
 #pragma once
 
-#include "srtc/depacketizer.h"
+#include "srtc/depacketizer_video.h"
 
 namespace srtc
 {
 
-class DepacketizerVP8 final : public Depacketizer
+class DepacketizerVP8 final : public DepacketizerVideo
 {
 public:
     explicit DepacketizerVP8(const std::shared_ptr<Track>& track);
@@ -15,7 +15,6 @@ public:
 
     void reset() override;
 
-    void extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet) override;
     void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
 
 private:

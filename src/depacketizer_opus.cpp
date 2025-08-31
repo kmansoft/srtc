@@ -21,22 +21,17 @@ void DepacketizerOpus::reset()
     // Nothing
 }
 
-void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
+void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
-    assert(getPacketKind(packet->payload, packet->marker) == PacketKind::Standalone);
-
     out.clear();
+    assert(packetList.size() == 1);
+
+    const auto packet = packetList[0];
+    assert(getPacketKind(packet->payload, packet->marker) == PacketKind::Standalone);
 
     if (!packet->payload.empty()) {
         out.emplace_back(packet->payload.copy());
     }
-}
-
-void DepacketizerOpus::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
-{
-    // Opus packets are always standalone
-    out.clear();
-    assert(false);
 }
 
 } // namespace srtc

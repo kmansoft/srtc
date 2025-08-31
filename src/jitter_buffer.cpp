@@ -352,7 +352,11 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
         if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->kind == PacketKind::Standalone) {
                 // A standalone packet, which is ready to be extracted, possibly into multiple frames
-                mDepacketizer->extract(mTempFrameList, item);
+                mTempPacketList.clear();
+                mTempPacketList.push_back(item);
+
+                // Extract
+                mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                 // Append to result frame list
                 appendToResult(result, item, item, now, mTempFrameList);
@@ -366,24 +370,25 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 // Start of a multi-packet sequence
                 uint64_t maxSeq = 0;
                 if (findMultiPacketSequence(maxSeq)) {
-                    // Create a list of buffers
-                    extractBufferList(mTempBufferList, seq, maxSeq);
+                    // Create a list of packets
+                    mTempPacketList.clear();
+                    fillItemList(mTempPacketList, seq, maxSeq);
 
 #ifdef NDEBUG
 #else
-                    assert(!mTempBufferList.empty());
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.front()->payload,
-                                                        mTempBufferList.front()->marker) == PacketKind::Start);
-                    for (size_t i = 1; i < mTempBufferList.size() - 1; i += 1) {
-                        assert(mDepacketizer->getPacketKind(mTempBufferList[i]->payload, mTempBufferList[i]->marker) ==
+                    assert(!mTempPacketList.empty());
+                    assert(mDepacketizer->getPacketKind(mTempPacketList.front()->payload,
+                                                        mTempPacketList.front()->marker) == PacketKind::Start);
+                    for (size_t i = 1; i < mTempPacketList.size() - 1; i += 1) {
+                        assert(mDepacketizer->getPacketKind(mTempPacketList[i]->payload, mTempPacketList[i]->marker) ==
                                PacketKind::Middle);
                     }
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.back()->payload,
-                                                        mTempBufferList.back()->marker) == PacketKind::End);
+                    assert(mDepacketizer->getPacketKind(mTempPacketList.back()->payload,
+                                                        mTempPacketList.back()->marker) == PacketKind::End);
 #endif
 
-                    // Extract, possibly into multiple frames (theoretical)
-                    mDepacketizer->extract(mTempFrameList, mTempBufferList);
+                    // Extract, possibly into multiple frames
+                    mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                     // Append to result frame list
                     const auto maxIndex = maxSeq & mCapacityMask;
@@ -520,10 +525,8 @@ JitterBufferItem* JitterBuffer::newLostItem(const std::chrono::steady_clock::tim
     return item_lost;
 }
 
-void JitterBuffer::extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
+void JitterBuffer::fillItemList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
 {
-    out.clear();
-
     for (uint64_t seq = start; seq <= max; seq += 1) {
         const auto index = seq & mCapacityMask;
         auto item = mItemList[index];

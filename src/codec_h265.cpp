@@ -111,8 +111,7 @@ bool isParameterNalu(uint8_t naluType)
 
 bool isKeyFrameNalu(uint8_t nalu_type)
 {
-    return nalu_type == srtc::h265::NaluType::KeyFrame19 || nalu_type == srtc::h265::NaluType::KeyFrame20 ||
-           nalu_type == srtc::h265::NaluType::KeyFrame21;
+    return nalu_type == NaluType::KeyFrame19 || nalu_type == NaluType::KeyFrame20 || nalu_type == NaluType::KeyFrame21;
 }
 
 bool isFrameStart(const uint8_t* frame, size_t size)

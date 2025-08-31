@@ -23,7 +23,7 @@ namespace srtc
 {
 
 DepacketizerH265::DepacketizerH265(const std::shared_ptr<Track>& track)
-    : Depacketizer(track)
+    : DepacketizerVideo(track)
     , mHaveBits(0)
     , mLastRtpTimestamp(0)
 {
@@ -71,6 +71,7 @@ void DepacketizerH265::reset()
     mLastRtpTimestamp = 0;
 }
 
+#if 0
 void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
 {
     out.clear();
@@ -106,46 +107,87 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const JitterBufferI
         }
     }
 }
+#endif
 
 void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
     out.clear();
 
-    ByteBuffer buf;
-    ByteWriter w(buf);
+    std::unique_ptr<ByteBuffer> fu_buf;
+    std::unique_ptr<ByteWriter> fu_wrt;
 
     for (const auto packet : packetList) {
         ByteReader reader(packet->payload);
+        if (reader.remaining() >= 2) {
+            const auto nalUnitHeader = reader.readU16();
+            const auto type = (nalUnitHeader >> 9) & 0x3Fu;
+            const auto layerId = (nalUnitHeader >> 3) & 0x3Fu;
+            const auto temporalId = nalUnitHeader & 0x7u;
 
-        if (reader.remaining() > 2) {
-            const auto payloadHeader = reader.readU16();
-            const auto fuHeader = reader.readU8();
+            if (type == h265::kPacket_AP) {
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+                while (reader.remaining() >= 2) {
+                    const auto size = reader.readU16();
+                    if (reader.remaining() >= size) {
+                        ByteBuffer buf(packet->payload.data() + reader.position(), size);
 
-            uint8_t layerId = (payloadHeader >> 3)  & 0x3F;
-            uint8_t temporalId = payloadHeader & 0x07;
-            uint8_t nalu_type = fuHeader & 0x3F;
+                        const auto nalu_header = (buf.data()[0] << 8) | buf.data()[1];
+                        const auto nalu_type = (nalu_header >> 9) & 0x3Fu;
+                        LOG(SRTC_LOG_Z, "AP     type = %3u, size = %zu", nalu_type, buf.size());
 
-            if (buf.empty()) {
-                w.writeU16((nalu_type << 9) | (layerId << 3) | temporalId);
+                        extractImpl(out, packet, std::move(buf));
+                        reader.skip(size);
+                    } else {
+                        break;
+                    }
+                }
+            } else if (type == h265::kPacket_FU) {
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+                if (reader.remaining() >= 1) {
+                    const auto fuHeader = reader.readU8();
+                    const auto fuIsStart = (fuHeader & (1 << 7)) != 0;
+                    const auto fuIsEnd = (fuHeader & (1 << 6)) != 0;
+                    const auto fuType = fuHeader & 0x3Fu;
+
+                    if (fuIsStart) {
+                        fu_buf = std::make_unique<ByteBuffer>(fuHeader);
+                        fu_wrt = std::make_unique<ByteWriter>(*fu_buf);
+
+                        fu_wrt->writeU16((fuType << 9) | (layerId << 3) | temporalId);
+                    }
+
+                    if (reader.remaining() > 0) {
+                        fu_wrt->write(packet->payload.data() + reader.position(), reader.remaining());
+                    }
+
+                    if (fuIsEnd) {
+                        const auto nalu_type = fuType;
+                        LOG(SRTC_LOG_Z, "FU_A   type = %3u, size = %zu", nalu_type, fu_buf->size());
+
+                        extractImpl(out, packet, std::move(*fu_buf));
+                    }
+                }
+            } else if (type <= 40) {
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
+
+                const auto nalu_type = type;
+                LOG(SRTC_LOG_Z, "SINGLE type = %3u, size = %zu", nalu_type, packet->payload.size());
+
+                extractImpl(out, packet, packet->payload.copy());
             }
-
-            const auto pos = reader.position();
-            w.write(packet->payload.data() + pos, packet->payload.size() - pos);
         }
     }
-
-    extractImpl(out, packetList.back(), std::move(buf));
 }
 
-void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame)
+void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& nalu)
 {
-    if (frame.empty()) {
+    if (nalu.empty()) {
         return;
     }
 
     if ((mHaveBits & kHaveAll) != kHaveAll) {
         // Wait to emit until we have a key frame
-        const auto nalu_type = (frame.front() >> 1) & 0x3F;
+        const auto nalu_type = (nalu.front() >> 1) & 0x3F;
         switch (nalu_type) {
         case h265::NaluType::VPS:
             mHaveBits |= kHaveVPS;
@@ -173,7 +215,7 @@ void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
     }
 
     mFrameBuffer.append(kAnnexB, sizeof(kAnnexB));
-    mFrameBuffer.append(frame);
+    mFrameBuffer.append(nalu);
 
     if (packet->marker) {
         out.push_back(std::move(mFrameBuffer));

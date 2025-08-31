@@ -38,11 +38,13 @@ add_library(srtc
         include/srtc/depacketizer_h264.h
         include/srtc/depacketizer_h265.h
         include/srtc/depacketizer_opus.h
+        include/srtc/depacketizer_video.h
         include/srtc/depacketizer_vp8.h
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
         include/srtc/extended_value.h
+        include/srtc/codec_av1.h
         include/srtc/codec_h264.h
         include/srtc/codec_h265.h
         include/srtc/ice_agent.h
@@ -100,16 +102,18 @@ add_library(srtc
         include/srtc/x509_hash.h
         # Sources
         src/byte_buffer.cpp
+        src/codec_av1.cpp
+        src/codec_h264.cpp
+        src/codec_h265.cpp
         src/depacketizer.cpp
         src/depacketizer_h264.cpp
         src/depacketizer_h265.cpp
         src/depacketizer_opus.cpp
+        src/depacketizer_video.cpp
         src/depacketizer_vp8.cpp
         src/error.cpp
         src/extension_map.cpp
         src/extended_value.cpp
-        src/codec_h264.cpp
-        src/codec_h265.cpp
         src/ice_agent.cpp
         src/jitter_buffer.cpp
         src/logging.cpp
@@ -160,8 +164,6 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
-        include/srtc/codec_av1.h
-        src/codec_av1.cpp
 )
 
 if (APPLE)

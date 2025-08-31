@@ -88,7 +88,7 @@ namespace srtc
 {
 
 DepacketizerVP8::DepacketizerVP8(const std::shared_ptr<Track>& track)
-    : Depacketizer(track)
+    : DepacketizerVideo(track)
     , mSeenKeyFrame(false)
 {
 }
@@ -114,11 +114,11 @@ PacketKind DepacketizerVP8::getPacketKind(const ByteBuffer& payload, bool marker
                 return PacketKind::Standalone;
             }
             return PacketKind::Start;
-        } else if (marker) {
-            return PacketKind::End;
-        } else {
-            return PacketKind::Middle;
         }
+        if (marker) {
+            return PacketKind::End;
+        }
+        return PacketKind::Middle;
     }
 
     return PacketKind::Standalone;
@@ -127,23 +127,6 @@ PacketKind DepacketizerVP8::getPacketKind(const ByteBuffer& payload, bool marker
 void DepacketizerVP8::reset()
 {
     mSeenKeyFrame = false;
-}
-
-void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
-{
-    out.clear();
-
-    ByteBuffer buf;
-    ByteWriter w(buf);
-
-    const uint8_t* payloadData = nullptr;
-    size_t payloadSize = 0;
-    if (!extractPayload(packet->payload, payloadData, payloadSize)) {
-        return;
-    }
-    w.write(payloadData, payloadSize);
-
-    extractImpl(out, packet, std::move(buf));
 }
 
 void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
