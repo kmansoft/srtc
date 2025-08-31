@@ -59,12 +59,6 @@ void DepacketizerH264::reset()
 
 void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
-    LOG(SRTC_LOG_Z,
-        "----- Frame at %8u, seq = %" PRIu64 " to %" PRIu64,
-        static_cast<uint32_t>(packetList.front()->rtp_timestamp_ext),
-        packetList.front()->seq_ext,
-        packetList.back()->seq_ext);
-
     out.clear();
 
     std::unique_ptr<ByteBuffer> fu_buf;
@@ -86,9 +80,6 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
                     const auto size = reader.readU16();
                     if (reader.remaining() >= size && size > 0) {
                         ByteBuffer buf(packet->payload.data() + reader.position(), size);
-
-                        const auto nalu_type = buf.front() & 0x1F;
-                        LOG(SRTC_LOG_Z, "STAP_A type = %3u, size = %zu", nalu_type, buf.size());
 
                         extractImpl(out, packet, std::move(buf));
                         reader.skip(size);
@@ -115,18 +106,11 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
                     }
 
                     if (fuIsEnd && fu_buf) {
-                        const auto nalu_type = fu_buf->front() & 0x1F;
-                        LOG(SRTC_LOG_Z, "FU_A   type = %3u, size = %zu", nalu_type, fu_buf->size());
-
                         extractImpl(out, packet, std::move(*fu_buf));
                     }
                 }
             } else if (type < 23) {
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
-
-                const auto nalu_type = type;
-                LOG(SRTC_LOG_Z, "SINGLE type = %3u, size = %zu", nalu_type, packet->payload.size());
-
                 extractImpl(out, packet, packet->payload.copy());
             }
         }
@@ -199,21 +183,21 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
 
     if ((mHaveBits & kHaveAll) != kHaveAll) {
         // Wait to emit until we have a key frame
-        const auto type = nalu.front() & 0x1F;
-        switch (type) {
-        case h264::NaluType::NonKeyFrame:
-            LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
-            return;
+        const auto nalu_type = nalu.front() & 0x1F;
+        switch (nalu_type) {
         case h264::NaluType::SPS:
             mHaveBits |= kHaveSPS;
             break;
         case h264::NaluType::PPS:
             mHaveBits |= kHavePPS;
             break;
-        case h264::NaluType::KeyFrame:
-            mHaveBits |= kHaveKey;
-            break;
         default:
+            if (h264::isKeyFrameNalu(nalu_type)) {
+                mHaveBits |= kHaveKey;
+            } else if (h264::isSliceNalu(nalu_type)) {
+                LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
+                return;
+            }
             break;
         }
     }

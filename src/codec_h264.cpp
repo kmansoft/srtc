@@ -109,6 +109,11 @@ bool isParameterNalu(uint8_t naluType)
     return naluType == NaluType::SPS || naluType == NaluType::PPS;
 }
 
+bool isKeyFrameNalu(uint8_t naluType)
+{
+    return naluType == NaluType::KeyFrame;
+}
+
 bool isFrameStart(const uint8_t* nalu, size_t size)
 {
     if (size > 0) {
@@ -122,6 +127,11 @@ bool isFrameStart(const uint8_t* nalu, size_t size)
     }
 
     return false;
+}
+
+bool isSliceNalu(uint8_t naluType)
+{
+    return naluType == NaluType::NonKeyFrame || naluType == NaluType::KeyFrame;
 }
 
 bool isSliceFrameStart(const uint8_t* data, size_t size)

@@ -1,8 +1,8 @@
 #include "srtc/depacketizer_h265.h"
 #include "srtc/codec_h265.h"
 #include "srtc/logging.h"
-#include "srtc/util.h"
 #include "srtc/track.h"
+#include "srtc/util.h"
 
 #include <cassert>
 
@@ -60,12 +60,6 @@ void DepacketizerH265::reset()
 
 void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
-    LOG(SRTC_LOG_Z,
-        "----- Frame at %8u, seq = %" PRIu64 " to %" PRIu64,
-        static_cast<uint32_t>(packetList.front()->rtp_timestamp_ext),
-        packetList.front()->seq_ext,
-        packetList.back()->seq_ext);
-
     out.clear();
 
     std::unique_ptr<ByteBuffer> fu_buf;
@@ -86,10 +80,6 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
                     if (reader.remaining() >= size && size >= 2) {
                         ByteBuffer buf(packet->payload.data() + reader.position(), size);
 
-                        const auto apHeader = (buf.data()[0] << 8) | buf.data()[1];
-                        const auto apNaluType = (apHeader >> 9) & 0x3Fu;
-                        LOG(SRTC_LOG_Z, "AP     type = %3u, size = %zu", apNaluType, buf.size());
-
                         extractImpl(out, packet, std::move(buf));
                         reader.skip(size);
                     } else {
@@ -108,10 +98,6 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
                         fu_buf = std::make_unique<ByteBuffer>(fuHeader);
                         fu_wrt = std::make_unique<ByteWriter>(*fu_buf);
 
-                        if (h265::isKeyFrameNalu(fuType)) {
-                            std::printf("Starting key frame nalu %u\n", fuType);
-                        }
-
                         fu_wrt->writeU16((fuType << 9) | (layerId << 3) | temporalId);
                     }
 
@@ -120,18 +106,11 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
                     }
 
                     if (fuIsEnd && fu_buf) {
-                        const auto nalu_type = fuType;
-                        LOG(SRTC_LOG_Z, "FU_A   type = %3u, size = %zu", nalu_type, fu_buf->size());
-
                         extractImpl(out, packet, std::move(*fu_buf));
                     }
                 }
             } else if (type <= 40) {
                 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
-
-                const auto nalu_type = type;
-                LOG(SRTC_LOG_Z, "SINGLE type = %3u, size = %zu", nalu_type, packet->payload.size());
-
                 extractImpl(out, packet, packet->payload.copy());
             }
         }
@@ -213,7 +192,7 @@ void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
         default:
             if (h265::isKeyFrameNalu(nalu_type)) {
                 mHaveBits |= kHaveKey;
-            } else {
+            } else if (h265::isSliceNalu(nalu_type)) {
                 LOG(SRTC_LOG_V, "Not emitting a non-key frame until there is a keyframe");
                 return;
             }

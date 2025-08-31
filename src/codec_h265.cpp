@@ -109,9 +109,9 @@ bool isParameterNalu(uint8_t naluType)
     return naluType == NaluType::VPS || naluType == NaluType::SPS || naluType == NaluType::PPS;
 }
 
-bool isKeyFrameNalu(uint8_t nalu_type)
+bool isKeyFrameNalu(uint8_t naluType)
 {
-    return nalu_type == NaluType::KeyFrame19 || nalu_type == NaluType::KeyFrame20 || nalu_type == NaluType::KeyFrame21;
+    return naluType == NaluType::KeyFrame19 || naluType == NaluType::KeyFrame20 || naluType == NaluType::KeyFrame21;
 }
 
 bool isFrameStart(const uint8_t* nalu, size_t size)
@@ -130,9 +130,9 @@ bool isFrameStart(const uint8_t* nalu, size_t size)
     }
 }
 
-bool isSliceNalu(uint8_t nalu_type)
+bool isSliceNalu(uint8_t naluType)
 {
-    return nalu_type <= 21;
+    return naluType <= 21;
 }
 
 bool isSliceFrameStart(const uint8_t* data, size_t size)
