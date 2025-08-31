@@ -395,8 +395,6 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/media_reader_webm.h
                 tools/media_reader_webm.cpp
                 tools/media_reader_webm.cpp
-                tools/media_writer_webm.h
-                tools/media_writer_webm.cpp
         )
 
         add_dependencies(srtc_publish srtc)
@@ -449,6 +447,8 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/media_writer_ogg.cpp
                 tools/media_writer_vp8.h
                 tools/media_writer_vp8.cpp
+                tools/media_writer_webm.h
+                tools/media_writer_webm.cpp
         )
 
         add_subdirectory(tools/libogg)

@@ -9,13 +9,20 @@ namespace
 void writeVarIntToBuffer(srtc::ByteWriter& writer, uint64_t value)
 {
     int width = 1;
-    if (value > 127) width = 2;
-    if (value > 16383) width = 3;
-    if (value > 2097151) width = 4;
-    if (value > 268435455) width = 5;
-    if (value > 34359738367ULL) width = 6;
-    if (value > 4398046511103ULL) width = 7;
-    if (value > 562949953421311ULL) width = 8;
+    if (value > 127)
+        width = 2;
+    if (value > 16383)
+        width = 3;
+    if (value > 2097151)
+        width = 4;
+    if (value > 268435455)
+        width = 5;
+    if (value > 34359738367ULL)
+        width = 6;
+    if (value > 4398046511103ULL)
+        width = 7;
+    if (value > 562949953421311ULL)
+        width = 8;
 
     uint8_t first_byte = (1 << (8 - width)) | ((value >> ((width - 1) * 8)) & ((1 << (8 - width)) - 1));
     writer.writeU8(first_byte);
@@ -26,7 +33,6 @@ void writeVarIntToBuffer(srtc::ByteWriter& writer, uint64_t value)
 }
 
 } // namespace
-
 
 MediaWriterWebm::MediaWriterWebm(FILE* file,
                                  const std::string& codecId,
@@ -43,7 +49,7 @@ MediaWriterWebm::MediaWriterWebm(FILE* file,
 
 void MediaWriterWebm::write()
 {
-
+    writeWebM();
 }
 
 MediaWriterWebm::~MediaWriterWebm() = default;
@@ -73,7 +79,7 @@ void MediaWriterWebm::writeWebM()
     segment_content.resize(segment_data_size);
     fseek(temp_file, 0, SEEK_SET);
     if (fread(segment_content.data(), 1, segment_data_size, temp_file) != segment_data_size) {
-        std::printf("VP8: Failed to read temporary file\n");
+        std::printf("WebM: Failed to read temporary file\n");
         exit(1);
     }
     fclose(temp_file);
@@ -189,11 +195,10 @@ void MediaWriterWebm::writeTracks(FILE* file)
     const uint8_t track_type[] = { 0x83, 0x81, 0x01 };
     track_writer.write(track_type, sizeof(track_type));
 
-    // CodecID (0x86) = "V_VP8"
-    const char* codec_id = "V_VP8";
+    // CodecID (0x86) = "V_VP8" or "V_AV1"
     track_writer.writeU8(0x86);
-    writeVarIntToBuffer(track_writer, strlen(codec_id));
-    track_writer.write(reinterpret_cast<const uint8_t*>(codec_id), strlen(codec_id));
+    writeVarIntToBuffer(track_writer, mCodecId.size());
+    track_writer.write(reinterpret_cast<const uint8_t*>(mCodecId.data()), mCodecId.size());
 
     // Video (0xE0)
     srtc::ByteBuffer video_buffer;
@@ -290,7 +295,6 @@ void MediaWriterWebm::writeClusters(FILE* file)
     }
 }
 
-
 void MediaWriterWebm::writeEBMLElement(FILE* file, uint32_t id, const void* data, size_t size)
 {
     // Write element ID (big endian, variable length)
@@ -337,7 +341,6 @@ void MediaWriterWebm::writeVarInt(FILE* file, uint64_t value)
     }
 }
 
-
 int MediaWriterWebm::getVarIntWidth(uint64_t value)
 {
     if (value <= 127)
@@ -356,4 +359,3 @@ int MediaWriterWebm::getVarIntWidth(uint64_t value)
         return 7; // 2^49 - 1
     return 8;
 }
-
