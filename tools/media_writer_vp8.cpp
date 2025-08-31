@@ -7,13 +7,13 @@ namespace
 {
 
 // Write multi-byte values in big-endian byte order
-inline void writeBE16(std::vector<uint8_t>& data, uint16_t value)
+void writeBE16(std::vector<uint8_t>& data, uint16_t value)
 {
     data.push_back((value >> 8) & 0xFF);
     data.push_back(value & 0xFF);
 }
 
-inline void writeBE32(std::vector<uint8_t>& data, uint32_t value)
+void writeBE32(std::vector<uint8_t>& data, uint32_t value)
 {
     data.push_back((value >> 24) & 0xFF);
     data.push_back((value >> 16) & 0xFF);
@@ -21,7 +21,7 @@ inline void writeBE32(std::vector<uint8_t>& data, uint32_t value)
     data.push_back(value & 0xFF);
 }
 
-inline void writeBE64(std::vector<uint8_t>& data, uint64_t value)
+void writeBE64(std::vector<uint8_t>& data, uint64_t value)
 {
     data.push_back((value >> 56) & 0xFF);
     data.push_back((value >> 48) & 0xFF);

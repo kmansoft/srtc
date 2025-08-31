@@ -91,6 +91,7 @@ public:
     [[nodiscard]] uint8_t readU8();
     [[nodiscard]] uint16_t readU16();
     [[nodiscard]] uint32_t readU32();
+    [[nodiscard]] uint32_t readLEB128();
 
 	[[nodiscard]] ByteBuffer readByteBuffer(size_t size);
 

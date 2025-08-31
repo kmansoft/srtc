@@ -35,6 +35,7 @@ add_library(srtc
         # Headers
         include/srtc/byte_buffer.h
         include/srtc/depacketizer.h
+        include/srtc/depacketizer_av1.h
         include/srtc/depacketizer_h264.h
         include/srtc/depacketizer_h265.h
         include/srtc/depacketizer_opus.h
@@ -106,6 +107,7 @@ add_library(srtc
         src/codec_h264.cpp
         src/codec_h265.cpp
         src/depacketizer.cpp
+        src/depacketizer_av1.cpp
         src/depacketizer_h264.cpp
         src/depacketizer_h265.cpp
         src/depacketizer_opus.cpp

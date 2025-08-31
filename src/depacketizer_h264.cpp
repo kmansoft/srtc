@@ -1,7 +1,10 @@
 #include "srtc/depacketizer_h264.h"
 #include "srtc/codec_h264.h"
 #include "srtc/logging.h"
+#include "srtc/track.h"
 #include "srtc/util.h"
+
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "Depacketizer_H264", __VA_ARGS__)
 
@@ -42,6 +45,7 @@ DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
     , mHaveBits(0)
     , mLastRtpTimestamp(0)
 {
+    assert(track->getCodec() == Codec::H264);
 }
 
 DepacketizerH264::~DepacketizerH264() = default;

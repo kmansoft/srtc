@@ -1,7 +1,9 @@
 #include "srtc/depacketizer_vp8.h"
-
 #include "srtc/logging.h"
+#include "srtc/track.h"
 #include "srtc/util.h"
+
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "DepacketizerVP8", __VA_ARGS__)
 
@@ -91,6 +93,7 @@ DepacketizerVP8::DepacketizerVP8(const std::shared_ptr<Track>& track)
     : DepacketizerVideo(track)
     , mSeenKeyFrame(false)
 {
+    assert(track->getCodec() == Codec::VP8);
 }
 
 DepacketizerVP8::~DepacketizerVP8() = default;

@@ -2,6 +2,9 @@
 #include "srtc/codec_h265.h"
 #include "srtc/logging.h"
 #include "srtc/util.h"
+#include "srtc/track.h"
+
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "Depacketizer_H265", __VA_ARGS__)
 
@@ -43,6 +46,7 @@ DepacketizerH265::DepacketizerH265(const std::shared_ptr<Track>& track)
     , mHaveBits(0)
     , mLastRtpTimestamp(0)
 {
+    assert(track->getCodec() == Codec::H265);
 }
 
 DepacketizerH265::~DepacketizerH265() = default;

@@ -342,6 +342,29 @@ uint32_t ByteReader::readU32()
     return res;
 }
 
+uint32_t ByteReader::readLEB128()
+{
+    uint32_t result = 0;
+    int shift = 0;
+
+    while (mPos < mLen) {
+        const uint8_t byte = mBuf[mPos++];
+
+        result |= (static_cast<uint32_t>(byte & 0x7F) << shift);
+
+        if ((byte & 0x80) == 0) {
+            break;
+        }
+
+        shift += 7;
+        if (shift >= 32) {
+            break;
+        }
+    }
+
+    return result;
+}
+
 ByteBuffer ByteReader::readByteBuffer(size_t size)
 {
     assert(mPos + size <= mLen);

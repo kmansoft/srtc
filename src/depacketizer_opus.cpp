@@ -1,4 +1,5 @@
 #include "srtc/depacketizer_opus.h"
+#include "srtc/track.h"
 
 #include <cassert>
 
@@ -8,7 +9,9 @@ namespace srtc
 DepacketizerOpus::DepacketizerOpus(const std::shared_ptr<Track>& track)
     : Depacketizer(track)
 {
+    assert(track->getCodec() == Codec::Opus);
 }
+
 DepacketizerOpus::~DepacketizerOpus() = default;
 
 PacketKind DepacketizerOpus::getPacketKind(const ByteBuffer& payload, bool marker) const
