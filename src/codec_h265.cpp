@@ -114,16 +114,16 @@ bool isKeyFrameNalu(uint8_t nalu_type)
     return nalu_type == NaluType::KeyFrame19 || nalu_type == NaluType::KeyFrame20 || nalu_type == NaluType::KeyFrame21;
 }
 
-bool isFrameStart(const uint8_t* frame, size_t size)
+bool isFrameStart(const uint8_t* nalu, size_t size)
 {
     if (size < 3) {
         return false;
     }
 
-    const auto nalu_type = (frame[0] >> 1) & 0x3F;
+    const auto nalu_type = (nalu[0] >> 1) & 0x3F;
     if (nalu_type <= 21) {
         // Regular slice - check first_slice_segment_in_pic_flag
-        return (frame[2] & 0x80) != 0;
+        return (nalu[2] & 0x80) != 0;
     } else {
         // Non-slice NAL unit
         return false;

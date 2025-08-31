@@ -109,6 +109,30 @@ bool isParameterNalu(uint8_t naluType)
     return naluType == NaluType::SPS || naluType == NaluType::PPS;
 }
 
+bool isFrameStart(const uint8_t* nalu, size_t size)
+{
+    if (size > 0) {
+        const auto naluType = nalu[0] & 0x1F;
+        if (naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
+            if (size > 1) {
+                BitReader reader(nalu + 1, size - 1);
+                return reader.readUnsignedExpGolomb() == 0;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool isSliceFrameStart(const uint8_t* data, size_t size)
+{
+    if (size > 0) {
+        BitReader reader(data, size);
+        return reader.readUnsignedExpGolomb() == 0;
+    }
+    return false;
+}
+
 //////////
 
 uint32_t BitReader::readBit()
@@ -139,8 +163,9 @@ uint32_t BitReader::readUnsignedExpGolomb()
         leadingZeros++;
     }
 
-    if (leadingZeros == 0)
+    if (leadingZeros == 0) {
         return 0;
+    }
 
     // Read remaining bits
     uint32_t remainingBits = readBits(leadingZeros);

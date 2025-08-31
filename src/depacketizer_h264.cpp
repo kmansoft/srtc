@@ -16,6 +16,22 @@ constexpr auto kHaveAll = kHaveSPS | kHavePPS | kHaveKey;
 
 const uint8_t kAnnexB[4] = { 0, 0, 0, 1 };
 
+bool isFrameStartImpl(uint8_t naluType, const uint8_t* data, size_t size)
+{
+    if (naluType == srtc::h264::NaluType::SPS) {
+        // Key frames start with SPS
+        return true;
+    }
+    if (naluType == srtc::h264::NaluType::NonKeyFrame && size > 0) {
+        // Non-key frames start first_mb_in_slice == 0
+        if (srtc::h264::isSliceFrameStart(data, size)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 } // namespace
 
 namespace srtc
@@ -29,40 +45,6 @@ DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
 }
 
 DepacketizerH264::~DepacketizerH264() = default;
-
-#if 0
-PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& payload, bool marker) const
-{
-    ByteReader reader(payload);
-    if (reader.remaining() >= 1) {
-        // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
-        const auto value = reader.readU8();
-        const auto type = value & 0x1F;
-
-        if (type == h264::kPacket_STAP_A) {
-            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
-            return PacketKind::Standalone;
-        } else if (type == h264::kPacket_FU_A) {
-            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
-            if (reader.remaining() >= 1) {
-                const auto header = reader.readU8();
-                if ((header & (1 << 7)) != 0) {
-                    return PacketKind::Start;
-                } else if ((header & (1 << 6)) != 0) {
-                    return PacketKind::End;
-                } else {
-                    return PacketKind::Middle;
-                }
-            }
-        } else if (type >= 1 && type <= 23) {
-            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
-            return PacketKind::Standalone;
-        }
-    }
-
-    return PacketKind::Standalone;
-}
-#endif
 
 void DepacketizerH264::reset()
 {
@@ -145,8 +127,60 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
 
 bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
 {
-    // TODO
-    return true;
+    ByteReader reader(payload);
+
+    if (reader.remaining() > 1) {
+        const auto indicator = reader.readU8();
+
+        // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
+        // const auto nri = indicator & 0x60u;
+        const auto type = indicator & 0x1Fu;
+
+        if (type == h264::kPacket_STAP_A) {
+            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
+            while (reader.remaining() >= 2) {
+                const auto size = reader.readU16();
+                if (reader.remaining() >= size && size > 0) {
+                    const auto naluData = payload.data() + reader.position();
+                    const auto naluSize = size;
+                    const auto naluType = naluData[0] & 0x1F;
+
+                    if (naluSize > 0 && isFrameStartImpl(naluType, naluData + 1, naluSize - 1)) {
+                        return true;
+                    }
+
+                    reader.skip(size);
+                } else {
+                    break;
+                }
+            }
+        } else if (type == h264::kPacket_FU_A) {
+            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.8
+            if (reader.remaining() >= 1) {
+                const auto fuHeader = reader.readU8();
+                const auto fuIsStart = (fuHeader & (1 << 7)) != 0;
+                const auto fuNaluType = fuHeader & 0x1Fu;
+
+                if (fuIsStart) {
+                    const auto naluData = payload.data() + reader.position();
+                    const auto naluSize = reader.remaining();
+                    if (isFrameStartImpl(fuNaluType, naluData, naluSize)) {
+                        return true;
+                    }
+                }
+            }
+        } else if (type <= 23) {
+            // https://datatracker.ietf.org/doc/html/rfc6184#section-5.6
+            const auto naluData = payload.data() + reader.position();
+            const auto naluSize = reader.remaining();
+
+            if (isFrameStartImpl(type, naluData, naluSize)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& nalu)

@@ -55,6 +55,9 @@ private:
 //////////
 
 bool isParameterNalu(uint8_t naluType);
+bool isFrameStart(const uint8_t* nalu, size_t size);
+
+bool isSliceFrameStart(const uint8_t* data, size_t size);
 
 //////////
 
