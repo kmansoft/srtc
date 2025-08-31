@@ -30,6 +30,7 @@ DepacketizerH264::DepacketizerH264(const std::shared_ptr<Track>& track)
 
 DepacketizerH264::~DepacketizerH264() = default;
 
+#if 0
 PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& payload, bool marker) const
 {
     ByteReader reader(payload);
@@ -61,6 +62,7 @@ PacketKind DepacketizerH264::getPacketKind(const ByteBuffer& payload, bool marke
 
     return PacketKind::Standalone;
 }
+#endif
 
 void DepacketizerH264::reset()
 {
@@ -92,7 +94,7 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
                 // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
                 while (reader.remaining() >= 2) {
                     const auto size = reader.readU16();
-                    if (reader.remaining() >= size) {
+                    if (reader.remaining() >= size && size > 0) {
                         ByteBuffer buf(packet->payload.data() + reader.position(), size);
 
                         const auto nalu_type = buf.front() & 0x1F;
@@ -139,6 +141,12 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
             }
         }
     }
+}
+
+bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
+{
+    // TODO
+    return true;
 }
 
 void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& nalu)

@@ -95,35 +95,6 @@ DepacketizerVP8::DepacketizerVP8(const std::shared_ptr<Track>& track)
 
 DepacketizerVP8::~DepacketizerVP8() = default;
 
-PacketKind DepacketizerVP8::getPacketKind(const ByteBuffer& payload, bool marker) const
-{
-    // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
-
-    // |X|R|N|S|R| PID |
-
-    const auto data = payload.data();
-    const auto size = payload.size();
-
-    if (size >= 1) {
-        const auto firstByte = data[0];
-        const auto start = (firstByte & (1 << 4)) != 0;
-        const auto pid = firstByte & 0x07;
-
-        if (start && pid == 0) {
-            if (marker) {
-                return PacketKind::Standalone;
-            }
-            return PacketKind::Start;
-        }
-        if (marker) {
-            return PacketKind::End;
-        }
-        return PacketKind::Middle;
-    }
-
-    return PacketKind::Standalone;
-}
-
 void DepacketizerVP8::reset()
 {
     mSeenKeyFrame = false;
@@ -146,6 +117,22 @@ void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const std::vector<co
     }
 
     extractImpl(out, packetList.back(), std::move(buf));
+}
+
+bool DepacketizerVP8::isFrameStart(const ByteBuffer& payload) const
+{
+    if (!payload.empty()) {
+        // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
+        // |X|R|N|S|R| PID |
+
+        const auto firstByte = payload.front();
+        const auto start = (firstByte & (1 << 4)) != 0;
+        const auto pid = firstByte & 0x07;
+
+        return start && pid == 0;
+    }
+
+    return false;
 }
 
 void DepacketizerVP8::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame)

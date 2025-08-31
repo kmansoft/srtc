@@ -31,6 +31,7 @@ DepacketizerH265::DepacketizerH265(const std::shared_ptr<Track>& track)
 
 DepacketizerH265::~DepacketizerH265() = default;
 
+#if 0
 PacketKind DepacketizerH265::getPacketKind(const ByteBuffer& payload, bool marker) const
 {
     ByteReader reader(payload);
@@ -63,6 +64,7 @@ PacketKind DepacketizerH265::getPacketKind(const ByteBuffer& payload, bool marke
 
     return PacketKind::Standalone;
 }
+#endif
 
 void DepacketizerH265::reset()
 {
@@ -70,44 +72,6 @@ void DepacketizerH265::reset()
     mFrameBuffer.clear();
     mLastRtpTimestamp = 0;
 }
-
-#if 0
-void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
-{
-    out.clear();
-
-    ByteReader reader(packet->payload);
-    if (reader.remaining() >= 1) {
-        // https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4
-        const auto value = reader.readU8();
-        const auto nalu_type = (value >> 1) & 0x3F;
-
-        if (nalu_type == h265::kPacket_AP) {
-            // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-            if (reader.remaining() >= 1) {
-                reader.skip(1);
-            } else {
-                return;
-            }
-
-            while (reader.remaining() >= 2) {
-                const auto size = reader.readU16();
-                if (reader.remaining() < size) {
-                    break;
-                }
-
-                ByteBuffer buf(packet->payload.data() + reader.position(), size);
-                extractImpl(out, packet, std::move(buf));
-
-                reader.skip(size);
-            }
-        } else {
-            // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
-            extractImpl(out, packet, packet->payload.copy());
-        }
-    }
-}
-#endif
 
 void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
@@ -128,7 +92,7 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
                 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
                 while (reader.remaining() >= 2) {
                     const auto size = reader.readU16();
-                    if (reader.remaining() >= size) {
+                    if (reader.remaining() >= size && size > 0) {
                         ByteBuffer buf(packet->payload.data() + reader.position(), size);
 
                         const auto nalu_header = (buf.data()[0] << 8) | buf.data()[1];
@@ -177,6 +141,11 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
             }
         }
     }
+}
+
+bool DepacketizerH265::isFrameStart(const ByteBuffer& payload) const
+{
+    return true; // TODO
 }
 
 void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& nalu)

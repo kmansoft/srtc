@@ -12,11 +12,12 @@ public:
     explicit DepacketizerH264(const std::shared_ptr<Track>& track);
     ~DepacketizerH264() override;
 
-    [[nodiscard]] PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const override;
-
     void reset() override;
 
     void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
+
+protected:
+    [[nodiscard]] bool isFrameStart(const ByteBuffer& payload) const override;
 
 private:
     uint8_t mHaveBits;

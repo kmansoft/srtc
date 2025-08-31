@@ -11,11 +11,12 @@ public:
     explicit DepacketizerVP8(const std::shared_ptr<Track>& track);
     ~DepacketizerVP8() override;
 
-    [[nodiscard]] PacketKind getPacketKind(const ByteBuffer& payload, bool marker) const override;
-
     void reset() override;
 
     void extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList) override;
+
+protected:
+    [[nodiscard]] bool isFrameStart(const ByteBuffer& payload) const override;
 
 private:
     bool mSeenKeyFrame;
