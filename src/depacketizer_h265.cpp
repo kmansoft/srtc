@@ -57,7 +57,7 @@ void DepacketizerH265::reset()
 void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
     LOG(SRTC_LOG_Z,
-        "----- Frame at %8u, seq = %llu to %llu",
+        "----- Frame at %8u, seq = %" PRIu64 " to %" PRIu64,
         static_cast<uint32_t>(packetList.front()->rtp_timestamp_ext),
         packetList.front()->seq_ext,
         packetList.back()->seq_ext);
