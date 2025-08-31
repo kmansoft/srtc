@@ -55,12 +55,12 @@ void DepacketizerH264::reset()
 
 void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
 {
+    LOG(SRTC_LOG_Z, "----- Frame at %8u", static_cast<uint32_t>(packetList.front()->rtp_timestamp_ext));
+
     out.clear();
 
     std::unique_ptr<ByteBuffer> fu_buf;
     std::unique_ptr<ByteWriter> fu_wrt;
-
-    LOG(SRTC_LOG_Z, "----- Frame at %8u", static_cast<uint32_t>(packetList.front()->rtp_timestamp_ext));
 
     for (const auto packet : packetList) {
         ByteReader reader(packet->payload);
@@ -106,7 +106,7 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
                         fu_wrt->write(packet->payload.data() + reader.position(), reader.remaining());
                     }
 
-                    if (fuIsEnd) {
+                    if (fuIsEnd && fu_buf) {
                         const auto nalu_type = fu_buf->front() & 0x1F;
                         LOG(SRTC_LOG_Z, "FU_A   type = %3u, size = %zu", nalu_type, fu_buf->size());
 
@@ -145,7 +145,7 @@ bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
                     const auto naluSize = size;
                     const auto naluType = naluData[0] & 0x1F;
 
-                    if (naluSize > 0 && isFrameStartImpl(naluType, naluData + 1, naluSize - 1)) {
+                    if (naluSize > 1 && isFrameStartImpl(naluType, naluData + 1, naluSize - 1)) {
                         return true;
                     }
 

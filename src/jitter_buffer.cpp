@@ -97,6 +97,14 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto seq_ext = mExtValueSeq.extend(seq);
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
 
+    if (mTrack->getMediaType() == MediaType::Video) {
+        std::printf("Consume seq = %llu, size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
+
+        if (payload.size() < 800 && packet->getMarker()) {
+            std::printf("A small packet with a marker\n");
+        }
+    }
+
     // Is this packet too late?
     if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
         LOG(SRTC_LOG_W,
@@ -356,6 +364,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 mTempPacketList.push_back(item);
 
                 // Extract
+                mTempFrameList.clear();
                 mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                 // Append to result frame list
@@ -388,6 +397,7 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 #endif
 
                     // Extract, possibly into multiple frames
+                    mTempFrameList.clear();
                     mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                     // Append to result frame list
@@ -585,11 +595,39 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
 
 bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 {
-    auto index = (mMinSeq)&mCapacityMask;
+    auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
     assert(item);
     assert(item->received);
     assert(item->kind == PacketKind::Start);
+
+    for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
+        const char* label = "?";
+        const auto debug_index = debug_seq & mCapacityMask;
+        const auto debug_item = mItemList[debug_index];
+        assert(debug_item);
+
+        if (!debug_item->received) {
+            label = "fill";
+        } else {
+            switch (debug_item->kind) {
+            case PacketKind::Start:
+                label = "start";
+                break;
+            case PacketKind::Middle:
+                label = "middle";
+                break;
+            case PacketKind::End:
+                label = "end";
+                break;
+            case PacketKind::Standalone:
+                label = "standalone";
+                break;
+            }
+        }
+
+        std::printf("item seq=%10llu, type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
+    }
 
     for (auto seq = mMinSeq + 1; seq < mMaxSeq; seq += 1) {
         index = seq & mCapacityMask;
@@ -613,7 +651,7 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 
 bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now)
 {
-    auto index = (mMinSeq)&mCapacityMask;
+    auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
     assert(item);
     assert(item->received);

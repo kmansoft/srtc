@@ -137,7 +137,7 @@ bool isSliceNalu(uint8_t nalu_type)
 
 bool isSliceFrameStart(const uint8_t* data, size_t size)
 {
-    if (size < 1) {
+    if (size == 0) {
         return false;
     }
 
