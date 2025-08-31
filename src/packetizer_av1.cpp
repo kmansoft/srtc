@@ -80,7 +80,7 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
     // We need to know if there is a key frame (new coded video sequence)
     bool isNewCodedVideoSequence = false;
     for (av1::ObuParser parser(frame); parser; parser.next()) {
-        if (av1::isKeyFrameObu(parser.currType(), parser.currData(), parser.currSize())) {
+        if (parser.currType() == av1::ObuType::SequenceHeader) {
             isNewCodedVideoSequence = true;
             break;
         }
