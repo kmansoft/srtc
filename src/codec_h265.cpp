@@ -129,4 +129,20 @@ bool isFrameStart(const uint8_t* frame, size_t size)
         return false;
     }
 }
+
+bool isSliceNalu(uint8_t nalu_type)
+{
+    return nalu_type <= 21;
+}
+
+bool isSliceFrameStart(const uint8_t* data, size_t size)
+{
+    if (size < 1) {
+        return false;
+    }
+
+    // check first_slice_segment_in_pic_flag
+    return (data[0] & 0x80) != 0;
+}
+
 } // namespace srtc::h265
