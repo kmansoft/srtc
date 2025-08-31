@@ -101,12 +101,16 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
     uint8_t padding = 0;
     auto packetNumber = 0u;
 
+    std::printf("AV1 Frame: ts = %" PRIu32 "\n", frameTimestamp);
+
     for (av1::ObuParser parser(frame); parser; parser.next()) {
         const auto obuType = parser.currType();
         if (obuType == av1::ObuType::TemporalDelimiter) {
             // https://aomediacodec.github.io/av1-rtp-spec/#packetization
             continue;
         }
+
+        std::printf("AV1 OBU: type = %2u, size = %4zu\n", obuType, parser.currSize());
 
         auto obuCurrData = parser.currData();
         auto obuCurrSize = parser.currSize();
