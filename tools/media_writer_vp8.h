@@ -3,6 +3,7 @@
 #include "media_writer.h"
 
 #include "srtc/track.h"
+#include "srtc/byte_buffer.h"
 
 #include <cstdio>
 
@@ -35,7 +36,6 @@ private:
     void writeClusters(FILE* file);
     static void writeEBMLElement(FILE* file, uint32_t id, const void* data, size_t size);
     static void writeVarInt(FILE* file, uint64_t value);
-    static void writeVarIntToBuffer(std::vector<uint8_t>& buffer, uint64_t value);
     static int getVarIntWidth(uint64_t value);
     static bool isKeyFrame(const VP8Frame& frame);
     bool extractVP8Dimensions(uint16_t& width, uint16_t& height) const;

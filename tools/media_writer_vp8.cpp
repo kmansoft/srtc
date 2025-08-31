@@ -1,4 +1,5 @@
 #include "media_writer_vp8.h"
+#include "srtc/byte_buffer.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -6,31 +7,24 @@
 namespace
 {
 
-// Write multi-byte values in big-endian byte order
-void writeBE16(std::vector<uint8_t>& data, uint16_t value)
+// Helper to write variable-length EBML integer to ByteBuffer
+void writeVarIntToBuffer(srtc::ByteWriter& writer, uint64_t value)
 {
-    data.push_back((value >> 8) & 0xFF);
-    data.push_back(value & 0xFF);
-}
+    int width = 1;
+    if (value > 127) width = 2;
+    if (value > 16383) width = 3;
+    if (value > 2097151) width = 4;
+    if (value > 268435455) width = 5;
+    if (value > 34359738367ULL) width = 6;
+    if (value > 4398046511103ULL) width = 7;
+    if (value > 562949953421311ULL) width = 8;
 
-void writeBE32(std::vector<uint8_t>& data, uint32_t value)
-{
-    data.push_back((value >> 24) & 0xFF);
-    data.push_back((value >> 16) & 0xFF);
-    data.push_back((value >> 8) & 0xFF);
-    data.push_back(value & 0xFF);
-}
+    uint8_t first_byte = (1 << (8 - width)) | ((value >> ((width - 1) * 8)) & ((1 << (8 - width)) - 1));
+    writer.writeU8(first_byte);
 
-void writeBE64(std::vector<uint8_t>& data, uint64_t value)
-{
-    data.push_back((value >> 56) & 0xFF);
-    data.push_back((value >> 48) & 0xFF);
-    data.push_back((value >> 40) & 0xFF);
-    data.push_back((value >> 32) & 0xFF);
-    data.push_back((value >> 24) & 0xFF);
-    data.push_back((value >> 16) & 0xFF);
-    data.push_back((value >> 8) & 0xFF);
-    data.push_back(value & 0xFF);
+    for (int i = width - 2; i >= 0; i--) {
+        writer.writeU8((value >> (i * 8)) & 0xFF);
+    }
 }
 
 } // namespace
@@ -149,40 +143,41 @@ void MediaWriterVP8::writeEBMLHeader(FILE* file)
     // EBML Header (0x1A45DFA3)
     const uint32_t ebml_header_id = 0x1A45DFA3;
 
-    // Build header content
-    std::vector<uint8_t> header_data;
+    // Build header content using ByteBuffer and ByteWriter
+    srtc::ByteBuffer header_buffer;
+    srtc::ByteWriter writer(header_buffer);
 
     // EBMLVersion (0x4286) = 1
-    uint8_t ebml_version[] = { 0x42, 0x86, 0x81, 0x01 };
-    header_data.insert(header_data.end(), ebml_version, ebml_version + sizeof(ebml_version));
+    const uint8_t ebml_version[] = { 0x42, 0x86, 0x81, 0x01 };
+    writer.write(ebml_version, sizeof(ebml_version));
 
     // EBMLReadVersion (0x42F7) = 1
-    uint8_t ebml_read_version[] = { 0x42, 0xF7, 0x81, 0x01 };
-    header_data.insert(header_data.end(), ebml_read_version, ebml_read_version + sizeof(ebml_read_version));
+    const uint8_t ebml_read_version[] = { 0x42, 0xF7, 0x81, 0x01 };
+    writer.write(ebml_read_version, sizeof(ebml_read_version));
 
     // EBMLMaxIDLength (0x42F2) = 4
-    uint8_t ebml_max_id[] = { 0x42, 0xF2, 0x81, 0x04 };
-    header_data.insert(header_data.end(), ebml_max_id, ebml_max_id + sizeof(ebml_max_id));
+    const uint8_t ebml_max_id[] = { 0x42, 0xF2, 0x81, 0x04 };
+    writer.write(ebml_max_id, sizeof(ebml_max_id));
 
     // EBMLMaxSizeLength (0x42F3) = 8
-    uint8_t ebml_max_size[] = { 0x42, 0xF3, 0x81, 0x08 };
-    header_data.insert(header_data.end(), ebml_max_size, ebml_max_size + sizeof(ebml_max_size));
+    const uint8_t ebml_max_size[] = { 0x42, 0xF3, 0x81, 0x08 };
+    writer.write(ebml_max_size, sizeof(ebml_max_size));
 
     // DocType (0x4282) = "webm"
     const char* doctype = "webm";
-    uint8_t doctype_header[] = { 0x42, 0x82, 0x84 };
-    header_data.insert(header_data.end(), doctype_header, doctype_header + sizeof(doctype_header));
-    header_data.insert(header_data.end(), doctype, doctype + strlen(doctype));
+    const uint8_t doctype_header[] = { 0x42, 0x82, 0x84 };
+    writer.write(doctype_header, sizeof(doctype_header));
+    writer.write(reinterpret_cast<const uint8_t*>(doctype), strlen(doctype));
 
     // DocTypeVersion (0x4287) = 2
-    uint8_t doctype_version[] = { 0x42, 0x87, 0x81, 0x02 };
-    header_data.insert(header_data.end(), doctype_version, doctype_version + sizeof(doctype_version));
+    const uint8_t doctype_version[] = { 0x42, 0x87, 0x81, 0x02 };
+    writer.write(doctype_version, sizeof(doctype_version));
 
     // DocTypeReadVersion (0x4285) = 2
-    uint8_t doctype_read_version[] = { 0x42, 0x85, 0x81, 0x02 };
-    header_data.insert(header_data.end(), doctype_read_version, doctype_read_version + sizeof(doctype_read_version));
+    const uint8_t doctype_read_version[] = { 0x42, 0x85, 0x81, 0x02 };
+    writer.write(doctype_read_version, sizeof(doctype_read_version));
 
-    writeEBMLElement(file, ebml_header_id, header_data.data(), header_data.size());
+    writeEBMLElement(file, ebml_header_id, header_buffer.data(), header_buffer.size());
 }
 
 void MediaWriterVP8::writeSegmentInfo(FILE* file, uint64_t duration_ns)
@@ -190,39 +185,39 @@ void MediaWriterVP8::writeSegmentInfo(FILE* file, uint64_t duration_ns)
     // Info (0x1549A966)
     const uint32_t info_id = 0x1549A966;
 
-    std::vector<uint8_t> info_data;
+    srtc::ByteBuffer info_buffer;
+    srtc::ByteWriter writer(info_buffer);
 
     // TimecodeScale (0x2AD7B1) = 1000000 (1ms)
     uint32_t timecode_scale = 1000000;
-    uint8_t timecode_header[] = { 0x2A, 0xD7, 0xB1, 0x84 }; // 4-byte size
-    info_data.insert(info_data.end(), timecode_header, timecode_header + sizeof(timecode_header));
-
-    writeBE32(info_data, timecode_scale);
+    const uint8_t timecode_header[] = { 0x2A, 0xD7, 0xB1, 0x84 }; // 4-byte size
+    writer.write(timecode_header, sizeof(timecode_header));
+    writer.writeU32(timecode_scale);
 
     // MuxingApp (0x4D80) = "srtc"
     const char* muxing_app = "srtc";
-    uint8_t muxing_header[] = { 0x4D, 0x80, 0x84 };
-    info_data.insert(info_data.end(), muxing_header, muxing_header + sizeof(muxing_header));
-    info_data.insert(info_data.end(), muxing_app, muxing_app + strlen(muxing_app));
+    const uint8_t muxing_header[] = { 0x4D, 0x80, 0x84 };
+    writer.write(muxing_header, sizeof(muxing_header));
+    writer.write(reinterpret_cast<const uint8_t*>(muxing_app), strlen(muxing_app));
 
     // WritingApp (0x5741) = "srtc"
     const char* writing_app = "srtc";
-    uint8_t writing_header[] = { 0x57, 0x41, 0x84 };
-    info_data.insert(info_data.end(), writing_header, writing_header + sizeof(writing_header));
-    info_data.insert(info_data.end(), writing_app, writing_app + strlen(writing_app));
+    const uint8_t writing_header[] = { 0x57, 0x41, 0x84 };
+    writer.write(writing_header, sizeof(writing_header));
+    writer.write(reinterpret_cast<const uint8_t*>(writing_app), strlen(writing_app));
 
     // Duration (0x4489) - optional
     if (duration_ns > 0) {
         double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
-        uint8_t duration_header[] = { 0x44, 0x89, 0x88 };
-        info_data.insert(info_data.end(), duration_header, duration_header + sizeof(duration_header));
+        const uint8_t duration_header[] = { 0x44, 0x89, 0x88 };
+        writer.write(duration_header, sizeof(duration_header));
 
         uint64_t duration_bits;
         memcpy(&duration_bits, &duration_ms, 8);
-        writeBE64(info_data, duration_bits);
+        writer.writeU64(duration_bits);
     }
 
-    writeEBMLElement(file, info_id, info_data.data(), info_data.size());
+    writeEBMLElement(file, info_id, info_buffer.data(), info_buffer.size());
 }
 
 void MediaWriterVP8::writeTracks(FILE* file)
@@ -230,31 +225,34 @@ void MediaWriterVP8::writeTracks(FILE* file)
     // Tracks (0x1654AE6B)
     const uint32_t tracks_id = 0x1654AE6B;
 
-    std::vector<uint8_t> tracks_data;
+    srtc::ByteBuffer tracks_buffer;
+    srtc::ByteWriter tracks_writer(tracks_buffer);
 
     // TrackEntry (0xAE)
-    std::vector<uint8_t> track_data;
+    srtc::ByteBuffer track_buffer;
+    srtc::ByteWriter track_writer(track_buffer);
 
     // TrackNumber (0xD7) = 1
-    uint8_t track_number[] = { 0xD7, 0x81, 0x01 };
-    track_data.insert(track_data.end(), track_number, track_number + sizeof(track_number));
+    const uint8_t track_number[] = { 0xD7, 0x81, 0x01 };
+    track_writer.write(track_number, sizeof(track_number));
 
     // TrackUID (0x73C5) = 1
-    uint8_t track_uid[] = { 0x73, 0xC5, 0x81, 0x01 };
-    track_data.insert(track_data.end(), track_uid, track_uid + sizeof(track_uid));
+    const uint8_t track_uid[] = { 0x73, 0xC5, 0x81, 0x01 };
+    track_writer.write(track_uid, sizeof(track_uid));
 
     // TrackType (0x83) = 1 (video)
-    uint8_t track_type[] = { 0x83, 0x81, 0x01 };
-    track_data.insert(track_data.end(), track_type, track_type + sizeof(track_type));
+    const uint8_t track_type[] = { 0x83, 0x81, 0x01 };
+    track_writer.write(track_type, sizeof(track_type));
 
     // CodecID (0x86) = "V_VP8"
     const char* codec_id = "V_VP8";
-    uint8_t codec_header[] = { 0x86, 0x85 };
-    track_data.insert(track_data.end(), codec_header, codec_header + sizeof(codec_header));
-    track_data.insert(track_data.end(), codec_id, codec_id + strlen(codec_id));
+    track_writer.writeU8(0x86);
+    writeVarIntToBuffer(track_writer, strlen(codec_id));
+    track_writer.write(reinterpret_cast<const uint8_t*>(codec_id), strlen(codec_id));
 
     // Video (0xE0)
-    std::vector<uint8_t> video_data;
+    srtc::ByteBuffer video_buffer;
+    srtc::ByteWriter video_writer(video_buffer);
 
     // Extract actual dimensions from VP8 frames
     uint16_t frame_width = 1920;  // fallback
@@ -262,46 +260,28 @@ void MediaWriterVP8::writeTracks(FILE* file)
     extractVP8Dimensions(frame_width, frame_height);
 
     // PixelWidth (0xB0)
-    uint8_t width_header[] = { 0xB0, 0x82 };
-    video_data.insert(video_data.end(), width_header, width_header + sizeof(width_header));
-    writeBE16(video_data, frame_width);
+    const uint8_t width_header[] = { 0xB0, 0x82 };
+    video_writer.write(width_header, sizeof(width_header));
+    video_writer.writeU16(frame_width);
 
     // PixelHeight (0xBA)
-    uint8_t height_header[] = { 0xBA, 0x82 };
-    video_data.insert(video_data.end(), height_header, height_header + sizeof(height_header));
-    writeBE16(video_data, frame_height);
+    const uint8_t height_header[] = { 0xBA, 0x82 };
+    video_writer.write(height_header, sizeof(height_header));
+    video_writer.writeU16(frame_height);
 
     // Write Video element
-    uint8_t video_header[] = { 0xE0 };
-    track_data.insert(track_data.end(), video_header, video_header + sizeof(video_header));
-
-    std::vector<uint8_t> video_size_bytes;
-    uint64_t video_size = video_data.size();
-    int width = getVarIntWidth(video_size);
-    uint8_t first_byte = (1 << (8 - width)) | ((video_size >> ((width - 1) * 8)) & ((1 << (8 - width)) - 1));
-    video_size_bytes.push_back(first_byte);
-    for (int i = width - 2; i >= 0; i--) {
-        video_size_bytes.push_back((video_size >> (i * 8)) & 0xFF);
-    }
-    track_data.insert(track_data.end(), video_size_bytes.begin(), video_size_bytes.end());
-    track_data.insert(track_data.end(), video_data.begin(), video_data.end());
+    const uint8_t video_header[] = { 0xE0 };
+    track_writer.write(video_header, sizeof(video_header));
+    writeVarIntToBuffer(track_writer, video_buffer.size());
+    track_writer.write(video_buffer.data(), video_buffer.size());
 
     // Write TrackEntry
-    uint8_t track_entry_header[] = { 0xAE };
-    tracks_data.insert(tracks_data.end(), track_entry_header, track_entry_header + sizeof(track_entry_header));
+    const uint8_t track_entry_header[] = { 0xAE };
+    tracks_writer.write(track_entry_header, sizeof(track_entry_header));
+    writeVarIntToBuffer(tracks_writer, track_buffer.size());
+    tracks_writer.write(track_buffer.data(), track_buffer.size());
 
-    std::vector<uint8_t> track_size_bytes;
-    uint64_t track_size = track_data.size();
-    int width2 = getVarIntWidth(track_size);
-    uint8_t track_first_byte = (1 << (8 - width2)) | ((track_size >> ((width2 - 1) * 8)) & ((1 << (8 - width2)) - 1));
-    track_size_bytes.push_back(track_first_byte);
-    for (int i = width2 - 2; i >= 0; i--) {
-        track_size_bytes.push_back((track_size >> (i * 8)) & 0xFF);
-    }
-    tracks_data.insert(tracks_data.end(), track_size_bytes.begin(), track_size_bytes.end());
-    tracks_data.insert(tracks_data.end(), track_data.begin(), track_data.end());
-
-    writeEBMLElement(file, tracks_id, tracks_data.data(), tracks_data.size());
+    writeEBMLElement(file, tracks_id, tracks_buffer.data(), tracks_buffer.size());
 }
 
 void MediaWriterVP8::writeClusters(FILE* file)
@@ -316,59 +296,53 @@ void MediaWriterVP8::writeClusters(FILE* file)
         // Cluster (0x1F43B675)
         const uint32_t cluster_id = 0x1F43B675;
 
-        std::vector<uint8_t> cluster_data;
+        srtc::ByteBuffer cluster_buffer;
+        srtc::ByteWriter cluster_writer(cluster_buffer);
 
         // Timecode (0xE7) - in milliseconds
         uint64_t timecode_ms = frame.pts_usec / 1000;
 
         // Create temporary buffer for timecode element
-        std::vector<uint8_t> timecode_data;
+        srtc::ByteBuffer timecode_buffer;
+        srtc::ByteWriter timecode_writer(timecode_buffer);
         int tc_width = getVarIntWidth(timecode_ms);
         for (int j = tc_width - 1; j >= 0; j--) {
-            timecode_data.push_back((timecode_ms >> (j * 8)) & 0xFF);
+            timecode_writer.writeU8((timecode_ms >> (j * 8)) & 0xFF);
         }
 
         // Write timecode element header manually
-        cluster_data.push_back(0xE7); // Timecode ID
-        writeVarIntToBuffer(cluster_data, timecode_data.size());
-        cluster_data.insert(cluster_data.end(), timecode_data.begin(), timecode_data.end());
+        cluster_writer.writeU8(0xE7); // Timecode ID
+        writeVarIntToBuffer(cluster_writer, timecode_buffer.size());
+        cluster_writer.write(timecode_buffer.data(), timecode_buffer.size());
 
         // SimpleBlock (0xA3)
-        std::vector<uint8_t> block_data;
+        srtc::ByteBuffer block_buffer;
+        srtc::ByteWriter block_writer(block_buffer);
 
         // Track number (1) - variable integer
-        block_data.push_back(0x81); // track 1
+        block_writer.writeU8(0x81); // track 1
 
         // Timestamp relative to cluster (0 for now)
-        block_data.push_back(0x00);
-        block_data.push_back(0x00);
+        block_writer.writeU8(0x00);
+        block_writer.writeU8(0x00);
 
         // Flags - keyframe detection
         uint8_t flags = 0x00;
         if (i == 0 || isKeyFrame(frame)) {
             flags |= 0x80; // Keyframe
         }
-        block_data.push_back(flags);
+        block_writer.writeU8(flags);
 
         // Frame data
-        block_data.insert(block_data.end(), frame.data.data(), frame.data.data() + frame.data.size());
+        block_writer.write(frame.data.data(), frame.data.size());
 
         // Write SimpleBlock
-        uint8_t block_header[] = { 0xA3 };
-        cluster_data.insert(cluster_data.end(), block_header, block_header + sizeof(block_header));
+        const uint8_t block_header[] = { 0xA3 };
+        cluster_writer.write(block_header, sizeof(block_header));
+        writeVarIntToBuffer(cluster_writer, block_buffer.size());
+        cluster_writer.write(block_buffer.data(), block_buffer.size());
 
-        std::vector<uint8_t> block_size_bytes;
-        uint64_t block_size = block_data.size();
-        int width = getVarIntWidth(block_size);
-        uint8_t first_byte = (1 << (8 - width)) | ((block_size >> ((width - 1) * 8)) & ((1 << (8 - width)) - 1));
-        block_size_bytes.push_back(first_byte);
-        for (int j = width - 2; j >= 0; j--) {
-            block_size_bytes.push_back((block_size >> (j * 8)) & 0xFF);
-        }
-        cluster_data.insert(cluster_data.end(), block_size_bytes.begin(), block_size_bytes.end());
-        cluster_data.insert(cluster_data.end(), block_data.begin(), block_data.end());
-
-        writeEBMLElement(file, cluster_id, cluster_data.data(), cluster_data.size());
+        writeEBMLElement(file, cluster_id, cluster_buffer.data(), cluster_buffer.size());
     }
 }
 
@@ -431,20 +405,6 @@ void MediaWriterVP8::writeVarInt(FILE* file, uint64_t value)
     }
 }
 
-void MediaWriterVP8::writeVarIntToBuffer(std::vector<uint8_t>& buffer, uint64_t value)
-{
-    const auto width = getVarIntWidth(value);
-
-    // EBML variable integer: first byte has leading 1 bit, followed by width-1 zero bits, then data
-    uint8_t first_byte = (1 << (8 - width)) | ((value >> ((width - 1) * 8)) & ((1 << (8 - width)) - 1));
-    buffer.push_back(first_byte);
-
-    // Write remaining bytes
-    for (int i = width - 2; i >= 0; i--) {
-        uint8_t byte = (value >> (i * 8)) & 0xFF;
-        buffer.push_back(byte);
-    }
-}
 
 int MediaWriterVP8::getVarIntWidth(uint64_t value)
 {
