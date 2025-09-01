@@ -12,6 +12,8 @@
 
 #define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
+#define VERBOSE_LOGGING
+
 namespace
 {
 
@@ -96,11 +98,6 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     // Extend
     const auto seq_ext = mExtValueSeq.extend(seq);
     const auto rtp_timestamp_ext = mExtValueRtpTimestamp.extend(packet->getTimestamp());
-
-    if (mTrack->getMediaType() == MediaType::Video) {
-        std::printf(
-            "Consume seq = %" PRIu64 ", size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
-    }
 
     // Is this packet too late?
     if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
@@ -275,33 +272,71 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 
     item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
 
-    for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
-        const char* label = "?";
-        const auto debug_index = debug_seq & mCapacityMask;
-        const auto debug_item = mItemList[debug_index];
-        assert(debug_item);
+    // Some packetizers (I'm looking at you AV1) cannot tell is a packet starts a brand-new frame or is a continuation.
+    // In this case they'll return "Start" packet kind and we need to fix things.
 
-        if (!debug_item->received) {
-            label = "fill";
-        } else {
-            switch (debug_item->kind) {
-            case PacketKind::Start:
-                label = "start";
-                break;
-            case PacketKind::Middle:
-                label = "middle";
-                break;
-            case PacketKind::End:
-                label = "end";
-                break;
-            case PacketKind::Standalone:
-                label = "standalone";
-                break;
+    if (item->kind == PacketKind::Start) {
+        if (mMinSeq < item->seq_ext) {
+            const auto prev_seq = item->seq_ext - 1;
+            const auto prev_index = prev_seq & mCapacityMask;
+            const auto prev_item = mItemList[prev_index];
+            assert(prev_item);
+
+            if (prev_item->rtp_timestamp_ext == item->rtp_timestamp_ext) {
+                if (prev_item->kind == PacketKind::Start || prev_item->kind == PacketKind::Middle) {
+                    item->kind = PacketKind::Middle;
+                }
             }
         }
 
-        std::printf("item seq=%10" PRIu64 ", type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
+        if (item->seq_ext + 1 < mMaxSeq) {
+            const auto next_seq = item->seq_ext + 1;
+            const auto next_index = next_seq & mCapacityMask;
+            const auto next_item = mItemList[next_index];
+            assert(next_item);
+
+            if (next_item->rtp_timestamp_ext == item->rtp_timestamp_ext) {
+                if (next_item->kind == PacketKind::Start) {
+                    next_item->kind = PacketKind::Middle;
+                }
+            }
+        }
     }
+
+#ifdef VERBOSE_LOGGING
+    if (mTrack->getMediaType() == MediaType::Video) {
+        std::printf(
+            "Consume seq = %" PRIu64 ", size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
+
+        for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
+            const char* label = "?";
+            const auto debug_index = debug_seq & mCapacityMask;
+            const auto debug_item = mItemList[debug_index];
+            assert(debug_item);
+
+            if (!debug_item->received) {
+                label = "fill";
+            } else {
+                switch (debug_item->kind) {
+                case PacketKind::Start:
+                    label = "start";
+                    break;
+                case PacketKind::Middle:
+                    label = "middle";
+                    break;
+                case PacketKind::End:
+                    label = "end";
+                    break;
+                case PacketKind::Standalone:
+                    label = "standalone";
+                    break;
+                }
+            }
+
+            std::printf("item seq=%10" PRIu64 ", type %10s, size %4zu\n", debug_seq, label, debug_item->payload.size());
+        }
+    }
+#endif
 }
 
 int JitterBuffer::getTimeoutMillis(int defaultTimeout) const

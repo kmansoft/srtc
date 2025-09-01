@@ -9,6 +9,7 @@
 #include "media_writer_h26x.h"
 #include "media_writer_ogg.h"
 #include "media_writer_vp8.h"
+#include "media_writer_av1.h"
 
 #include "http_whip_whep.h"
 
@@ -211,10 +212,14 @@ int main(int argc, char* argv[])
     SubVideoCodec videoCodecH265 = {};
     videoCodecH265.codec = Codec::H265;
 
+    SubVideoCodec videoCodecAV1 = {};
+    videoCodecAV1.codec = Codec::AV1;
+
     SubVideoConfig videoConfig = {};
     videoConfig.codec_list.push_back(videoCodecVP8);
     videoConfig.codec_list.push_back(videoCodecH264);
     videoConfig.codec_list.push_back(videoCodecH265);
+    videoConfig.codec_list.push_back(videoCodecAV1);
 
     SubAudioCodec audioCodec = {};
     audioCodec.codec = Codec::Opus;
@@ -286,6 +291,9 @@ int main(int argc, char* argv[])
             mediaWriterVideo->start();
         } else if (codec == srtc::Codec::H264 || codec == srtc::Codec::H265) {
             mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
+            mediaWriterVideo->start();
+        } else if (codec == srtc::Codec::AV1) {
+            mediaWriterVideo = std::make_shared<MediaWriterAV1>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
         } else {
             std::cout << "Saving video output is requested, but the video codec is not one we support" << std::endl;

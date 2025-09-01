@@ -16,25 +16,25 @@
 
 #define LOG(level, ...) srtc::log(level, "Packetizer_AV1", __VA_ARGS__)
 
+#define VERBOSE_LOGGING
+
 namespace
 {
 
-#if 0
+#ifdef VERBOSE_LOGGING
 
 void dumpFrame(int64_t pts_usec, const srtc::ByteBuffer& frame)
 {
-    static uint32_t n = 0;
+    std::printf("PUB AV1 Frame: ts = %" PRIu64 "\n", pts_usec);
 
     for (srtc::av1::ObuParser parser(frame); parser; parser.next()) {
         const auto obuType = parser.currType();
-        const auto isFrame = srtc::av1::isFrameObuType(obuType);
-        const auto isKeyFrame = isFrame && srtc::av1::isKeyFrameObu(parser.currData(), parser.currSize());
-        std::cout << "AV1 " << std::setw(4) << n << ", pts = " << std::setw(8) << pts_usec
-                  << ", OBU type = " << static_cast<int>(obuType) << ", size = " << std::setw(5) << parser.currSize()
-                  << ", key = " << isKeyFrame << ", end = " << parser.isAtEnd() << std::endl;
-    }
+        const auto obuData = parser.currData();
+        const auto obuSize = parser.currSize();
+        const auto isKeyFrame = srtc::av1::isKeyFrameObu(obuType, obuData, obuSize);
 
-    n += 1;
+        std::printf("PUB AV1 OBU: type = %2u, key = %d, size = %4zu\n", obuType, isKeyFrame, parser.currSize());
+    }
 }
 
 #endif
@@ -101,7 +101,9 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
     uint8_t padding = 0;
     auto packetNumber = 0u;
 
-    std::printf("AV1 Frame: ts = %" PRIu32 "\n", frameTimestamp);
+#ifdef VERBOSE_LOGGING
+    dumpFrame(pts_usec, frame);
+#endif
 
     for (av1::ObuParser parser(frame); parser; parser.next()) {
         const auto obuType = parser.currType();
@@ -109,8 +111,6 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_
             // https://aomediacodec.github.io/av1-rtp-spec/#packetization
             continue;
         }
-
-        std::printf("AV1 OBU: type = %2u, size = %4zu\n", obuType, parser.currSize());
 
         auto obuCurrData = parser.currData();
         auto obuCurrSize = parser.currSize();
