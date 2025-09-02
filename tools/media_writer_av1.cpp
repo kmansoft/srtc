@@ -113,14 +113,67 @@ bool MediaWriterAV1::extractAV1Dimensions(const srtc::ByteBuffer& frame, uint16_
             const auto obuData = parser.currData();
             const auto obuSize = parser.currSize();
 
-            if (obuSize < 4) {
+            if (obuSize < 8) {
                 continue; // Too small to contain dimensions
             }
 
-            // I am too lazy right now to implement extraction of frame dimentions from AV1 sequence header
+            // Parse AV1 sequence header according to specification
+            // Reference: https://aomediacodec.github.io/av1-spec/#sequence-header-obu-syntax
 
-            width = 1280;
-            height = 720;
+            // I took a lot of shortcuts, but it handles AV1 coming out of Chrome
+
+            srtc::BitReader reader(obuData, obuSize);
+
+            uint8_t seq_profile = reader.readBits(3);
+            uint8_t still_picture = reader.readBit();
+            uint8_t reduced_still_picture_header = reader.readBit();
+            if (reduced_still_picture_header) {
+                // Doesn't apply
+                return false;
+            }
+
+            uint8_t decoder_model_info_present_flag = 0;
+            uint8_t timing_info_present_flag = reader.readBit();
+            if (timing_info_present_flag) {
+                // We don't handle this case
+                return false;
+            }
+
+            uint8_t initial_display_delay_present_flag = reader.readBit();
+            uint8_t operating_points_cnt_minus_1 = reader.readBits(5);
+
+            for (size_t i = 0; i <= operating_points_cnt_minus_1; i++) {
+                uint32_t operating_point_idc_i = reader.readBits(12);
+                uint32_t seq_level_i = reader.readBits(5);
+                if (seq_level_i > 7) {
+                    // seq_tier[i]
+                    reader.readBit();
+                }
+                if (decoder_model_info_present_flag) {
+                    // decoder_model_present_for_this_op[ i ]
+                    uint32_t decoder_model_present_for_this_op_i = reader.readBit();
+                    if (decoder_model_present_for_this_op_i) {
+                        // We don't handle this case
+                        return false;
+                    }
+                }
+                if (initial_display_delay_present_flag) {
+                    uint32_t initial_display_delay_present_for_this_op_i = reader.readBit();
+                    if (initial_display_delay_present_for_this_op_i) {
+                        // initial_display_delay_minus_1[ i ]
+                        reader.readBits(4);
+                    }
+                }
+            }
+
+            // Read the dimensions
+            uint32_t frame_width_bits_minus_1 = reader.readBits(4);
+            uint32_t frame_height_bits_minus_1 = reader.readBits(4);
+            uint32_t max_frame_width_minus_1 = reader.readBits(frame_width_bits_minus_1 + 1);
+            uint32_t max_frame_height_minus_1 = reader.readBits(frame_height_bits_minus_1 + 1);
+
+            width = max_frame_width_minus_1 + 1;
+            height = max_frame_height_minus_1 + 1;
 
             return true;
         }
