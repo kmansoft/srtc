@@ -107,7 +107,7 @@ void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<co
             const auto packetHeader = reader.readU8();
             const auto valueZ = (packetHeader & (1 << 7)) != 0;
             const auto valueW = (packetHeader >> 4) & 0x03u;
-            const auto valueN = (packetHeader >> 3) & 0x01;
+            const auto valueN = (packetHeader >> 3) & 0x01u;
 
             if (valueN) {
                 mSeenNewSequence = true;
@@ -118,7 +118,7 @@ void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<co
             while (reader.remaining() >= 1) {
                 // Size unless it's the last OBU and we are told there is no size
                 size_t obuSize;
-                if (valueW != 0 && obuIndex == valueW - 1) {
+                if (valueW > 0 && obuIndex == valueW - 1) {
                     obuSize = reader.remaining();
                 } else {
                     obuSize = reader.readLEB128();
@@ -137,8 +137,9 @@ void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<co
                         bufferedObu.setHeader(obuHeader);
                         if (obuHasExtension && reader.remaining() >= 1) {
                             const auto obuExtension = reader.readU8();
-                            bufferedObu.setExtension(obuExtension);
                             obuSize -= 1;
+
+                            bufferedObu.setExtension(obuExtension);
                         }
                     }
 
@@ -148,8 +149,8 @@ void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<co
                     break;
                 }
 
-                if (valueW != 0 && obuIndex == valueW - 1) {
-                    // Reached last one
+                if (valueW > 0 && obuIndex == valueW - 1) {
+                    // Reached the last one
                     break;
                 }
 
@@ -207,7 +208,7 @@ bool DepacketizerAV1::isFrameStart(const ByteBuffer& payload) const
             }
 
             if (valueW != 0 && obuIndex == valueW - 1) {
-                // Reached last one
+                // Reached the last one
                 break;
             }
 
