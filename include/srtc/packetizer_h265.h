@@ -21,9 +21,9 @@ public:
                                                                  const ByteBuffer& frame) override;
 
 private:
-    srtc::ByteBuffer mVPS; // Without Annex B header
-    srtc::ByteBuffer mSPS;
-    srtc::ByteBuffer mPPS;
+    ByteBuffer mVPS; // Without Annex B header
+    ByteBuffer mSPS;
+    ByteBuffer mPPS;
 };
 
 } // namespace srtc

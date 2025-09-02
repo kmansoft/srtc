@@ -133,20 +133,20 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
 
         if (!isParameterNalu(naluType)) {
             // Now the frame itself
-            const auto naluDataPtr = parser.currData();
-            const auto naluDataSize = parser.currDataSize();
+            const auto naluData = parser.currData();
+            const auto naluSize = parser.currDataSize();
 
-            uint8_t padding = getPadding(track, simulcast, twcc, naluDataSize);
+            uint8_t padding = getPadding(track, simulcast, twcc, naluSize);
             RtpExtension extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
 
-            if (packetSize >= naluDataSize) {
+            if (packetSize >= naluSize) {
                 // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
                 const auto marker = parser.isAtEnd();
                 const auto [rollover, sequence] = packetSource->getNextSequence();
-                auto payload = ByteBuffer{ naluDataPtr, naluDataSize };
+                auto payload = ByteBuffer{ naluData, naluSize };
                 result.push_back(std::make_shared<RtpPacket>(track,
                                                              marker,
                                                              rollover,
@@ -155,28 +155,28 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                                                              padding,
                                                              std::move(extension),
                                                              std::move(payload)));
-            } else if (naluDataSize > 2) {
-                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-                uint8_t layerId = ((naluDataPtr[0] & 0x01) << 5) | ((naluDataPtr[1] >> 3) & 0x1F);
-                uint8_t temporalId = naluDataPtr[1] & 0x07;
+            } else if (naluSize > 2) {
+                // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+                uint8_t layerId = ((naluData[0] & 0x01) << 5) | ((naluData[1] >> 3) & 0x1F);
+                uint8_t temporalId = naluData[1] & 0x07;
 
-                auto dataPtr = naluDataPtr + 2;
-                auto dataSize = naluDataSize - 2;
+                auto currData = naluData + 2;
+                auto currSize = naluSize - 2;
 
                 auto packetNumber = 0u;
-                while (dataSize > 0) {
+                while (currSize > 0) {
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
                     if (packetNumber > 0) {
-                        padding = getPadding(track, simulcast, twcc, naluDataSize);
+                        padding = getPadding(track, simulcast, twcc, naluSize);
                         extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), packetNumber);
                     }
 
                     // The "-3" is for FU headers
                     packetSize = adjustPacketSize(basicPacketSize - 3, padding, extension);
-                    if (packetNumber == 0 && packetSize >= dataSize) {
+                    if (packetNumber == 0 && packetSize >= currSize) {
                         // The frame now fits in one packet, but a FU cannot have both start and end
-                        packetSize = dataSize - 10;
+                        packetSize = currSize - 10;
                     }
 
                     ByteBuffer payload;
@@ -187,15 +187,15 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                     writer.writeU16(payloadHeader);
 
                     const auto isStart = packetNumber == 0;
-                    const auto isEnd = dataSize <= packetSize;
+                    const auto isEnd = currSize <= packetSize;
                     const uint8_t fuHeader =
                         (isStart ? (1 << 7) : 0) | (isEnd ? (1 << 6) : 0) | static_cast<uint8_t>(naluType & 0x3F);
                     writer.writeU8(fuHeader);
 
                     const auto marker = isEnd && parser.isAtEnd();
 
-                    const auto writeNow = std::min(dataSize, packetSize);
-                    writer.write(dataPtr, writeNow);
+                    const auto writeNow = std::min(currSize, packetSize);
+                    writer.write(currData, writeNow);
 
                     result.push_back(std::make_shared<RtpPacket>(track,
                                                                  marker,
@@ -206,8 +206,8 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared
                                                                  std::move(extension),
                                                                  std::move(payload)));
 
-                    dataPtr += writeNow;
-                    dataSize -= writeNow;
+                    currData += writeNow;
+                    currSize -= writeNow;
                     packetNumber += 1;
                 }
             }

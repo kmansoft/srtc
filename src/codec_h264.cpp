@@ -1,4 +1,5 @@
 #include "srtc/codec_h264.h"
+#include "srtc/bit_reader.h"
 
 namespace
 {
@@ -109,42 +110,38 @@ bool isParameterNalu(uint8_t naluType)
     return naluType == NaluType::SPS || naluType == NaluType::PPS;
 }
 
-//////////
-
-uint32_t BitReader::readBit()
+bool isKeyFrameNalu(uint8_t naluType)
 {
-    if ((bitPos >> 3) >= dataSize)
-        return 0;
-
-    uint8_t byte = data[bitPos >> 3];
-    uint32_t bit = (byte >> (7 - (bitPos & 7))) & 1;
-    bitPos++;
-    return bit;
+    return naluType == NaluType::KeyFrame;
 }
 
-uint32_t BitReader::readBits(size_t n)
+bool isFrameStart(const uint8_t* nalu, size_t size)
 {
-    uint32_t value = 0;
-    for (size_t i = 0; i < n; i++) {
-        value = (value << 1) | readBit();
+    if (size > 0) {
+        const auto naluType = nalu[0] & 0x1F;
+        if (naluType == NaluType::KeyFrame || naluType == NaluType::NonKeyFrame) {
+            if (size > 1) {
+                BitReader reader(nalu + 1, size - 1);
+                return reader.readUnsignedExpGolomb() == 0;
+            }
+        }
     }
-    return value;
+
+    return false;
 }
 
-uint32_t BitReader::readUnsignedExpGolomb()
+bool isSliceNalu(uint8_t naluType)
 {
-    // Count leading zeros
-    int leadingZeros = 0;
-    while (readBit() == 0 && leadingZeros < 32) {
-        leadingZeros++;
+    return naluType == NaluType::NonKeyFrame || naluType == NaluType::KeyFrame;
+}
+
+bool isSliceFrameStart(const uint8_t* data, size_t size)
+{
+    if (size > 0) {
+        BitReader reader(data, size);
+        return reader.readUnsignedExpGolomb() == 0;
     }
-
-    if (leadingZeros == 0)
-        return 0;
-
-    // Read remaining bits
-    uint32_t remainingBits = readBits(leadingZeros);
-    return (1 << leadingZeros) - 1 + remainingBits;
+    return false;
 }
 
 } // namespace srtc::h264

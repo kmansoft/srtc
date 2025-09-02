@@ -12,6 +12,8 @@
 
 #define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
+// #define VERBOSE_LOGGING
+
 namespace
 {
 
@@ -269,6 +271,72 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     item->payload = std::move(payload);
 
     item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
+
+    // Some packetizers (I'm looking at you AV1) cannot tell if a packet starts a brand-new frame or is a continuation.
+    // In this case they'll return "Start" packet kind, and we fix things by extending a frame based on the RTP timestamp.
+
+    if (item->kind == PacketKind::Start) {
+        if (mMinSeq < item->seq_ext) {
+            const auto prev_seq = item->seq_ext - 1;
+            const auto prev_index = prev_seq & mCapacityMask;
+            const auto prev_item = mItemList[prev_index];
+            assert(prev_item);
+
+            if (prev_item->rtp_timestamp_ext == item->rtp_timestamp_ext) {
+                if (prev_item->kind == PacketKind::Start || prev_item->kind == PacketKind::Middle) {
+                    item->kind = PacketKind::Middle;
+                }
+            }
+        }
+
+        if (item->seq_ext + 1 < mMaxSeq) {
+            const auto next_seq = item->seq_ext + 1;
+            const auto next_index = next_seq & mCapacityMask;
+            const auto next_item = mItemList[next_index];
+            assert(next_item);
+
+            if (next_item->rtp_timestamp_ext == item->rtp_timestamp_ext) {
+                if (next_item->kind == PacketKind::Start) {
+                    next_item->kind = PacketKind::Middle;
+                }
+            }
+        }
+    }
+
+#ifdef VERBOSE_LOGGING
+    if (mTrack->getMediaType() == MediaType::Video) {
+        std::printf(
+            "Consume seq = %" PRIu64 ", size = %zu, marker = %d\n", seq_ext, payload.size(), packet->getMarker());
+
+        for (auto debug_seq = mMinSeq; debug_seq < mMaxSeq; debug_seq += 1) {
+            const char* label = "?";
+            const auto debug_index = debug_seq & mCapacityMask;
+            const auto debug_item = mItemList[debug_index];
+            assert(debug_item);
+
+            if (!debug_item->received) {
+                label = "fill";
+            } else {
+                switch (debug_item->kind) {
+                case PacketKind::Start:
+                    label = "start";
+                    break;
+                case PacketKind::Middle:
+                    label = "middle";
+                    break;
+                case PacketKind::End:
+                    label = "end";
+                    break;
+                case PacketKind::Standalone:
+                    label = "standalone";
+                    break;
+                }
+            }
+
+            std::printf("item seq = %10" PRIu64 ", type = %10s, size = %4zu\n", debug_seq, label, debug_item->payload.size());
+        }
+    }
+#endif
 }
 
 int JitterBuffer::getTimeoutMillis(int defaultTimeout) const
@@ -352,7 +420,12 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
         if (item->received && diff_millis(item->when_dequeue, now) <= 0) {
             if (item->kind == PacketKind::Standalone) {
                 // A standalone packet, which is ready to be extracted, possibly into multiple frames
-                mDepacketizer->extract(mTempFrameList, item);
+                mTempPacketList.clear();
+                mTempPacketList.push_back(item);
+
+                // Extract
+                mTempFrameList.clear();
+                mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                 // Append to result frame list
                 appendToResult(result, item, item, now, mTempFrameList);
@@ -366,24 +439,26 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
                 // Start of a multi-packet sequence
                 uint64_t maxSeq = 0;
                 if (findMultiPacketSequence(maxSeq)) {
-                    // Create a list of buffers
-                    extractBufferList(mTempBufferList, seq, maxSeq);
+                    // Create a list of packets
+                    mTempPacketList.clear();
+                    fillItemList(mTempPacketList, seq, maxSeq);
 
 #ifdef NDEBUG
 #else
-                    assert(!mTempBufferList.empty());
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.front()->payload,
-                                                        mTempBufferList.front()->marker) == PacketKind::Start);
-                    for (size_t i = 1; i < mTempBufferList.size() - 1; i += 1) {
-                        assert(mDepacketizer->getPacketKind(mTempBufferList[i]->payload, mTempBufferList[i]->marker) ==
+                    assert(!mTempPacketList.empty());
+                    assert(mDepacketizer->getPacketKind(mTempPacketList.front()->payload,
+                                                        mTempPacketList.front()->marker) == PacketKind::Start);
+                    for (size_t i = 1; i < mTempPacketList.size() - 1; i += 1) {
+                        assert(mDepacketizer->getPacketKind(mTempPacketList[i]->payload, mTempPacketList[i]->marker) ==
                                PacketKind::Middle);
                     }
-                    assert(mDepacketizer->getPacketKind(mTempBufferList.back()->payload,
-                                                        mTempBufferList.back()->marker) == PacketKind::End);
+                    assert(mDepacketizer->getPacketKind(mTempPacketList.back()->payload,
+                                                        mTempPacketList.back()->marker) == PacketKind::End);
 #endif
 
-                    // Extract, possibly into multiple frames (theoretical)
-                    mDepacketizer->extract(mTempFrameList, mTempBufferList);
+                    // Extract, possibly into multiple frames
+                    mTempFrameList.clear();
+                    mDepacketizer->extract(mTempFrameList, mTempPacketList);
 
                     // Append to result frame list
                     const auto maxIndex = maxSeq & mCapacityMask;
@@ -520,10 +595,8 @@ JitterBufferItem* JitterBuffer::newLostItem(const std::chrono::steady_clock::tim
     return item_lost;
 }
 
-void JitterBuffer::extractBufferList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
+void JitterBuffer::fillItemList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max)
 {
-    out.clear();
-
     for (uint64_t seq = start; seq <= max; seq += 1) {
         const auto index = seq & mCapacityMask;
         auto item = mItemList[index];
@@ -582,7 +655,7 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
 
 bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 {
-    auto index = (mMinSeq)&mCapacityMask;
+    auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
     assert(item);
     assert(item->received);
@@ -610,7 +683,7 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 
 bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now)
 {
-    auto index = (mMinSeq)&mCapacityMask;
+    auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
     assert(item);
     assert(item->received);

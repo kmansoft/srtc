@@ -1,7 +1,9 @@
 #include "srtc/depacketizer_vp8.h"
-
 #include "srtc/logging.h"
+#include "srtc/track.h"
 #include "srtc/util.h"
+
+#include <cassert>
 
 #define LOG(level, ...) srtc::log(level, "DepacketizerVP8", __VA_ARGS__)
 
@@ -88,62 +90,17 @@ namespace srtc
 {
 
 DepacketizerVP8::DepacketizerVP8(const std::shared_ptr<Track>& track)
-    : Depacketizer(track)
+    : DepacketizerVideo(track)
     , mSeenKeyFrame(false)
 {
+    assert(track->getCodec() == Codec::VP8);
 }
 
 DepacketizerVP8::~DepacketizerVP8() = default;
 
-PacketKind DepacketizerVP8::getPacketKind(const ByteBuffer& payload, bool marker) const
-{
-    // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
-
-    // |X|R|N|S|R| PID |
-
-    const auto data = payload.data();
-    const auto size = payload.size();
-
-    if (size >= 1) {
-        const auto firstByte = data[0];
-        const auto start = (firstByte & (1 << 4)) != 0;
-        const auto pid = firstByte & 0x07;
-
-        if (start && pid == 0) {
-            if (marker) {
-                return PacketKind::Standalone;
-            }
-            return PacketKind::Start;
-        } else if (marker) {
-            return PacketKind::End;
-        } else {
-            return PacketKind::Middle;
-        }
-    }
-
-    return PacketKind::Standalone;
-}
-
 void DepacketizerVP8::reset()
 {
     mSeenKeyFrame = false;
-}
-
-void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const JitterBufferItem* packet)
-{
-    out.clear();
-
-    ByteBuffer buf;
-    ByteWriter w(buf);
-
-    const uint8_t* payloadData = nullptr;
-    size_t payloadSize = 0;
-    if (!extractPayload(packet->payload, payloadData, payloadSize)) {
-        return;
-    }
-    w.write(payloadData, payloadSize);
-
-    extractImpl(out, packet, std::move(buf));
 }
 
 void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
@@ -163,6 +120,22 @@ void DepacketizerVP8::extract(std::vector<ByteBuffer>& out, const std::vector<co
     }
 
     extractImpl(out, packetList.back(), std::move(buf));
+}
+
+bool DepacketizerVP8::isFrameStart(const ByteBuffer& payload) const
+{
+    if (!payload.empty()) {
+        // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
+        // |X|R|N|S|R| PID |
+
+        const auto firstByte = payload.front();
+        const auto start = (firstByte & (1 << 4)) != 0;
+        const auto pid = firstByte & 0x07;
+
+        return start && pid == 0;
+    }
+
+    return false;
 }
 
 void DepacketizerVP8::extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame)

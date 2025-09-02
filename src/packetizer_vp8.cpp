@@ -58,16 +58,16 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
     const auto tagFrameType = tag & 0x01;
 
     // https://datatracker.ietf.org/doc/html/rfc7741#section-4.2
-    auto dataPtr = frame.data();
-    auto dataSize = frame.size();
+    auto currData = frame.data();
+    auto currSize = frame.size();
 
     const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
 
     auto packetNumber = 0u;
-    while (dataSize > 0) {
+    while (currSize > 0) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
 
-        const auto padding = getPadding(track, simulcast, twcc, dataSize);
+        const auto padding = getPadding(track, simulcast, twcc, currSize);
         RtpExtension extension = buildExtension(track, simulcast, twcc, tagFrameType == 0, packetNumber);
 
         // The "-1" is for VP8 payload descriptor
@@ -80,17 +80,17 @@ std::list<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_
         writer.writeU8((tagFrameType << 5) | ((packetNumber == 0 ? 1 : 0) << 4));
 
         // Payload
-        const auto writeNow = std::min(dataSize, packetSize);
-        writer.write(dataPtr, writeNow);
+        const auto writeNow = std::min(currSize, packetSize);
+        writer.write(currData, writeNow);
 
         // Make a packet
-        const auto marker = dataSize <= packetSize;
+        const auto marker = currSize <= packetSize;
         result.push_back(std::make_shared<RtpPacket>(
             track, marker, rollover, sequence, frameTimestamp, padding, std::move(extension), std::move(payload)));
 
         // Advance
-        dataPtr += writeNow;
-        dataSize -= writeNow;
+        currData += writeNow;
+        currSize -= writeNow;
         packetNumber += 1;
     }
 

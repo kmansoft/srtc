@@ -55,7 +55,10 @@ private:
 //////////
 
 bool isParameterNalu(uint8_t naluType);
-bool isKeyFrameNalu(uint8_t nalu_type);
-bool isFrameStart(const uint8_t* frame, size_t size);
+bool isKeyFrameNalu(uint8_t naluType);
+bool isFrameStart(const uint8_t* nalu, size_t size);
+
+bool isSliceNalu(uint8_t naluType);
+bool isSliceFrameStart(const uint8_t* data, size_t size);
 
 } // namespace srtc::h265

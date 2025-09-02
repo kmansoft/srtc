@@ -109,25 +109,40 @@ bool isParameterNalu(uint8_t naluType)
     return naluType == NaluType::VPS || naluType == NaluType::SPS || naluType == NaluType::PPS;
 }
 
-bool isKeyFrameNalu(uint8_t nalu_type)
+bool isKeyFrameNalu(uint8_t naluType)
 {
-    return nalu_type == srtc::h265::NaluType::KeyFrame19 || nalu_type == srtc::h265::NaluType::KeyFrame20 ||
-           nalu_type == srtc::h265::NaluType::KeyFrame21;
+    return naluType == NaluType::KeyFrame19 || naluType == NaluType::KeyFrame20 || naluType == NaluType::KeyFrame21;
 }
 
-bool isFrameStart(const uint8_t* frame, size_t size)
+bool isFrameStart(const uint8_t* nalu, size_t size)
 {
     if (size < 3) {
         return false;
     }
 
-    const auto nalu_type = (frame[0] >> 1) & 0x3F;
+    const auto nalu_type = (nalu[0] >> 1) & 0x3F;
     if (nalu_type <= 21) {
         // Regular slice - check first_slice_segment_in_pic_flag
-        return (frame[2] & 0x80) != 0;
+        return (nalu[2] & 0x80) != 0;
     } else {
         // Non-slice NAL unit
         return false;
     }
 }
+
+bool isSliceNalu(uint8_t naluType)
+{
+    return naluType <= 21;
+}
+
+bool isSliceFrameStart(const uint8_t* data, size_t size)
+{
+    if (size == 0) {
+        return false;
+    }
+
+    // check first_slice_segment_in_pic_flag
+    return (data[0] & 0x80) != 0;
+}
+
 } // namespace srtc::h265

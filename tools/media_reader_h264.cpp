@@ -1,6 +1,6 @@
 #include "media_reader_h264.h"
-
 #include "srtc/codec_h264.h"
+#include "srtc/bit_reader.h"
 
 #include <iomanip>
 #include <iostream>
@@ -42,9 +42,7 @@ LoadedMedia MediaReaderH264::loadMedia(bool print_info) const
             break;
         case srtc::h264::NaluType::KeyFrame:
         case srtc::h264::NaluType::NonKeyFrame:
-            srtc::h264::BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
-            const auto first_mb_in_slice = br.readUnsignedExpGolomb();
-            if (first_mb_in_slice == 0) {
+            if (srtc::h264::isFrameStart(parser.currData(), parser.currDataSize())) {
                 if (!frame.empty()) {
                     LoadedFrame loaded_frame = {};
                     loaded_frame.pts_usec = pts_usec;
@@ -107,7 +105,7 @@ void MediaReaderH264::printInfo(const srtc::ByteBuffer& data) const
         case srtc::h264::NaluType::KeyFrame:
         case srtc::h264::NaluType::NonKeyFrame:
             frame_nalu_count += 1;
-            srtc::h264::BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
+            srtc::BitReader br = { parser.currData() + 1, parser.currDataSize() - 1 };
             const auto first_mb_in_slice = br.readUnsignedExpGolomb();
             if (first_mb_in_slice == 0) {
                 all_frame_count += 1;
