@@ -54,7 +54,11 @@ PacketizerAV1::~PacketizerAV1() = default;
 bool PacketizerAV1::isKeyFrame(const ByteBuffer& frame) const
 {
     for (av1::ObuParser parser(frame); parser; parser.next()) {
-        if (av1::isKeyFrameObu(parser.currType(), parser.currData(), parser.currSize())) {
+        const auto obuType = parser.currType();
+        if (obuType == av1::ObuType::SequenceHeader) {
+            return true;
+        }
+        if (av1::isKeyFrameObu(obuType, parser.currData(), parser.currSize())) {
             return true;
         }
     }
