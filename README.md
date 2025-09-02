@@ -7,7 +7,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Depends on OpenSSL (or BoringSSL) only, nothing else.
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
 - Only one worker thread per PeerConnection.
-- Video codecs: VP8, H264 (any profile id), H265. AV1 is coming.
+- Video codecs: VP8, H264 (any profile id), H265, AV1.
 - Audo codec: Opus.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
@@ -167,6 +167,20 @@ To send video to Pion, run the publish sample like this:
 ./build/srtc_publish[.exe] -f sintel.h265
 ```
 
+#### Using an AV1 input file
+
+First please run the Pion WebRTC server like this to use AV1 (by default it uses H264):
+
+```bash
+./run.sh -codec av1
+```
+
+To send video to Pion, run the publish sample like this:
+
+```bash
+./build/srtc_publish[.exe] -f sintel-av1.webm
+```
+
 ### A command line tool for subscribing
 
 ```bash
@@ -228,6 +242,24 @@ And then subscribe like this:
 ```bash
 ./build/srtc_subscribe[.exe] --ov output.h265
 ```
+
+#### Running in AV1 mode
+
+Run the Pion server like this, just like for publishing, and use the web page to publish media.
+
+```bash
+./run.sh -codec av1
+```
+
+And then subscribe like this:
+
+```bash
+./build/srtc_subscribe[.exe] --ov output.webm
+```
+
+The resulting webm file will not contain any audio, just video - if you'd like to capture audio as well,
+please add `--oa output.ogg`.
+
 
 ### An Android demo / sample
 

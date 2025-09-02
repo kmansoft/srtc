@@ -16,7 +16,7 @@
 
 #define LOG(level, ...) srtc::log(level, "Packetizer_AV1", __VA_ARGS__)
 
-#define VERBOSE_LOGGING
+//#define VERBOSE_LOGGING
 
 namespace
 {

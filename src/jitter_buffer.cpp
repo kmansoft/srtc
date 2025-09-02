@@ -12,7 +12,7 @@
 
 #define LOG(level, ...) srtc::log(level, "JitterBuffer", __VA_ARGS__)
 
-#define VERBOSE_LOGGING
+// #define VERBOSE_LOGGING
 
 namespace
 {

@@ -9,6 +9,10 @@
 namespace
 {
 
+// Chrome sends AV1 data without the size in the OBUs, which kind of makes sense because they can save one LEB128 per
+// OBU. When we produce our output, we have to write OBUs with a size, and for that, we have to buffer each OBU's data
+// until we are ready to emit and then we know its size (a new OBU starts, or we reach the end of the packet list).
+
 class BufferedObu
 {
 public:
@@ -20,8 +24,7 @@ public:
 
     void append(const uint8_t* data, size_t size);
 
-    void writeTo(srtc::ByteWriter& out);
-    void clear();
+    void flushTo(srtc::ByteWriter& out);
 
 private:
     uint8_t mHeader; // or 0 since OBU types start at 1
@@ -50,36 +53,48 @@ void BufferedObu::append(const uint8_t* data, size_t size)
     mBuf.append(data, size);
 }
 
-void BufferedObu::writeTo(srtc::ByteWriter& out)
+void BufferedObu::flushTo(srtc::ByteWriter& out)
 {
-    if (mHeader == 0) {
-        return;
+    if (mHeader != 0) {
+        out.writeU8(mHeader | (1 << 1)); // force has_size
+        if ((mHeader & (1 << 2)) != 0) {
+            // Extension
+            out.writeU8(mExtension);
+        }
+
+        out.writeLEB128(mBuf.size());
+        out.write(mBuf);
+
+        mBuf.clear();
+        mHeader = 0;
+        mExtension = 0;
     }
-
-    out.writeU8(mHeader | (1 << 1)); // force has_size
-    if ((mHeader & (1 << 2)) != 0) {
-        // Extension
-        out.writeU8(mExtension);
-    }
-
-    out.writeLEB128(mBuf.size());
-    out.write(mBuf);
-
-    clear();
 }
 
-void BufferedObu::clear()
+} // namespace
+
+namespace srtc
 {
-    mBuf.clear();
-    mHeader = 0;
-    mExtension = 0;
+
+DepacketizerAV1::DepacketizerAV1(const std::shared_ptr<Track>& track)
+    : DepacketizerVideo(track)
+    , mSeenNewSequence(false)
+{
 }
 
-bool extractHelper(srtc::ByteBuffer& buf, const std::vector<const srtc::JitterBufferItem*>& packetList)
-{
-    bool seenNewSequence = false;
+DepacketizerAV1::~DepacketizerAV1() = default;
 
-    srtc::ByteWriter w(buf);
+void DepacketizerAV1::reset()
+{
+    mSeenNewSequence = false;
+}
+
+void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
+{
+    out.clear();
+
+    ByteBuffer buf;
+    ByteWriter w(buf);
 
     BufferedObu bufferedObu;
 
@@ -95,7 +110,7 @@ bool extractHelper(srtc::ByteBuffer& buf, const std::vector<const srtc::JitterBu
             const auto valueN = (packetHeader >> 3) & 0x01;
 
             if (valueN) {
-                seenNewSequence = true;
+                mSeenNewSequence = true;
             }
 
             auto obuIndex = 0u;
@@ -112,18 +127,12 @@ bool extractHelper(srtc::ByteBuffer& buf, const std::vector<const srtc::JitterBu
                 if (reader.remaining() >= obuSize && obuSize > 0) {
                     if (!valueZ) {
                         // Start of a new OBU
-                        bufferedObu.writeTo(w);
+                        bufferedObu.flushTo(w);
 
                         const auto obuHeader = reader.readU8();
                         obuSize -= 1;
 
-                        const auto obuType = (obuHeader >> 3) & 0x3F;
                         const auto obuHasExtension = (obuHeader >> 2) & 0x01;
-                        const auto obuHasSize = (obuHeader >> 1) & 0x01;
-
-                        if (obuType == srtc::av1::ObuType::SequenceHeader) {
-                            std::printf("SUB AV1 extract helper: sequence header, has_size = %d\n", obuHasSize);
-                        }
 
                         bufferedObu.setHeader(obuHeader);
                         if (obuHasExtension && reader.remaining() >= 1) {
@@ -150,37 +159,7 @@ bool extractHelper(srtc::ByteBuffer& buf, const std::vector<const srtc::JitterBu
     }
 
     // Flush
-    bufferedObu.writeTo(w);
-
-    return seenNewSequence;
-}
-
-} // namespace
-
-namespace srtc
-{
-
-DepacketizerAV1::DepacketizerAV1(const std::shared_ptr<Track>& track)
-    : DepacketizerVideo(track)
-    , mSeenNewSequence(false)
-{
-}
-
-DepacketizerAV1::~DepacketizerAV1() = default;
-
-void DepacketizerAV1::reset()
-{
-    mSeenNewSequence = false;
-}
-
-void DepacketizerAV1::extract(std::vector<ByteBuffer>& out, const std::vector<const JitterBufferItem*>& packetList)
-{
-    out.clear();
-
-    ByteBuffer buf;
-    if (extractHelper(buf, packetList)) {
-        mSeenNewSequence = true;
-    }
+    bufferedObu.flushTo(w);
 
     if (!buf.empty()) {
         extractImpl(out, packetList.back(), std::move(buf));
@@ -195,8 +174,8 @@ bool DepacketizerAV1::isFrameStart(const ByteBuffer& payload) const
         // https://aomediacodec.github.io/av1-rtp-spec/#aggregation-header
         // |Z|Y|WW|N|-|-|-|
         const auto packetHeader = reader.readU8();
-        const auto flagZ = (packetHeader & (1 << 7)) != 0;
-        if (flagZ) {
+        const auto valueZ = (packetHeader & (1 << 7)) != 0;
+        if (valueZ) {
             return false;
         }
 
