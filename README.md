@@ -45,6 +45,9 @@ Has a command line tool to subscribe to audio and/or video, which can save media
 Media encoding / decoding and presentation are deliberately out of scope of this library. For publishing, the application needs to
 provide encoded media samples. For subscribing, the application receives encoded media samples which it needs to decode and present.
 
+The srtc library does handle packetization of media frames into RTP packets when publishing and the reconstruction of media
+frames from RTP packets when subscribing (a jitter buffer).
+
 The API is deliberately not compatible with Google's, but the concepts are similar. The Google WebRTC library is inteded
 for browsers, and therefore its API has to match the API defined for JavaScript and cannot be changed. I decided that it's
 not necessary to follow the JavaScript API.
