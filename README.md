@@ -12,7 +12,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
 - Support for IPv4 and IPv6.
-- Tested with Pion and Amazon IVS (Interactive Video Service).
+- Tested with Pion and Amazon IVS (Interactive Video Service)
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
 #### State of publish
@@ -40,7 +40,7 @@ due to its hunger for threads.
 
 Has a command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
 
-Has a command line tool to subscribe to audio and/or video, which can save media to .ogg and .h264 files.
+Has a command line tool to subscribe to audio and/or video, which can save media to files.
 
 Media encoding / decoding and presentation are deliberately out of scope of this library. For publishing, the application needs to
 provide encoded media samples. For subscribing, the application receives encoded media samples which it needs to decode and present.
@@ -109,7 +109,7 @@ Should output:
 ```bash
 Usage: ./build/srtc_publish [options]
 Options:
-  -f, --file <path>    Path to a H.264 or VP8 (webm) file (default: sintel.h264)
+  -f, --file <path>    Path to a H264/H265/WEBM (webm) file (default: sintel.h264)
   -u, --url <url>      WHIP server URL (default: http://localhost:8080/whip)
   -t, --token <token>  WHIP authorization token
   -l, --loop           Loop the file
