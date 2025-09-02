@@ -33,6 +33,7 @@ endif ()
 
 add_library(srtc
         # Headers
+        include/srtc/bit_reader.h
         include/srtc/byte_buffer.h
         include/srtc/depacketizer.h
         include/srtc/depacketizer_av1.h
@@ -102,6 +103,7 @@ add_library(srtc
         include/srtc/x509_certificate.h
         include/srtc/x509_hash.h
         # Sources
+        src/bit_reader.cpp
         src/byte_buffer.cpp
         src/codec_av1.cpp
         src/codec_h264.cpp
@@ -441,6 +443,8 @@ if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
                 tools/http_whip_whep.h
                 tools/media_writer.h
                 tools/media_writer.cpp
+                tools/media_writer_av1.h
+                tools/media_writer_av1.cpp
                 tools/media_writer_h26x.h
                 tools/media_writer_h26x.cpp
                 tools/media_writer_ogg.h

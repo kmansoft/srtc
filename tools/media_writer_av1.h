@@ -25,4 +25,5 @@ private:
     uint64_t mBaseRtpTimestamp;
 
     bool extractAV1Dimensions(uint16_t& width, uint16_t& height) const;
+    bool extractAV1Dimensions(const srtc::ByteBuffer& frame, uint16_t& width, uint16_t& height) const;
 };

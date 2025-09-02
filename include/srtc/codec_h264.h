@@ -61,26 +61,4 @@ bool isFrameStart(const uint8_t* nalu, size_t size);
 bool isSliceNalu(uint8_t naluType);
 bool isSliceFrameStart(const uint8_t* data, size_t size);
 
-//////////
-
-class BitReader
-{
-private:
-    const uint8_t* const data;
-    const size_t dataSize;
-    size_t bitPos;
-
-public:
-    BitReader(const uint8_t* buffer, size_t size)
-        : data(buffer)
-        , dataSize(size)
-        , bitPos(0)
-    {
-    }
-
-    uint32_t readBit();
-    uint32_t readBits(size_t n);
-    uint32_t readUnsignedExpGolomb();
-};
-
 } // namespace srtc::h264

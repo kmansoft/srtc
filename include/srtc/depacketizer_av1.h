@@ -19,7 +19,7 @@ protected:
     [[nodiscard]] bool isFrameStart(const ByteBuffer& payload) const override;
 
 private:
-    bool mSeenKeyFrame;
+    bool mSeenNewSequence;
 
     void extractImpl(std::vector<ByteBuffer>& out, const JitterBufferItem* packet, ByteBuffer&& frame);
 };
