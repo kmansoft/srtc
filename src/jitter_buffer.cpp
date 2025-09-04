@@ -273,7 +273,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
 
     // Some packetizers (I'm looking at you AV1) cannot tell if a packet starts a brand-new frame or is a continuation.
-    // In this case they'll return "Start" packet kind, and we fix things by extending a frame based on the RTP timestamp.
+    // In this case they'll return "Start" packet kind, and we fix things by extending a frame based on the RTP
+    // timestamp.
 
     if (item->kind == PacketKind::Start) {
         if (mMinSeq < item->seq_ext) {
@@ -288,7 +289,9 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
                 }
             }
         }
+    }
 
+    if (item->kind == PacketKind::Start || item->kind == PacketKind::Middle) {
         if (item->seq_ext + 1 < mMaxSeq) {
             const auto next_seq = item->seq_ext + 1;
             const auto next_index = next_seq & mCapacityMask;
@@ -333,7 +336,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
                 }
             }
 
-            std::printf("item seq = %10" PRIu64 ", type = %10s, size = %4zu\n", debug_seq, label, debug_item->payload.size());
+            std::printf(
+                "item seq = %10" PRIu64 ", type = %10s, size = %4zu\n", debug_seq, label, debug_item->payload.size());
         }
     }
 #endif
