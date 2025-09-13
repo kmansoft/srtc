@@ -306,6 +306,6 @@ This library is my side project.
 
 - Releases. This is done.
 
-- Start implementing subscribing. In progress.
+- Subscribing. This is done, although some improvements are still possible.
   
-- Support for more codecs. If you'd  like to see support for H265 and/or AV1, feel free to point me to a WebRTC server which supports those.
+- Support for more codecs. Done: VP8, H264, H265, AV1.
