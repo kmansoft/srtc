@@ -26,6 +26,8 @@ struct NtpTime {
 
 void getNtpTime(NtpTime& ntp);
 
+int64_t getNtpUnixMicroseconds(const NtpTime& ntp);
+
 int64_t getStableTimeMicros();
 
 size_t compressNackList(const std::vector<uint16_t>& nackList, uint16_t* buf_seq, uint16_t* buf_blp);

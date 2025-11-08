@@ -6,10 +6,10 @@
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
 
+#include "media_writer_av1.h"
 #include "media_writer_h26x.h"
 #include "media_writer_ogg.h"
 #include "media_writer_vp8.h"
-#include "media_writer_av1.h"
 
 #include "http_whip_whep.h"
 
@@ -34,6 +34,7 @@ static std::string gWhepUrl = "http://localhost:8080/whep";
 static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
+static bool gPrintSenderReports = false;
 static std::string gOutputAudioFilename;
 static std::string gOutputVideoFilename;
 static bool gDropPackets = false;
@@ -64,6 +65,7 @@ void printUsage(const char* programName)
     std::cout << "  -t, --token <token>  WHEP authorization token" << std::endl;
     std::cout << "  -v, --verbose        Verbose logging from the srtc library" << std::endl;
     std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
+    std::cout << "  -r, --sr             Print sender report information" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
     std::cout << "  --ov <filename>      Save video to a file (h264 or webm format)" << std::endl;
@@ -87,6 +89,79 @@ const char* connectionStateToString(const srtc::PeerConnection::ConnectionState&
     default:
         return "?";
     }
+}
+
+struct SenderReportState {
+    srtc::ExtendedValue<uint32_t> rtp_ext;
+    std::optional<uint64_t> last_rtp_ext;
+    std::optional<srtc::SenderReport> last_report = {};
+    std::optional<std::chrono::steady_clock::time_point> last_received = {};
+};
+
+void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::SenderReport& sr)
+{
+    static SenderReportState stateAudio;
+    static SenderReportState stateVideo;
+
+    const auto type = track->getMediaType();
+
+    const char* label;
+    SenderReportState* state;
+    if (type == srtc::MediaType::Audio) {
+        label = "AUDIO";
+        state = &stateAudio;
+    } else if (type == srtc::MediaType::Video) {
+        label = "VIDEO";
+        state = &stateVideo;
+    } else {
+        return;
+    }
+
+    const auto clock_rate = track->getClockRate();
+
+    const auto rtp_ext = state->rtp_ext.extend(sr.rtp);
+
+    const auto now = std::chrono::steady_clock::now();
+
+    std::string elapsed_wall_clock_s = "N/A";
+    if (state->last_received.has_value()) {
+        const auto elapsed_mills =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - state->last_received.value()).count();
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "%6ld ms", static_cast<long>(elapsed_mills));
+        elapsed_wall_clock_s = buf;
+    }
+
+    std::string ntp_diff_s = "N/A";
+    if (state->last_report.has_value()) {
+        const auto elapsed_micros =
+            srtc::getNtpUnixMicroseconds(sr.ntp) - srtc::getNtpUnixMicroseconds(state->last_report.value().ntp);
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "%6ld ms", static_cast<long>(elapsed_micros / 1000));
+        ntp_diff_s = buf;
+    }
+
+    std::string rtp_diff_s = "N/A";
+    if (state->last_rtp_ext.has_value()) {
+        const auto elapsed_millis = (1000l * (rtp_ext - state->last_rtp_ext.value())) / track->getClockRate();
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "%6ld ms", static_cast<long>(elapsed_millis));
+        rtp_diff_s = buf;
+    }
+
+    state->last_rtp_ext = rtp_ext;
+    state->last_report = sr;
+    state->last_received = now;
+
+    std::printf(">>> SR for %s: ntp = [%12" PRIu32 ". %12" PRIu32 "], ntp diff = %10s, rtp = %12" PRId64
+                ", rtp diff = %10s, elapsed time = %s\n",
+                label,
+                sr.ntp.seconds,
+                sr.ntp.fraction,
+                ntp_diff_s.c_str(),
+                rtp_ext,
+                rtp_diff_s.c_str(),
+                elapsed_wall_clock_s.c_str());
 }
 
 int main(int argc, char* argv[])
@@ -119,6 +194,8 @@ int main(int argc, char* argv[])
             srtc::setLogLevel(SRTC_LOG_V);
         } else if (arg == "-q" || arg == "--quiet") {
             gQuiet = true;
+        } else if (arg == "-r" || arg == "--sr") {
+            gPrintSenderReports = true;
         } else if (arg == "-s" || arg == "--sdp") {
             gPrintSDP = true;
         } else if (arg == "--oa") {
@@ -196,6 +273,11 @@ int main(int argc, char* argv[])
             }
             connectionStateCond.notify_one();
         });
+
+    if (gPrintSenderReports) {
+        peerConnection->setSubscribeSenderReportsListener(
+            [](const std::shared_ptr<Track>& track, const SenderReport& sr) { printSenderReport(track, sr); });
+    }
 
     // Offer
     SubOfferConfig offerConfig = {};
