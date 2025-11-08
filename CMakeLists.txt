@@ -274,7 +274,7 @@ target_link_directories(srtc PRIVATE
 
 # Tests - only when not cross-compiling e.g. Android, and when enabled
 
-if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TESTS)
+if (NOT ANDROID AND SRTC_BUILD_TESTS)
 
     # Google Test
 
@@ -376,7 +376,7 @@ endif ()
 
 # Tools
 
-if (NOT CMAKE_CROSSCOMPILING AND SRTC_BUILD_TOOLS)
+if (NOT ANDROID AND SRTC_BUILD_TOOLS)
 
     # Publish tool
 
