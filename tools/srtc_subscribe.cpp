@@ -122,6 +122,7 @@ void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::Se
     const auto rtp_ext = state->rtp_ext.extend(sr.rtp);
 
     const auto now = std::chrono::steady_clock::now();
+    const auto sr_ntp_unix_micros = srtc::getNtpUnixMicroseconds(sr.ntp);
 
     std::string elapsed_wall_clock_s = "N/A";
     if (state->last_received.has_value()) {
@@ -134,8 +135,7 @@ void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::Se
 
     std::string ntp_diff_s = "N/A";
     if (state->last_report.has_value()) {
-        const auto elapsed_micros =
-            srtc::getNtpUnixMicroseconds(sr.ntp) - srtc::getNtpUnixMicroseconds(state->last_report.value().ntp);
+        const auto elapsed_micros = sr_ntp_unix_micros - srtc::getNtpUnixMicroseconds(state->last_report.value().ntp);
         char buf[256];
         std::snprintf(buf, sizeof(buf), "%6ld ms", static_cast<long>(elapsed_micros / 1000));
         ntp_diff_s = buf;
@@ -153,11 +153,12 @@ void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::Se
     state->last_report = sr;
     state->last_received = now;
 
-    std::printf(">>> SR for %s: ntp = [%12" PRIu32 ". %12" PRIu32 "], ntp diff = %10s, rtp = %12" PRId64
-                ", rtp diff = %10s, elapsed time = %s\n",
+    std::printf(">>> SR for %s: ntp = [%12" PRIu32 ". %12" PRIu32 "], ntp unix = %14" PRId64
+                " ms, ntp diff = %10s, rtp = %12" PRId64 ", rtp diff = %10s, elapsed time = %s\n",
                 label,
                 sr.ntp.seconds,
                 sr.ntp.fraction,
+                sr_ntp_unix_micros / 1000,
                 ntp_diff_s.c_str(),
                 rtp_ext,
                 rtp_diff_s.c_str(),
