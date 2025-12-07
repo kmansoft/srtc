@@ -25,6 +25,7 @@ struct PubOfferConfig {
     std::string cname;
     bool enable_rtx = true;
     bool enable_bwe = false;
+    bool enable_rfc8851 = false;
     bool debug_drop_packets = false;
 };
 
@@ -50,6 +51,7 @@ private:
         // Publish
         bool enable_rtx = true;
         bool enable_bwe = false;
+        bool enable_rfc8851 = false;
         // Subscribe
         uint16_t pli_interval_millis = 0;
         uint16_t jitter_buffer_length_millis = 0;

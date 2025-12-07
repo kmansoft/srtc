@@ -189,7 +189,14 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
 
             for (const auto& layer : layerList) {
-                ss << "a=rid:" << layer.name << " send" << std::endl;
+                ss << "a=rid:" << layer.name << " send";
+
+                if (mConfig.enable_rfc8851) {
+                    ss << " max-br=" << layer.kilobits_per_second * 1024 << ";max-width=" << layer.width
+                       << ";max-height=" << layer.height << ";max-fps=" << layer.frames_per_second;
+                }
+
+                ss << std::endl;
             }
 
             ss << "a=simulcast:send";

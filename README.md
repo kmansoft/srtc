@@ -18,7 +18,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 #### State of publish
 
 - Retransmits of packets reported lost by the receiver, uses RTX if supported.
-- Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension.
+- Video simulcast (sending multiple layers at different resolutions) including the Google VLA extension and RFC 8851.
 - Basic bandwidth estimation using the TWCC extension and probing.
 - Pacing.
 

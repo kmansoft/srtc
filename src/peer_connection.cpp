@@ -66,6 +66,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
     config.cname = pubConfig.cname;
     config.enable_rtx = pubConfig.enable_rtx;
     config.enable_bwe = pubConfig.enable_bwe;
+    config.enable_rfc8851 = pubConfig.enable_rfc8851;
     config.debug_drop_packets = pubConfig.debug_drop_packets;
 
     std::optional<SdpOffer::VideoConfig> video;
