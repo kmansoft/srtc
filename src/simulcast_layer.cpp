@@ -7,6 +7,11 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::share
 {
     buf.clear();
 
+    if (list.empty() || list.size() > 4) {
+        // Invalid input
+        return;
+    }
+
     ByteWriter w(buf);
 
     // https://webrtc.googlesource.com/src/+/refs/heads/main/docs/native-code/rtp-hdrext/video-layers-allocation00
