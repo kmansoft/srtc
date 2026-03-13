@@ -548,7 +548,7 @@ std::vector<uint16_t> JitterBuffer::processNack()
                     static_cast<uint16_t>(mMaxSeq));
 #endif
             }
-        } else if (item->when_nack_abandon <= now) {
+        } else if (diff_millis(item->when_nack_abandon, now) <= 0) {
             break;
         }
     }
@@ -567,6 +567,8 @@ void JitterBuffer::freeEverything()
         delete[] mItemList;
         mItemList = nullptr;
     }
+
+    mLastFrameTimeStamp.reset();
 }
 
 JitterBufferItem* JitterBuffer::newItem()
