@@ -55,14 +55,15 @@ private:
 
     void fillItemList(std::vector<const JitterBufferItem*>& out, uint64_t start, uint64_t max);
     void deleteItemList(uint64_t start, uint64_t max);
-    void appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
+    void appendToResult(std::vector<std::shared_ptr<EncodedFrame>>& result,
                         JitterBufferItem* item,
                         JitterBufferItem* last,
                         const std::chrono::steady_clock::time_point& now,
-                        std::vector<srtc::ByteBuffer>& list);
+                        std::vector<ByteBuffer>& list);
 
-    [[nodiscard]] bool findMultiPacketSequence(uint64_t& outEnd);
-    [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now);
+    enum class SequenceResult { Complete, Gap, Abandoned };
+    [[nodiscard]] SequenceResult findMultiPacketSequence(uint64_t& outEnd);
+    [[nodiscard]] bool findNextToDequeue(const std::chrono::steady_clock::time_point& now) const;
 
     const std::shared_ptr<Track> mTrack;
     const std::shared_ptr<Depacketizer> mDepacketizer;

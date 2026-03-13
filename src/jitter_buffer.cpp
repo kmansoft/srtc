@@ -5,8 +5,6 @@
 #include "srtc/track.h"
 
 #include <cassert>
-#include <cinttypes>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -442,7 +440,9 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
             } else if (item->kind == PacketKind::Start) {
                 // Start of a multi-packet sequence
                 uint64_t maxSeq = 0;
-                if (findMultiPacketSequence(maxSeq)) {
+                const auto seqResult = findMultiPacketSequence(maxSeq);
+
+                if (seqResult == SequenceResult::Complete) {
                     // Create a list of packets
                     mTempPacketList.clear();
                     fillItemList(mTempPacketList, seq, maxSeq);
@@ -476,21 +476,26 @@ std::vector<std::shared_ptr<EncodedFrame>> JitterBuffer::processDeque()
 
                     // Advance
                     mMinSeq = maxSeq + 1;
-                } else if (findNextToDequeue(now)) {
-                    // There is another frame that's ready, delete this one
-                    LOG(SRTC_LOG_W,
-                        "Dropping an incomplete multi-frame, SEQ = %u, MIN = %u, MAX = %u",
-                        static_cast<uint16_t>(seq),
-                        static_cast<uint16_t>(mMinSeq),
-                        static_cast<uint16_t>(mMaxSeq));
+                } else if (seqResult == SequenceResult::Gap) {
+                    if (findNextToDequeue(now)) {
+                        // There is another frame that's ready, delete this one
+                        LOG(SRTC_LOG_W,
+                            "Dropping an incomplete multi-frame, SEQ = %" PRIu16 ", MIN = %" PRIu16 ", MAX = %" PRIu16,
+                            static_cast<uint16_t>(seq),
+                            static_cast<uint16_t>(mMinSeq),
+                            static_cast<uint16_t>(mMaxSeq));
 
-                    mItemList[index] = nullptr;
-                    mMinSeq += 1;
+                        mItemList[index] = nullptr;
+                        mMinSeq += 1;
 
-                    deleteItem(item);
+                        deleteItem(item);
+                    } else {
+                        // There is no other frame, we can afford to wait longer
+                        break;
+                    }
                 } else {
-                    // There is no other frame, we can afford to wait longer
-                    break;
+                    // SequenceResult::Abandoned: findMultiPacketSequence already deleted the
+                    // broken sequence and advanced mMinSeq, so just continue the loop
                 }
             } else {
                 // We cannot and will never be able to extract this
@@ -540,7 +545,7 @@ std::vector<uint16_t> JitterBuffer::processNack()
                 const auto diff_abandon = diff_millis(item->when_nack_abandon, now);
 
                 LOG(SRTC_LOG_V,
-                    "Processing NACK for item SEQ = %u, diff_request = %d, diff_abandon = %d, min = %u, max = %u",
+                    "Processing NACK for item SEQ = %" PRIu16 ", diff_request = %d, diff_abandon = %d, min = %" PRIu16", max = %" PRIu16,
                     static_cast<uint16_t>(item->seq_ext),
                     diff_request,
                     diff_abandon,
@@ -622,11 +627,11 @@ void JitterBuffer::deleteItemList(uint64_t start, uint64_t max)
     }
 }
 
-void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame>>& result,
+void JitterBuffer::appendToResult(std::vector<std::shared_ptr<EncodedFrame>>& result,
                                   JitterBufferItem* item,
                                   JitterBufferItem* last,
                                   const std::chrono::steady_clock::time_point& now,
-                                  std::vector<srtc::ByteBuffer>& list)
+                                  std::vector<ByteBuffer>& list)
 {
     if (!list.empty()) {
         // Check that we're not trying to go backwards
@@ -659,7 +664,7 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<srtc::EncodedFrame
     }
 }
 
-bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
+JitterBuffer::SequenceResult JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
 {
     auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
@@ -673,21 +678,23 @@ bool JitterBuffer::findMultiPacketSequence(uint64_t& outEnd)
         assert(item);
 
         if (!item->received) {
-            break;
-        } else if (item->kind == PacketKind::End) {
+            return SequenceResult::Gap;
+        }
+        if (item->kind == PacketKind::End) {
             outEnd = seq;
-            return true;
-        } else if (item->kind != PacketKind::Middle) {
+            return SequenceResult::Complete;
+        }
+        if (item->kind != PacketKind::Middle) {
             deleteItemList(mMinSeq, seq);
             mMinSeq = seq + 1;
-            break;
+            return SequenceResult::Abandoned;
         }
     }
 
-    return false;
+    return SequenceResult::Gap;
 }
 
-bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now)
+bool JitterBuffer::findNextToDequeue(const std::chrono::steady_clock::time_point& now) const
 {
     auto index = mMinSeq & mCapacityMask;
     auto item = mItemList[index];
