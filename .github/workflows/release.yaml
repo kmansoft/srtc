@@ -44,13 +44,13 @@ jobs:
           tar -czvf srtc_subscribe-linux.tar.gz srtc_subscribe
 
       - name: Upload publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_publish-linux
           path: release/srtc_publish-linux.tar.gz
 
       - name: Upload subscribe
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_subscribe-linux
           path: release/srtc_subscribe-linux.tar.gz
@@ -89,13 +89,13 @@ jobs:
           tar -czvf srtc_subscribe-macos.tar.gz srtc_subscribe
 
       - name: Upload publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_publish-macos
           path: release/srtc_publish-macos.tar.gz
 
       - name: Upload subscribe
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_subscribe-macos
           path: release/srtc_subscribe-macos.tar.gz
@@ -135,13 +135,13 @@ jobs:
           7z a -tzip srtc_subscribe-windows.zip srtc_subscribe.exe
 
       - name: Upload publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_publish-windows
           path: release/srtc_publish-windows.zip
 
       - name: Upload subscribe
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: srtc_subscribe-windows
           path: release/srtc_subscribe-windows.zip
@@ -158,7 +158,7 @@ jobs:
           cp ${{ github.workspace }}/*.h264 ${{ github.workspace }}/*.h265 ${{ github.workspace }}/*.webm release/
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: video-files
           path: release
@@ -168,7 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
