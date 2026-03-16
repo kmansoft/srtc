@@ -19,7 +19,7 @@ class TrackStats;
 class Track
 {
 public:
-    struct SimulcastLayer : public srtc::SimulcastLayer {
+    struct SimulcastLayer : srtc::SimulcastLayer {
         uint16_t index = { 0 }; // [0..3]
     };
 

@@ -17,6 +17,7 @@
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
 
+#include "srtc/codec_av1.h"
 #include "stunmessage.h"
 
 #include <algorithm>
@@ -188,6 +189,15 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
     mVideoSimulcastTrackList = answer->getVideoSimulcastTrackList();
     mAudioTrack = answer->getAudioTrack();
 
+    mSendSimulcastLayerList.clear();
+    for (const auto& track : mVideoSimulcastTrackList) {
+        if (track->getMediaType() == MediaType::Video && track->isSimulcast()) {
+            const auto layer = track->getSimulcastLayer();
+            assert(layer != nullptr);
+            mSendSimulcastLayerList.push_back(*layer);
+        }
+    }
+
     if (mSdpOffer && mSdpAnswer) {
         if (mSdpOffer->getDirection() != mSdpAnswer->getDirection()) {
             return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
@@ -357,7 +367,12 @@ Error PeerConnection::setVideoSimulcastCodecSpecificData(const std::string& laye
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ 0, layer.track, layer.packetizer, {}, std::move(list) });
+    FrameToSend frameToSend = {};
+    frameToSend.track = layer.track;
+    frameToSend.packetizer = layer.packetizer;
+    frameToSend.csd = std::move(list);
+
+    mFrameSendQueue.push_back(std::move(frameToSend));
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -390,7 +405,51 @@ Error PeerConnection::publishVideoSimulcastFrame(int64_t pts_usec, const std::st
         return { Error::Code::InvalidData, "There is no video packetizer" };
     }
 
-    mFrameSendQueue.push_back({ pts_usec, layer.track, layer.packetizer, std::move(buf) });
+    FrameToSend frameToSend = {};
+    frameToSend.pts_usec = pts_usec;
+    frameToSend.track = layer.track;
+    frameToSend.packetizer = layer.packetizer;
+    frameToSend.buf = std::move(buf);
+
+    mFrameSendQueue.push_back(std::move(frameToSend));
+    mEventLoop->interrupt();
+
+    return Error::OK;
+}
+
+Error PeerConnection::updateVideoSimulcastLayer(const SimulcastLayer& updated)
+{
+    if (mDirection != Direction::Publish) {
+        return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
+    }
+
+    std::lock_guard lock(mMutex);
+
+    if (mConnectionState != ConnectionState::Connected) {
+        return Error::OK;
+    }
+
+    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
+                                   mVideoSimulcastLayerList.end(),
+                                   [layerName = updated.name](const auto& layer) { return layer.ridName == layerName; });
+    if (iter == mVideoSimulcastLayerList.end()) {
+        return { Error::Code::InvalidData, "There is no video layer named " + updated.name };
+    }
+
+    const auto& layer = *iter;
+    if (layer.track == nullptr) {
+        return { Error::Code::InvalidData, "There is no video track" };
+    }
+    if (layer.packetizer == nullptr) {
+        return { Error::Code::InvalidData, "There is no video packetizer" };
+    }
+
+    FrameToSend frameToSend = {};
+    frameToSend.track = layer.track;
+    frameToSend.packetizer = layer.packetizer;
+    frameToSend.layer = updated;
+
+    mFrameSendQueue.push_back(std::move(frameToSend));
     mEventLoop->interrupt();
 
     return Error::OK;
@@ -514,9 +573,23 @@ void PeerConnection::networkThreadWorkerFunc()
         // Scheduler
         mLoopScheduler->run();
 
-        // Frames to send
-        if (mSelectedCandidate) {
-            for (auto& item : frameSendQueue) {
+        for (auto& item : frameSendQueue) {
+            // Update simulcast layer
+            if (item.layer.has_value()) {
+                const auto updated = item.layer.value();
+                for (auto& layer : mSendSimulcastLayerList) {
+                    if (layer.name == updated.name) {
+                        layer.width = updated.width;
+                        layer.height = updated.height;
+                        layer.frames_per_second = updated.frames_per_second;
+                        layer.kilobits_per_second = updated.kilobits_per_second;
+                        break;
+                    }
+                }
+            }
+
+            // Frames to send
+            if (mSelectedCandidate) {
                 mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
                     item.pts_usec, item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
             }
@@ -844,6 +917,11 @@ void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
             mSubscribeSenderReportsListener(track, sr);
         }
     }
+}
+
+const std::vector<SimulcastLayer>& PeerConnection::getSimulcastLayerList() const
+{
+    return mSendSimulcastLayerList;
 }
 
 void PeerConnection::sendReports()

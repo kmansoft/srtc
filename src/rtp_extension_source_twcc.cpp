@@ -71,17 +71,15 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
     uint8_t nVideoExtTWCC = 0;
     if (answer->hasVideoMedia()) {
         nVideoExtTWCC = findTWCCExtension(answer->getVideoExtensionMap());
-        if (nVideoExtTWCC == 0) {
-            return {};
-        }
     }
 
     uint8_t nAudioExtTWCC = 0;
     if (answer->hasAudioMedia()) {
         nAudioExtTWCC = findTWCCExtension(answer->getAudioExtensionMap());
-        if (nAudioExtTWCC == 0) {
-            return {};
-        }
+    }
+
+    if (nVideoExtTWCC == 0 && nAudioExtTWCC == 0) {
+        return {};
     }
 
     return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC, scheduler);

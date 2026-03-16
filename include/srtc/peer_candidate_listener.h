@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 namespace srtc
 {
@@ -11,6 +12,7 @@ class RtpPacket;
 class Track;
 
 struct SenderReport;
+struct SimulcastLayer;
 
 class PeerCandidateListener
 {
@@ -28,6 +30,8 @@ public:
     virtual void onCandidateReceivedSenderReport(PeerCandidate* candidate,
                                                  const std::shared_ptr<Track>& track,
                                                  const SenderReport& sr) = 0;
+
+    virtual const std::vector<SimulcastLayer>& getSimulcastLayerList() const = 0;
 };
 
 } // namespace srtc

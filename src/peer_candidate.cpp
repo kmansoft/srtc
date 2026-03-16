@@ -191,7 +191,7 @@ uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer, const
     return answer->getVideoExtensionMap().findByName(name);
 }
 
-float calculateLayerBandwidthScale(const std::vector<std::shared_ptr<srtc::SimulcastLayer>>& layerList,
+float calculateLayerBandwidthScale(const std::vector<srtc::SimulcastLayer>& layerList,
                                    const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
 {
     if (layerList.empty()) {
@@ -200,7 +200,7 @@ float calculateLayerBandwidthScale(const std::vector<std::shared_ptr<srtc::Simul
 
     uint32_t total = 0;
     for (const auto& layer : layerList) {
-        total += layer->kilobits_per_second;
+        total += layer.kilobits_per_second;
     }
 
     return static_cast<float>(trackLayer->kilobits_per_second) / static_cast<float>(total);
@@ -478,27 +478,24 @@ void PeerCandidate::run()
         const auto item = std::move(mFrameSendQueue.front());
         mFrameSendQueue.erase(mFrameSendQueue.begin());
 
+        if (!item.csd.empty()) {
+            // Set Codec Specific Data
+            item.packetizer->setCodecSpecificData(item.csd);
+        }
+
         if (mSrtpConnection == nullptr || mSendPacer == nullptr) {
             // We are not connected yet
-            LOG(SRTC_LOG_E, "We are not connected yet, not sending a frame");
+            LOG(SRTC_LOG_E, "We are not connected yet");
             continue;
         }
 
-        if (!item.csd.empty()) {
-            // Codec Specific Data
-            item.packetizer->setCodecSpecificData(item.csd);
-        } else if (!item.buf.empty()) {
-            // Simulcast layers
-            std::vector<std::shared_ptr<SimulcastLayer>> layerList;
-            if (item.track->isSimulcast()) {
-                for (const auto& trackItem : mAnswer->getVideoSimulcastTrackList()) {
-                    layerList.push_back(trackItem->getSimulcastLayer());
-                }
-            }
+        if (!item.buf.empty()) {
+            // Simulcast layer list
+            const auto& layerList = mListener->getSimulcastLayerList();
 
             // Frame data
             if (mExtensionSourceSimulcast) {
-                if (item.track->isSimulcast() &&
+                if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast() &&
                     mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
                     mExtensionSourceSimulcast->prepare(item.track, layerList);
                 } else {
@@ -526,7 +523,8 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
+                            bandwidthScale = calculateLayerBandwidthScale(layerList,
+                                item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }

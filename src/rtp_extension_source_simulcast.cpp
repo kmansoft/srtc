@@ -52,7 +52,7 @@ bool RtpExtensionSourceSimulcast::shouldAdd(const std::shared_ptr<Track>& track,
 }
 
 void RtpExtensionSourceSimulcast::prepare(const std::shared_ptr<Track>& track,
-										  const std::vector<std::shared_ptr<SimulcastLayer>>& layerList)
+										  const std::vector<SimulcastLayer>& layerList)
 {
 	const auto layer = track->getSimulcastLayer();
 

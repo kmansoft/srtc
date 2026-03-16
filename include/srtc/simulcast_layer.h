@@ -17,6 +17,6 @@ struct SimulcastLayer {
 	uint32_t kilobits_per_second;
 };
 
-void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::shared_ptr<SimulcastLayer>>& list);
+void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<SimulcastLayer>& list);
 
 } // namespace srtc

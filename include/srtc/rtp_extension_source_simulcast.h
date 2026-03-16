@@ -4,7 +4,6 @@
 #include "srtc/rtp_extension_source.h"
 #include "srtc/simulcast_layer.h"
 
-#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -35,7 +34,7 @@ public:
 								 const std::shared_ptr<Packetizer>& packetizer,
 								 const ByteBuffer& frame);
 
-	void prepare(const std::shared_ptr<Track>& track, const std::vector<std::shared_ptr<SimulcastLayer>>& layerList);
+	void prepare(const std::shared_ptr<Track>& track, const std::vector<SimulcastLayer>& layerList);
 	void clear();
 
 	[[nodiscard]] uint8_t getPadding(const std::shared_ptr<Track>& track, size_t remainingDataSize) override;

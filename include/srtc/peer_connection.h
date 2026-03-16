@@ -86,6 +86,7 @@ public:
 
     Error setVideoSimulcastCodecSpecificData(const std::string& layerName, std::vector<ByteBuffer>&& list);
     Error publishVideoSimulcastFrame(int64_t pts_usec, const std::string& layerName, ByteBuffer&& buf);
+    Error updateVideoSimulcastLayer(const SimulcastLayer& layer);
 
     Error publishAudioFrame(int64_t pts_usec, ByteBuffer&& buf);
 
@@ -146,11 +147,15 @@ private:
         int64_t pts_usec;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;              // possibly empty
-        std::vector<ByteBuffer> csd; // possibly empty
+        ByteBuffer buf;                      // possibly empty
+        std::vector<ByteBuffer> csd;         // possibly empty
+        std::optional<SimulcastLayer> layer; // possibly empty
     };
 
     std::list<FrameToSend> mFrameSendQueue SRTC_GUARDED_BY(mMutex);
+
+    // Simulcast layer list
+    std::vector<SimulcastLayer> mSendSimulcastLayerList;
 
     // Jitter buffer processing
     void processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer);
@@ -165,6 +170,7 @@ private:
     void onCandidateReceivedSenderReport(PeerCandidate* candidate,
                                          const std::shared_ptr<Track>& track,
                                          const SenderReport& sr) override;
+    const std::vector<SimulcastLayer>& getSimulcastLayerList() const override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex);

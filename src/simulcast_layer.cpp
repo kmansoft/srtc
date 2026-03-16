@@ -3,7 +3,7 @@
 namespace srtc
 {
 
-void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::shared_ptr<SimulcastLayer>>& list)
+void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<SimulcastLayer>& list)
 {
     buf.clear();
 
@@ -30,7 +30,7 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::share
 
     // bitrate in kpbs per temporal layer
     for (const auto& layer : list) {
-        w.writeLEB128(layer->kilobits_per_second);
+        w.writeLEB128(layer.kilobits_per_second);
     }
 
     // resolution and framerate per spatial layer
@@ -38,9 +38,9 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<std::share
         // width-1
         // height-1
         // max framerate
-        w.writeU16(layer->width - 1);
-        w.writeU16(layer->height - 1);
-        w.writeU8(layer->frames_per_second);
+        w.writeU16(layer.width - 1);
+        w.writeU16(layer.height - 1);
+        w.writeU8(layer.frames_per_second);
     }
 }
 
