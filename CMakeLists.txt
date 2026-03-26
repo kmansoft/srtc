@@ -337,6 +337,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             test/test_util.cpp
             test/test_allocator.cpp
             test/test_subscribe_twcc.cpp
+            test/test_packetizer.cpp
     )
 
     target_include_directories(

@@ -7,14 +7,16 @@
 namespace srtc
 {
 
+// Track
+
 Track::Track(uint32_t trackId,
-			 Direction direction,
+             Direction direction,
              MediaType mediaType,
              const std::string& mediaId,
              uint32_t ssrtc,
-			 uint8_t payloadId,
+             uint8_t payloadId,
              uint32_t rtxSsrc,
-			 uint8_t rtxPayloadId,
+             uint8_t rtxPayloadId,
              uint32_t remoteSsrc,
              Codec codec,
              const std::shared_ptr<Track::CodecOptions>& codecOptions,
@@ -23,7 +25,7 @@ Track::Track(uint32_t trackId,
              bool hasNack,
              bool hasPli)
     : mTrackId(trackId)
-	, mDirection(direction)
+    , mDirection(direction)
     , mMediaType(mediaType)
     , mMediaId(mediaId)
     , mSSRC(ssrtc)
@@ -52,7 +54,7 @@ uint32_t Track::getTrackId() const
 
 Direction Track::getDirection() const
 {
-	return mDirection;
+    return mDirection;
 }
 
 MediaType Track::getMediaType() const
@@ -148,6 +150,82 @@ std::shared_ptr<RtpPacketSource> Track::getRtxPacketSource() const
 std::shared_ptr<TrackStats> Track::getStats() const
 {
     return mStats;
+}
+
+// TrackBuilder
+
+TrackBuilder::TrackBuilder(uint32_t trackId,
+                           Direction direction,
+                           MediaType mediaType,
+                           const std::string& mediaId,
+                           uint32_t ssrc,
+                           uint8_t payloadId,
+                           uint32_t clockRate)
+    : mTrackId(trackId)
+    , mDirection(direction)
+    , mMediaType(mediaType)
+    , mMediaId(mediaId)
+    , mSSRC(ssrc)
+    , mPayloadId(payloadId)
+    , mClockRate(clockRate)
+{
+}
+
+TrackBuilder& TrackBuilder::rtx(uint32_t rtxSsrc, uint8_t rtxPayloadId)
+{
+    mRtxSSRC = rtxSsrc;
+    mRtxPayloadId = rtxPayloadId;
+    return *this;
+}
+
+TrackBuilder& TrackBuilder::remoteSSRC(uint32_t remoteSSRC)
+{
+    mRemoteSSRC = remoteSSRC;
+    return *this;
+}
+
+TrackBuilder& TrackBuilder::codec(Codec codec, const std::shared_ptr<Track::CodecOptions>& codecOptions)
+{
+    mCodec = codec;
+    mCodecOptions = codecOptions;
+    return *this;
+}
+
+TrackBuilder& TrackBuilder::simulcastLayer(const std::shared_ptr<Track::SimulcastLayer>& simulcastLayer)
+{
+    mSimulcastLayer = simulcastLayer;
+    return *this;
+}
+
+TrackBuilder& TrackBuilder::nack(bool nack)
+{
+    mHasNack = nack;
+    return *this;
+}
+
+TrackBuilder& TrackBuilder::pli(bool pli)
+{
+    mHasPli = pli;
+    return *this;
+}
+
+std::shared_ptr<Track> TrackBuilder::build() const
+{
+    return std::make_shared<Track>(mTrackId,
+                                   mDirection,
+                                   mMediaType,
+                                   mMediaId,
+                                   mSSRC,
+                                   mPayloadId,
+                                   mRtxSSRC,
+                                   mRtxPayloadId,
+                                   mRemoteSSRC,
+                                   mCodec,
+                                   mCodecOptions,
+                                   mSimulcastLayer,
+                                   mClockRate,
+                                   mHasNack,
+                                   mHasPli);
 }
 
 } // namespace srtc

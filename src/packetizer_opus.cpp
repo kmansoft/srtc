@@ -11,51 +11,51 @@ namespace srtc
 {
 
 PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
-	: Packetizer(track)
+    : Packetizer(track)
 {
     assert(track->getCodec() == Codec::Opus);
 }
 
 PacketizerOpus::~PacketizerOpus() = default;
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
-	[[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
-	const std::shared_ptr<RtpExtensionSource>& twcc,
-	[[maybe_unused]] size_t mediaProtectionOverhead,
+std::vector<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
+    [[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
+    const std::shared_ptr<RtpExtensionSource>& twcc,
+    [[maybe_unused]] size_t mediaProtectionOverhead,
     int64_t pts_usec,
-	const srtc::ByteBuffer& frame)
+    const srtc::ByteBuffer& frame)
 {
-	std::list<std::shared_ptr<RtpPacket>> result;
+    std::vector<std::shared_ptr<RtpPacket>> result;
 
-	// https://datatracker.ietf.org/doc/rfc7587
+    // https://datatracker.ietf.org/doc/rfc7587
 
-	const auto track = getTrack();
+    const auto track = getTrack();
 
-	const auto timeSource = track->getRtpTimeSource();
-	const auto packetSource = track->getRtpPacketSource();
+    const auto timeSource = track->getRtpTimeSource();
+    const auto packetSource = track->getRtpPacketSource();
 
-	const auto frameTimestamp = timeSource->getFrameTimestamp(pts_usec);
+    const auto frameTimestamp = timeSource->getFrameTimestamp(pts_usec);
 
-	auto payload = frame.copy();
-	if (payload.size() > RtpPacket::kMaxPayloadSize) {
-		payload.resize(RtpPacket::kMaxPayloadSize);
-	}
+    auto payload = frame.copy();
+    if (payload.size() > RtpPacket::kMaxPayloadSize) {
+        payload.resize(RtpPacket::kMaxPayloadSize);
+    }
 
-	RtpExtension extension;
-	if (twcc && twcc->wantsExtension(track, false, 0)) {
-		RtpExtensionBuilder builder;
-		twcc->addExtension(builder, track, false, 0);
-		extension = builder.build();
-	}
+    RtpExtension extension;
+    if (twcc && twcc->wantsExtension(track, false, 0)) {
+        RtpExtensionBuilder builder;
+        twcc->addExtension(builder, track, false, 0);
+        extension = builder.build();
+    }
 
-	const auto [rollover, sequence] = packetSource->getNextSequence();
-	result.push_back(
-		extension.empty()
-			? std::make_shared<RtpPacket>(track, false, rollover, sequence, frameTimestamp, 0, std::move(payload))
-			: std::make_shared<RtpPacket>(
-				  track, false, rollover, sequence, frameTimestamp, 0, std::move(extension), std::move(payload)));
+    const auto [rollover, sequence] = packetSource->getNextSequence();
+    result.push_back(
+        extension.empty()
+            ? std::make_shared<RtpPacket>(track, false, rollover, sequence, frameTimestamp, 0, std::move(payload))
+            : std::make_shared<RtpPacket>(
+                  track, false, rollover, sequence, frameTimestamp, 0, std::move(extension), std::move(payload)));
 
-	return result;
+    return result;
 }
 
 } // namespace srtc

@@ -353,7 +353,7 @@ std::optional<uint16_t> RtpExtensionSourceTWCC::getFeedbackSeq(const std::shared
     return ext.findU16(nExtId);
 }
 
-unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+unsigned int RtpExtensionSourceTWCC::getPacingSpreadMillis(const std::vector<std::shared_ptr<RtpPacket>>& list,
                                                            float bandwidthScale,
                                                            unsigned int defaultValue) const
 {

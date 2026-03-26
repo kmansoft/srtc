@@ -39,7 +39,7 @@ public:
 	void flush(const std::shared_ptr<Track>& track);
 
 	void sendNow(const std::shared_ptr<RtpPacket>& packet);
-	void sendPaced(const std::list<std::shared_ptr<RtpPacket>>& packetList,
+	void sendPaced(const std::vector<std::shared_ptr<RtpPacket>>& packetList,
 				   unsigned int spreadMillis);
 
 	[[nodiscard]] int getTimeoutMillis(int defaultValue) const;

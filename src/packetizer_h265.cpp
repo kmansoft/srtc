@@ -67,13 +67,13 @@ bool PacketizerH265::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::list<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                               const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                               size_t mediaProtectionOverhead,
-                                                               int64_t pts_usec,
-                                                               const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
+                                                                 const std::shared_ptr<RtpExtensionSource>& twcc,
+                                                                 size_t mediaProtectionOverhead,
+                                                                 int64_t pts_usec,
+                                                                 const ByteBuffer& frame)
 {
-    std::list<std::shared_ptr<RtpPacket>> result;
+    std::vector<std::shared_ptr<RtpPacket>> result;
 
     // https://datatracker.ietf.org/doc/html/rfc7798
 

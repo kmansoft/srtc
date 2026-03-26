@@ -61,7 +61,7 @@ public:
 
     [[nodiscard]] std::optional<uint16_t> getFeedbackSeq(const std::shared_ptr<RtpPacket>& packet) const;
 
-    [[nodiscard]] unsigned int getPacingSpreadMillis(const std::list<std::shared_ptr<RtpPacket>>& list,
+    [[nodiscard]] unsigned int getPacingSpreadMillis(const std::vector<std::shared_ptr<RtpPacket>>& list,
                                                      float bandwidthScale,
                                                      unsigned int defaultValue) const;
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;

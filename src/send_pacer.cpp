@@ -63,7 +63,7 @@ void SendPacer::sendNow(const std::shared_ptr<RtpPacket>& packet)
     sendImpl(packet);
 }
 
-void SendPacer::sendPaced(const std::list<std::shared_ptr<RtpPacket>>& packetList, unsigned int spreadMillis)
+void SendPacer::sendPaced(const std::vector<std::shared_ptr<RtpPacket>>& packetList, unsigned int spreadMillis)
 {
     if (packetList.empty()) {
         return;

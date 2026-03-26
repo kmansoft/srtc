@@ -1,12 +1,10 @@
 #pragma once
 
 #include "srtc/error.h"
-#include "srtc/random_generator.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/srtc.h"
 
-#include <chrono>
-#include <list>
+#include <vector>
 #include <memory>
 #include <utility>
 
@@ -28,7 +26,7 @@ public:
 
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
     [[nodiscard]] virtual bool isKeyFrame(const ByteBuffer& frame) const;
-    [[nodiscard]] virtual std::list<std::shared_ptr<RtpPacket>> generate(
+    [[nodiscard]] virtual std::vector<std::shared_ptr<RtpPacket>> generate(
         const std::shared_ptr<RtpExtensionSource>& simulcast,
         const std::shared_ptr<RtpExtensionSource>& twcc,
         size_t mediaProtectionOverhead,
