@@ -766,7 +766,7 @@ void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
     mJitterBufferAudio.reset();
 }
 
-void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
+void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 {
     for (const auto& item : mConnectingCandidateList) {
         if (item.get() == candidate) {
@@ -796,7 +796,7 @@ void PeerConnection::onCandidateIceSelected(PeerCandidate* candidate)
         mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 }
 
-void PeerConnection::onCandidateConnected(PeerCandidate* candidate)
+void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connected);
 

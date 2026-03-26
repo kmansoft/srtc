@@ -29,7 +29,15 @@ srtc::ByteBuffer generateNAL(uint8_t type, uint32_t size)
 
     buffer.reserve(size + 1);
     buffer.resize(size + 1);
-    RAND_bytes(buffer.data() + 1, static_cast<int>(size));
+
+    uint8_t* nal_data = buffer.data() + 1;
+    RAND_bytes(nal_data, static_cast<int>(size));
+
+    for (size_t i = 0u; i < size - 2; ++i) {
+        if (nal_data[i] == 0u && nal_data[i+1] == 0u && nal_data[i+2] == 1u) {
+            nal_data[i] = 5u;
+        }
+    }
 
     return buffer;
 }
@@ -79,7 +87,7 @@ TEST(Packetizer, h264)
     srtc::ExtendedValue<uint16_t> extendedSeq;
     srtc::ExtendedValue<uint32_t> extendedRtpTime;
 
-    for (size_t i = 0u; i < 1000; i += 1, pts_usec += 40u * 1000u) {
+    for (size_t i = 0u; i < 100000; i += 1, pts_usec += 40u * 1000u) {
         // Generate random input frame
         srtc::ByteBuffer sourceFrame;
 

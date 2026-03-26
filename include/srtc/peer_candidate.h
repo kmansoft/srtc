@@ -167,8 +167,8 @@ private:
 
     // State
     void emitOnConnecting();
-    void emitOnIceSelected();
-    void emitOnConnected();
+    void emitOnIceConnected();
+    void emitOnDtlsConnected();
     void emitOnFailedToConnect(const Error& error);
 
     void onReceivedFromRemote();

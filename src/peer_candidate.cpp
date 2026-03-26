@@ -693,7 +693,7 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 
                     mSentUseCandidate = true;
 
-                    emitOnIceSelected();
+                    emitOnIceConnected();
                     sendStunBindingResponse(0);
 
                     mDtlsState = DtlsState::Activating;
@@ -1246,14 +1246,14 @@ void PeerCandidate::emitOnConnecting()
     mListener->onCandidateConnecting(this);
 }
 
-void PeerCandidate::emitOnIceSelected()
+void PeerCandidate::emitOnIceConnected()
 {
-    mListener->onCandidateIceSelected(this);
+    mListener->onCandidateIceConnected(this);
 }
 
-void PeerCandidate::emitOnConnected()
+void PeerCandidate::emitOnDtlsConnected()
 {
-    mListener->onCandidateConnected(this);
+    mListener->onCandidateDtlsConnected(this);
 
     mSrtpConnection->onPeerConnected();
 
@@ -1277,7 +1277,7 @@ void PeerCandidate::onReceivedFromRemote()
 
     if (!mIsConnected) {
         mIsConnected = true;
-        emitOnConnected();
+        emitOnDtlsConnected();
     }
 }
 
