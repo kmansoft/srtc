@@ -16,8 +16,8 @@ namespace srtc
 
 template <typename T>
 ExtendedValue<T>::ExtendedValue()
-    : mIncrement(static_cast<uint64_t>(std::numeric_limits<T>::max()) + 1)
-    , mRollover(0)
+    : mRolloverIncrement(static_cast<uint64_t>(std::numeric_limits<T>::max()) + 1)
+    , mRolloverValue(0)
 {
 }
 
@@ -25,43 +25,43 @@ template <typename T>
 uint64_t ExtendedValue<T>::extend(T src)
 {
     // Lazy init
-    if (mRollover == 0) {
-        mRollover = mIncrement;
+    if (mRolloverValue == 0) {
+        mRolloverValue = mRolloverIncrement;
         mRolloverTime = std::chrono::steady_clock::now();
     }
 
     // Do we even have a previous value?
-    if (!mLast.has_value()) {
-        mLast = src;
-        return mRollover | src;
+    if (!mLastValue.has_value()) {
+        mLastValue = src;
+        return mRolloverValue | src;
     }
 
     // Decide what we're going to do
     constexpr auto margin = std::numeric_limits<T>::max() / 4;
     constexpr auto max = std::numeric_limits<T>::max();
 
-    if (mLast.value() >= max - margin && src <= margin) {
+    if (mLastValue.value() >= max - margin && src <= margin) {
         // Rollover
-        mRollover += mIncrement;
-        mLast = src;
-        return mRollover | src;
+        mRolloverValue += mRolloverIncrement;
+        mLastValue = src;
+        return mRolloverValue | src;
     }
 
-    if (mLast.value() <= margin && src >= max - margin &&
+    if (mLastValue.value() <= margin && src >= max - margin &&
         std::chrono::steady_clock::now() - mRolloverTime <= mRolloverBack) {
         // We just had a rollover, and the new value wants to go backwards
-        return (mRollover - mIncrement) | src;
+        return (mRolloverValue - mRolloverIncrement) | src;
     }
 
-    mLast = src;
-    return mRollover | src;
+    mLastValue = src;
+    return mRolloverValue | src;
 }
 
 template <typename T>
 std::optional<uint64_t> ExtendedValue<T>::get() const
 {
-    if (mLast.has_value()) {
-        return mRollover | mLast.value();
+    if (mLastValue.has_value()) {
+        return mRolloverValue | mLastValue.value();
     }
     return std::nullopt;
 }

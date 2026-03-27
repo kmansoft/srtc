@@ -1,27 +1,28 @@
 #pragma once
 
-#include <optional>
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
+#include <optional>
 
-namespace srtc {
+namespace srtc
+{
 
-// Extends sequential values to 64 bits on rollover, used for SEQ and RTP timestamps
+// Extends sequential values to 64 bits on rollover, used for RTP sequence numbers and timestamps
 
 template <typename T>
 class ExtendedValue
 {
 public:
-	ExtendedValue();
+    ExtendedValue();
 
-	uint64_t extend(T src);
-	[[nodiscard]] std::optional<uint64_t> get() const;
+    uint64_t extend(T src);
+    [[nodiscard]] std::optional<uint64_t> get() const;
 
 private:
-    const uint64_t mIncrement;
-	uint64_t mRollover;
+    const uint64_t mRolloverIncrement;
+    uint64_t mRolloverValue;
     std::chrono::steady_clock::time_point mRolloverTime;
-	std::optional<T> mLast;
+    std::optional<T> mLastValue;
 };
 
-}
+} // namespace srtc
