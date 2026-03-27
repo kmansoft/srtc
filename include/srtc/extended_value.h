@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <cstdint>
+#include <chrono>
 
 namespace srtc {
 
@@ -19,6 +20,7 @@ public:
 private:
     const uint64_t mIncrement;
 	uint64_t mRollover;
+    std::chrono::steady_clock::time_point mRolloverTime;
 	std::optional<T> mLast;
 };
 
