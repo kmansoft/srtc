@@ -43,6 +43,7 @@ uint64_t ExtendedValue<T>::extend(T src)
     if (mLastValue.value() >= max - margin && src <= margin) {
         // Rollover
         mRolloverValue += mRolloverIncrement;
+        mRolloverTime = std::chrono::steady_clock::now();
         mLastValue = src;
         return mRolloverValue | src;
     }
