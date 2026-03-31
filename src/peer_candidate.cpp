@@ -294,7 +294,7 @@ void PeerCandidate::receiveFromSocket()
     list.clear();
 }
 
-void PeerCandidate::addSendFrame(PeerCandidate::FrameToSend&& frame)
+void PeerCandidate::addSendFrame(FrameToSend&& frame)
 {
     mFrameSendQueue.push_back(std::move(frame));
 }
@@ -798,6 +798,17 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
         if (mDtlsState == DtlsState::Failed) {
             freeDTLS();
         }
+    } else if (mDtlsState == DtlsState::Completed) {
+        uint8_t tmp[16];
+        int r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
+        if (r <= 0) {
+            int err = SSL_get_error(mDtlsSsl, r);
+            if (err == SSL_ERROR_ZERO_RETURN) {
+                // Clean DTLS close_notify received - peer closed gracefully
+                LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");
+                emitOnDtlsDisconnected();
+            }
+        }
     }
 }
 
@@ -893,7 +904,7 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
                 break;
             case 15:
                 // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
-                // Google'e Transport-Wide Congension Control
+                // Google's Transport-Wide Congension Control
                 onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
                 break;
             default:
@@ -1237,6 +1248,13 @@ void PeerCandidate::freeDTLS()
 
     mDtlsReceiveQueue.clear();
     mDtlsBio = nullptr;
+
+    // Flush the send queue to send the DTLS_close message
+    while (!mRawSendQueue.empty()) {
+        const auto buf = std::move(mRawSendQueue.front());
+        mRawSendQueue.erase(mRawSendQueue.begin());
+        (void) mSocket->send(buf);
+    }
 }
 
 // State
@@ -1260,6 +1278,11 @@ void PeerCandidate::emitOnDtlsConnected()
     if (mExtensionSourceTWCC) {
         mExtensionSourceTWCC->onPeerConnected();
     }
+}
+
+void PeerCandidate::emitOnDtlsDisconnected()
+{
+    mListener->onCandidateDtlsDisconnected(this);
 }
 
 void PeerCandidate::emitOnFailedToConnect(const Error& error)

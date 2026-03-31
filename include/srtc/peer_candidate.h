@@ -170,6 +170,7 @@ private:
     void emitOnIceConnected();
     void emitOnDtlsConnected();
     void emitOnFailedToConnect(const Error& error);
+    void emitOnDtlsDisconnected();
 
     void onReceivedFromRemote();
 

@@ -554,7 +554,7 @@ void PeerConnection::networkThreadWorkerFunc()
             if (mIsQuit) {
                 break;
             }
-            if (mConnectionState == ConnectionState::Failed) {
+            if (mConnectionState == ConnectionState::Failed || mConnectionState == ConnectionState::Closed) {
                 break;
             }
 
@@ -852,6 +852,13 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
     }
 
     sendPictureLossIndicator();
+}
+
+void PeerConnection::onCandidateDtlsDisconnected(PeerCandidate* candidate)
+{
+    if (mSelectedCandidate.get() == candidate) {
+        setConnectionState(ConnectionState::Closed);
+    }
 }
 
 void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error)
