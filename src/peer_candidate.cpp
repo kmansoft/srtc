@@ -912,6 +912,13 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
                 break;
             }
         }
+    } else if (rtcpPT == 206) {
+        // https://datatracker.ietf.org/doc/html/rfc4585#section-6.3.1
+        // Picture Loss Indicator
+        const auto rtcpFmt = rtcpRC;
+        if (rtcpFmt == 1) {
+            onReceivedControlMessage_206_1();
+        }
     }
 }
 
@@ -1073,6 +1080,11 @@ void PeerCandidate::onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& r
     if (mExtensionSourceTWCC) {
         mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
     }
+}
+
+void PeerCandidate::onReceivedControlMessage_206_1()
+{
+    mListener->onCandidateReceivedKeyFrameRequest(this);
 }
 
 void PeerCandidate::forgetExpiredStunRequests()

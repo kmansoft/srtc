@@ -76,9 +76,12 @@ public:
     using ConnectionStateListener = std::function<void(ConnectionState state)>;
     void setConnectionStateListener(const ConnectionStateListener& listener);
 
-    // Publish stats listener
+    // Publish listeners
     using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
     void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
+
+    using PublishKeyFrameRequestedListner = std::function<void()>;
+    void setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListner& listener);
 
     // Publishing media
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
@@ -97,7 +100,7 @@ public:
     using SubscribeSenderReportListener = std::function<void(const std::shared_ptr<Track>&, const SenderReport&)>;
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
-    // Closing
+   // Closing
     void close();
 
 private:
@@ -171,7 +174,9 @@ private:
     void onCandidateReceivedSenderReport(PeerCandidate* candidate,
                                          const std::shared_ptr<Track>& track,
                                          const SenderReport& sr) override;
+    void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) override;
     const std::vector<SimulcastLayer>& getSimulcastLayerList() const override;
+
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex);
@@ -179,6 +184,7 @@ private:
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
     PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
+    PublishKeyFrameRequestedListner mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
 

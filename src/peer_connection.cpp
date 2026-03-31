@@ -298,6 +298,12 @@ void PeerConnection::setPublishConnectionStatsListener(const PublishConnectionSt
     mPublishConnectionStatsListener = listener;
 }
 
+void PeerConnection::setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListner& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mPublishKeyFrameRequestedListener = listener;
+}
+
 Error PeerConnection::setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list)
 {
     std::lock_guard lock(mMutex);
@@ -923,6 +929,14 @@ void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
         if (mSubscribeSenderReportsListener) {
             mSubscribeSenderReportsListener(track, sr);
         }
+    }
+}
+
+void PeerConnection::onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mPublishKeyFrameRequestedListener) {
+        mPublishKeyFrameRequestedListener();
     }
 }
 

@@ -32,7 +32,9 @@ public:
                                                  const std::shared_ptr<Track>& track,
                                                  const SenderReport& sr) = 0;
 
-    virtual const std::vector<SimulcastLayer>& getSimulcastLayerList() const = 0;
+    virtual void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) = 0;
+
+    [[nodiscard]] virtual const std::vector<SimulcastLayer>& getSimulcastLayerList() const = 0;
 };
 
 } // namespace srtc

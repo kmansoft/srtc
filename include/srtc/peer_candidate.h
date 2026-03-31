@@ -92,6 +92,7 @@ private:
     void onReceivedControlMessage_201(ByteReader& rtcpReader);
     void onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
     void onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_206_1();
 
     void forgetExpiredStunRequests();
 
