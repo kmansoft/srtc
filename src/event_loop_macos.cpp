@@ -3,11 +3,19 @@
 #include "srtc/socket.h"
 
 #include <cstring>
+#include <cassert>
+#include <unistd.h>
 #include <sys/event.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #define LOG(level, ...) srtc::log(level, "EventLoop_MacOS", __VA_ARGS__)
+
+namespace
+{
+
+constexpr auto kInterruptId = 1;
+
+}
 
 namespace srtc
 {
@@ -19,34 +27,24 @@ std::shared_ptr<EventLoop> EventLoop::factory()
 
 EventLoop_MacOS::EventLoop_MacOS()
     : mKQueue(kqueue())
-    , mPipeRead(-1)
-    , mPipeWrite(-1)
 {
-    int fd[2];
-    if (pipe(fd) == -1) {
-        LOG(SRTC_LOG_E, "Cannot create a pipe");
-    } else {
-        mPipeRead = fd[0];
-        mPipeWrite = fd[1];
-    }
-
     struct kevent change = {};
-    EV_SET(&change, mPipeRead, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+    EV_SET(&change, kInterruptId, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
 
     if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
-        LOG(SRTC_LOG_E, "Cannot add pipe to kqueue");
+        LOG(SRTC_LOG_E, "Cannot add user event to kqueue");
     }
 }
 
 EventLoop_MacOS::~EventLoop_MacOS()
 {
     close(mKQueue);
-    close(mPipeRead);
-    close(mPipeWrite);
 }
 
 void EventLoop_MacOS::registerSocket(const std::shared_ptr<Socket>& socket, void* udata)
 {
+    assert(udata != nullptr);
+
     struct kevent change = {};
     EV_SET(&change, socket->handle(), EVFILT_READ, EV_ADD, 0, 0, udata);
 
@@ -88,9 +86,7 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
         for (int i = 0; i < n; i += 1) {
             const auto& ev = event[i];
             if (ev.udata == nullptr) {
-                // Our interrupt event
-                uint8_t value;
-                read(mPipeRead, &value, sizeof(value));
+                // Our interrupt event - nothing to drain, EV_CLEAR handles reset
             } else {
                 udataList.push_back(ev.udata);
             }
@@ -102,9 +98,11 @@ void EventLoop_MacOS::wait(std::vector<void*>& udataList, int timeoutMillis)
 
 void EventLoop_MacOS::interrupt()
 {
-    uint8_t value = 0;
-    if (write(mPipeWrite, &value, sizeof(value)) != 1) {
-        LOG(SRTC_LOG_E, "Error writing to pipe: %s", strerror(errno));
+    struct kevent change = {};
+    EV_SET(&change, kInterruptId, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
+
+    if (kevent(mKQueue, &change, 1, nullptr, 0, nullptr) == -1) {
+        LOG(SRTC_LOG_E, "Error triggering user event: %s", strerror(errno));
     }
 }
 

@@ -20,8 +20,6 @@ public:
 
 private:
     int mKQueue;
-    int mPipeRead;
-    int mPipeWrite;
 };
 
 } // namespace srtc
