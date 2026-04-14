@@ -1,5 +1,8 @@
-cmake-build-*
-cmake-vs-build-*
+build
+out
+deps
+build-*
+build-vs-cmake*
 .idea
 .vscode
 .vs
@@ -8,9 +11,6 @@ CMakePresets.json
 token.txt
 token*.txt
 go.sum
-build
-out
-deps
 CMakeSettings.json
 output.*
 *.ivf
