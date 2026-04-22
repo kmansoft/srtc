@@ -2,7 +2,7 @@
 
 #include "media_reader.h"
 
-class MediaReaderVP8 : public MediaReader
+class MediaReaderVP8 final : public MediaReader
 {
 public:
     explicit MediaReaderVP8(const std::string& filename);

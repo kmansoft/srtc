@@ -2,7 +2,7 @@
 
 #include "media_reader.h"
 
-class MediaReaderH264 : public MediaReader
+class MediaReaderH264 final : public MediaReader
 {
 public:
     explicit MediaReaderH264(const std::string& filename);

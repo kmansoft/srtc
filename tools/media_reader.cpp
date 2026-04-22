@@ -4,6 +4,7 @@
 #include "media_reader_h264.h"
 #include "media_reader_h265.h"
 #include "media_reader_vp8.h"
+#include "media_reader_vp9.h"
 
 #include <iostream>
 
@@ -53,6 +54,9 @@ std::shared_ptr<MediaReader> MediaReader::create(const std::string& filename)
         }
         if (name.find("-vp8") != std::string::npos) {
             return std::make_shared<MediaReaderVP8>(filename);
+        }
+        if (name.find("-vp9") != std::string::npos) {
+            return std::make_shared<MediaReaderVP9>(filename);
         }
     }
 

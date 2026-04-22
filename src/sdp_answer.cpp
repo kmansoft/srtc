@@ -114,6 +114,9 @@ std::optional<srtc::Codec> parse_codec(const std::string& s)
     if (s == "VP8") {
         return srtc::Codec::VP8;
     }
+    if (s == "VP9") {
+        return srtc::Codec::VP9;
+    }
     if (s == "H264") {
         return srtc::Codec::H264;
     }

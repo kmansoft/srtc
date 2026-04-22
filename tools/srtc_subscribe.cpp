@@ -10,6 +10,7 @@
 #include "media_writer_h26x.h"
 #include "media_writer_ogg.h"
 #include "media_writer_vp8.h"
+#include "media_writer_vp9.h"
 
 #include "http_whip_whep.h"
 
@@ -288,6 +289,9 @@ int main(int argc, char* argv[])
     SubVideoCodec videoCodecVP8 = {};
     videoCodecVP8.codec = Codec::VP8;
 
+    SubVideoCodec videoCodecVP9 = {};
+    videoCodecVP9.codec = Codec::VP9;
+
     SubVideoCodec videoCodecH264 = {};
     videoCodecH264.codec = Codec::H264;
     videoCodecH264.profile_level_id = 0x42e01f;
@@ -300,6 +304,7 @@ int main(int argc, char* argv[])
 
     SubVideoConfig videoConfig = {};
     videoConfig.codec_list.push_back(videoCodecVP8);
+    videoConfig.codec_list.push_back(videoCodecVP9);
     videoConfig.codec_list.push_back(videoCodecH264);
     videoConfig.codec_list.push_back(videoCodecH265);
     videoConfig.codec_list.push_back(videoCodecAV1);
@@ -371,6 +376,9 @@ int main(int argc, char* argv[])
         const auto codec = track->getCodec();
         if (codec == srtc::Codec::VP8) {
             mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, track);
+            mediaWriterVideo->start();
+        } else if (codec == srtc::Codec::VP9) {
+            mediaWriterVideo = std::make_shared<MediaWriterVP9>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
         } else if (codec == srtc::Codec::H264 || codec == srtc::Codec::H265) {
             mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);

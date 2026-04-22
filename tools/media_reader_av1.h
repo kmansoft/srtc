@@ -2,7 +2,7 @@
 
 #include "media_reader.h"
 
-class MediaReaderAV1 : public MediaReader
+class MediaReaderAV1 final : public MediaReader
 {
 public:
     explicit MediaReaderAV1(const std::string& filename);

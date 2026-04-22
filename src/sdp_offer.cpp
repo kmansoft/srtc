@@ -17,6 +17,8 @@ const char* codec_to_string(srtc::Codec codec)
         return "AV1/90000";
     case srtc::Codec::VP8:
         return "VP8/90000";
+    case srtc::Codec::VP9:
+        return "VP9/90000";
     case srtc::Codec::H264:
         return "H264/90000";
     case srtc::Codec::H265:

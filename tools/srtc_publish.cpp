@@ -94,6 +94,7 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
         if (gLoopVideo) {
             std::cout << "Looping back to the beginning" << std::endl;
         } else {
+            std::cout << "The input file has ended, we are done" << std::endl;
             break;
         }
     }

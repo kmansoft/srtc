@@ -42,6 +42,7 @@ add_library(srtc
         include/srtc/depacketizer_opus.h
         include/srtc/depacketizer_video.h
         include/srtc/depacketizer_vp8.h
+        include/srtc/depacketizer_vp9.h
         include/srtc/error.h
         include/srtc/event_loop.h
         include/srtc/extension_map.h
@@ -49,6 +50,7 @@ add_library(srtc
         include/srtc/codec_av1.h
         include/srtc/codec_h264.h
         include/srtc/codec_h265.h
+        include/srtc/codec_vp9.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
@@ -60,6 +62,7 @@ add_library(srtc
         include/srtc/packetizer_opus.h
         include/srtc/packetizer_video.h
         include/srtc/packetizer_vp8.h
+        include/srtc/packetizer_vp9.h
         include/srtc/peer_candidate.h
         include/srtc/peer_candidate_listener.h
         include/srtc/peer_connection.h
@@ -108,6 +111,7 @@ add_library(srtc
         src/codec_av1.cpp
         src/codec_h264.cpp
         src/codec_h265.cpp
+        src/codec_vp9.cpp
         src/depacketizer.cpp
         src/depacketizer_av1.cpp
         src/depacketizer_h264.cpp
@@ -115,6 +119,7 @@ add_library(srtc
         src/depacketizer_opus.cpp
         src/depacketizer_video.cpp
         src/depacketizer_vp8.cpp
+        src/depacketizer_vp9.cpp
         src/error.cpp
         src/extension_map.cpp
         src/extended_value.cpp
@@ -128,6 +133,7 @@ add_library(srtc
         src/packetizer_opus.cpp
         src/packetizer_video.cpp
         src/packetizer_vp8.cpp
+        src/packetizer_vp9.cpp
         src/peer_candidate.cpp
         src/peer_connection.cpp
         src/pool_allocator.cpp
@@ -395,6 +401,8 @@ if (NOT ANDROID AND SRTC_BUILD_TOOLS)
                 tools/media_reader_h265.cpp
                 tools/media_reader_vp8.h
                 tools/media_reader_vp8.cpp
+                tools/media_reader_vp9.h
+                tools/media_reader_vp9.cpp
                 tools/media_reader_webm.h
                 tools/media_reader_webm.cpp
                 tools/media_reader_webm.cpp
@@ -452,6 +460,8 @@ if (NOT ANDROID AND SRTC_BUILD_TOOLS)
                 tools/media_writer_ogg.cpp
                 tools/media_writer_vp8.h
                 tools/media_writer_vp8.cpp
+                tools/media_writer_vp9.h
+                tools/media_writer_vp9.cpp
                 tools/media_writer_webm.h
                 tools/media_writer_webm.cpp
         )

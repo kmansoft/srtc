@@ -5,6 +5,7 @@
 #include "srtc/depacketizer_h265.h"
 #include "srtc/depacketizer_opus.h"
 #include "srtc/depacketizer_vp8.h"
+#include "srtc/depacketizer_vp9.h"
 #include "srtc/track.h"
 
 namespace srtc
@@ -23,6 +24,8 @@ std::pair<std::shared_ptr<Depacketizer>, Error> Depacketizer::make(const std::sh
     switch (codec) {
     case Codec::VP8:
         return { std::make_shared<DepacketizerVP8>(track), Error::OK };
+    case Codec::VP9:
+        return { std::make_shared<DepacketizerVP9>(track), Error::OK };
     case Codec::H264:
         return { std::make_shared<DepacketizerH264>(track), Error::OK };
     case Codec::H265:

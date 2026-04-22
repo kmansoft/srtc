@@ -39,7 +39,7 @@ var (
 // nolint:gocognit
 func main() {
 	flagCodec := ""
-	flag.StringVar(&flagCodec, "codec", "", "The codec to use: vp8, h264, h265 (default is h264)")
+	flag.StringVar(&flagCodec, "codec", "", "The codec to use: vp8, vp9, h264, h265 (default is h264)")
 	flag.Parse()
 
 	if flagCodec != "" {
@@ -47,6 +47,9 @@ func main() {
 		case "vp8":
 			fmt.Println("Using VP8 for video")
 			gVideoCodecMime = webrtc.MimeTypeVP8
+		case "vp9":
+			fmt.Println("Using VP9 for video")
+			gVideoCodecMime = webrtc.MimeTypeVP9
 		case "av1":
 			fmt.Println("Using AV1 for video")
 			gVideoCodecMime = webrtc.MimeTypeAV1
