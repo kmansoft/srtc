@@ -39,7 +39,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerVP9::generate(const std::share
     const auto packetSource = track->getRtpPacketSource();
 
     const auto frameTimestamp = timeSource->getFrameTimestamp(pts_usec);
-    const auto frameIsKeyFrame = srtc::vp9::isKeyFrame(frame.data(), frame.size());
+    const auto frameIsKeyFrame = vp9::isKeyFrame(frame.data(), frame.size());
 
     // Claim and advance the picture ID (15-bit, wraps)
     const auto pictureId = mPictureId;
@@ -72,7 +72,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerVP9::generate(const std::share
 
         // Payload descriptor
         uint8_t descBuf[3];
-        const auto descSize = srtc::vp9::buildPayloadDescriptor(
+        const auto descSize = vp9::buildPayloadDescriptor(
             descBuf, sizeof(descBuf), startOfFrame, endOfFrame, !frameIsKeyFrame, pictureId);
         writer.write(descBuf, descSize);
 

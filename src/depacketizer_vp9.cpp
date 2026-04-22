@@ -33,7 +33,7 @@ void DepacketizerVP9::extract(std::vector<ByteBuffer>& out, const std::vector<co
 
     for (const auto packet : packetList) {
         // https://www.rfc-editor.org/rfc/rfc9628#section-4
-        vp9::PayloadDescriptor desc;
+        vp9::PayloadDescriptor desc = {};
         const uint8_t* payloadData = nullptr;
         size_t payloadSize = 0;
 
