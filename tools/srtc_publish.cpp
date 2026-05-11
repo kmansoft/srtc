@@ -119,8 +119,10 @@ void printUsage(const char* programName)
 
 int main(int argc, char* argv[])
 {
+    using namespace srtc;
+
     // Set logging to errors by default
-    srtc::setLogLevel(SRTC_LOG_W);
+    setLogLevel(SRTC_LOG_W);
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -173,8 +175,6 @@ int main(int argc, char* argv[])
 
     std::cout << "*** Using source file: " << gInputFile << std::endl;
     std::cout << "*** Using WHIP URL:    " << gWhipUrl << std::endl;
-
-    using namespace srtc;
 
     char cwd[1024];
 #ifdef _WIN32
@@ -246,7 +246,7 @@ int main(int argc, char* argv[])
 
     PubVideoCodec video_codec = {};
     video_codec.codec = media_file.codec;
-    if (video_codec.codec == srtc::Codec::H264) {
+    if (video_codec.codec == Codec::H264) {
         video_codec.profile_level_id = 0x42e01f;
     }
 

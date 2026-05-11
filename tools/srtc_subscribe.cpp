@@ -168,8 +168,10 @@ void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::Se
 
 int main(int argc, char* argv[])
 {
+    using namespace srtc;
+
     // Set logging to warnings by default
-    srtc::setLogLevel(SRTC_LOG_W);
+    setLogLevel(SRTC_LOG_W);
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -193,7 +195,7 @@ int main(int argc, char* argv[])
                 return 1;
             }
         } else if (arg == "-v" || arg == "--verbose") {
-            srtc::setLogLevel(SRTC_LOG_V);
+            setLogLevel(SRTC_LOG_V);
         } else if (arg == "-q" || arg == "--quiet") {
             gQuiet = true;
         } else if (arg == "-r" || arg == "--sr") {
@@ -224,8 +226,6 @@ int main(int argc, char* argv[])
     }
 
     std::cout << "*** Using WHEP URL: " << gWhepUrl << std::endl;
-
-    using namespace srtc;
 
     char cwd[1024];
 #ifdef _WIN32
@@ -357,7 +357,7 @@ int main(int argc, char* argv[])
         }
 
         const auto codec = track->getCodec();
-        if (codec == srtc::Codec::Opus) {
+        if (codec == Codec::Opus) {
             mediaWriterAudio = std::make_shared<MediaWriterOgg>(gOutputAudioFilename, track);
             mediaWriterAudio->start();
         } else {
@@ -374,16 +374,16 @@ int main(int argc, char* argv[])
         }
 
         const auto codec = track->getCodec();
-        if (codec == srtc::Codec::VP8) {
+        if (codec == Codec::VP8) {
             mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
-        } else if (codec == srtc::Codec::VP9) {
+        } else if (codec == Codec::VP9) {
             mediaWriterVideo = std::make_shared<MediaWriterVP9>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
-        } else if (codec == srtc::Codec::H264 || codec == srtc::Codec::H265) {
+        } else if (codec == Codec::H264 || codec == Codec::H265) {
             mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
-        } else if (codec == srtc::Codec::AV1) {
+        } else if (codec == Codec::AV1) {
             mediaWriterVideo = std::make_shared<MediaWriterAV1>(gOutputVideoFilename, track);
             mediaWriterVideo->start();
         } else {
@@ -407,11 +407,11 @@ int main(int argc, char* argv[])
             }
 
             const auto mediaType = frame->track->getMediaType();
-            if (mediaType == srtc::MediaType::Audio) {
+            if (mediaType == MediaType::Audio) {
                 if (mediaWriterAudio) {
                     mediaWriterAudio->send(frame);
                 }
-            } else if (mediaType == srtc::MediaType::Video) {
+            } else if (mediaType == MediaType::Video) {
                 if (mediaWriterVideo) {
                     mediaWriterVideo->send(frame);
                 }
