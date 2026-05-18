@@ -726,6 +726,8 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                 // Error, no certificate
                 LOG(SRTC_LOG_E, "There is no DTLS server certificate");
                 mDtlsState = DtlsState::Failed;
+
+                Task::cancelHelper(mTaskConnectTimeout);
                 emitOnFailedToConnect({ Error::Code::InvalidData, "There is no DTLS server certificate" });
             } else {
                 uint8_t fpBuf[32] = {};
@@ -733,6 +735,7 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
                 const auto digest = EVP_get_digestbyname("sha256");
                 X509_digest(cert, digest, fpBuf, &fpSize);
+                X509_free(cert);
 
                 std::string hex = bin_to_hex(fpBuf, fpSize);
                 LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
