@@ -860,10 +860,18 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
     sendPictureLossIndicator();
 }
 
-void PeerConnection::onCandidateDtlsDisconnected(PeerCandidate* candidate)
+void PeerConnection::onCandidateDtlsDisconnected(PeerCandidate* candidate, const Error& error)
 {
     if (mSelectedCandidate.get() == candidate) {
-        setConnectionState(ConnectionState::Closed);
+        if (error.isOk()) {
+            setConnectionState(ConnectionState::Closed);
+        } else {
+            LOG(SRTC_LOG_E,
+                "DTLS disconnected with error: %d %s",
+                static_cast<int>(error.code),
+                error.message.c_str());
+            setConnectionState(ConnectionState::Failed);
+        }
     }
 }
 

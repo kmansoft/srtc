@@ -802,14 +802,19 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
             freeDTLS();
         }
     } else if (mDtlsState == DtlsState::Completed) {
-        uint8_t tmp[16];
-        int r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
+        uint8_t tmp[1];
+        const auto r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
+
         if (r <= 0) {
-            int err = SSL_get_error(mDtlsSsl, r);
-            if (err == SSL_ERROR_ZERO_RETURN) {
-                // Clean DTLS close_notify received - peer closed gracefully
+            if ((SSL_get_shutdown(mDtlsSsl) & SSL_RECEIVED_SHUTDOWN) != 0) {
                 LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");
-                emitOnDtlsDisconnected();
+                emitOnDtlsDisconnected(Error::OK);
+            } else {
+                const auto err = SSL_get_error(mDtlsSsl, r);
+                if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+                    LOG(SRTC_LOG_V, "DTLS connection lost, ssl error = %d", err);
+                    emitOnDtlsDisconnected({ Error::Code::InvalidData, "DTLS connection lost unexpectedly" });
+                }
             }
         }
     }
@@ -1295,9 +1300,9 @@ void PeerCandidate::emitOnDtlsConnected()
     }
 }
 
-void PeerCandidate::emitOnDtlsDisconnected()
+void PeerCandidate::emitOnDtlsDisconnected(const Error& error)
 {
-    mListener->onCandidateDtlsDisconnected(this);
+    mListener->onCandidateDtlsDisconnected(this, error);
 }
 
 void PeerCandidate::emitOnFailedToConnect(const Error& error)
