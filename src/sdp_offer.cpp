@@ -45,6 +45,9 @@ std::string list_to_string(size_t start, size_t end)
     return ss.str();
 }
 
+constexpr uint16_t kSctpPort = 5000;
+constexpr uint32_t kSctpMaxMessageSize = 262144;
+
 } // namespace
 
 namespace srtc
@@ -84,8 +87,10 @@ const SdpOffer::Config& SdpOffer::getConfig() const
 
 std::pair<std::string, Error> SdpOffer::generate()
 {
-    if (!mVideoConfig.has_value() && !mAudioConfig.has_value()) {
-        return { "", { Error::Code::InvalidData, "No video and no audio configured" } };
+    const bool hasData = !mConfig.data_channels.empty();
+
+    if (!mVideoConfig.has_value() && !mAudioConfig.has_value() && !hasData) {
+        return { "", { Error::Code::InvalidData, "No video, audio, or data channels configured" } };
     }
 
     std::stringstream ss;
@@ -97,8 +102,17 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "a=extmap-allow-mixed" << std::endl;
     ss << "a=msid-semantic: WMS" << std::endl;
 
-    if (mVideoConfig.has_value() && mAudioConfig.has_value()) {
-        ss << "a=group:BUNDLE 0 1" << std::endl;
+    {
+        const int sectionCount = (mVideoConfig.has_value() ? 1 : 0) +
+                                 (mAudioConfig.has_value() ? 1 : 0) +
+                                 (hasData ? 1 : 0);
+        if (sectionCount > 1) {
+            ss << "a=group:BUNDLE";
+            for (int i = 0; i < sectionCount; i += 1) {
+                ss << " " << i;
+            }
+            ss << std::endl;
+        }
     }
 
     uint32_t mid = 0;
@@ -298,6 +312,19 @@ std::pair<std::string, Error> SdpOffer::generate()
         }
     }
 
+    // Data channels
+    if (hasData) {
+        ss << "m=application 9 UDP/DTLS/SCTP webrtc-datachannel" << std::endl;
+        ss << "c=IN IP4 0.0.0.0" << std::endl;
+        ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
+        ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
+        ss << "a=ice-pwd:" << mIcePassword << std::endl;
+        ss << "a=setup:actpass" << std::endl;
+        ss << "a=mid:" << mid << std::endl;
+        ss << "a=sctp-port:" << kSctpPort << std::endl;
+        ss << "a=max-message-size:" << kSctpMaxMessageSize << std::endl;
+    }
+
     return { ss.str(), Error::OK };
 }
 
@@ -354,6 +381,21 @@ std::pair<uint32_t, uint32_t> SdpOffer::getVideoSimulastSSRC(const std::string& 
     }
 
     return {};
+}
+
+bool SdpOffer::hasDataChannel() const
+{
+    return !mConfig.data_channels.empty();
+}
+
+uint16_t SdpOffer::getSctpPort() const
+{
+    return kSctpPort;
+}
+
+uint32_t SdpOffer::getSctpMaxMessageSize() const
+{
+    return kSctpMaxMessageSize;
 }
 
 std::string SdpOffer::generateRandomUUID()

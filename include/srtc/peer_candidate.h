@@ -1,6 +1,5 @@
 #pragma once
 
-#include "srtc/simulcast_layer.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/random_generator.h"
@@ -8,6 +7,8 @@
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
 #include "srtc/util.h"
+
+#include "sctp/sctp_session_listener.h"
 
 #include <list>
 #include <memory>
@@ -41,7 +42,12 @@ class SenderReportsHistory;
 
 struct PublishConnectionStats;
 
-class PeerCandidate final
+namespace sctp
+{
+class SctpSession;
+}
+
+class PeerCandidate final : sctp::SctpSessionListener
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
@@ -52,7 +58,7 @@ public:
                   const Host& host,
                   const std::shared_ptr<EventLoop>& eventLoop,
                   const Scheduler::Delay& startDelay);
-    ~PeerCandidate();
+    ~PeerCandidate() override;
 
     void receiveFromSocket();
 
@@ -77,9 +83,13 @@ public:
 
     [[nodiscard]] std::optional<float> getIceRtt() const;
 
+    // SCTP listener
+    void onSctpSendPacket(const ByteBuffer& packet) override;
+
 private:
     void startConnecting();
     void addSendRaw(ByteBuffer&& buf);
+    void flushSendRaw();
 
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
@@ -127,6 +137,7 @@ private:
 
     std::shared_ptr<SrtpConnection> mSrtpConnection;
     std::shared_ptr<SendPacer> mSendPacer;
+    std::shared_ptr<sctp::SctpSession> mSctpSession;
 
     std::list<ByteBuffer> mDtlsReceiveQueue;
 

@@ -1,3 +1,4 @@
+#include "sctp/sctp_session.h"
 #ifdef _WIN32
 #include "srtc/srtc.h"
 #include <wincrypt.h>
@@ -30,6 +31,8 @@
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
+
+#include "sctp/sctp_session.h"
 
 #include <cassert>
 #include <cstring>
@@ -265,6 +268,17 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
     initOpenSSL();
 
+    if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
+        const auto maxMessageSize = std::min(mOffer->getSctpMaxMessageSize(), mAnswer->getMaxMessageSize());
+        SctpSessionListener* l = this;
+        mSctpSession = std::make_shared<sctp::SctpSession>(l,
+                                                           mOffer->getSctpPort(),
+                                                           mAnswer->getSctpPort(),
+                                                           maxMessageSize,
+                                                           mAnswer->isSetupActive(),
+                                                           mOffer->getConfig().data_channels);
+    }
+
     mEventLoop->registerSocket(mSocket, this);
 
     mScheduler.submit(startDelay, __FILE__, __LINE__, [this] { startConnecting(); });
@@ -449,6 +463,22 @@ std::optional<float> PeerCandidate::getIceRtt() const
     return mIceRttFilter.value();
 }
 
+void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
+{
+    if (mDtlsState != DtlsState::Completed) {
+        LOG(SRTC_LOG_E, "SCTP wants to send but DTLS is not connected");
+        return;
+    }
+
+    std::printf("*** SCTP send (%zu bytes): %s\n", packet.size(), bin_to_hex(packet.data(), packet.size()).c_str());
+
+    const auto r = SSL_write(mDtlsSsl, packet.data(), static_cast<int>(packet.size()));
+    if (r <= 0) {
+        const auto err = SSL_get_error(mDtlsSsl, r);
+        LOG(SRTC_LOG_E, "SSL_write failed for SCTP packet, ssl error = %d", err);
+    }
+}
+
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
 {
     if (mSendPacer) {
@@ -465,13 +495,7 @@ void PeerCandidate::run()
     }
 
     // Raw data
-    while (!mRawSendQueue.empty()) {
-        const auto buf = std::move(mRawSendQueue.front());
-        mRawSendQueue.erase(mRawSendQueue.begin());
-
-        const auto w = mSocket->send(buf);
-        LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
-    }
+    flushSendRaw();
 
     // Frames
     while (!mFrameSendQueue.empty()) {
@@ -632,6 +656,21 @@ void PeerCandidate::addSendRaw(ByteBuffer&& buf)
     mListener->onCandidateHasDataToSend(this);
 }
 
+void PeerCandidate::flushSendRaw()
+{
+    while (!mRawSendQueue.empty()) {
+        const auto buf = std::move(mRawSendQueue.front());
+        mRawSendQueue.erase(mRawSendQueue.begin());
+
+        const auto w = mSocket->send(buf);
+        if (w < 0) {
+            LOG(SRTC_LOG_E, "Error sending %zd raw bytes", buf.size());
+        } else {
+            LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
+        }
+    }
+}
+
 void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
 {
     stun::StunMessage incomingMessage = {};
@@ -768,6 +807,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                             mIceRttFilter.value());
 
                         onReceivedFromRemote();
+
+                        if (mSctpSession) {
+                            mSctpSession->start();
+                        }
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E,
@@ -802,10 +845,12 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
             freeDTLS();
         }
     } else if (mDtlsState == DtlsState::Completed) {
-        uint8_t tmp[1];
+        uint8_t tmp[4096];
         const auto r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
 
-        if (r <= 0) {
+        if (r > 0) {
+            std::printf("*** DTLS app data (%d bytes): %s\n", r, bin_to_hex(tmp, r).c_str());
+        } else {
             if ((SSL_get_shutdown(mDtlsSsl) & SSL_RECEIVED_SHUTDOWN) != 0) {
                 LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");
                 emitOnDtlsDisconnected(Error::OK);
@@ -1270,11 +1315,7 @@ void PeerCandidate::freeDTLS()
     mDtlsBio = nullptr;
 
     // Flush the send queue to send the DTLS_close message
-    while (!mRawSendQueue.empty()) {
-        const auto buf = std::move(mRawSendQueue.front());
-        mRawSendQueue.erase(mRawSendQueue.begin());
-        (void) mSocket->send(buf);
-    }
+    flushSendRaw();
 }
 
 // State

@@ -174,6 +174,10 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        # sctp
+        include/sctp/sctp_session.h
+        include/sctp/sctp_session_listener.h
+        src/sctp/sctp_session.cpp
 )
 
 if (APPLE)

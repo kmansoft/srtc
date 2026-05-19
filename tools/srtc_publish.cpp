@@ -31,10 +31,12 @@ static bool gPrintInfo = false;
 static bool gDropPackets = false;
 static bool gEnableBWE = false;
 static bool gLoopVideo = false;
+static bool gDataChannels = false;
 
 // State
 
 static std::atomic_bool gIsConnectionFailed = false;
+static std::atomic_bool gIsConnectionClosed = false;
 
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
@@ -89,6 +91,10 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 std::cout << "*** Connection failed, stopping video playback" << std::endl;
                 return;
             }
+            if (gIsConnectionClosed) {
+                std::cout << "*** Connection has been closed, stopping video playback" << std::endl;
+                return;
+            }
         }
 
         if (gLoopVideo) {
@@ -114,6 +120,7 @@ void printUsage(const char* programName)
     std::cout << "  -i, --info           Print input file info" << std::endl;
     std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
     std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
+    std::cout << "  -c, --datachannels   Enable data channels" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -166,6 +173,8 @@ int main(int argc, char* argv[])
             gDropPackets = true;
         } else if (arg == "-b" || arg == "--bwe") {
             gEnableBWE = true;
+        } else if (arg == "-c" || arg == "--datachannels") {
+            gDataChannels = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -220,6 +229,8 @@ int main(int argc, char* argv[])
 
             if (state == PeerConnection::ConnectionState::Failed) {
                 gIsConnectionFailed = true;
+            } else if (state == PeerConnection::ConnectionState::Closed) {
+                gIsConnectionClosed = true;
             }
 
             {
@@ -243,6 +254,9 @@ int main(int argc, char* argv[])
     offer_config.enable_rtx = true;
     offer_config.enable_bwe = gEnableBWE;
     offer_config.debug_drop_packets = gDropPackets;
+    if (gDataChannels) {
+        offer_config.data_channel_config.data_channels.emplace_back("foo");
+    }
 
     PubVideoCodec video_codec = {};
     video_codec.codec = media_file.codec;

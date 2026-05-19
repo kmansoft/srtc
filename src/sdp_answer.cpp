@@ -354,6 +354,12 @@ private:
     ParseMediaState mediaStateVideo, mediaStateAudio;
     ParseMediaState* mediaStateCurr = nullptr;
 
+    bool mIsApplicationSection = false;
+    bool mHasDataChannel = false;
+    bool mDataChannelSetupActive = false;
+    uint16_t mSctpPort = 5000;
+    uint32_t mMaxMessageSize = 262144;
+
     std::vector<Host> hostList;
 
     std::string certHashAlg;
@@ -397,22 +403,23 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::s
         }
     }
 
-    if (!isRtcpMux) {
+    const bool hasMediaSection = mediaStateVideo.id.has_value() || mediaStateAudio.id.has_value();
+    if (hasMediaSection && !isRtcpMux) {
         return { {}, { Error::Code::InvalidData, "The rtcp-mux extension is required" } };
     }
     if (hostList.empty()) {
         return { {}, { Error::Code::InvalidData, "No hosts to connect to" } };
     }
 
-    if (mediaStateVideo.id < 0 && mediaStateAudio.id < 0) {
-        return { {}, { Error::Code::InvalidData, "No media tracks" } };
+    if (!hasMediaSection && !mHasDataChannel) {
+        return { {}, { Error::Code::InvalidData, "No media tracks or data channels" } };
     }
 
     auto videoSingleTrack = mediaStateVideo.selectTrack(direction, selector);
     const auto audioTrack = mediaStateAudio.selectTrack(direction, selector);
 
-    if (!videoSingleTrack && !audioTrack) {
-        return { nullptr, { Error::Code::InvalidData, "No media tracks" } };
+    if (!videoSingleTrack && !audioTrack && !mHasDataChannel) {
+        return { nullptr, { Error::Code::InvalidData, "No media tracks or data channels" } };
     }
 
     std::vector<std::shared_ptr<Track>> videoSimulcastTrackList;
@@ -430,8 +437,12 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::s
                                                        audioTrack,
                                                        mediaStateVideo.extensionMap,
                                                        mediaStateAudio.extensionMap,
-                                                       mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive,
-                                                       { certHashAlg, certHashBin, certHashHex }));
+                                                       mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive ||
+                                                           mDataChannelSetupActive,
+                                                       { certHashAlg, certHashBin, certHashHex },
+                                                       mHasDataChannel,
+                                                       mSctpPort,
+                                                       mMaxMessageSize));
 
     return { sdpAnswer, Error::OK };
 }
@@ -463,6 +474,18 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
                                    const std::string& value,
                                    const std::vector<std::string>& props)
 {
+    mIsApplicationSection = false;
+
+    // "m=application 9 UDP/DTLS/SCTP webrtc-datachannel"
+    if (key == "application") {
+        mediaStateCurr = nullptr;
+        if (props.size() >= 2 && props[1] == "UDP/DTLS/SCTP") {
+            mIsApplicationSection = true;
+            mHasDataChannel = true;
+        }
+        return Error::OK;
+    }
+
     // "m=video 9 UDP/TLS/RTP/SAVPF 96 97 98"
     if (props.size() < 2 || props[1] != "UDP/TLS/RTP/SAVPF") {
         return { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" };
@@ -509,6 +532,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
     } else if (key == "setup") {
         if (mediaStateCurr) {
             mediaStateCurr->isSetupActive = value == "active";
+        } else if (mIsApplicationSection) {
+            mDataChannelSetupActive = value == "active";
         }
     } else if (key == "fingerprint") {
         if (props.size() == 1) {
@@ -705,6 +730,18 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                 mediaStateCurr->ssrcList.push_back(ssrcMedia.value());
             }
         }
+    } else if (key == "sctp-port") {
+        if (mIsApplicationSection) {
+            if (const auto port = parse_u32(value); port.has_value() && port > 0u && port <= 65535u) {
+                mSctpPort = static_cast<uint16_t>(port.value());
+            }
+        }
+    } else if (key == "max-message-size") {
+        if (mIsApplicationSection) {
+            if (const auto size = parse_u32(value); size.has_value()) {
+                mMaxMessageSize = size.value();
+            }
+        }
     }
 
     return Error::OK;
@@ -729,7 +766,10 @@ SdpAnswer::SdpAnswer(Direction direction,
                      const ExtensionMap& videoExtensionMap,
                      const ExtensionMap& audioExtensionMap,
                      bool isSetupActive,
-                     const X509Hash& certHash)
+                     const X509Hash& certHash,
+                     bool hasDataChannel,
+                     uint16_t sctpPort,
+                     uint32_t maxMessageSize)
     : mDirection(direction)
     , mIceUFrag(iceUFrag)
     , mIcePassword(icePassword)
@@ -741,6 +781,9 @@ SdpAnswer::SdpAnswer(Direction direction,
     , mAudioExtensionMap(audioExtensionMap)
     , mIsSetupActive(isSetupActive)
     , mCertHash(certHash)
+    , mHasDataChannel(hasDataChannel)
+    , mSctpPort(sctpPort)
+    , mMaxMessageSize(maxMessageSize)
 {
 }
 
@@ -814,6 +857,21 @@ bool SdpAnswer::isSetupActive() const
 const X509Hash& SdpAnswer::getCertificateHash() const
 {
     return mCertHash;
+}
+
+bool SdpAnswer::hasDataChannel() const
+{
+    return mHasDataChannel;
+}
+
+uint16_t SdpAnswer::getSctpPort() const
+{
+    return mSctpPort;
+}
+
+uint32_t SdpAnswer::getMaxMessageSize() const
+{
+    return mMaxMessageSize;
 }
 
 } // namespace srtc

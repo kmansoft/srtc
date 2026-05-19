@@ -57,6 +57,7 @@ void signalHandler(int signal)
 // State
 
 static std::atomic_bool gIsConnectionFailed = false;
+static std::atomic_bool gIsConnectionClosed = false;
 
 void printUsage(const char* programName)
 {
@@ -267,6 +268,8 @@ int main(int argc, char* argv[])
 
             if (state == PeerConnection::ConnectionState::Failed) {
                 gIsConnectionFailed = true;
+            } else if (state == PeerConnection::ConnectionState::Closed) {
+                gIsConnectionClosed = true;
             }
 
             {
@@ -463,7 +466,11 @@ int main(int argc, char* argv[])
             std::cout << "The connection has failed, exiting..." << std::endl;
             break;
         }
-    }
+        if (gIsConnectionClosed) {
+            std::cout << "The connection has closed, exiting..." << std::endl;
+            break;
+        }
+}
 
     // Wait a little and exit
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

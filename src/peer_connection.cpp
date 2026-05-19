@@ -65,6 +65,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
 
     SdpOffer::Config config;
     config.cname = pubConfig.cname;
+    config.data_channels = pubConfig.data_channel_config.data_channels;
     config.enable_rtx = pubConfig.enable_rtx;
     config.enable_bwe = pubConfig.enable_bwe;
     config.enable_rfc8851 = pubConfig.enable_rfc8851;
@@ -108,6 +109,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
 
     SdpOffer::Config config;
     config.cname = subConfig.cname;
+    config.data_channels = subConfig.data_channel_config.data_channels;
     config.pli_interval_millis = subConfig.pli_interval_millis;
     config.jitter_buffer_length_millis = subConfig.jitter_buffer_length_millis;
     config.jitter_buffer_nack_delay_millis = subConfig.jitter_buffer_nack_delay_millis;
