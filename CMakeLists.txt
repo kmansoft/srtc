@@ -22,6 +22,12 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 
 include(ExternalProject)
 include(FetchContent)
+include(TestBigEndian)
+
+test_big_endian(WORDS_BIGENDIAN)
+if (WORDS_BIGENDIAN)
+    add_compile_definitions(WORDS_BIGENDIAN)
+endif ()
 
 # Static link runtime on Windows, unless building tests (link errors)
 
@@ -175,8 +181,10 @@ add_library(srtc
         src/x509_certificate.cpp
         src/x509_hash.cpp
         # sctp
+        include/sctp/sctp_crc32.h
         include/sctp/sctp_session.h
         include/sctp/sctp_session_listener.h
+        src/sctp/sctp_crc32.cpp
         src/sctp/sctp_session.cpp
 )
 
@@ -348,6 +356,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             test/test_allocator.cpp
             test/test_subscribe_twcc.cpp
             test/test_packetizer.cpp
+            test/test_sctp_crc32.cpp
     )
 
     target_include_directories(
