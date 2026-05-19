@@ -28,6 +28,9 @@ private:
     const uint32_t mMaxMessageSize;
     const bool mIsSetupActive;
     const std::vector<std::string> mDataChannels;
+
+    uint32_t mInitiateTag;
+    uint32_t mInitialTsn;
 };
 
 } // namespace srtc::sctp

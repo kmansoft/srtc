@@ -1,0 +1,32 @@
+#pragma once
+
+#include <cstdint>
+
+namespace srtc::sctp {
+
+// SCTP chunk types (RFC 4960)
+constexpr uint8_t kChunkInit             = 1;
+constexpr uint8_t kChunkInitAck          = 2;
+constexpr uint8_t kChunkSack             = 3;
+constexpr uint8_t kChunkHeartbeat        = 4;
+constexpr uint8_t kChunkHeartbeatAck     = 5;
+constexpr uint8_t kChunkAbort            = 6;
+constexpr uint8_t kChunkShutdown         = 7;
+constexpr uint8_t kChunkShutdownAck      = 8;
+constexpr uint8_t kChunkError            = 9;
+constexpr uint8_t kChunkCookieEcho       = 10;
+constexpr uint8_t kChunkCookieAck        = 11;
+constexpr uint8_t kChunkShutdownComplete = 14;
+constexpr uint8_t kChunkForwardTsn       = 0xC0;
+constexpr uint8_t kChunkReconfig         = 0x82;
+
+// SCTP parameter types
+constexpr uint16_t kParamStateCookie          = 7;
+constexpr uint16_t kParamSupportedExtensions  = 0x8008;
+constexpr uint16_t kParamForwardTsnSupported  = 0xC000;
+
+// Session limits
+constexpr uint32_t kInitRwnd    = 131072;   // 128 KB receive window
+constexpr uint16_t kInitStreams = 1024;
+
+} // namespace srtc::sctp

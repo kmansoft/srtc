@@ -182,6 +182,7 @@ add_library(srtc
         src/x509_hash.cpp
         # sctp
         include/sctp/sctp_crc32.h
+        include/sctp/sctp_defs.h
         include/sctp/sctp_message_builder.h
         include/sctp/sctp_session.h
         include/sctp/sctp_session_listener.h

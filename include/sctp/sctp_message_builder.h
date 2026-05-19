@@ -15,11 +15,11 @@ public:
     void addChunk(uint8_t type, uint8_t flags, const uint8_t* data, size_t length);
     void addChunk(uint8_t type, uint8_t flags, const ByteBuffer& buf);
 
-    [[nodiscard]] srtc::ByteBuffer build();
+    [[nodiscard]] ByteBuffer build();
 
 private:
-    srtc::ByteBuffer mBuf;
-    srtc::ByteWriter mWriter;
+    ByteBuffer mBuf;
+    ByteWriter mWriter;
 };
 
 } // namespace srtc::sctp
