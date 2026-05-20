@@ -1,11 +1,15 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace srtc::sctp {
 
 const char* formatChunkName(uint8_t type);
 const char* formatParamName(uint16_t type);
+
+// Constant-time byte comparison — always visits every byte to prevent timing side-channels
+bool constTimeEqual(const uint8_t* a, const uint8_t* b, size_t size);
 
 // SCTP chunk types (RFC 4960)
 constexpr uint8_t kChunkInit             = 1;
@@ -31,5 +35,11 @@ constexpr uint16_t kParamForwardTsnSupported  = 0xC000;
 // Session limits
 constexpr uint32_t kInitRwnd    = 131072;   // 128 KB receive window
 constexpr uint16_t kInitStreams = 1024;
+
+// State Cookie layout: kCookieDataSize bytes of fields, then kCookieHmacSize bytes of HMAC-SHA1
+constexpr uint32_t kCookieLifetime  = 60;   // seconds
+constexpr size_t   kCookieDataSize  = 36;
+constexpr size_t   kCookieHmacSize  = 20;
+constexpr size_t   kCookieTotalSize = kCookieDataSize + kCookieHmacSize;
 
 } // namespace srtc::sctp

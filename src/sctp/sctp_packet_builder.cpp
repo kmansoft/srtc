@@ -22,7 +22,9 @@ void SctpPacketBuilder::addChunk(uint8_t type, uint8_t flags, const uint8_t* dat
     mWriter.writeU8(type);
     mWriter.writeU8(flags);
     mWriter.writeU16(chunkLen);
-    mWriter.write(data, length);
+    if (length > 0) {
+        mWriter.write(data, length);
+    }
 
     // Pad to 4-byte boundary (padding bytes are not counted in chunkLen)
     const size_t padded = (chunkLen + 3) & ~3u;

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "sctp/sctp_packet.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,6 +30,13 @@ public:
 
     void onReceiveData(const ByteBuffer& data);
 
+    enum class State {
+        New,
+        CookieWait,
+        CookieEchoed,
+        Established,
+    };
+
 private:
     SctpSessionListener* const mListener;
     const uint16_t mLocalPort;
@@ -35,8 +45,15 @@ private:
     const bool mIsSetupActive;
     const std::vector<std::string> mDataChannels;
 
-    uint32_t mInitiateTag;
-    uint32_t mInitialTsn;
+    RandomGenerator<uint32_t> mRandom;
+    State mState;
+    uint32_t mInitiateTag;   // our tag — peer puts this in verificationTag of packets it sends us
+    uint32_t mInitialTsn;    // our DATA chunk sequence counter start
+    uint32_t mPeerTag;       // peer's tag — we put this in verificationTag of packets we send
+    std::array<uint8_t, 16> mHmacKey;
+
+    void onReceiveInit(const SctpPacket::Chunk& chunk);
+    void onReceiveCookieEcho(const SctpPacket::Chunk& chunk);
 
     ScopedScheduler mScheduler;
 };

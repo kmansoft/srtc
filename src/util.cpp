@@ -159,6 +159,13 @@ int64_t getStableTimeMicros()
 #endif
 }
 
+uint32_t getSystemTimeSecs()
+{
+    const auto sinceEpoch = std::chrono::system_clock::now().time_since_epoch();
+    return static_cast<uint32_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch).count());
+}
+
 size_t compressNackList(const std::vector<uint16_t>& nackList, uint16_t* buf_seq, uint16_t* buf_blp)
 {
     const size_t in_end = nackList.size();
