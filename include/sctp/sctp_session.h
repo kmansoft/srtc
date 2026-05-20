@@ -51,7 +51,12 @@ private:
     uint32_t mInitialTsn;    // our DATA chunk sequence counter start
     uint32_t mPeerTag;       // peer's tag — we put this in verificationTag of packets we send
     std::array<uint8_t, 16> mHmacKey;
+    ByteBuffer mCookieEchoPacket;
+    std::weak_ptr<Task> mTaskT1Init;
+    std::weak_ptr<Task> mTaskT1Cookie;
 
+    void sendInit(unsigned iteration);
+    void sendCookieEcho(unsigned iteration);
     void onReceiveInit(const SctpPacket::Chunk& chunk);
     void onReceiveCookieEcho(const SctpPacket::Chunk& chunk);
 

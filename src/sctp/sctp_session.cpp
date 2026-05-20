@@ -45,16 +45,23 @@ SctpSession::SctpSession(const std::shared_ptr<RealScheduler>& scheduler,
 
 void SctpSession::start()
 {
-    // RFC 4960 §3.3.2: INIT chunk body
+    sendInit(0);
+}
+
+void SctpSession::sendInit(unsigned iteration)
+{
+    if (iteration > kMaxInitRetransmits) {
+        std::printf("*** SCTP INIT: max retransmits reached, giving up\n");
+        return;
+    }
+
     ByteBuffer initBody;
     ByteWriter w(initBody);
-    w.writeU32(mInitiateTag); // Initiate Tag (high for tie-breaking)
+    w.writeU32(mInitiateTag);
     w.writeU32(kInitRwnd);
     w.writeU16(kInitStreams);
     w.writeU16(kInitStreams);
     w.writeU32(mInitialTsn);
-
-    // FORWARD_TSN_SUPPORTED parameter (RFC 3758): type + length only, no value
     w.writeU16(kParamForwardTsnSupported);
     w.writeU16(4);
 
@@ -62,9 +69,30 @@ void SctpSession::start()
     SctpPacketBuilder builder(mLocalPort, mRemotePort, 0);
     builder.addChunk(kChunkInit, 0, initBody);
     auto packet = builder.build();
-
     mListener->onSctpSendPacket(packet);
     mState = State::CookieWait;
+
+    const auto delay = std::chrono::milliseconds(
+        std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    mTaskT1Init = mScheduler.submit(delay, __FILE__, __LINE__, [this, iteration] {
+        sendInit(iteration + 1);
+    });
+}
+
+void SctpSession::sendCookieEcho(unsigned iteration)
+{
+    if (iteration > kMaxInitRetransmits) {
+        std::printf("*** SCTP COOKIE_ECHO: max retransmits reached, giving up\n");
+        return;
+    }
+
+    mListener->onSctpSendPacket(mCookieEchoPacket);
+
+    const auto delay = std::chrono::milliseconds(
+        std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    mTaskT1Cookie = mScheduler.submit(delay, __FILE__, __LINE__, [this, iteration] {
+        sendCookieEcho(iteration + 1);
+    });
 }
 
 void SctpSession::onReceiveInit(const SctpPacket::Chunk& chunk)
@@ -226,6 +254,7 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
         }
 
         if (chunk.type == kChunkCookieAck && mState == State::CookieEchoed) {
+            srtc::Task::cancelHelper(mTaskT1Cookie);
             mState = State::Established;
             std::printf("  --> SCTP established\n");
         }
@@ -238,11 +267,14 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 
             for (const auto& param : chunk.parseParams(16)) {
                 if (param.type == kParamStateCookie) {
+                    srtc::Task::cancelHelper(mTaskT1Init);
+
                     SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
                     builder.addChunk(kChunkCookieEcho, 0, param.data, param.size);
-                    auto cookie = builder.build();
-                    mListener->onSctpSendPacket(cookie);
+                    mCookieEchoPacket = builder.build();
+
                     mState = State::CookieEchoed;
+                    sendCookieEcho(0);
                     break;
                 }
             }

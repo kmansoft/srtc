@@ -36,6 +36,11 @@ constexpr uint16_t kParamForwardTsnSupported  = 0xC000;
 constexpr uint32_t kInitRwnd    = 131072;   // 128 KB receive window
 constexpr uint16_t kInitStreams = 1024;
 
+// Retransmit timers (RFC 4960 defaults)
+constexpr unsigned kMaxInitRetransmits = 8;      // max retransmits for INIT and COOKIE_ECHO
+constexpr uint32_t kRtoInitialMs       = 3000;   // initial RTO in milliseconds
+constexpr uint32_t kRtoMaxMs           = 60000;  // maximum RTO in milliseconds
+
 // State Cookie layout: kCookieDataSize bytes of fields, then kCookieHmacSize bytes of HMAC-SHA1
 constexpr uint32_t kCookieLifetime  = 60;   // seconds
 constexpr size_t   kCookieDataSize  = 36;
