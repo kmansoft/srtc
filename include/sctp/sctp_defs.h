@@ -4,6 +4,9 @@
 
 namespace srtc::sctp {
 
+const char* formatChunkName(uint8_t type);
+const char* formatParamName(uint16_t type);
+
 // SCTP chunk types (RFC 4960)
 constexpr uint8_t kChunkInit             = 1;
 constexpr uint8_t kChunkInitAck          = 2;

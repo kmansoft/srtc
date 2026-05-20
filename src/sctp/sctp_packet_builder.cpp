@@ -1,11 +1,11 @@
-#include "sctp/sctp_message_builder.h"
+#include "sctp/sctp_packet_builder.h"
 #include "sctp/sctp_crc32.h"
 
 #include <utility>
 
 namespace srtc::sctp {
 
-SctpMessageBuilder::SctpMessageBuilder(uint16_t srcPort, uint16_t dstPort, uint32_t verificationTag)
+SctpPacketBuilder::SctpPacketBuilder(uint16_t srcPort, uint16_t dstPort, uint32_t verificationTag)
     : mWriter(mBuf)
 {
     mWriter.writeU16(srcPort);
@@ -14,9 +14,9 @@ SctpMessageBuilder::SctpMessageBuilder(uint16_t srcPort, uint16_t dstPort, uint3
     mWriter.writeU32(0); // CRC-32c placeholder at offset 8
 }
 
-SctpMessageBuilder::~SctpMessageBuilder() = default;
+SctpPacketBuilder::~SctpPacketBuilder() = default;
 
-void SctpMessageBuilder::addChunk(uint8_t type, uint8_t flags, const uint8_t* data, size_t length)
+void SctpPacketBuilder::addChunk(uint8_t type, uint8_t flags, const uint8_t* data, size_t length)
 {
     const auto chunkLen = static_cast<uint16_t>(4 + length);
     mWriter.writeU8(type);
@@ -31,12 +31,12 @@ void SctpMessageBuilder::addChunk(uint8_t type, uint8_t flags, const uint8_t* da
     }
 }
 
-void SctpMessageBuilder::addChunk(uint8_t type, uint8_t flags, const ByteBuffer& buf)
+void SctpPacketBuilder::addChunk(uint8_t type, uint8_t flags, const ByteBuffer& buf)
 {
     addChunk(type, flags, buf.data(), buf.size());
 }
 
-ByteBuffer SctpMessageBuilder::build()
+ByteBuffer SctpPacketBuilder::build()
 {
     uint8_t* data = mBuf.data();
     const size_t size = mBuf.size();

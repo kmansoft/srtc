@@ -6,11 +6,11 @@
 
 namespace srtc::sctp {
 
-class SctpMessageBuilder
+class SctpPacketBuilder
 {
 public:
-    SctpMessageBuilder(uint16_t srcPort, uint16_t dstPort, uint32_t verificationTag);
-    ~SctpMessageBuilder();
+    SctpPacketBuilder(uint16_t srcPort, uint16_t dstPort, uint32_t verificationTag);
+    ~SctpPacketBuilder();
 
     void addChunk(uint8_t type, uint8_t flags, const uint8_t* data, size_t length);
     void addChunk(uint8_t type, uint8_t flags, const ByteBuffer& buf);

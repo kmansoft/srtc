@@ -271,7 +271,8 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
         const auto maxMessageSize = std::min(mOffer->getSctpMaxMessageSize(), mAnswer->getMaxMessageSize());
         SctpSessionListener* l = this;
-        mSctpSession = std::make_shared<sctp::SctpSession>(l,
+        mSctpSession = std::make_shared<sctp::SctpSession>(scheduler,
+                                                           l,
                                                            mOffer->getSctpPort(),
                                                            mAnswer->getSctpPort(),
                                                            maxMessageSize,
@@ -547,8 +548,7 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(layerList,
-                                item.track->getSimulcastLayer());
+                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }
@@ -849,7 +849,9 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
         const auto r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
 
         if (r > 0) {
-            std::printf("*** DTLS app data (%d bytes): %s\n", r, bin_to_hex(tmp, r).c_str());
+            if (mSctpSession) {
+                mSctpSession->onReceiveData({ tmp, static_cast<size_t>(r) });
+            }
         } else {
             if ((SSL_get_shutdown(mDtlsSsl) & SSL_RECEIVED_SHUTDOWN) != 0) {
                 LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");

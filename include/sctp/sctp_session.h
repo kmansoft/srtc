@@ -1,5 +1,8 @@
 #pragma once
 
+#include "srtc/byte_buffer.h"
+#include "srtc/scheduler.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -12,7 +15,8 @@ class SctpSessionListener;
 class SctpSession
 {
 public:
-    SctpSession(SctpSessionListener* listener,
+    SctpSession(const std::shared_ptr<RealScheduler>& scheduler,
+                SctpSessionListener* listener,
                 uint16_t localPort,
                 uint16_t remotePort,
                 uint32_t maxMessageSize,
@@ -20,6 +24,8 @@ public:
                 const std::vector<std::string>& dataChannels);
 
     void start();
+
+    void onReceiveData(const ByteBuffer& data);
 
 private:
     SctpSessionListener* const mListener;
@@ -31,6 +37,8 @@ private:
 
     uint32_t mInitiateTag;
     uint32_t mInitialTsn;
+
+    ScopedScheduler mScheduler;
 };
 
 } // namespace srtc::sctp

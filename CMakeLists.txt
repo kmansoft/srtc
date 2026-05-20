@@ -183,11 +183,14 @@ add_library(srtc
         # sctp
         include/sctp/sctp_crc32.h
         include/sctp/sctp_defs.h
-        include/sctp/sctp_message_builder.h
+        include/sctp/sctp_packet_builder.h
+        include/sctp/sctp_packet.h
         include/sctp/sctp_session.h
         include/sctp/sctp_session_listener.h
         src/sctp/sctp_crc32.cpp
-        src/sctp/sctp_message_builder.cpp
+        src/sctp/sctp_defs.cpp
+        src/sctp/sctp_packet_builder.cpp
+        src/sctp/sctp_packet.cpp
         src/sctp/sctp_session.cpp
 )
 
