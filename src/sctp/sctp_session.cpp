@@ -59,6 +59,10 @@ SctpSession::~SctpSession()
 {
     for (auto& channel : mDataChannels) {
         Task::cancelHelper(channel.taskT1Open);
+
+        if (channel.state == DataChannelState::kOpen) {
+            mListener->onSctpDataChannelClose(channel.label);
+        }
     }
 }
 
@@ -263,6 +267,10 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 
         if (chunk.type == kChunkData) {
             onReceiveDataChunk(chunk);
+        }
+
+        if (chunk.type == kChunkReconfig) {
+            onReceiveReconfig(chunk);
         }
 
         if (chunk.type == kChunkInit) {
@@ -483,6 +491,54 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
             "  --> sending DATA_CHANNEL_ACK stream=%u label=\"%s\" unordered=%d\n", streamId, label.c_str(), unordered);
         mListener->onSctpSendPacket(packet);
         mListener->onSctpDataChannelOpen(label);
+    }
+}
+
+void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
+{
+    // RECONFIG chunk body is a sequence of parameters starting at offset 0
+    for (const auto& param : chunk.parseParams(0)) {
+        if (param.type != kParamOutgoingSsnReset || param.size < 12) continue;
+
+        // Outgoing SSN Reset Request layout (RFC 6525 §4.1):
+        //   requestSeqNum(4) + responseSeqNum(4) + lastTsn(4) + streamIds(2 each)
+        ByteReader r(param.data, param.size);
+        const auto requestSeqNum = r.readU32();
+        r.skip(8); // responseSeqNum, lastTsn
+
+        const auto numStreams = r.remaining() / 2;
+        std::vector<uint16_t> streamIds;
+        streamIds.reserve(numStreams);
+        for (size_t i = 0; i < numStreams; ++i) {
+            streamIds.push_back(r.readU16());
+        }
+
+        // Close matching channels and notify listener
+        for (const auto streamId : streamIds) {
+            for (auto it = mDataChannels.begin(); it != mDataChannels.end(); ++it) {
+                if (it->streamId == streamId) {
+                    std::printf("  --> DATA_CHANNEL_CLOSE stream=%u label=\"%s\"\n",
+                                streamId, it->label.c_str());
+                    Task::cancelHelper(it->taskT1Open);
+                    mListener->onSctpDataChannelClose(it->label);
+                    mDataChannels.erase(it);
+                    break;
+                }
+            }
+        }
+
+        // Send Re-Config Response acknowledging the request
+        ByteBuffer responseParam;
+        ByteWriter pw(responseParam);
+        pw.writeU16(kParamReconfigResponse);
+        pw.writeU16(12); // type(2) + length(2) + seqNum(4) + result(4)
+        pw.writeU32(requestSeqNum);
+        pw.writeU32(kReconfigResultSuccess);
+
+        SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
+        builder.addChunk(kChunkReconfig, 0, responseParam);
+        auto packet = builder.build();
+        mListener->onSctpSendPacket(packet);
     }
 }
 

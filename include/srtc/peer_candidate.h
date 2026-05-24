@@ -88,6 +88,7 @@ public:
     void onSctpDataChannelOpen(const std::string& label) override;
     void onSctpDataChannelText(const std::string& label, const std::string& text) override;
     void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
+    void onSctpDataChannelClose(const std::string& label) override;
 
 private:
     void startConnecting();

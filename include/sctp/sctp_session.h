@@ -97,6 +97,7 @@ private:
     void onAssociationEstablished();
     void sendDataChannelOpen(DataChannel& channel, unsigned iteration);
     void onReceiveDataChunk(const SctpPacket::Chunk& chunk);
+    void onReceiveReconfig(const SctpPacket::Chunk& chunk);
     void sendSack();
 
     ScopedScheduler mScheduler;

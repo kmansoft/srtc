@@ -15,7 +15,7 @@ std::list<DataChannelReceiveBuffer::Message> DataChannelReceiveBuffer::receive(
     uint16_t ssn, uint8_t flags, bool unordered, uint32_t ppid, const uint8_t* data, size_t size)
 {
     const bool isFirst = (flags & kDataFlagB) != 0;
-    const bool isLast  = (flags & kDataFlagE) != 0;
+    const bool isLast = (flags & kDataFlagE) != 0;
 
     std::list<Message> out;
 

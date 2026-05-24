@@ -514,6 +514,12 @@ void PeerCandidate::onSctpDataChannelBinary(const std::string& label, const Byte
     mListener->onSctpDataChannelBinary(label, data);
 }
 
+void PeerCandidate::onSctpDataChannelClose(const std::string& label)
+{
+    std::printf("*** SCTP data channel close: \"%s\"\n", label.c_str());
+    mListener->onSctpDataChannelClosed(label);
+}
+
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
 {
     if (mSendPacer) {

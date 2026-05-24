@@ -635,13 +635,14 @@ void PeerConnection::networkThreadWorkerFunc()
 
     mLoopScheduler.reset();
 
-    setConnectionState(ConnectionState::Closed);
-
     // Clear everything on this thread before exiting
     mConnectingCandidateList.clear();
     mSelectedCandidate.reset();
     mJitterBufferVideo.reset();
     mJitterBufferAudio.reset();
+
+    // We are all done
+    setConnectionState(ConnectionState::Closed);
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)

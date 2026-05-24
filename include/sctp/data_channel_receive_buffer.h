@@ -26,8 +26,8 @@ public:
     // and E (0x02) bits from the DATA chunk header. Returns all messages now
     // deliverable: for unordered channels, any newly-completed message;
     // for ordered channels, all consecutive complete messages from mNextSsn.
-    std::list<Message> receive(uint16_t ssn, uint8_t flags, bool unordered,
-                               uint32_t ppid, const uint8_t* data, size_t size);
+    std::list<Message> receive(
+        uint16_t ssn, uint8_t flags, bool unordered, uint32_t ppid, const uint8_t* data, size_t size);
 
 private:
     struct PendingMessage {

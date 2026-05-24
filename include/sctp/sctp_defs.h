@@ -54,6 +54,13 @@ constexpr uint16_t kParamStateCookie          = 7;
 constexpr uint16_t kParamSupportedExtensions  = 0x8008;
 constexpr uint16_t kParamForwardTsnSupported  = 0xC000;
 
+// RE-CONFIG parameter types (RFC 6525)
+constexpr uint16_t kParamOutgoingSsnReset = 0x000D;
+constexpr uint16_t kParamReconfigResponse = 0x0010;
+
+// RE-CONFIG response result codes (RFC 6525 §4.4)
+constexpr uint32_t kReconfigResultSuccess = 0x00000000;
+
 // Session limits
 constexpr uint32_t kInitRwnd    = 131072;   // 128 KB receive window
 constexpr uint16_t kInitStreams = 1024;
