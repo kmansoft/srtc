@@ -2,7 +2,28 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
+
+namespace
+{
+
+void check_read(const char* file, int line, const char* func, size_t r, size_t pos, size_t len)
+{
+    if (pos + r > len) {
+        std::fprintf(stderr,
+                     "ByteBuffer is attempting to read %zu bytes at pos = %zu, len = %zu, func %s, file %s, line %d",
+                     r,
+                     pos,
+                     len,
+                     func,
+                     file,
+                     line);
+        std::abort();
+    }
+}
+
+} // namespace
 
 namespace srtc
 {
@@ -320,6 +341,8 @@ size_t ByteReader::remaining() const
 uint8_t ByteReader::readU8()
 {
     assert(mPos + 1 <= mLen);
+    check_read(__FILE__, __LINE__, "readU8", 1, mPos, mLen);
+
     const uint8_t res = mBuf[mPos];
     mPos += 1;
     return res;
@@ -328,6 +351,8 @@ uint8_t ByteReader::readU8()
 uint16_t ByteReader::readU16()
 {
     assert(mPos + 2 <= mLen);
+    check_read(__FILE__, __LINE__, "readU16", 2, mPos, mLen);
+
     const uint16_t res = (static_cast<uint16_t>(mBuf[mPos]) << 8) | static_cast<uint16_t>(mBuf[mPos + 1]);
     mPos += 2;
     return res;
@@ -336,6 +361,8 @@ uint16_t ByteReader::readU16()
 uint32_t ByteReader::readU32()
 {
     assert(mPos + 4 <= mLen);
+    check_read(__FILE__, __LINE__, "readU32", 4, mPos, mLen);
+
     const uint32_t res = (static_cast<uint32_t>(mBuf[mPos]) << 24) | (static_cast<uint32_t>(mBuf[mPos + 1]) << 16) |
                          (static_cast<uint32_t>(mBuf[mPos + 2]) << 8) | static_cast<uint32_t>(mBuf[mPos + 3]);
     mPos += 4;
@@ -368,6 +395,7 @@ uint32_t ByteReader::readLEB128()
 ByteBuffer ByteReader::readByteBuffer(size_t size)
 {
     assert(mPos + size <= mLen);
+    check_read(__FILE__, __LINE__, "readByteBuffer", size, mPos, mLen);
 
     ByteBuffer res(size);
     std::memcpy(res.data(), mBuf + mPos, size);
@@ -380,6 +408,7 @@ ByteBuffer ByteReader::readByteBuffer(size_t size)
 void ByteReader::read(uint8_t* buf, size_t size)
 {
     assert(mPos + size <= mLen);
+    check_read(__FILE__, __LINE__, "read", size, mPos, mLen);
 
     std::memcpy(buf, mBuf + mPos, size);
 
@@ -388,6 +417,9 @@ void ByteReader::read(uint8_t* buf, size_t size)
 
 void ByteReader::skip(size_t size)
 {
+    assert(mPos + size <= mLen);
+    check_read(__FILE__, __LINE__, "skip", size, mPos, mLen);
+
     mPos += size;
 }
 
