@@ -99,24 +99,16 @@ void SctpSession::onReceiveInit(const SctpPacket::Chunk& chunk)
 {
     if (chunk.size < 16) return;
 
-    const uint32_t peerInitiateTag = static_cast<uint32_t>(chunk.data[0]) << 24
-                                   | static_cast<uint32_t>(chunk.data[1]) << 16
-                                   | static_cast<uint32_t>(chunk.data[2]) << 8
-                                   | static_cast<uint32_t>(chunk.data[3]);
+    ByteReader r(chunk.data, chunk.size);
+    const auto peerInitiateTag = r.readU32();
 
     // RFC 4960 §5.2.1: silently discard if initiate tags are equal
     if (peerInitiateTag == mInitiateTag) return;
 
-    const uint32_t peerRwnd      = static_cast<uint32_t>(chunk.data[4]) << 24
-                                 | static_cast<uint32_t>(chunk.data[5]) << 16
-                                 | static_cast<uint32_t>(chunk.data[6]) << 8
-                                 | static_cast<uint32_t>(chunk.data[7]);
-    const uint16_t peerOutStreams = static_cast<uint16_t>(chunk.data[8]  << 8 | chunk.data[9]);
-    const uint16_t peerInStreams  = static_cast<uint16_t>(chunk.data[10] << 8 | chunk.data[11]);
-    const uint32_t peerInitialTsn = static_cast<uint32_t>(chunk.data[12]) << 24
-                                  | static_cast<uint32_t>(chunk.data[13]) << 16
-                                  | static_cast<uint32_t>(chunk.data[14]) << 8
-                                  | static_cast<uint32_t>(chunk.data[15]);
+    const auto peerRwnd       = r.readU32();
+    const auto peerOutStreams  = r.readU16();
+    const auto peerInStreams   = r.readU16();
+    const auto peerInitialTsn  = r.readU32();
 
     // Build State Cookie: kCookieDataSize bytes of fields, then HMAC-SHA1
     // Layout (all big-endian):
@@ -199,8 +191,8 @@ void SctpSession::onReceiveCookieEcho(const SctpPacket::Chunk& chunk)
 
     // Verify lifetime
     ByteReader r(chunk.data, kCookieTotalSize);
-    const uint32_t createdAt = r.readU32();
-    const uint32_t lifetime  = r.readU32();
+    const auto createdAt = r.readU32();
+    const auto lifetime  = r.readU32();
     const auto nowSecs = getSystemTimeSecs();
     if (nowSecs > createdAt + lifetime) {
         std::printf("  --> COOKIE_ECHO expired\n");
@@ -260,10 +252,8 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
         }
 
         if (chunk.type == kChunkInitAck && mState == State::CookieWait && chunk.size >= 16) {
-            mPeerTag = static_cast<uint32_t>(chunk.data[0]) << 24
-                     | static_cast<uint32_t>(chunk.data[1]) << 16
-                     | static_cast<uint32_t>(chunk.data[2]) << 8
-                     | static_cast<uint32_t>(chunk.data[3]);
+            ByteReader r(chunk.data, chunk.size);
+            mPeerTag = r.readU32();
 
             for (const auto& param : chunk.parseParams(16)) {
                 if (param.type == kParamStateCookie) {
@@ -282,20 +272,12 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 
         // Dump fixed fields and parameters for INIT and INIT ACK
         if ((chunk.type == kChunkInit || chunk.type == kChunkInitAck) && chunk.size >= 16) {
-            const uint32_t initiateTag = static_cast<uint32_t>(chunk.data[0])  << 24
-                                       | static_cast<uint32_t>(chunk.data[1])  << 16
-                                       | static_cast<uint32_t>(chunk.data[2])  << 8
-                                       | static_cast<uint32_t>(chunk.data[3]);
-            const uint32_t arwnd       = static_cast<uint32_t>(chunk.data[4])  << 24
-                                       | static_cast<uint32_t>(chunk.data[5])  << 16
-                                       | static_cast<uint32_t>(chunk.data[6])  << 8
-                                       | static_cast<uint32_t>(chunk.data[7]);
-            const uint16_t outStreams  = static_cast<uint16_t>(chunk.data[8]   << 8 | chunk.data[9]);
-            const uint16_t inStreams   = static_cast<uint16_t>(chunk.data[10]  << 8 | chunk.data[11]);
-            const uint32_t initialTsn  = static_cast<uint32_t>(chunk.data[12]) << 24
-                                       | static_cast<uint32_t>(chunk.data[13]) << 16
-                                       | static_cast<uint32_t>(chunk.data[14]) << 8
-                                       | static_cast<uint32_t>(chunk.data[15]);
+            ByteReader r(chunk.data, chunk.size);
+            const auto initiateTag = r.readU32();
+            const auto arwnd       = r.readU32();
+            const auto outStreams   = r.readU16();
+            const auto inStreams    = r.readU16();
+            const auto initialTsn  = r.readU32();
 
             std::printf("    initiateTag=0x%08X a_rwnd=%u streams=%u/%u tsn=0x%08X\n",
                         initiateTag, arwnd, outStreams, inStreams, initialTsn);

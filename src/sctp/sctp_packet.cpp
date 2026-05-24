@@ -1,5 +1,8 @@
 #include "sctp/sctp_packet.h"
 #include "sctp/sctp_crc32.h"
+#include "srtc/byte_buffer.h"
+
+#include <algorithm>
 
 namespace srtc::sctp {
 
@@ -23,35 +26,31 @@ std::optional<SctpPacket> SctpPacket::parse(const uint8_t* data, size_t size)
         return std::nullopt;
     }
 
+    ByteReader r(data, size);
     SctpPacket packet;
-    packet.mSrcPort         = static_cast<uint16_t>(data[0] << 8 | data[1]);
-    packet.mDstPort         = static_cast<uint16_t>(data[2] << 8 | data[3]);
-    packet.mVerificationTag = static_cast<uint32_t>(data[4]) << 24
-                            | static_cast<uint32_t>(data[5]) << 16
-                            | static_cast<uint32_t>(data[6]) << 8
-                            | static_cast<uint32_t>(data[7]);
+    packet.mSrcPort         = r.readU16();
+    packet.mDstPort         = r.readU16();
+    packet.mVerificationTag = r.readU32();
+    r.skip(4); // skip CRC field
 
-    // Parse chunks
-    size_t pos = 12;
-    while (pos + 4 <= size) {
-        const uint8_t  chunkType  = data[pos];
-        const uint8_t  chunkFlags = data[pos + 1];
-        const uint16_t chunkLen   = static_cast<uint16_t>(data[pos + 2] << 8 | data[pos + 3]);
+    while (r.remaining() >= 4) {
+        const auto chunkType  = r.readU8();
+        const auto chunkFlags = r.readU8();
+        const auto chunkLen   = r.readU16();
 
-        if (chunkLen < 4 || pos + chunkLen > size) {
+        if (chunkLen < 4 || chunkLen - 4u > r.remaining()) {
             return std::nullopt;
         }
 
         packet.mChunks.push_back({
             chunkType,
             chunkFlags,
-            data + pos + 4,
+            data + r.position(),
             static_cast<size_t>(chunkLen - 4)
         });
 
-        // Advance past chunk and its padding
-        const size_t padded = (chunkLen + 3) & ~3u;
-        pos += padded;
+        const size_t paddedSkip = ((size_t)(chunkLen + 3) & ~3u) - 4;
+        r.skip(std::min(paddedSkip, r.remaining()));
     }
 
     return packet;
@@ -61,22 +60,27 @@ std::vector<SctpPacket::Param> SctpPacket::Chunk::parseParams(size_t offset) con
 {
     std::vector<Param> params;
 
-    while (offset + 4 <= size) {
-        const auto paramType = static_cast<uint16_t>(data[offset] << 8 | data[offset + 1]);
-        const auto paramLen  = static_cast<uint16_t>(data[offset + 2] << 8 | data[offset + 3]);
+    if (offset > size) return params;
 
-        if (paramLen < 4 || offset + paramLen > size) {
+    ByteReader r(data, size);
+    r.skip(offset);
+
+    while (r.remaining() >= 4) {
+        const auto paramType = r.readU16();
+        const auto paramLen  = r.readU16();
+
+        if (paramLen < 4 || paramLen - 4u > r.remaining()) {
             break;
         }
 
         params.push_back({
             paramType,
-            data + offset + 4,
+            data + r.position(),
             static_cast<size_t>(paramLen - 4)
         });
 
-        const size_t padded = (paramLen + 3) & ~3u;
-        offset += padded;
+        const size_t paddedSkip = ((size_t)(paramLen + 3) & ~3u) - 4;
+        r.skip(std::min(paddedSkip, r.remaining()));
     }
 
     return params;
