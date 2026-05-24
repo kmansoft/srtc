@@ -500,6 +500,14 @@ void PeerConnection::setSubscribeSenderReportsListener(const SubscribeSenderRepo
     mSubscribeSenderReportsListener = listener;
 }
 
+PeerConnection::DataChannelListener::~DataChannelListener() = default;
+
+void PeerConnection::setDataChannelListener(const std::shared_ptr<DataChannelListener>& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mDataChannelListener = listener;
+}
+
 void PeerConnection::close()
 {
     std::thread waitForThread;
@@ -696,7 +704,8 @@ void PeerConnection::startConnecting()
     for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
         if (i < hostList4.size()) {
             const auto host = hostList4[i];
-            const auto candidate = std::make_shared<PeerCandidate>(this,
+            const auto listener = static_cast<PeerCandidateListener*>(this);
+            const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
@@ -708,7 +717,8 @@ void PeerConnection::startConnecting()
         }
         if (i < hostList6.size()) {
             const auto host = hostList6[i];
-            const auto candidate = std::make_shared<PeerCandidate>(this,
+            const auto listener = static_cast<PeerCandidateListener*>(this);
+            const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
@@ -953,6 +963,38 @@ void PeerConnection::onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate)
 const std::vector<SimulcastLayer>& PeerConnection::getSimulcastLayerList() const
 {
     return mSendSimulcastLayerList;
+}
+
+void PeerConnection::onSctpDataChannelOpen(const std::string& label)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelOpened(label);
+    }
+}
+
+void PeerConnection::onSctpDataChannelText(const std::string& label, const std::string& data)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelReceivedText(label, data);
+    }
+}
+
+void PeerConnection::onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelReceivedBinary(label, data);
+    }
+}
+
+void PeerConnection::onSctpDataChannelClosed(const std::string& label)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelClosed(label);
+    }
 }
 
 void PeerConnection::sendReports()

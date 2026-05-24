@@ -30,7 +30,7 @@ class Scheduler;
 class PeerCandidate;
 class EventLoop;
 
-class PeerConnection final : public PeerCandidateListener
+class PeerConnection final : PeerCandidateListener
 {
 public:
     explicit PeerConnection(Direction direction);
@@ -100,7 +100,20 @@ public:
     using SubscribeSenderReportListener = std::function<void(const std::shared_ptr<Track>&, const SenderReport&)>;
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
-   // Closing
+    // Data channels
+    struct DataChannelListener
+    {
+        virtual ~DataChannelListener();
+
+        virtual void onDataChannelOpened(const std::string& label) = 0;
+        virtual void onDataChannelClosed(const std::string& label) = 0;
+
+        virtual void onDataChannelReceivedText(const std::string& label, const std::string& data) = 0;
+        virtual void onDataChannelReceivedBinary(const std::string& label, const ByteBuffer& data) = 0;
+    };
+    void setDataChannelListener(const std::shared_ptr<DataChannelListener>& listener);
+
+    // Closing
     void close();
 
 private:
@@ -177,6 +190,10 @@ private:
     void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) override;
     const std::vector<SimulcastLayer>& getSimulcastLayerList() const override;
 
+    void onSctpDataChannelOpen(const std::string& label) override;
+    void onSctpDataChannelText(const std::string& label, const std::string& data) override;
+    void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
+    void onSctpDataChannelClosed(const std::string& label) override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex);
@@ -187,6 +204,7 @@ private:
     PublishKeyFrameRequestedListner mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
+    std::shared_ptr<DataChannelListener> mDataChannelListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer;

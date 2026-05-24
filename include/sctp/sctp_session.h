@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <list>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -75,14 +76,15 @@ private:
     };
 
     State mState;
-    uint32_t mInitiateTag;       // our tag — peer puts this in verificationTag of packets it sends us
-    uint32_t mInitialTsn;        // our DATA chunk sequence counter start
-    uint32_t mPeerTag;           // peer's tag — we put this in verificationTag of packets we send
-    uint16_t mPeerOutStreams;     // number of outbound streams the peer supports
-    uint16_t mPeerInStreams;      // number of inbound streams the peer supports
-    uint32_t mPeerRwnd;          // peer's receive window
-    uint32_t mCurrentTsn;        // next TSN to use when sending DATA chunks
-    uint32_t mPeerCumulativeTsn; // highest consecutive TSN received from peer
+    uint32_t mInitiateTag;                  // our tag — peer puts this in verificationTag of packets it sends us
+    uint32_t mInitialTsn;                   // our DATA chunk sequence counter start
+    uint32_t mPeerTag;                      // peer's tag — we put this in verificationTag of packets we send
+    uint16_t mPeerOutStreams;               // number of outbound streams the peer supports
+    uint16_t mPeerInStreams;                // number of inbound streams the peer supports
+    uint32_t mPeerRwnd;                     // peer's receive window
+    uint32_t mCurrentTsn;                   // next TSN to use when sending DATA chunks
+    uint32_t mPeerCumulativeTsn;            // highest consecutive TSN received from peer
+    std::set<uint32_t> mPeerOutOfOrderTsns; // received but not yet consecutive
     std::array<uint8_t, 16> mHmacKey;
     ByteBuffer mCookieEchoPacket;
     std::weak_ptr<Task> mTaskT1Init;

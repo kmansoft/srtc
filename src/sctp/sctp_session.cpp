@@ -385,9 +385,28 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     (void)ssn; // needed for ordered delivery
     const auto ppid = r.readU32();
 
-    // Advance cumulative TSN if in order
+    // Duplicate detection: TSN already covered by cumulative or seen out-of-order
+    const bool isDuplicate = static_cast<int32_t>(tsn - mPeerCumulativeTsn) <= 0
+                          || mPeerOutOfOrderTsns.count(tsn) > 0;
+    if (isDuplicate) {
+        sendSack();
+        return;
+    }
+
     if (tsn == mPeerCumulativeTsn + 1) {
         mPeerCumulativeTsn = tsn;
+        // Drain any now-consecutive TSNs from the out-of-order set
+        while (true) {
+            auto it = mPeerOutOfOrderTsns.find(mPeerCumulativeTsn + 1);
+            if (it == mPeerOutOfOrderTsns.end()) break;
+            mPeerCumulativeTsn++;
+            mPeerOutOfOrderTsns.erase(it);
+        }
+    } else {
+        mPeerOutOfOrderTsns.insert(tsn);
+        if (mPeerOutOfOrderTsns.size() > 1024) {
+            mPeerOutOfOrderTsns.erase(mPeerOutOfOrderTsns.begin());
+        }
     }
     sendSack();
 
@@ -469,12 +488,47 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
 
 void SctpSession::sendSack()
 {
+    // Build gap ack blocks from out-of-order TSNs.
+    // Offsets are relative to mPeerCumulativeTsn; sort by offset to handle
+    // TSN wraparound correctly (uint32_t distance, not raw value order).
+    struct GapBlock { uint16_t start, end; };
+    std::vector<GapBlock> gapBlocks;
+
+    if (!mPeerOutOfOrderTsns.empty()) {
+        std::vector<uint32_t> tsns(mPeerOutOfOrderTsns.begin(), mPeerOutOfOrderTsns.end());
+        std::sort(tsns.begin(), tsns.end(), [this](uint32_t a, uint32_t b) {
+            return (uint32_t)(a - mPeerCumulativeTsn) < (uint32_t)(b - mPeerCumulativeTsn);
+        });
+
+        uint16_t blockStart = 0, blockEnd = 0;
+        bool inBlock = false;
+        for (const auto tsn : tsns) {
+            const auto offset = static_cast<uint16_t>(tsn - mPeerCumulativeTsn);
+            if (!inBlock) {
+                blockStart = blockEnd = offset;
+                inBlock = true;
+            } else if (offset == static_cast<uint16_t>(blockEnd + 1)) {
+                blockEnd = offset;
+            } else {
+                gapBlocks.push_back({ blockStart, blockEnd });
+                blockStart = blockEnd = offset;
+            }
+        }
+        if (inBlock) {
+            gapBlocks.push_back({ blockStart, blockEnd });
+        }
+    }
+
     ByteBuffer body;
     ByteWriter w(body);
     w.writeU32(mPeerCumulativeTsn);
     w.writeU32(kInitRwnd);
-    w.writeU16(0); // no gap ack blocks
-    w.writeU16(0); // no duplicate TSNs
+    w.writeU16(static_cast<uint16_t>(gapBlocks.size()));
+    w.writeU16(0); // duplicate TSNs not tracked
+    for (const auto& gb : gapBlocks) {
+        w.writeU16(gb.start);
+        w.writeU16(gb.end);
+    }
 
     SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
     builder.addChunk(kChunkSack, 0, body);

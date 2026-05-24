@@ -141,6 +141,7 @@ add_library(srtc
         src/packetizer_vp8.cpp
         src/packetizer_vp9.cpp
         src/peer_candidate.cpp
+        src/peer_candidate_listener.cpp
         src/peer_connection.cpp
         src/pool_allocator.cpp
         src/random_generator.cpp

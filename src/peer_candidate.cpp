@@ -499,16 +499,19 @@ void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
 void PeerCandidate::onSctpDataChannelOpen(const std::string& label)
 {
     std::printf("*** SCTP data channel open: \"%s\"\n", label.c_str());
+    mListener->onSctpDataChannelOpen(label);
 }
 
 void PeerCandidate::onSctpDataChannelText(const std::string& label, const std::string& text)
 {
     std::printf("*** SCTP data channel text \"%s\": \"%s\"\n", label.c_str(), text.c_str());
+    mListener->onSctpDataChannelText(label, text);
 }
 
 void PeerCandidate::onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data)
 {
     std::printf("*** SCTP data channel binary \"%s\": %zu bytes\n", label.c_str(), data.size());
+    mListener->onSctpDataChannelBinary(label, data);
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
