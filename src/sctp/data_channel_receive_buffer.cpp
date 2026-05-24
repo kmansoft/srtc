@@ -1,4 +1,4 @@
-#include "sctp/sctp_receive_buffer.h"
+#include "sctp/data_channel_receive_buffer.h"
 #include "sctp/sctp_defs.h"
 
 namespace srtc::sctp
