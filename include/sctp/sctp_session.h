@@ -49,12 +49,14 @@ private:
     struct DataChannel {
         const std::string label;
         const uint16_t streamId;
+        const bool unordered;
         DataChannelState state;
         std::weak_ptr<Task> taskT1Open;
 
-        DataChannel(const std::string& label, uint16_t streamId)
+        DataChannel(const std::string& label, uint16_t streamId, bool unordered)
             : label(label)
             , streamId(streamId)
+            , unordered(unordered)
             , state(DataChannelState::kNone)
         {
         }

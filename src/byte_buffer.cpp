@@ -338,6 +338,11 @@ size_t ByteReader::remaining() const
     return mLen - mPos;
 }
 
+const uint8_t* ByteReader::current() const
+{
+    return mBuf + mPos;
+}
+
 uint8_t ByteReader::readU8()
 {
     assert(mPos + 1 <= mLen);

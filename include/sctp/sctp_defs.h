@@ -33,7 +33,11 @@ constexpr uint8_t kDataFlagComplete  = 0x03; // B + E: single-fragment message
 constexpr uint8_t kDataFlagUnordered = 0x04; // U: unordered delivery
 
 // PPID values (IANA registry)
-constexpr uint32_t kPpidDcep = 50; // WebRTC DCEP (RFC 8832)
+constexpr uint32_t kPpidDcep          = 50; // WebRTC DCEP (RFC 8832)
+constexpr uint32_t kPpidString        = 51; // WebRTC string
+constexpr uint32_t kPpidBinary        = 53; // WebRTC binary
+constexpr uint32_t kPpidStringEmpty   = 56; // WebRTC string, zero length
+constexpr uint32_t kPpidBinaryEmpty   = 57; // WebRTC binary, zero length
 
 // DCEP message types (RFC 8832)
 constexpr uint8_t kDcepMsgAck  = 0x02;

@@ -5,6 +5,7 @@ namespace srtc::sctp {
 const char* formatChunkName(uint8_t type)
 {
     switch (type) {
+    case kChunkData:             return "DATA";
     case kChunkInit:             return "INIT";
     case kChunkInitAck:          return "INIT_ACK";
     case kChunkSack:             return "SACK";

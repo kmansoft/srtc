@@ -88,6 +88,7 @@ public:
     [[nodiscard]] size_t size() const;
     [[nodiscard]] size_t position() const;
     [[nodiscard]] size_t remaining() const;
+    [[nodiscard]] const uint8_t* current() const;
 
     [[nodiscard]] uint8_t readU8();
     [[nodiscard]] uint16_t readU16();

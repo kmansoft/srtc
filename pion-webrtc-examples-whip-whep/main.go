@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
@@ -313,9 +314,22 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 		})
 	})
 
-	if _, err := peerConnection.CreateDataChannel("bar", nil); err != nil {
+	barChannel, err := peerConnection.CreateDataChannel("bar", nil)
+	if err != nil {
 		panic(err)
 	}
+	barChannel.OnOpen(func() {
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				if sendErr := barChannel.SendText("hello from bar"); sendErr != nil {
+					fmt.Printf("DataChannel 'bar' send error: %v\n", sendErr)
+					return
+				}
+			}
+		}()
+	})
 
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected

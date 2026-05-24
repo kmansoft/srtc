@@ -86,6 +86,8 @@ public:
     // SCTP listener
     void onSctpSendPacket(const ByteBuffer& packet) override;
     void onSctpDataChannelOpen(const std::string& label) override;
+    void onSctpDataChannelText(const std::string& label, const std::string& text) override;
+    void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
 
 private:
     void startConnecting();

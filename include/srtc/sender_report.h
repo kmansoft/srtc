@@ -11,10 +11,10 @@ namespace srtc
 
 struct SenderReport {
 	std::chrono::steady_clock::time_point when;
-	NtpTime ntp;
-	uint32_t rtp;
-	uint32_t packet_count;
-	uint32_t octet_count;
+	NtpTime ntp = {};
+	uint32_t rtp = 0;
+	uint32_t packet_count = 0;
+	uint32_t octet_count = 0;
 };
 
 }
