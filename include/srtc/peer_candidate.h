@@ -135,6 +135,9 @@ private:
     Filter<float> mIceRttFilter;
     Filter<float> mControlRttFilter;
 
+    mutable uint64_t mPrevByteCount = 0;
+    mutable std::chrono::steady_clock::time_point mPrevStatsTime = {};
+
     std::shared_ptr<SrtpConnection> mSrtpConnection;
     std::shared_ptr<SendPacer> mSendPacer;
     std::shared_ptr<sctp::SctpSession> mSctpSession;

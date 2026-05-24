@@ -455,6 +455,22 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
 
     if (mExtensionSourceTWCC) {
         mExtensionSourceTWCC->updatePublishConnectionStats(stats);
+    } else {
+        // Fall back to byte-count delta when TWCC is not available
+        if (stats.bandwidth_actual_kbit_per_second < 0) {
+            if (mPrevStatsTime != std::chrono::steady_clock::time_point{}) {
+                const auto deltaMs =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - mPrevStatsTime).count();
+                const auto deltaBytes = stats.byte_count - mPrevByteCount;
+                if (deltaMs > 0) {
+                    // bits / milliseconds == kbits / second
+                    stats.bandwidth_actual_kbit_per_second =
+                        static_cast<float>(deltaBytes) * 8.0f / static_cast<float>(deltaMs);
+                }
+            }
+            mPrevByteCount = stats.byte_count;
+            mPrevStatsTime = now;
+        }
     }
 }
 
