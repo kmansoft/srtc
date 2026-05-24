@@ -55,6 +55,13 @@ SctpSession::SctpSession(const std::shared_ptr<RealScheduler>& scheduler,
     }
 }
 
+SctpSession::~SctpSession()
+{
+    for (auto& channel : mDataChannels) {
+        srtc::Task::cancelHelper(channel.taskT1Open);
+    }
+}
+
 void SctpSession::start()
 {
     sendInit(0);
@@ -322,12 +329,18 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 void SctpSession::onAssociationEstablished()
 {
     for (auto& channel : mDataChannels) {
-        sendDataChannelOpen(channel);
+        sendDataChannelOpen(channel, 0);
     }
 }
 
-void SctpSession::sendDataChannelOpen(DataChannel& channel)
+void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
 {
+    if (iteration > kMaxInitRetransmits) {
+        std::printf("*** SCTP DATA_CHANNEL_OPEN: max retransmits reached for \"%s\", giving up\n",
+                    channel.label.c_str());
+        return;
+    }
+
     ByteBuffer payload;
     ByteWriter pw(payload);
     pw.writeU8(kDcepMsgOpen);
@@ -354,6 +367,11 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel)
                 channel.streamId, channel.label.c_str());
     mListener->onSctpSendPacket(packet);
     channel.state = DataChannelState::kOpening;
+
+    const auto delay = std::chrono::milliseconds(std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    channel.taskT1Open = mScheduler.submit(delay, __FILE__, __LINE__, [this, &channel, iteration] {
+        sendDataChannelOpen(channel, iteration + 1);
+    });
 }
 
 void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
@@ -381,6 +399,7 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     if (msgType == kDcepMsgAck) {
         for (auto& channel : mDataChannels) {
             if (channel.streamId == streamId && channel.state == DataChannelState::kOpening) {
+                srtc::Task::cancelHelper(channel.taskT1Open);
                 channel.state = DataChannelState::kOpen;
                 std::printf("  --> DATA_CHANNEL_ACK stream=%u label=\"%s\"\n",
                             streamId, channel.label.c_str());

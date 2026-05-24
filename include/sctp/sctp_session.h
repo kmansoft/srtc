@@ -27,6 +27,8 @@ public:
                 bool isSetupActive,
                 const std::vector<std::string>& dataChannels);
 
+    ~SctpSession();
+
     void start();
 
     void onReceiveData(const ByteBuffer& data);
@@ -48,6 +50,7 @@ private:
         const std::string label;
         const uint16_t streamId;
         DataChannelState state;
+        std::weak_ptr<Task> taskT1Open;
 
         DataChannel(const std::string& label, uint16_t streamId)
             : label(label)
@@ -86,7 +89,7 @@ private:
     void onReceiveInit(const SctpPacket::Chunk& chunk);
     void onReceiveCookieEcho(const SctpPacket::Chunk& chunk);
     void onAssociationEstablished();
-    void sendDataChannelOpen(DataChannel& channel);
+    void sendDataChannelOpen(DataChannel& channel, unsigned iteration);
     void onReceiveDataChunk(const SctpPacket::Chunk& chunk);
     void sendSack();
 
