@@ -12,6 +12,7 @@ const char* formatParamName(uint16_t type);
 bool constTimeEqual(const uint8_t* a, const uint8_t* b, size_t size);
 
 // SCTP chunk types (RFC 4960)
+constexpr uint8_t kChunkData             = 0;
 constexpr uint8_t kChunkInit             = 1;
 constexpr uint8_t kChunkInitAck          = 2;
 constexpr uint8_t kChunkSack             = 3;
@@ -26,6 +27,21 @@ constexpr uint8_t kChunkCookieAck        = 11;
 constexpr uint8_t kChunkShutdownComplete = 14;
 constexpr uint8_t kChunkForwardTsn       = 0xC0;
 constexpr uint8_t kChunkReconfig         = 0x82;
+
+// DATA chunk flags (RFC 4960 §3.3.1)
+constexpr uint8_t kDataFlagComplete  = 0x03; // B + E: single-fragment message
+constexpr uint8_t kDataFlagUnordered = 0x04; // U: unordered delivery
+
+// PPID values (IANA registry)
+constexpr uint32_t kPpidDcep = 50; // WebRTC DCEP (RFC 8832)
+
+// DCEP message types (RFC 8832)
+constexpr uint8_t kDcepMsgAck  = 0x02;
+constexpr uint8_t kDcepMsgOpen = 0x03;
+
+// DCEP channel types
+constexpr uint8_t  kDcepChannelReliable = 0x00;
+constexpr uint16_t kDcepPriorityNormal  = 256;
 
 // SCTP parameter types
 constexpr uint16_t kParamStateCookie          = 7;

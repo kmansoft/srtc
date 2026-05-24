@@ -405,6 +405,16 @@ ByteBuffer ByteReader::readByteBuffer(size_t size)
     return res;
 }
 
+std::string ByteReader::readString(size_t size)
+{
+    assert(mPos + size <= mLen);
+    check_read(__FILE__, __LINE__, "readString", size, mPos, mLen);
+
+    std::string res(reinterpret_cast<const char*>(mBuf + mPos), size);
+    mPos += size;
+    return res;
+}
+
 void ByteReader::read(uint8_t* buf, size_t size)
 {
     assert(mPos + size <= mLen);

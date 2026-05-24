@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 #include <cstddef>
+#include <string>
 
 namespace srtc
 {
@@ -94,6 +95,7 @@ public:
     [[nodiscard]] uint32_t readLEB128();
 
 	[[nodiscard]] ByteBuffer readByteBuffer(size_t size);
+	[[nodiscard]] std::string readString(size_t size);
 
 	void read(uint8_t* buf, size_t size);
 

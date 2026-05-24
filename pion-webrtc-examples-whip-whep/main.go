@@ -306,6 +306,17 @@ func whepHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, offer []byte, path string) {
+	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		fmt.Printf("DataChannel '%s' opened\n", d.Label())
+		d.OnClose(func() {
+			fmt.Printf("DataChannel '%s' closed\n", d.Label())
+		})
+	})
+
+	if _, err := peerConnection.CreateDataChannel("bar", nil); err != nil {
+		panic(err)
+	}
+
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {

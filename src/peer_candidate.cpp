@@ -496,6 +496,11 @@ void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
     }
 }
 
+void PeerCandidate::onSctpDataChannelOpen(const std::string& label)
+{
+    std::printf("*** SCTP data channel open: \"%s\"\n", label.c_str());
+}
+
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
 {
     if (mSendPacer) {
