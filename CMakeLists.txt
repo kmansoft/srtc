@@ -185,12 +185,14 @@ add_library(srtc
         include/sctp/sctp_defs.h
         include/sctp/sctp_packet_builder.h
         include/sctp/sctp_packet.h
+        include/sctp/sctp_receive_buffer.h
         include/sctp/sctp_session.h
         include/sctp/sctp_session_listener.h
         src/sctp/sctp_crc32.cpp
         src/sctp/sctp_defs.cpp
         src/sctp/sctp_packet_builder.cpp
         src/sctp/sctp_packet.cpp
+        src/sctp/sctp_receive_buffer.cpp
         src/sctp/sctp_session.cpp
 )
 

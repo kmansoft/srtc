@@ -29,6 +29,8 @@ constexpr uint8_t kChunkForwardTsn       = 0xC0;
 constexpr uint8_t kChunkReconfig         = 0x82;
 
 // DATA chunk flags (RFC 4960 §3.3.1)
+constexpr uint8_t kDataFlagE         = 0x01; // E: last (ending) fragment
+constexpr uint8_t kDataFlagB         = 0x02; // B: first (beginning) fragment
 constexpr uint8_t kDataFlagComplete  = 0x03; // B + E: single-fragment message
 constexpr uint8_t kDataFlagUnordered = 0x04; // U: unordered delivery
 

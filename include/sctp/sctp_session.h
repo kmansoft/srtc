@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sctp/sctp_packet.h"
+#include "sctp/sctp_receive_buffer.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
@@ -51,6 +52,7 @@ private:
         const uint16_t streamId;
         const bool unordered;
         DataChannelState state;
+        DataChannelReceiveBuffer receiveBuffer;
         std::weak_ptr<Task> taskT1Open;
 
         DataChannel(const std::string& label, uint16_t streamId, bool unordered)

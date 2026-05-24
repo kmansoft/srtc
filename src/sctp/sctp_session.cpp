@@ -363,28 +363,27 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
     builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
     auto packet = builder.build();
 
-    std::printf("  --> sending DATA_CHANNEL_OPEN stream=%u label=\"%s\"\n",
-                channel.streamId, channel.label.c_str());
+    std::printf("  --> sending DATA_CHANNEL_OPEN stream=%u label=\"%s\"\n", channel.streamId, channel.label.c_str());
     mListener->onSctpSendPacket(packet);
     channel.state = DataChannelState::kOpening;
 
     const auto delay = std::chrono::milliseconds(std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
-    channel.taskT1Open = mScheduler.submit(delay, __FILE__, __LINE__, [this, &channel, iteration] {
-        sendDataChannelOpen(channel, iteration + 1);
-    });
+    channel.taskT1Open = mScheduler.submit(
+        delay, __FILE__, __LINE__, [this, &channel, iteration] { sendDataChannelOpen(channel, iteration + 1); });
 }
 
 void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
 {
     // DATA chunk body: TSN(4) + streamId(2) + SSN(2) + PPID(4) + payload
-    if (chunk.size < 12) return;
+    if (chunk.size < 12)
+        return;
 
     ByteReader r(chunk.data, chunk.size);
-    const auto tsn      = r.readU32();
+    const auto tsn = r.readU32();
     const auto streamId = r.readU16();
-    const auto ssn      = r.readU16();
+    const auto ssn = r.readU16();
     (void)ssn; // needed for ordered delivery
-    const auto ppid     = r.readU32();
+    const auto ppid = r.readU32();
 
     // Advance cumulative TSN if in order
     if (tsn == mPeerCumulativeTsn + 1) {
@@ -392,32 +391,30 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     }
     sendSack();
 
-    if (ppid == kPpidString || ppid == kPpidStringEmpty) {
-        const auto text = r.readString(r.remaining());
-        std::printf("  --> DATA stream=%u string(%zu): \"%s\"\n", streamId, text.size(), text.c_str());
-        for (const auto& channel : mDataChannels) {
-            if (channel.streamId == streamId) {
-                mListener->onSctpDataChannelText(channel.label, text);
-                break;
+    if (ppid == kPpidString || ppid == kPpidStringEmpty || ppid == kPpidBinary || ppid == kPpidBinaryEmpty) {
+        for (auto& channel : mDataChannels) {
+            if (channel.streamId != streamId) {
+                continue;
             }
+            const auto messages =
+                channel.receiveBuffer.receive(ssn, chunk.flags, channel.unordered, ppid, r.current(), r.remaining());
+            for (const auto& msg : messages) {
+                if (msg.ppid == kPpidString || msg.ppid == kPpidStringEmpty) {
+                    const auto text = std::string(reinterpret_cast<const char*>(msg.data.data()), msg.data.size());
+                    std::printf("  --> DATA stream=%u string(%zu): \"%s\"\n", streamId, text.size(), text.c_str());
+                    mListener->onSctpDataChannelText(channel.label, text);
+                } else {
+                    std::printf("  --> DATA stream=%u binary(%zu bytes)\n", streamId, msg.data.size());
+                    mListener->onSctpDataChannelBinary(channel.label, msg.data);
+                }
+            }
+            break;
         }
         return;
     }
 
-    if (ppid == kPpidBinary || ppid == kPpidBinaryEmpty) {
-        const auto ptr = r.current();
-        const auto len = r.remaining();
-        std::printf("  --> DATA stream=%u binary(%zu bytes)\n", streamId, len);
-        for (const auto& channel : mDataChannels) {
-            if (channel.streamId == streamId) {
-                mListener->onSctpDataChannelBinary(channel.label, {ptr, len});
-                break;
-            }
-        }
+    if (ppid != kPpidDcep || r.remaining() < 1)
         return;
-    }
-
-    if (ppid != kPpidDcep || r.remaining() < 1) return;
 
     const auto msgType = r.readU8();
 
@@ -426,25 +423,29 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
             if (channel.streamId == streamId && channel.state == DataChannelState::kOpening) {
                 Task::cancelHelper(channel.taskT1Open);
                 channel.state = DataChannelState::kOpen;
-                std::printf("  --> DATA_CHANNEL_ACK stream=%u label=\"%s\"\n",
-                            streamId, channel.label.c_str());
+                channel.receiveBuffer.consumeSsn(ssn);
+                std::printf("  --> DATA_CHANNEL_ACK stream=%u label=\"%s\"\n", streamId, channel.label.c_str());
                 mListener->onSctpDataChannelOpen(channel.label);
                 break;
             }
         }
     } else if (msgType == kDcepMsgOpen) {
         // channelType(1) + priority(2) + reliabilityParameter(4) + labelLength(2) + protocolLength(2)
-        if (r.remaining() < 11) return;
+        if (r.remaining() < 11)
+            return;
         const auto channelType = r.readU8();
         const bool unordered = (channelType & 0x80) != 0;
         r.skip(6); // priority, reliabilityParameter
         const auto labelLen = r.readU16();
         r.skip(2); // protocolLength
-        if (labelLen > r.remaining()) return;
+        if (labelLen > r.remaining()) {
+            return;
+        }
         const auto label = r.readString(labelLen);
 
         auto& channel = mDataChannels.emplace_back(label, streamId, unordered);
         channel.state = DataChannelState::kOpen;
+        channel.receiveBuffer.consumeSsn(ssn);
 
         // Send ACK
         ByteBuffer chunkBody;
@@ -459,8 +460,8 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
         builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
         auto packet = builder.build();
 
-        std::printf("  --> sending DATA_CHANNEL_ACK stream=%u label=\"%s\" unordered=%d\n",
-                    streamId, label.c_str(), unordered);
+        std::printf(
+            "  --> sending DATA_CHANNEL_ACK stream=%u label=\"%s\" unordered=%d\n", streamId, label.c_str(), unordered);
         mListener->onSctpSendPacket(packet);
         mListener->onSctpDataChannelOpen(label);
     }

@@ -322,8 +322,16 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 		go func() {
 			ticker := time.NewTicker(time.Second)
 			defer ticker.Stop()
+			seq := 0
 			for range ticker.C {
-				if sendErr := barChannel.SendText("hello from bar"); sendErr != nil {
+				var msg string
+				if seq%5 == 0 {
+					msg = fmt.Sprintf("Message #%d from bar (large): %s", seq, generateText(2000))
+				} else {
+					msg = fmt.Sprintf("Message #%d from bar", seq)
+				}
+				seq++
+				if sendErr := barChannel.SendText(msg); sendErr != nil {
 					fmt.Printf("DataChannel 'bar' send error: %v\n", sendErr)
 					return
 				}
@@ -370,4 +378,16 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 
 	// Write Answer with Candidates as HTTP Response
 	fmt.Fprint(w, peerConnection.LocalDescription().SDP) //nolint: errcheck
+}
+
+func generateText(size int) string {
+	const phrase = "the quick brown fox jumps over the lazy dog"
+	var buf []byte
+	for len(buf) < size {
+		if len(buf) > 0 {
+			buf = append(buf, ' ')
+		}
+		buf = append(buf, phrase...)
+	}
+	return string(buf)
 }
