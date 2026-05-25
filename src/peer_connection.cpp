@@ -673,8 +673,6 @@ void PeerConnection::networkThreadWorkerFunc()
 
 void PeerConnection::setConnectionState(ConnectionState state)
 {
-    // std::printf("setConnectionState %d\n", static_cast<int>(state));
-
     {
         std::lock_guard lock1(mMutex);
 

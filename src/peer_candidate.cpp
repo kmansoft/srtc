@@ -487,8 +487,6 @@ void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
         return;
     }
 
-    std::printf("*** SCTP send (%zu bytes): %s\n", packet.size(), bin_to_hex(packet.data(), packet.size()).c_str());
-
     const auto r = SSL_write(mDtlsSsl, packet.data(), static_cast<int>(packet.size()));
     if (r <= 0) {
         const auto err = SSL_get_error(mDtlsSsl, r);

@@ -6,10 +6,13 @@
 
 #include "srtc/byte_buffer.h"
 #include "srtc/data_channel_message.h"
+#include "srtc/logging.h"
 #include "srtc/srtp_hmac_sha1.h"
 #include "srtc/util.h"
 
 #include <algorithm>
+
+#define LOG(level, ...) srtc::log(level, "PeerConnection", __VA_ARGS__)
 
 namespace
 {
@@ -102,15 +105,14 @@ void SctpSession::send(DataChannelMessage&& message)
         return;
     }
 
-    auto it = std::find_if(mDataChannels.begin(), mDataChannels.end(),
-                           [&](const DataChannel& ch) { return ch.label == message.label; });
+    auto it = std::find_if(
+        mDataChannels.begin(), mDataChannels.end(), [&](const DataChannel& ch) { return ch.label == message.label; });
     if (it == mDataChannels.end() || it->state != DataChannelState::kOpen) {
         return;
     }
 
-    const size_t payloadSize = message.kind == DataChannelMessage::Kind::kText
-                               ? message.text.size()
-                               : message.binary.size();
+    const size_t payloadSize =
+        message.kind == DataChannelMessage::Kind::kText ? message.text.size() : message.binary.size();
 
     if (payloadSize > 0 && mFlightSize + payloadSize > mPeerRwnd) {
         mPendingSend.emplace_back(std::move(message));
@@ -172,8 +174,10 @@ void SctpSession::sendMessageNow(DataChannel& channel, DataChannelMessage&& mess
             const size_t fragSize = std::min(payloadSize - offset, kMaxFragmentPayload);
             const bool isLast = (offset + fragSize >= payloadSize);
             uint8_t flags = unorderedFlag;
-            if (isFirst) flags |= kDataFlagB;
-            if (isLast)  flags |= kDataFlagE;
+            if (isFirst)
+                flags |= kDataFlagB;
+            if (isLast)
+                flags |= kDataFlagE;
             sendFragment(flags, payload + offset, fragSize);
             offset += fragSize;
             isFirst = false;
@@ -190,16 +194,14 @@ void SctpSession::transmitPending()
     while (!mPendingSend.empty()) {
         auto& msg = mPendingSend.front();
 
-        auto it = std::find_if(mDataChannels.begin(), mDataChannels.end(),
-                               [&](const DataChannel& ch) { return ch.label == msg.label; });
+        auto it = std::find_if(
+            mDataChannels.begin(), mDataChannels.end(), [&](const DataChannel& ch) { return ch.label == msg.label; });
         if (it == mDataChannels.end() || it->state != DataChannelState::kOpen) {
             mPendingSend.pop_front();
             continue;
         }
 
-        const size_t payloadSize = msg.kind == DataChannelMessage::Kind::kText
-                                   ? msg.text.size()
-                                   : msg.binary.size();
+        const size_t payloadSize = msg.kind == DataChannelMessage::Kind::kText ? msg.text.size() : msg.binary.size();
         if (payloadSize > 0 && mFlightSize + payloadSize > mPeerRwnd)
             break;
 
@@ -211,7 +213,7 @@ void SctpSession::transmitPending()
 void SctpSession::sendInit(unsigned iteration)
 {
     if (iteration > kMaxInitRetransmits) {
-        std::printf("*** SCTP INIT: max retransmits reached, giving up\n");
+        LOG(SRTC_LOG_E, "SCTP INIT: max retransmits reached, giving up");
         return;
     }
 
@@ -239,7 +241,7 @@ void SctpSession::sendInit(unsigned iteration)
 void SctpSession::sendCookieEcho(unsigned iteration)
 {
     if (iteration > kMaxInitRetransmits) {
-        std::printf("*** SCTP COOKIE_ECHO: max retransmits reached, giving up\n");
+        LOG(SRTC_LOG_E, "SCTP COOKIE_ECHO: max retransmits reached, giving up");
         return;
     }
 
@@ -327,27 +329,27 @@ void SctpSession::onReceiveInit(const SctpPacket::Chunk& chunk)
     builder.addChunk(kChunkInitAck, 0, ackBody);
     auto packet = builder.build();
 
-    std::printf("  --> sending INIT_ACK (peer tag=0x%08X)\n", peerInitiateTag);
     mListener->onSctpSendPacket(packet);
 }
 
 void SctpSession::onReceiveCookieEcho(const SctpPacket::Chunk& chunk)
 {
     if (chunk.size < kCookieTotalSize) {
-        std::printf("  --> COOKIE_ECHO too small (%zu bytes)\n", chunk.size);
+        LOG(SRTC_LOG_W, "COOKIE_ECHO too small (%zu bytes)", chunk.size);
         return;
     }
 
     // Verify HMAC-SHA1 over the first kCookieDataSize bytes
     uint8_t expectedHmac[kCookieHmacSize];
     HmacSha1 hmacCtx;
-    if (!hmacCtx.reset(mHmacKey.data(), mHmacKey.size()))
+    if (!hmacCtx.reset(mHmacKey.data(), mHmacKey.size())) {
         return;
+    }
     hmacCtx.update(chunk.data, kCookieDataSize);
     hmacCtx.final(expectedHmac);
 
     if (!constTimeEqual(chunk.data + kCookieDataSize, expectedHmac, kCookieHmacSize)) {
-        std::printf("  --> COOKIE_ECHO HMAC mismatch, discarding\n");
+        LOG(SRTC_LOG_W, "COOKIE_ECHO HMAC mismatch, discarding");
         return;
     }
 
@@ -357,7 +359,7 @@ void SctpSession::onReceiveCookieEcho(const SctpPacket::Chunk& chunk)
     const auto lifetime = r.readU32();
     const auto nowSecs = getSystemTimeSecs();
     if (nowSecs > createdAt + lifetime) {
-        std::printf("  --> COOKIE_ECHO expired\n");
+        LOG(SRTC_LOG_W, "COOKIE_ECHO expired");
         return;
     }
 
@@ -370,7 +372,6 @@ void SctpSession::onReceiveCookieEcho(const SctpPacket::Chunk& chunk)
     builder.addChunk(kChunkCookieAck, 0, nullptr, 0);
     auto packet = builder.build();
 
-    std::printf("  --> sending COOKIE_ACK (peer tag=0x%08X)\n", peerInitiateTag);
     mListener->onSctpSendPacket(packet);
 }
 
@@ -378,7 +379,7 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 {
     const auto packet = SctpPacket::parse(buf.data(), buf.size());
     if (!packet) {
-        std::printf("*** SCTP recv: parse failed (%zu bytes)\n", buf.size());
+        LOG(SRTC_LOG_W, "recv: parse failed (%zu bytes)", buf.size());
         return;
     }
 
@@ -386,91 +387,63 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
     const bool isInit = !packet->chunks().empty() && packet->chunks()[0].type == kChunkInit;
     const uint32_t expectedTag = isInit ? 0 : mInitiateTag;
     if (packet->verificationTag() != expectedTag) {
-        std::printf("*** SCTP recv: wrong verification tag 0x%08X (expected 0x%08X), discarding\n",
-                    packet->verificationTag(),
-                    expectedTag);
+        LOG(SRTC_LOG_W,
+            "recv: wrong verification tag 0x%08X (expected 0x%08X), discarding",
+            packet->verificationTag(),
+            expectedTag);
         return;
     }
 
-    std::printf("*** SCTP recv (%zu bytes): src=%u dst=%u verTag=0x%08X\n",
-                buf.size(),
-                packet->srcPort(),
-                packet->dstPort(),
-                packet->verificationTag());
-
     for (const auto& chunk : packet->chunks()) {
-        std::printf(
-            "  %s (0x%02X) flags=0x%02X size=%zu\n", formatChunkName(chunk.type), chunk.type, chunk.flags, chunk.size);
-
-        if (chunk.type == kChunkData) {
+        switch (chunk.type) {
+        case kChunkData:
             onReceiveDataChunk(chunk);
-        }
-
-        if (chunk.type == kChunkSack) {
+            break;
+        case kChunkSack:
             onReceiveSack(chunk);
-        }
-
-        if (chunk.type == kChunkReconfig) {
+            break;
+        case kChunkReconfig:
             onReceiveReconfig(chunk);
-        }
-
-        if (chunk.type == kChunkInit) {
+            break;
+        case kChunkInit:
             onReceiveInit(chunk);
-        }
-
-        if (chunk.type == kChunkCookieEcho) {
+            break;
+        case kChunkCookieEcho:
             onReceiveCookieEcho(chunk);
-        }
+            break;
+        case kChunkCookieAck:
+            if (mState == State::CookieEchoed) {
+                Task::cancelHelper(mTaskT1Cookie);
+                mState = State::Established;
+                onAssociationEstablished();
+            }
+            break;
+        case kChunkInitAck:
+            if (mState == State::CookieWait && chunk.size >= 16) {
+                ByteReader r(chunk.data, chunk.size);
+                mPeerTag = r.readU32();
+                mPeerRwnd = r.readU32();
+                mPeerOutStreams = r.readU16();
+                mPeerInStreams = r.readU16();
+                mPeerCumulativeTsn = r.readU32() - 1; // peerInitialTsn - 1
 
-        if (chunk.type == kChunkCookieAck && mState == State::CookieEchoed) {
-            Task::cancelHelper(mTaskT1Cookie);
-            mState = State::Established;
-            std::printf("  --> SCTP established\n");
-            onAssociationEstablished();
-        }
+                for (const auto& param : chunk.parseParams(16)) {
+                    if (param.type == kParamStateCookie) {
+                        Task::cancelHelper(mTaskT1Init);
 
-        if (chunk.type == kChunkInitAck && mState == State::CookieWait && chunk.size >= 16) {
-            ByteReader r(chunk.data, chunk.size);
-            mPeerTag = r.readU32();
-            mPeerRwnd = r.readU32();
-            mPeerOutStreams = r.readU16();
-            mPeerInStreams = r.readU16();
-            mPeerCumulativeTsn = r.readU32() - 1; // peerInitialTsn - 1
+                        SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
+                        builder.addChunk(kChunkCookieEcho, 0, param.data, param.size);
+                        mCookieEchoPacket = builder.build();
 
-            for (const auto& param : chunk.parseParams(16)) {
-                if (param.type == kParamStateCookie) {
-                    Task::cancelHelper(mTaskT1Init);
-
-                    SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
-                    builder.addChunk(kChunkCookieEcho, 0, param.data, param.size);
-                    mCookieEchoPacket = builder.build();
-
-                    mState = State::CookieEchoed;
-                    sendCookieEcho(0);
-                    break;
+                        mState = State::CookieEchoed;
+                        sendCookieEcho(0);
+                        break;
+                    }
                 }
             }
-        }
-
-        // Dump fixed fields and parameters for INIT and INIT ACK
-        if ((chunk.type == kChunkInit || chunk.type == kChunkInitAck) && chunk.size >= 16) {
-            ByteReader r(chunk.data, chunk.size);
-            const auto initiateTag = r.readU32();
-            const auto arwnd = r.readU32();
-            const auto outStreams = r.readU16();
-            const auto inStreams = r.readU16();
-            const auto initialTsn = r.readU32();
-
-            std::printf("    initiateTag=0x%08X a_rwnd=%u streams=%u/%u tsn=0x%08X\n",
-                        initiateTag,
-                        arwnd,
-                        outStreams,
-                        inStreams,
-                        initialTsn);
-
-            for (const auto& param : chunk.parseParams(16)) {
-                std::printf("    param %s (0x%04X): %zu bytes\n", formatParamName(param.type), param.type, param.size);
-            }
+            break;
+        default:
+            break;
         }
     }
 }
@@ -485,8 +458,7 @@ void SctpSession::onAssociationEstablished()
 void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
 {
     if (iteration > kMaxInitRetransmits) {
-        std::printf("*** SCTP DATA_CHANNEL_OPEN: max retransmits reached for \"%s\", giving up\n",
-                    channel.label.c_str());
+        LOG(SRTC_LOG_W, "DATA_CHANNEL_OPEN: max retransmits reached for \"%s\", giving up", channel.label.c_str());
         return;
     }
 
@@ -512,7 +484,6 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
     builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
     auto packet = builder.build();
 
-    std::printf("  --> sending DATA_CHANNEL_OPEN stream=%u label=\"%s\"\n", channel.streamId, channel.label.c_str());
     mListener->onSctpSendPacket(packet);
     channel.state = DataChannelState::kOpening;
 
@@ -569,10 +540,8 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
             for (const auto& msg : messages) {
                 if (msg.ppid == kPpidString || msg.ppid == kPpidStringEmpty) {
                     const auto text = std::string(reinterpret_cast<const char*>(msg.data.data()), msg.data.size());
-                    std::printf("  --> DATA stream=%u string(%zu): \"%s\"\n", streamId, text.size(), text.c_str());
                     mListener->onSctpDataChannelText(channel.label, text);
                 } else {
-                    std::printf("  --> DATA stream=%u binary(%zu bytes)\n", streamId, msg.data.size());
                     mListener->onSctpDataChannelBinary(channel.label, msg.data);
                 }
             }
@@ -592,7 +561,6 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
                 Task::cancelHelper(channel.taskT1Open);
                 channel.state = DataChannelState::kOpen;
                 channel.receiveBuffer.consumeSsn(ssn);
-                std::printf("  --> DATA_CHANNEL_ACK stream=%u label=\"%s\"\n", streamId, channel.label.c_str());
                 mListener->onSctpDataChannelOpen(channel.label);
                 break;
             }
@@ -628,8 +596,6 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
         builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
         auto packet = builder.build();
 
-        std::printf(
-            "  --> sending DATA_CHANNEL_ACK stream=%u label=\"%s\" unordered=%d\n", streamId, label.c_str(), unordered);
         mListener->onSctpSendPacket(packet);
         mListener->onSctpDataChannelOpen(label);
     }
@@ -659,7 +625,6 @@ void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
         for (const auto streamId : streamIds) {
             for (auto it = mDataChannels.begin(); it != mDataChannels.end(); ++it) {
                 if (it->streamId == streamId) {
-                    std::printf("  --> DATA_CHANNEL_CLOSE stream=%u label=\"%s\"\n", streamId, it->label.c_str());
                     Task::cancelHelper(it->taskT1Open);
                     mListener->onSctpDataChannelClose(it->label);
                     mDataChannels.erase(it);
@@ -762,8 +727,7 @@ void SctpSession::retransmitOldest()
 void SctpSession::startT3Rtx()
 {
     Task::cancelHelper(mTaskT3Rtx);
-    mTaskT3Rtx = mScheduler.submit(
-        retransmitDelay(0), __FILE__, __LINE__, [this] { retransmitOldest(); });
+    mTaskT3Rtx = mScheduler.submit(retransmitDelay(0), __FILE__, __LINE__, [this] { retransmitOldest(); });
 }
 
 void SctpSession::stopT3Rtx()
