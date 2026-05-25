@@ -29,7 +29,7 @@ class Packetizer;
 class Scheduler;
 class PeerCandidate;
 class EventLoop;
-class DataChannelMessage;
+struct DataChannelMessage;
 
 class PeerConnection final : PeerCandidateListener
 {
