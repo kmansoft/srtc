@@ -102,8 +102,9 @@ public:
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
     // Data channels
-    void sendDataChannelText(const std::string& label, std::string&& data);
-    void sendDataChannelBinary(const std::string& label, ByteBuffer&& data);
+    [[nodiscard]] uint32_t getDataChannelMaxMessageSize() const;
+    [[nodiscard]] Error sendDataChannelText(const std::string& label, std::string&& data);
+    [[nodiscard]] Error sendDataChannelBinary(const std::string& label, ByteBuffer&& data);
 
     struct DataChannelListener
     {
@@ -127,6 +128,8 @@ private:
 
     std::shared_ptr<SdpOffer> mSdpOffer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<SdpAnswer> mSdpAnswer SRTC_GUARDED_BY(mMutex);
+    bool mDataChannelsNegotiated = false;
+    uint32_t mDataChannelMaxMessageSize = 0;
 
     std::shared_ptr<Track> mVideoSingleTrack;
     std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList;

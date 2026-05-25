@@ -124,7 +124,9 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 } else {
                     msg = "Frame " + std::to_string(frame_count);
                 }
-                peerConnection->sendDataChannelText("foo", std::move(msg));
+                if (const auto err = peerConnection->sendDataChannelText("foo", std::move(msg)); err.isError()) {
+                    std::cout << "*** Data channel send error: " << err.message << std::endl;
+                }
                 msg_seq += 1;
             }
 

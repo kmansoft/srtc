@@ -57,6 +57,7 @@ public:
                   const std::vector<std::shared_ptr<Track>>& trackList,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
+                  uint32_t dataChannelMaxMessageSize,
                   const std::shared_ptr<RealScheduler>& scheduler,
                   const Host& host,
                   const std::shared_ptr<EventLoop>& eventLoop,

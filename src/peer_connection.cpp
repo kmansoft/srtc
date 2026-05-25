@@ -200,6 +200,12 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
             return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
         }
 
+        mDataChannelsNegotiated = mSdpOffer->hasDataChannel() && mSdpAnswer->hasDataChannel();
+        if (mDataChannelsNegotiated) {
+            mDataChannelMaxMessageSize =
+                std::min(mSdpOffer->getSctpMaxMessageSize(), mSdpAnswer->getMaxMessageSize());
+        }
+
         if (mDirection == Direction::Publish) {
             // Packetizers
             if (mVideoSingleTrack) {
@@ -495,24 +501,43 @@ void PeerConnection::setSubscribeSenderReportsListener(const SubscribeSenderRepo
     mSubscribeSenderReportsListener = listener;
 }
 
-void PeerConnection::sendDataChannelText(const std::string& label, std::string&& data)
+uint32_t PeerConnection::getDataChannelMaxMessageSize() const
 {
-    std::lock_guard lock(mMutex);
-
-    auto message = DataChannelMessage::makeText(label, std::move(data));
-    mDataSendQueue.emplace_back(std::move(message));
-
-    mEventLoop->interrupt();
+    return mDataChannelMaxMessageSize;
 }
 
-void PeerConnection::sendDataChannelBinary(const std::string& label, ByteBuffer&& data)
+Error PeerConnection::sendDataChannelText(const std::string& label, std::string&& data)
 {
     std::lock_guard lock(mMutex);
 
-    auto message = DataChannelMessage::makeBinary(label, std::move(data));
-    mDataSendQueue.emplace_back(std::move(message));
+    if (!mDataChannelsNegotiated) {
+        return { Error::Code::InvalidData, "Data channels were not negotiated" };
+    }
+    if (mDataChannelMaxMessageSize > 0 && data.size() > mDataChannelMaxMessageSize) {
+        return { Error::Code::InvalidData, "Message size exceeds peer maximum" };
+    }
 
+    mDataSendQueue.emplace_back(DataChannelMessage::makeText(label, std::move(data)));
     mEventLoop->interrupt();
+
+    return Error::OK;
+}
+
+Error PeerConnection::sendDataChannelBinary(const std::string& label, ByteBuffer&& data)
+{
+    std::lock_guard lock(mMutex);
+
+    if (!mDataChannelsNegotiated) {
+        return { Error::Code::InvalidData, "Data channels were not negotiated" };
+    }
+    if (mDataChannelMaxMessageSize > 0 && data.size() > mDataChannelMaxMessageSize) {
+        return { Error::Code::InvalidData, "Message size exceeds peer maximum" };
+    }
+
+    mDataSendQueue.emplace_back(DataChannelMessage::makeBinary(label, std::move(data)));
+    mEventLoop->interrupt();
+
+    return Error::OK;
 }
 
 PeerConnection::DataChannelListener::~DataChannelListener() = default;
@@ -734,6 +759,7 @@ void PeerConnection::startConnecting()
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
+                                                                   mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
                                                                    host,
                                                                    mEventLoop,
@@ -747,6 +773,7 @@ void PeerConnection::startConnecting()
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
+                                                                   mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
                                                                    host,
                                                                    mEventLoop,

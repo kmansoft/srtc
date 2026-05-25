@@ -218,6 +218,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::vector<std::shared_ptr<Track>>& trackList,
                              const std::shared_ptr<SdpOffer>& offer,
                              const std::shared_ptr<SdpAnswer>& answer,
+                             const uint32_t dataChannelMaxMessageSize,
                              const std::shared_ptr<RealScheduler>& scheduler,
                              const Host& host,
                              const std::shared_ptr<EventLoop>& eventLoop,
@@ -269,13 +270,12 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     initOpenSSL();
 
     if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
-        const auto maxMessageSize = std::min(mOffer->getSctpMaxMessageSize(), mAnswer->getMaxMessageSize());
         SctpSessionListener* l = this;
         mSctpSession = std::make_shared<sctp::SctpSession>(scheduler,
                                                            l,
                                                            mOffer->getSctpPort(),
                                                            mAnswer->getSctpPort(),
-                                                           maxMessageSize,
+                                                           dataChannelMaxMessageSize,
                                                            mAnswer->isSetupActive(),
                                                            mOffer->getConfig().data_channels);
     }
