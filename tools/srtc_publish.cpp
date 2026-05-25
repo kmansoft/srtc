@@ -20,6 +20,23 @@
 #include <unistd.h>
 #endif
 
+class PublishDataChannelListener : public srtc::PeerConnection::DataChannelListener
+{
+public:
+    void onDataChannelOpened(const std::string& label) override {
+        std::cout << "*** Data channel opened: \"" << label << "\"" << std::endl;
+    }
+    void onDataChannelClosed(const std::string& label) override {
+        std::cout << "*** Data channel closed: \"" << label << "\"" << std::endl;
+    }
+    void onDataChannelReceivedText(const std::string& label, const std::string& data) override {
+        std::cout << "*** Data channel text \"" << label << "\": \"" << data << "\"" << std::endl;
+    }
+    void onDataChannelReceivedBinary(const std::string& label, const srtc::ByteBuffer& data) override {
+        std::cout << "*** Data channel binary \"" << label << "\": " << data.size() << " bytes" << std::endl;
+    }
+};
+
 // Program options
 
 static std::string gInputFile = "sintel.h264";
@@ -247,6 +264,11 @@ int main(int argc, char* argv[])
                   << std::setprecision(3) << stats.packets_lost_percent << "% packet loss, " << std::setprecision(3)
                   << stats.rtt_ms << " ms rtt" << std::endl;
     });
+
+    // Data channel listener
+    if (gDataChannels) {
+        peerConnection->setDataChannelListener(std::make_shared<PublishDataChannelListener>());
+    }
 
     // Offer
     PubOfferConfig offer_config = {};

@@ -22,7 +22,9 @@ std::optional<SctpPacket> SctpPacket::parse(const uint8_t* data, size_t size)
     uint32_t crc = crc32c_update(0xFFFFFFFFu, data, 8);
     crc = crc32c_update(crc, zeros, 4);
     crc = crc32c_update(crc, data + 12, size - 12);
-    if (crc32c_finalize(crc) != storedCrc) {
+
+    uint32_t finalized = crc32c_finalize(crc);
+    if (finalized != storedCrc) {
         return std::nullopt;
     }
 
