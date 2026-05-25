@@ -11,6 +11,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Audo codec: Opus.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
+- Data channels (both sending and receiving).
 - Support for IPv4 and IPv6.
 - Tested with Pion and Amazon IVS (Interactive Video Service)
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
