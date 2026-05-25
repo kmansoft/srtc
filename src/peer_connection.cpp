@@ -601,7 +601,7 @@ void PeerConnection::networkThreadWorkerFunc()
         for (const auto udata : udataList) {
             if (udata) {
                 // Read from socket
-                const auto ptr = reinterpret_cast<PeerCandidate*>(udata);
+                const auto ptr = static_cast<PeerCandidate*>(udata);
                 ptr->receiveFromSocket();
             }
         }
