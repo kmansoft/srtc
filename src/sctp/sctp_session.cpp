@@ -114,6 +114,13 @@ void SctpSession::send(DataChannelMessage&& message)
     const size_t payloadSize =
         message.kind == DataChannelMessage::Kind::kText ? message.text.size() : message.binary.size();
 
+    if (mMaxMessageSize > 0 && payloadSize > mMaxMessageSize) {
+        LOG(SRTC_LOG_W, "send: message size %zu exceeds peer max %" PRIu32 ", dropping",
+                    payloadSize,
+                    mMaxMessageSize);
+        return;
+    }
+
     if (payloadSize > 0 && mFlightSize + payloadSize > mPeerRwnd) {
         mPendingSend.emplace_back(std::move(message));
         return;
