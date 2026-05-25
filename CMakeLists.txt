@@ -57,6 +57,7 @@ add_library(srtc
         include/srtc/codec_h264.h
         include/srtc/codec_h265.h
         include/srtc/codec_vp9.h
+        include/srtc/data_channel_message.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
@@ -118,6 +119,7 @@ add_library(srtc
         src/codec_h264.cpp
         src/codec_h265.cpp
         src/codec_vp9.cpp
+        src/data_channel_message.cpp
         src/depacketizer.cpp
         src/depacketizer_av1.cpp
         src/depacketizer_h264.cpp

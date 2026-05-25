@@ -5,6 +5,7 @@
 #include "sctp/sctp_session_listener.h"
 
 #include "srtc/byte_buffer.h"
+#include "srtc/data_channel_message.h"
 #include "srtc/srtp_hmac_sha1.h"
 #include "srtc/util.h"
 
@@ -69,6 +70,88 @@ SctpSession::~SctpSession()
 void SctpSession::start()
 {
     sendInit(0);
+}
+
+bool SctpSession::isChannelOpen(const std::string& label) const
+{
+    return std::any_of(mDataChannels.begin(), mDataChannels.end(), [&label](const DataChannel& channel) {
+        return channel.label == label && channel.state == DataChannelState::kOpen;
+    });
+}
+
+void SctpSession::send(DataChannelMessage&& message)
+{
+    if (mState != State::Established)
+        return;
+
+    auto it = std::find_if(mDataChannels.begin(), mDataChannels.end(),
+                           [&](const DataChannel& ch) { return ch.label == message.label; });
+    if (it == mDataChannels.end() || it->state != DataChannelState::kOpen) {
+        return;
+    }
+
+    DataChannel& channel = *it;
+
+    std::string textStorage;
+    const uint8_t* payload;
+    size_t payloadSize;
+    uint32_t ppid;
+
+    if (message.kind == DataChannelMessage::Kind::kText) {
+        textStorage = std::move(message.text);
+        payload = reinterpret_cast<const uint8_t*>(textStorage.data());
+        payloadSize = textStorage.size();
+        ppid = payloadSize == 0 ? kPpidStringEmpty : kPpidString;
+    } else {
+        payload = message.binary.data();
+        payloadSize = message.binary.size();
+        ppid = payloadSize == 0 ? kPpidBinaryEmpty : kPpidBinary;
+    }
+
+    const uint16_t ssn = channel.sendSsn++;
+    const uint8_t unorderedFlag = channel.unordered ? kDataFlagUnordered : 0;
+
+    constexpr size_t kMaxFragmentPayload = 1100;
+
+    if (payloadSize <= kMaxFragmentPayload) {
+        ByteBuffer chunkBody;
+        ByteWriter cw(chunkBody);
+        cw.writeU32(mCurrentTsn++);
+        cw.writeU16(channel.streamId);
+        cw.writeU16(ssn);
+        cw.writeU32(ppid);
+        cw.write(payload, payloadSize);
+
+        SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
+        builder.addChunk(kChunkData, static_cast<uint8_t>(kDataFlagComplete | unorderedFlag), chunkBody);
+        mListener->onSctpSendPacket(builder.build());
+    } else {
+        size_t offset = 0;
+        bool isFirst = true;
+        while (offset < payloadSize) {
+            const size_t fragSize = std::min(payloadSize - offset, kMaxFragmentPayload);
+            const bool isLast = (offset + fragSize >= payloadSize);
+
+            uint8_t flags = unorderedFlag;
+            if (isFirst) flags |= kDataFlagB;
+            if (isLast)  flags |= kDataFlagE;
+
+            ByteBuffer chunkBody;
+            ByteWriter cw(chunkBody);
+            cw.writeU32(mCurrentTsn++);
+            cw.writeU16(channel.streamId);
+            cw.writeU16(ssn);
+            cw.writeU32(ppid);
+            cw.write(payload + offset, fragSize);
+
+            SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
+            builder.addChunk(kChunkData, flags, chunkBody);
+            mListener->onSctpSendPacket(builder.build());
+
+            offset += fragSize;
+            isFirst = false;
+        }
+    }
 }
 
 void SctpSession::sendInit(unsigned iteration)
@@ -394,8 +477,7 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     const auto ppid = r.readU32();
 
     // Duplicate detection: TSN already covered by cumulative or seen out-of-order
-    const bool isDuplicate = static_cast<int32_t>(tsn - mPeerCumulativeTsn) <= 0
-                          || mPeerOutOfOrderTsns.count(tsn) > 0;
+    const bool isDuplicate = static_cast<int32_t>(tsn - mPeerCumulativeTsn) <= 0 || mPeerOutOfOrderTsns.count(tsn) > 0;
     if (isDuplicate) {
         sendSack();
         return;
@@ -406,7 +488,8 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
         // Drain any now-consecutive TSNs from the out-of-order set
         while (true) {
             auto it = mPeerOutOfOrderTsns.find(mPeerCumulativeTsn + 1);
-            if (it == mPeerOutOfOrderTsns.end()) break;
+            if (it == mPeerOutOfOrderTsns.end())
+                break;
             mPeerCumulativeTsn++;
             mPeerOutOfOrderTsns.erase(it);
         }
@@ -498,7 +581,8 @@ void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
 {
     // RECONFIG chunk body is a sequence of parameters starting at offset 0
     for (const auto& param : chunk.parseParams(0)) {
-        if (param.type != kParamOutgoingSsnReset || param.size < 12) continue;
+        if (param.type != kParamOutgoingSsnReset || param.size < 12)
+            continue;
 
         // Outgoing SSN Reset Request layout (RFC 6525 §4.1):
         //   requestSeqNum(4) + responseSeqNum(4) + lastTsn(4) + streamIds(2 each)
@@ -517,8 +601,7 @@ void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
         for (const auto streamId : streamIds) {
             for (auto it = mDataChannels.begin(); it != mDataChannels.end(); ++it) {
                 if (it->streamId == streamId) {
-                    std::printf("  --> DATA_CHANNEL_CLOSE stream=%u label=\"%s\"\n",
-                                streamId, it->label.c_str());
+                    std::printf("  --> DATA_CHANNEL_CLOSE stream=%u label=\"%s\"\n", streamId, it->label.c_str());
                     Task::cancelHelper(it->taskT1Open);
                     mListener->onSctpDataChannelClose(it->label);
                     mDataChannels.erase(it);
@@ -547,7 +630,9 @@ void SctpSession::sendSack()
     // Build gap ack blocks from out-of-order TSNs.
     // Offsets are relative to mPeerCumulativeTsn; sort by offset to handle
     // TSN wraparound correctly (uint32_t distance, not raw value order).
-    struct GapBlock { uint16_t start, end; };
+    struct GapBlock {
+        uint16_t start, end;
+    };
     std::vector<GapBlock> gapBlocks;
 
     if (!mPeerOutOfOrderTsns.empty()) {

@@ -312,6 +312,13 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 		d.OnClose(func() {
 			fmt.Printf("DataChannel '%s' closed\n", d.Label())
 		})
+		d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			if msg.IsString {
+				fmt.Printf("DataChannel '%s' received text: %s\n", d.Label(), string(msg.Data))
+			} else {
+				fmt.Printf("DataChannel '%s' received binary: %d bytes\n", d.Label(), len(msg.Data))
+			}
+		})
 	})
 
 	barChannel, err := peerConnection.CreateDataChannel("bar", nil)

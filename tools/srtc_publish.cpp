@@ -104,6 +104,10 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 std::cout << "Played " << std::setw(5) << frame_count << " video frames" << std::endl;
             }
 
+            if (gDataChannels && frame_count > 0 && (frame_count % 25) == 0) {
+                peerConnection->sendDataChannelText("foo", "Frame " + std::to_string(frame_count));
+            }
+
             if (gIsConnectionFailed) {
                 std::cout << "*** Connection failed, stopping video playback" << std::endl;
                 return;

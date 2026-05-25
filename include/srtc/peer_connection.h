@@ -29,6 +29,7 @@ class Packetizer;
 class Scheduler;
 class PeerCandidate;
 class EventLoop;
+class DataChannelMessage;
 
 class PeerConnection final : PeerCandidateListener
 {
@@ -101,6 +102,9 @@ public:
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
     // Data channels
+    void sendDataChannelText(const std::string& label, std::string&& data);
+    void sendDataChannelBinary(const std::string& label, ByteBuffer&& data);
+
     struct DataChannelListener
     {
         virtual ~DataChannelListener();
@@ -169,6 +173,7 @@ private:
     };
 
     std::list<FrameToSend> mFrameSendQueue SRTC_GUARDED_BY(mMutex);
+    std::list<DataChannelMessage> mDataSendQueue SRTC_GUARDED_BY(mMutex);
 
     // Simulcast layer list
     std::vector<SimulcastLayer> mSendSimulcastLayerList;

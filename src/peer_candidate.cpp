@@ -499,6 +499,17 @@ void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
 void PeerCandidate::onSctpDataChannelOpen(const std::string& label)
 {
     mListener->onSctpDataChannelOpen(label);
+
+    // Flush messages queued before the channel was open
+    auto it = mDataSendQueue.begin();
+    while (it != mDataSendQueue.end()) {
+        if (it->label == label) {
+            mSctpSession->send(std::move(*it));
+            it = mDataSendQueue.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void PeerCandidate::onSctpDataChannelText(const std::string& label, const std::string& text)
@@ -514,6 +525,23 @@ void PeerCandidate::onSctpDataChannelBinary(const std::string& label, const Byte
 void PeerCandidate::onSctpDataChannelClose(const std::string& label)
 {
     mListener->onSctpDataChannelClosed(label);
+}
+
+void PeerCandidate::sendDataChannelMessage(DataChannelMessage&& message)
+{
+    if (mSctpSession) {
+        if (mSctpSession->isChannelOpen(message.label)) {
+            mSctpSession->send(std::move(message));
+        } else {
+            mDataSendQueue.emplace_back(std::move(message));
+
+            while (mDataSendQueue.size() > 64) {
+                mDataSendQueue.pop_front();
+            }
+        }
+    } else {
+        LOG(SRTC_LOG_E, "Trying to send a data channel message but there is no SCTP session negotiated");
+    }
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const

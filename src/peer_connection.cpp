@@ -1,4 +1,5 @@
 #include "srtc/peer_connection.h"
+#include "srtc/data_channel_message.h"
 #include "srtc/depacketizer.h"
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
@@ -6,18 +7,12 @@
 #include "srtc/logging.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
-#include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
-#include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
-#include "srtc/send_rtp_history.h"
 #include "srtc/srtc.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/x509_certificate.h"
-
-#include "srtc/codec_av1.h"
 #include "stunmessage.h"
 
 #include <algorithm>
@@ -500,6 +495,26 @@ void PeerConnection::setSubscribeSenderReportsListener(const SubscribeSenderRepo
     mSubscribeSenderReportsListener = listener;
 }
 
+void PeerConnection::sendDataChannelText(const std::string& label, std::string&& data)
+{
+    std::lock_guard lock(mMutex);
+
+    auto message = DataChannelMessage::makeText(label, std::move(data));
+    mDataSendQueue.emplace_back(std::move(message));
+
+    mEventLoop->interrupt();
+}
+
+void PeerConnection::sendDataChannelBinary(const std::string& label, ByteBuffer&& data)
+{
+    std::lock_guard lock(mMutex);
+
+    auto message = DataChannelMessage::makeBinary(label, std::move(data));
+    mDataSendQueue.emplace_back(std::move(message));
+
+    mEventLoop->interrupt();
+}
+
 PeerConnection::DataChannelListener::~DataChannelListener() = default;
 
 void PeerConnection::setDataChannelListener(const std::shared_ptr<DataChannelListener>& listener)
@@ -564,6 +579,7 @@ void PeerConnection::networkThreadWorkerFunc()
         mEventLoop->wait(udataList, timeout);
 
         std::list<FrameToSend> frameSendQueue;
+        std::list<DataChannelMessage> dataSendQueue;
 
         {
             std::lock_guard lock(mMutex);
@@ -575,6 +591,10 @@ void PeerConnection::networkThreadWorkerFunc()
             }
 
             frameSendQueue = std::move(mFrameSendQueue);
+
+            if (mSelectedCandidate) {
+                dataSendQueue = std::move(mDataSendQueue);
+            }
         }
 
         // Read data from the network
@@ -608,6 +628,12 @@ void PeerConnection::networkThreadWorkerFunc()
             if (mSelectedCandidate) {
                 mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
                     item.pts_usec, item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
+            }
+        }
+
+         if (mSelectedCandidate) {
+            for (auto& item : dataSendQueue) {
+                mSelectedCandidate->sendDataChannelMessage(std::move(item));
             }
         }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "data_channel_message.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/random_generator.h"
@@ -22,6 +23,8 @@ struct bio_method_st;
 
 namespace srtc
 {
+
+struct DataChannelMessage;
 
 class Error;
 class PeerCandidate;
@@ -90,6 +93,9 @@ public:
     void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
     void onSctpDataChannelClose(const std::string& label) override;
 
+    // Sending data channel messages
+    void sendDataChannelMessage(DataChannelMessage&& message);
+
 private:
     void startConnecting();
     void addSendRaw(ByteBuffer&& buf);
@@ -152,6 +158,7 @@ private:
 
     std::list<ByteBuffer> mRawSendQueue;
     std::list<FrameToSend> mFrameSendQueue;
+    std::list<DataChannelMessage> mDataSendQueue;
 
     bool mSentUseCandidate;
     bool mIsConnected;

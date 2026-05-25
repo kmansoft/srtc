@@ -13,6 +13,13 @@
 #include <string>
 #include <vector>
 
+namespace srtc
+{
+
+struct DataChannelMessage;
+
+}
+
 namespace srtc::sctp
 {
 
@@ -32,6 +39,8 @@ public:
     ~SctpSession();
 
     void start();
+    bool isChannelOpen(const std::string& label) const;
+    void send(DataChannelMessage&& message);
 
     void onReceiveData(const ByteBuffer& data);
 
@@ -54,6 +63,7 @@ private:
         const bool unordered;
         DataChannelState state;
         DataChannelReceiveBuffer receiveBuffer;
+        uint16_t sendSsn = 0;
         std::weak_ptr<Task> taskT1Open;
 
         DataChannel(const std::string& label, uint16_t streamId, bool unordered)
