@@ -73,9 +73,22 @@ const char* connectionStateToString(const srtc::PeerConnection::ConnectionState&
     }
 }
 
+std::string generateText(size_t size)
+{
+    const std::string phrase = "the quick brown fox jumps over the lazy dog";
+    std::string result;
+    result.reserve(size);
+    while (result.size() < size) {
+        if (!result.empty()) result += ' ';
+        result += phrase;
+    }
+    return result;
+}
+
 void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, const LoadedMedia& media)
 {
     std::optional<int64_t> pts_usec;
+    uint32_t msg_seq = 0;
 
     while (true) {
         uint32_t frame_count = 0;
@@ -105,7 +118,14 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
             }
 
             if (gDataChannels && frame_count > 0 && (frame_count % 25) == 0) {
-                peerConnection->sendDataChannelText("foo", "Frame " + std::to_string(frame_count));
+                std::string msg;
+                if (msg_seq % 5 == 0) {
+                    msg = "Frame " + std::to_string(frame_count) + " (large): " + generateText(2000);
+                } else {
+                    msg = "Frame " + std::to_string(frame_count);
+                }
+                peerConnection->sendDataChannelText("foo", std::move(msg));
+                msg_seq += 1;
             }
 
             if (gIsConnectionFailed) {

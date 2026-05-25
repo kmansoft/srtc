@@ -11,6 +11,23 @@
 
 #include <algorithm>
 
+namespace
+{
+
+std::chrono::milliseconds retransmitDelay(unsigned iteration)
+{
+    uint32_t delay = srtc::sctp::kRtoInitialMs;
+    for (unsigned i = 0; i < iteration; ++i) {
+        delay = delay * 3 / 2;
+        if (delay >= srtc::sctp::kRtoMaxMs) {
+            return std::chrono::milliseconds(srtc::sctp::kRtoMaxMs);
+        }
+    }
+    return std::chrono::milliseconds(delay);
+}
+
+} // namespace
+
 namespace srtc::sctp
 {
 
@@ -81,8 +98,9 @@ bool SctpSession::isChannelOpen(const std::string& label) const
 
 void SctpSession::send(DataChannelMessage&& message)
 {
-    if (mState != State::Established)
+    if (mState != State::Established) {
         return;
+    }
 
     auto it = std::find_if(mDataChannels.begin(), mDataChannels.end(),
                            [&](const DataChannel& ch) { return ch.label == message.label; });
@@ -90,8 +108,20 @@ void SctpSession::send(DataChannelMessage&& message)
         return;
     }
 
-    DataChannel& channel = *it;
+    const size_t payloadSize = message.kind == DataChannelMessage::Kind::kText
+                               ? message.text.size()
+                               : message.binary.size();
 
+    if (payloadSize > 0 && mFlightSize + payloadSize > mPeerRwnd) {
+        mPendingSend.emplace_back(std::move(message));
+        return;
+    }
+
+    sendMessageNow(*it, std::move(message));
+}
+
+void SctpSession::sendMessageNow(DataChannel& channel, DataChannelMessage&& message)
+{
     std::string textStorage;
     const uint8_t* payload;
     size_t payloadSize;
@@ -110,47 +140,71 @@ void SctpSession::send(DataChannelMessage&& message)
 
     const uint16_t ssn = channel.sendSsn++;
     const uint8_t unorderedFlag = channel.unordered ? kDataFlagUnordered : 0;
+    const bool wasEmpty = mSentChunks.empty();
 
     constexpr size_t kMaxFragmentPayload = 1100;
 
-    if (payloadSize <= kMaxFragmentPayload) {
+    auto sendFragment = [&](uint8_t flags, const uint8_t* fragPayload, size_t fragSize) {
+        const uint32_t tsn = mCurrentTsn++;
+
         ByteBuffer chunkBody;
         ByteWriter cw(chunkBody);
-        cw.writeU32(mCurrentTsn++);
+        cw.writeU32(tsn);
         cw.writeU16(channel.streamId);
         cw.writeU16(ssn);
         cw.writeU32(ppid);
-        cw.write(payload, payloadSize);
+        cw.write(fragPayload, fragSize);
 
         SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
-        builder.addChunk(kChunkData, static_cast<uint8_t>(kDataFlagComplete | unorderedFlag), chunkBody);
+        builder.addChunk(kChunkData, flags, chunkBody);
         mListener->onSctpSendPacket(builder.build());
+
+        mSentChunks.push_back(SentChunk{ tsn, flags, fragSize, std::move(chunkBody) });
+        mFlightSize += fragSize;
+    };
+
+    if (payloadSize <= kMaxFragmentPayload) {
+        sendFragment(static_cast<uint8_t>(kDataFlagComplete | unorderedFlag), payload, payloadSize);
     } else {
         size_t offset = 0;
         bool isFirst = true;
         while (offset < payloadSize) {
             const size_t fragSize = std::min(payloadSize - offset, kMaxFragmentPayload);
             const bool isLast = (offset + fragSize >= payloadSize);
-
             uint8_t flags = unorderedFlag;
             if (isFirst) flags |= kDataFlagB;
             if (isLast)  flags |= kDataFlagE;
-
-            ByteBuffer chunkBody;
-            ByteWriter cw(chunkBody);
-            cw.writeU32(mCurrentTsn++);
-            cw.writeU16(channel.streamId);
-            cw.writeU16(ssn);
-            cw.writeU32(ppid);
-            cw.write(payload + offset, fragSize);
-
-            SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
-            builder.addChunk(kChunkData, flags, chunkBody);
-            mListener->onSctpSendPacket(builder.build());
-
+            sendFragment(flags, payload + offset, fragSize);
             offset += fragSize;
             isFirst = false;
         }
+    }
+
+    if (wasEmpty) {
+        startT3Rtx();
+    }
+}
+
+void SctpSession::transmitPending()
+{
+    while (!mPendingSend.empty()) {
+        auto& msg = mPendingSend.front();
+
+        auto it = std::find_if(mDataChannels.begin(), mDataChannels.end(),
+                               [&](const DataChannel& ch) { return ch.label == msg.label; });
+        if (it == mDataChannels.end() || it->state != DataChannelState::kOpen) {
+            mPendingSend.pop_front();
+            continue;
+        }
+
+        const size_t payloadSize = msg.kind == DataChannelMessage::Kind::kText
+                                   ? msg.text.size()
+                                   : msg.binary.size();
+        if (payloadSize > 0 && mFlightSize + payloadSize > mPeerRwnd)
+            break;
+
+        sendMessageNow(*it, std::move(msg));
+        mPendingSend.pop_front();
     }
 }
 
@@ -178,7 +232,7 @@ void SctpSession::sendInit(unsigned iteration)
     mListener->onSctpSendPacket(packet);
     mState = State::CookieWait;
 
-    const auto delay = std::chrono::milliseconds(std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    const auto delay = retransmitDelay(iteration);
     mTaskT1Init = mScheduler.submit(delay, __FILE__, __LINE__, [this, iteration] { sendInit(iteration + 1); });
 }
 
@@ -191,7 +245,7 @@ void SctpSession::sendCookieEcho(unsigned iteration)
 
     mListener->onSctpSendPacket(mCookieEchoPacket);
 
-    const auto delay = std::chrono::milliseconds(std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    const auto delay = retransmitDelay(iteration);
     mTaskT1Cookie = mScheduler.submit(delay, __FILE__, __LINE__, [this, iteration] { sendCookieEcho(iteration + 1); });
 }
 
@@ -352,6 +406,10 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
             onReceiveDataChunk(chunk);
         }
 
+        if (chunk.type == kChunkSack) {
+            onReceiveSack(chunk);
+        }
+
         if (chunk.type == kChunkReconfig) {
             onReceiveReconfig(chunk);
         }
@@ -458,7 +516,7 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
     mListener->onSctpSendPacket(packet);
     channel.state = DataChannelState::kOpening;
 
-    const auto delay = std::chrono::milliseconds(std::min(kRtoInitialMs * (1u << iteration), kRtoMaxMs));
+    const auto delay = retransmitDelay(iteration);
     channel.taskT1Open = mScheduler.submit(
         delay, __FILE__, __LINE__, [this, &channel, iteration] { sendDataChannelOpen(channel, iteration + 1); });
 }
@@ -623,6 +681,94 @@ void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
         auto packet = builder.build();
         mListener->onSctpSendPacket(packet);
     }
+}
+
+void SctpSession::onReceiveSack(const SctpPacket::Chunk& chunk)
+{
+    if (chunk.size < 12) {
+        return;
+    }
+
+    ByteReader r(chunk.data, chunk.size);
+    const auto cumTsn = r.readU32();
+    const auto aRwnd = r.readU32();
+    const auto numGapBlocks = r.readU16();
+    r.skip(2); // numDupTsns
+
+    std::vector<std::pair<uint16_t, uint16_t>> gapBlocks;
+    gapBlocks.reserve(numGapBlocks);
+    for (uint16_t i = 0; i < numGapBlocks; ++i) {
+        const auto start = r.readU16();
+        const auto end = r.readU16();
+        gapBlocks.emplace_back(start, end);
+    }
+
+    mPeerRwnd = aRwnd;
+
+    bool anyNewlyAcked = false;
+
+    // Remove cumulatively ACKed chunks
+    auto it = mSentChunks.begin();
+    while (it != mSentChunks.end()) {
+        if (static_cast<int32_t>(it->tsn - cumTsn) <= 0) {
+            mFlightSize = mFlightSize >= it->payloadSize ? mFlightSize - it->payloadSize : 0;
+            it = mSentChunks.erase(it);
+            anyNewlyAcked = true;
+        } else {
+            ++it;
+        }
+    }
+
+    // Remove gap-ACKed chunks
+    for (const auto& [gapStart, gapEnd] : gapBlocks) {
+        auto git = mSentChunks.begin();
+        while (git != mSentChunks.end()) {
+            const auto offset = static_cast<uint16_t>(git->tsn - cumTsn);
+            if (offset >= gapStart && offset <= gapEnd) {
+                mFlightSize = mFlightSize >= git->payloadSize ? mFlightSize - git->payloadSize : 0;
+                git = mSentChunks.erase(git);
+                anyNewlyAcked = true;
+            } else {
+                ++git;
+            }
+        }
+    }
+
+    if (mSentChunks.empty()) {
+        stopT3Rtx();
+    } else if (anyNewlyAcked) {
+        startT3Rtx(); // restart on progress
+    }
+
+    if (anyNewlyAcked) {
+        transmitPending();
+    }
+}
+
+void SctpSession::retransmitOldest()
+{
+    if (mSentChunks.empty()) {
+        return;
+    }
+
+    const auto& chunk = mSentChunks.front();
+    SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
+    builder.addChunk(kChunkData, chunk.flags, chunk.body);
+    mListener->onSctpSendPacket(builder.build());
+
+    startT3Rtx(); // restart for next potential timeout
+}
+
+void SctpSession::startT3Rtx()
+{
+    Task::cancelHelper(mTaskT3Rtx);
+    mTaskT3Rtx = mScheduler.submit(
+        retransmitDelay(0), __FILE__, __LINE__, [this] { retransmitOldest(); });
+}
+
+void SctpSession::stopT3Rtx()
+{
+    Task::cancelHelper(mTaskT3Rtx);
 }
 
 void SctpSession::sendSack()

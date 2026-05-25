@@ -3,6 +3,7 @@
 #include "sctp/data_channel_receive_buffer.h"
 #include "sctp/sctp_packet.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/data_channel_message.h"
 #include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
 
@@ -12,13 +13,6 @@
 #include <set>
 #include <string>
 #include <vector>
-
-namespace srtc
-{
-
-struct DataChannelMessage;
-
-}
 
 namespace srtc::sctp
 {
@@ -39,7 +33,7 @@ public:
     ~SctpSession();
 
     void start();
-    bool isChannelOpen(const std::string& label) const;
+    [[nodiscard]] bool isChannelOpen(const std::string& label) const;
     void send(DataChannelMessage&& message);
 
     void onReceiveData(const ByteBuffer& data);
@@ -76,6 +70,16 @@ private:
     };
     std::list<DataChannel> mDataChannels;
 
+    struct SentChunk {
+        uint32_t tsn;
+        uint8_t flags;
+        size_t payloadSize;
+        ByteBuffer body; // TSN(4) + streamId(2) + ssn(2) + ppid(4) + payload
+    };
+    std::list<SentChunk> mSentChunks;
+    std::list<DataChannelMessage> mPendingSend;
+    uint32_t mFlightSize = 0;
+
     RandomGenerator<uint32_t> mRandom;
 
     enum class State {
@@ -108,8 +112,16 @@ private:
     void sendDataChannelOpen(DataChannel& channel, unsigned iteration);
     void onReceiveDataChunk(const SctpPacket::Chunk& chunk);
     void onReceiveReconfig(const SctpPacket::Chunk& chunk);
+    void onReceiveSack(const SctpPacket::Chunk& chunk);
     void sendSack();
 
+    void sendMessageNow(DataChannel& channel, DataChannelMessage&& message);
+    void transmitPending();
+    void retransmitOldest();
+    void startT3Rtx();
+    void stopT3Rtx();
+
+    std::weak_ptr<Task> mTaskT3Rtx;
     ScopedScheduler mScheduler;
 };
 

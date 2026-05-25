@@ -67,7 +67,7 @@ constexpr uint16_t kInitStreams = 1024;
 
 // Retransmit timers (RFC 4960 defaults)
 constexpr unsigned kMaxInitRetransmits = 8;      // max retransmits for INIT and COOKIE_ECHO
-constexpr uint32_t kRtoInitialMs       = 3000;   // initial RTO in milliseconds
+constexpr uint32_t kRtoInitialMs       = 250;    // initial RTO in milliseconds
 constexpr uint32_t kRtoMaxMs           = 60000;  // maximum RTO in milliseconds
 
 // State Cookie layout: kCookieDataSize bytes of fields, then kCookieHmacSize bytes of HMAC-SHA1
