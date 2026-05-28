@@ -47,6 +47,9 @@ public:
     [[nodiscard]] const ExtensionMap& getAudioExtensionMap() const;
     [[nodiscard]] bool isSetupActive() const;
     [[nodiscard]] const X509Hash& getCertificateHash() const;
+    [[nodiscard]] bool hasDataChannel() const;
+    [[nodiscard]] uint16_t getSctpPort() const;
+    [[nodiscard]] uint32_t getMaxMessageSize() const;
 
 private:
 	const Direction mDirection;
@@ -60,6 +63,9 @@ private:
     const ExtensionMap mAudioExtensionMap;
     const bool mIsSetupActive;
     const X509Hash mCertHash;
+    const bool mHasDataChannel;
+    const uint16_t mSctpPort;
+    const uint32_t mMaxMessageSize;
 
     SdpAnswer(Direction direction,
 			  const std::string& iceUFrag,
@@ -71,7 +77,10 @@ private:
               const ExtensionMap& videoExtensionMap,
               const ExtensionMap& audioExtensionMap,
               bool isSetupActive,
-              const X509Hash& certHash);
+              const X509Hash& certHash,
+              bool hasDataChannel,
+              uint16_t sctpPort,
+              uint32_t maxMessageSize);
 };
 
 } // namespace srtc

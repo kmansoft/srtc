@@ -22,6 +22,12 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 
 include(ExternalProject)
 include(FetchContent)
+include(TestBigEndian)
+
+test_big_endian(WORDS_BIGENDIAN)
+if (WORDS_BIGENDIAN)
+    add_compile_definitions(WORDS_BIGENDIAN)
+endif ()
 
 # Static link runtime on Windows, unless building tests (link errors)
 
@@ -51,6 +57,7 @@ add_library(srtc
         include/srtc/codec_h264.h
         include/srtc/codec_h265.h
         include/srtc/codec_vp9.h
+        include/srtc/data_channel_message.h
         include/srtc/ice_agent.h
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
@@ -112,6 +119,7 @@ add_library(srtc
         src/codec_h264.cpp
         src/codec_h265.cpp
         src/codec_vp9.cpp
+        src/data_channel_message.cpp
         src/depacketizer.cpp
         src/depacketizer_av1.cpp
         src/depacketizer_h264.cpp
@@ -135,6 +143,7 @@ add_library(srtc
         src/packetizer_vp8.cpp
         src/packetizer_vp9.cpp
         src/peer_candidate.cpp
+        src/peer_candidate_listener.cpp
         src/peer_connection.cpp
         src/pool_allocator.cpp
         src/random_generator.cpp
@@ -174,6 +183,20 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        # sctp
+        include/sctp/sctp_crc32.h
+        include/sctp/sctp_defs.h
+        include/sctp/sctp_packet_builder.h
+        include/sctp/sctp_packet.h
+        include/sctp/data_channel_receive_buffer.h
+        include/sctp/sctp_session.h
+        include/sctp/sctp_session_listener.h
+        src/sctp/sctp_crc32.cpp
+        src/sctp/sctp_defs.cpp
+        src/sctp/sctp_packet_builder.cpp
+        src/sctp/sctp_packet.cpp
+        src/sctp/data_channel_receive_buffer.cpp
+        src/sctp/sctp_session.cpp
 )
 
 if (APPLE)
@@ -344,6 +367,8 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             test/test_allocator.cpp
             test/test_subscribe_twcc.cpp
             test/test_packetizer.cpp
+            test/test_sctp_crc32.cpp
+            test/test_data_channel_receive_buffer.cpp
     )
 
     target_include_directories(

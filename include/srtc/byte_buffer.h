@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 #include <cstddef>
+#include <string>
 
 namespace srtc
 {
@@ -87,6 +88,7 @@ public:
     [[nodiscard]] size_t size() const;
     [[nodiscard]] size_t position() const;
     [[nodiscard]] size_t remaining() const;
+    [[nodiscard]] const uint8_t* current() const;
 
     [[nodiscard]] uint8_t readU8();
     [[nodiscard]] uint16_t readU16();
@@ -94,6 +96,7 @@ public:
     [[nodiscard]] uint32_t readLEB128();
 
 	[[nodiscard]] ByteBuffer readByteBuffer(size_t size);
+	[[nodiscard]] std::string readString(size_t size);
 
 	void read(uint8_t* buf, size_t size);
 

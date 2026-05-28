@@ -1,4 +1,5 @@
 #include "srtc/peer_connection.h"
+#include "srtc/data_channel_message.h"
 #include "srtc/depacketizer.h"
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
@@ -6,18 +7,12 @@
 #include "srtc/logging.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
-#include "srtc/rtcp_packet.h"
 #include "srtc/rtcp_packet_source.h"
-#include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
-#include "srtc/send_rtp_history.h"
 #include "srtc/srtc.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/x509_certificate.h"
-
-#include "srtc/codec_av1.h"
 #include "stunmessage.h"
 
 #include <algorithm>
@@ -65,6 +60,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(
 
     SdpOffer::Config config;
     config.cname = pubConfig.cname;
+    config.data_channels = pubConfig.data_channel_config.data_channels;
     config.enable_rtx = pubConfig.enable_rtx;
     config.enable_bwe = pubConfig.enable_bwe;
     config.enable_rfc8851 = pubConfig.enable_rfc8851;
@@ -108,6 +104,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
 
     SdpOffer::Config config;
     config.cname = subConfig.cname;
+    config.data_channels = subConfig.data_channel_config.data_channels;
     config.pli_interval_millis = subConfig.pli_interval_millis;
     config.jitter_buffer_length_millis = subConfig.jitter_buffer_length_millis;
     config.jitter_buffer_nack_delay_millis = subConfig.jitter_buffer_nack_delay_millis;
@@ -201,6 +198,12 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
     if (mSdpOffer && mSdpAnswer) {
         if (mSdpOffer->getDirection() != mSdpAnswer->getDirection()) {
             return { Error::Code::InvalidData, "Offer and answer must use same direction, publish or subscribe" };
+        }
+
+        mDataChannelsNegotiated = mSdpOffer->hasDataChannel() && mSdpAnswer->hasDataChannel();
+        if (mDataChannelsNegotiated) {
+            mDataChannelMaxMessageSize =
+                std::min(mSdpOffer->getSctpMaxMessageSize(), mSdpAnswer->getMaxMessageSize());
         }
 
         if (mDirection == Direction::Publish) {
@@ -498,6 +501,53 @@ void PeerConnection::setSubscribeSenderReportsListener(const SubscribeSenderRepo
     mSubscribeSenderReportsListener = listener;
 }
 
+uint32_t PeerConnection::getDataChannelMaxMessageSize() const
+{
+    return mDataChannelMaxMessageSize;
+}
+
+Error PeerConnection::sendDataChannelText(const std::string& label, std::string&& data)
+{
+    std::lock_guard lock(mMutex);
+
+    if (!mDataChannelsNegotiated) {
+        return { Error::Code::InvalidData, "Data channels were not negotiated" };
+    }
+    if (mDataChannelMaxMessageSize > 0 && data.size() > mDataChannelMaxMessageSize) {
+        return { Error::Code::InvalidData, "Message size exceeds peer maximum" };
+    }
+
+    mDataSendQueue.emplace_back(DataChannelMessage::makeText(label, std::move(data)));
+    mEventLoop->interrupt();
+
+    return Error::OK;
+}
+
+Error PeerConnection::sendDataChannelBinary(const std::string& label, ByteBuffer&& data)
+{
+    std::lock_guard lock(mMutex);
+
+    if (!mDataChannelsNegotiated) {
+        return { Error::Code::InvalidData, "Data channels were not negotiated" };
+    }
+    if (mDataChannelMaxMessageSize > 0 && data.size() > mDataChannelMaxMessageSize) {
+        return { Error::Code::InvalidData, "Message size exceeds peer maximum" };
+    }
+
+    mDataSendQueue.emplace_back(DataChannelMessage::makeBinary(label, std::move(data)));
+    mEventLoop->interrupt();
+
+    return Error::OK;
+}
+
+PeerConnection::DataChannelListener::~DataChannelListener() = default;
+
+void PeerConnection::setDataChannelListener(const std::shared_ptr<DataChannelListener>& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mDataChannelListener = listener;
+}
+
 void PeerConnection::close()
 {
     std::thread waitForThread;
@@ -554,6 +604,7 @@ void PeerConnection::networkThreadWorkerFunc()
         mEventLoop->wait(udataList, timeout);
 
         std::list<FrameToSend> frameSendQueue;
+        std::list<DataChannelMessage> dataSendQueue;
 
         {
             std::lock_guard lock(mMutex);
@@ -565,13 +616,17 @@ void PeerConnection::networkThreadWorkerFunc()
             }
 
             frameSendQueue = std::move(mFrameSendQueue);
+
+            if (mSelectedCandidate) {
+                dataSendQueue = std::move(mDataSendQueue);
+            }
         }
 
         // Read data from the network
         for (const auto udata : udataList) {
             if (udata) {
                 // Read from socket
-                const auto ptr = reinterpret_cast<PeerCandidate*>(udata);
+                const auto ptr = static_cast<PeerCandidate*>(udata);
                 ptr->receiveFromSocket();
             }
         }
@@ -601,6 +656,12 @@ void PeerConnection::networkThreadWorkerFunc()
             }
         }
 
+         if (mSelectedCandidate) {
+            for (auto& item : dataSendQueue) {
+                mSelectedCandidate->sendDataChannelMessage(std::move(item));
+            }
+        }
+
         // Candidate processing
         for (const auto& candidate : mConnectingCandidateList) {
             candidate->run();
@@ -625,19 +686,18 @@ void PeerConnection::networkThreadWorkerFunc()
 
     mLoopScheduler.reset();
 
-    setConnectionState(ConnectionState::Closed);
-
     // Clear everything on this thread before exiting
     mConnectingCandidateList.clear();
     mSelectedCandidate.reset();
     mJitterBufferVideo.reset();
     mJitterBufferAudio.reset();
+
+    // We are all done
+    setConnectionState(ConnectionState::Closed);
 }
 
 void PeerConnection::setConnectionState(ConnectionState state)
 {
-    // std::printf("setConnectionState %d\n", static_cast<int>(state));
-
     {
         std::lock_guard lock1(mMutex);
 
@@ -694,10 +754,12 @@ void PeerConnection::startConnecting()
     for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
         if (i < hostList4.size()) {
             const auto host = hostList4[i];
-            const auto candidate = std::make_shared<PeerCandidate>(this,
+            const auto listener = static_cast<PeerCandidateListener*>(this);
+            const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
+                                                                   mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
                                                                    host,
                                                                    mEventLoop,
@@ -706,10 +768,12 @@ void PeerConnection::startConnecting()
         }
         if (i < hostList6.size()) {
             const auto host = hostList6[i];
-            const auto candidate = std::make_shared<PeerCandidate>(this,
+            const auto listener = static_cast<PeerCandidateListener*>(this);
+            const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
+                                                                   mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
                                                                    host,
                                                                    mEventLoop,
@@ -951,6 +1015,38 @@ void PeerConnection::onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate)
 const std::vector<SimulcastLayer>& PeerConnection::getSimulcastLayerList() const
 {
     return mSendSimulcastLayerList;
+}
+
+void PeerConnection::onSctpDataChannelOpen(const std::string& label)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelOpened(label);
+    }
+}
+
+void PeerConnection::onSctpDataChannelText(const std::string& label, const std::string& data)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelReceivedText(label, data);
+    }
+}
+
+void PeerConnection::onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelReceivedBinary(label, data);
+    }
+}
+
+void PeerConnection::onSctpDataChannelClosed(const std::string& label)
+{
+    std::lock_guard lock(mListenerMutex);
+    if (mDataChannelListener) {
+        mDataChannelListener->onDataChannelClosed(label);
+    }
 }
 
 void PeerConnection::sendReports()

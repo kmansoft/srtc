@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
@@ -306,6 +307,45 @@ func whepHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, offer []byte, path string) {
+	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
+		fmt.Printf("DataChannel '%s' opened\n", d.Label())
+		d.OnClose(func() {
+			fmt.Printf("DataChannel '%s' closed\n", d.Label())
+		})
+		d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			if msg.IsString {
+				fmt.Printf("DataChannel '%s' received text: %s\n", d.Label(), string(msg.Data))
+			} else {
+				fmt.Printf("DataChannel '%s' received binary: %d bytes\n", d.Label(), len(msg.Data))
+			}
+		})
+	})
+
+	barChannel, err := peerConnection.CreateDataChannel("bar", nil)
+	if err != nil {
+		panic(err)
+	}
+	barChannel.OnOpen(func() {
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			seq := 0
+			for range ticker.C {
+				var msg string
+				if seq%5 == 0 {
+					msg = fmt.Sprintf("Message #%d from bar (large): %s", seq, generateText(2000))
+				} else {
+					msg = fmt.Sprintf("Message #%d from bar", seq)
+				}
+				seq++
+				if sendErr := barChannel.SendText(msg); sendErr != nil {
+					fmt.Printf("DataChannel 'bar' send error: %v\n", sendErr)
+					return
+				}
+			}
+		}()
+	})
+
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -345,4 +385,16 @@ func writeAnswer(w http.ResponseWriter, peerConnection *webrtc.PeerConnection, o
 
 	// Write Answer with Candidates as HTTP Response
 	fmt.Fprint(w, peerConnection.LocalDescription().SDP) //nolint: errcheck
+}
+
+func generateText(size int) string {
+	const phrase = "the quick brown fox jumps over the lazy dog"
+	var buf []byte
+	for len(buf) < size {
+		if len(buf) > 0 {
+			buf = append(buf, ' ')
+		}
+		buf = append(buf, phrase...)
+	}
+	return string(buf)
 }

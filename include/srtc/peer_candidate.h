@@ -1,6 +1,6 @@
 #pragma once
 
-#include "srtc/simulcast_layer.h"
+#include "data_channel_message.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/random_generator.h"
@@ -8,6 +8,8 @@
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
 #include "srtc/util.h"
+
+#include "sctp/sctp_session_listener.h"
 
 #include <list>
 #include <memory>
@@ -21,6 +23,8 @@ struct bio_method_st;
 
 namespace srtc
 {
+
+struct DataChannelMessage;
 
 class Error;
 class PeerCandidate;
@@ -41,18 +45,24 @@ class SenderReportsHistory;
 
 struct PublishConnectionStats;
 
-class PeerCandidate final
+namespace sctp
+{
+class SctpSession;
+}
+
+class PeerCandidate final : sctp::SctpSessionListener
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
                   const std::vector<std::shared_ptr<Track>>& trackList,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
+                  uint32_t dataChannelMaxMessageSize,
                   const std::shared_ptr<RealScheduler>& scheduler,
                   const Host& host,
                   const std::shared_ptr<EventLoop>& eventLoop,
                   const Scheduler::Delay& startDelay);
-    ~PeerCandidate();
+    ~PeerCandidate() override;
 
     void receiveFromSocket();
 
@@ -77,9 +87,20 @@ public:
 
     [[nodiscard]] std::optional<float> getIceRtt() const;
 
+    // SCTP listener
+    void onSctpSendPacket(const ByteBuffer& packet) override;
+    void onSctpDataChannelOpen(const std::string& label) override;
+    void onSctpDataChannelText(const std::string& label, const std::string& text) override;
+    void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
+    void onSctpDataChannelClose(const std::string& label) override;
+
+    // Sending data channel messages
+    void sendDataChannelMessage(DataChannelMessage&& message);
+
 private:
     void startConnecting();
     void addSendRaw(ByteBuffer&& buf);
+    void flushSendRaw();
 
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
@@ -125,8 +146,12 @@ private:
     Filter<float> mIceRttFilter;
     Filter<float> mControlRttFilter;
 
+    mutable uint64_t mPrevByteCount = 0;
+    mutable std::chrono::steady_clock::time_point mPrevStatsTime = {};
+
     std::shared_ptr<SrtpConnection> mSrtpConnection;
     std::shared_ptr<SendPacer> mSendPacer;
+    std::shared_ptr<sctp::SctpSession> mSctpSession;
 
     std::list<ByteBuffer> mDtlsReceiveQueue;
 
@@ -134,6 +159,7 @@ private:
 
     std::list<ByteBuffer> mRawSendQueue;
     std::list<FrameToSend> mFrameSendQueue;
+    std::list<DataChannelMessage> mDataSendQueue;
 
     bool mSentUseCandidate;
     bool mIsConnected;

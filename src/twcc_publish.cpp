@@ -241,7 +241,7 @@ void PublishPacketHistory::updatePublishConnectionStats(PublishConnectionStats& 
         return;
     }
 
-    const auto now = std::chrono::steady_clock::time_point();
+    const auto now = std::chrono::steady_clock::now();
 
     if (now - mPacketsLostPercentFilter.getWhenUpdated() <= kMaxRecentEnough) {
         stats.packets_lost_percent = mPacketsLostPercentFilter.value();

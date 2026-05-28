@@ -29,8 +29,9 @@ class Packetizer;
 class Scheduler;
 class PeerCandidate;
 class EventLoop;
+struct DataChannelMessage;
 
-class PeerConnection final : public PeerCandidateListener
+class PeerConnection final : PeerCandidateListener
 {
 public:
     explicit PeerConnection(Direction direction);
@@ -100,7 +101,24 @@ public:
     using SubscribeSenderReportListener = std::function<void(const std::shared_ptr<Track>&, const SenderReport&)>;
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
-   // Closing
+    // Data channels
+    [[nodiscard]] uint32_t getDataChannelMaxMessageSize() const;
+    [[nodiscard]] Error sendDataChannelText(const std::string& label, std::string&& data);
+    [[nodiscard]] Error sendDataChannelBinary(const std::string& label, ByteBuffer&& data);
+
+    struct DataChannelListener
+    {
+        virtual ~DataChannelListener();
+
+        virtual void onDataChannelOpened(const std::string& label) = 0;
+        virtual void onDataChannelClosed(const std::string& label) = 0;
+
+        virtual void onDataChannelReceivedText(const std::string& label, const std::string& data) = 0;
+        virtual void onDataChannelReceivedBinary(const std::string& label, const ByteBuffer& data) = 0;
+    };
+    void setDataChannelListener(const std::shared_ptr<DataChannelListener>& listener);
+
+    // Closing
     void close();
 
 private:
@@ -110,6 +128,8 @@ private:
 
     std::shared_ptr<SdpOffer> mSdpOffer SRTC_GUARDED_BY(mMutex);
     std::shared_ptr<SdpAnswer> mSdpAnswer SRTC_GUARDED_BY(mMutex);
+    bool mDataChannelsNegotiated = false;
+    uint32_t mDataChannelMaxMessageSize = 0;
 
     std::shared_ptr<Track> mVideoSingleTrack;
     std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList;
@@ -156,6 +176,7 @@ private:
     };
 
     std::list<FrameToSend> mFrameSendQueue SRTC_GUARDED_BY(mMutex);
+    std::list<DataChannelMessage> mDataSendQueue SRTC_GUARDED_BY(mMutex);
 
     // Simulcast layer list
     std::vector<SimulcastLayer> mSendSimulcastLayerList;
@@ -177,6 +198,10 @@ private:
     void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) override;
     const std::vector<SimulcastLayer>& getSimulcastLayerList() const override;
 
+    void onSctpDataChannelOpen(const std::string& label) override;
+    void onSctpDataChannelText(const std::string& label, const std::string& data) override;
+    void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) override;
+    void onSctpDataChannelClosed(const std::string& label) override;
 
     // Overall connection state and listener
     ConnectionState mConnectionState SRTC_GUARDED_BY(mMutex);
@@ -187,6 +212,7 @@ private:
     PublishKeyFrameRequestedListner mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
+    std::shared_ptr<DataChannelListener> mDataChannelListener SRTC_GUARDED_BY(mListenerMutex);
 
     // Packetizers
     std::shared_ptr<Packetizer> mVideoSinglePacketizer;

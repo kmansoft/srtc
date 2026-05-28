@@ -20,6 +20,23 @@
 #include <unistd.h>
 #endif
 
+class PublishDataChannelListener : public srtc::PeerConnection::DataChannelListener
+{
+public:
+    void onDataChannelOpened(const std::string& label) override {
+        std::cout << "*** Data channel opened: \"" << label << "\"" << std::endl;
+    }
+    void onDataChannelClosed(const std::string& label) override {
+        std::cout << "*** Data channel closed: \"" << label << "\"" << std::endl;
+    }
+    void onDataChannelReceivedText(const std::string& label, const std::string& data) override {
+        std::cout << "*** Data channel text \"" << label << "\": \"" << data << "\"" << std::endl;
+    }
+    void onDataChannelReceivedBinary(const std::string& label, const srtc::ByteBuffer& data) override {
+        std::cout << "*** Data channel binary \"" << label << "\": " << data.size() << " bytes" << std::endl;
+    }
+};
+
 // Program options
 
 static std::string gInputFile = "sintel.h264";
@@ -31,10 +48,12 @@ static bool gPrintInfo = false;
 static bool gDropPackets = false;
 static bool gEnableBWE = false;
 static bool gLoopVideo = false;
+static bool gDataChannels = false;
 
 // State
 
 static std::atomic_bool gIsConnectionFailed = false;
+static std::atomic_bool gIsConnectionClosed = false;
 
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
 {
@@ -54,9 +73,22 @@ const char* connectionStateToString(const srtc::PeerConnection::ConnectionState&
     }
 }
 
+std::string generateText(size_t size)
+{
+    const std::string phrase = "the quick brown fox jumps over the lazy dog";
+    std::string result;
+    result.reserve(size);
+    while (result.size() < size) {
+        if (!result.empty()) result += ' ';
+        result += phrase;
+    }
+    return result;
+}
+
 void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, const LoadedMedia& media)
 {
     std::optional<int64_t> pts_usec;
+    uint32_t msg_seq = 0;
 
     while (true) {
         uint32_t frame_count = 0;
@@ -85,8 +117,25 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 std::cout << "Played " << std::setw(5) << frame_count << " video frames" << std::endl;
             }
 
+            if (gDataChannels && frame_count > 0 && (frame_count % 25) == 0) {
+                std::string msg;
+                if (msg_seq % 5 == 0) {
+                    msg = "Frame " + std::to_string(frame_count) + " (large): " + generateText(2000);
+                } else {
+                    msg = "Frame " + std::to_string(frame_count);
+                }
+                if (const auto err = peerConnection->sendDataChannelText("foo", std::move(msg)); err.isError()) {
+                    std::cout << "*** Data channel send error: " << err.message << std::endl;
+                }
+                msg_seq += 1;
+            }
+
             if (gIsConnectionFailed) {
                 std::cout << "*** Connection failed, stopping video playback" << std::endl;
+                return;
+            }
+            if (gIsConnectionClosed) {
+                std::cout << "*** Connection has been closed, stopping video playback" << std::endl;
                 return;
             }
         }
@@ -114,6 +163,7 @@ void printUsage(const char* programName)
     std::cout << "  -i, --info           Print input file info" << std::endl;
     std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
     std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
+    std::cout << "  -c, --datachannels   Enable data channels" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -166,6 +216,8 @@ int main(int argc, char* argv[])
             gDropPackets = true;
         } else if (arg == "-b" || arg == "--bwe") {
             gEnableBWE = true;
+        } else if (arg == "-c" || arg == "--datachannels") {
+            gDataChannels = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -220,6 +272,8 @@ int main(int argc, char* argv[])
 
             if (state == PeerConnection::ConnectionState::Failed) {
                 gIsConnectionFailed = true;
+            } else if (state == PeerConnection::ConnectionState::Closed) {
+                gIsConnectionClosed = true;
             }
 
             {
@@ -237,12 +291,20 @@ int main(int argc, char* argv[])
                   << stats.rtt_ms << " ms rtt" << std::endl;
     });
 
+    // Data channel listener
+    if (gDataChannels) {
+        peerConnection->setDataChannelListener(std::make_shared<PublishDataChannelListener>());
+    }
+
     // Offer
     PubOfferConfig offer_config = {};
     offer_config.cname = "foo";
     offer_config.enable_rtx = true;
     offer_config.enable_bwe = gEnableBWE;
     offer_config.debug_drop_packets = gDropPackets;
+    if (gDataChannels) {
+        offer_config.data_channel_config.data_channels.emplace_back("foo");
+    }
 
     PubVideoCodec video_codec = {};
     video_codec.codec = media_file.codec;

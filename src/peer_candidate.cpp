@@ -1,3 +1,4 @@
+#include "sctp/sctp_session.h"
 #ifdef _WIN32
 #include "srtc/srtc.h"
 #include <wincrypt.h>
@@ -30,6 +31,8 @@
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
+
+#include "sctp/sctp_session.h"
 
 #include <cassert>
 #include <cstring>
@@ -215,6 +218,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::vector<std::shared_ptr<Track>>& trackList,
                              const std::shared_ptr<SdpOffer>& offer,
                              const std::shared_ptr<SdpAnswer>& answer,
+                             const uint32_t dataChannelMaxMessageSize,
                              const std::shared_ptr<RealScheduler>& scheduler,
                              const Host& host,
                              const std::shared_ptr<EventLoop>& eventLoop,
@@ -264,6 +268,17 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
         static_cast<long>(startDelay.count()));
 
     initOpenSSL();
+
+    if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
+        SctpSessionListener* l = this;
+        mSctpSession = std::make_shared<sctp::SctpSession>(scheduler,
+                                                           l,
+                                                           mOffer->getSctpPort(),
+                                                           mAnswer->getSctpPort(),
+                                                           dataChannelMaxMessageSize,
+                                                           mAnswer->isSetupActive(),
+                                                           mOffer->getConfig().data_channels);
+    }
 
     mEventLoop->registerSocket(mSocket, this);
 
@@ -440,6 +455,22 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
 
     if (mExtensionSourceTWCC) {
         mExtensionSourceTWCC->updatePublishConnectionStats(stats);
+    } else {
+        // Fall back to byte-count delta when TWCC is not available
+        if (stats.bandwidth_actual_kbit_per_second < 0) {
+            if (mPrevStatsTime != std::chrono::steady_clock::time_point{}) {
+                const auto deltaMs =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - mPrevStatsTime).count();
+                const auto deltaBytes = stats.byte_count - mPrevByteCount;
+                if (deltaMs > 0) {
+                    // bits / milliseconds == kbits / second
+                    stats.bandwidth_actual_kbit_per_second =
+                        static_cast<float>(deltaBytes) * 8.0f / static_cast<float>(deltaMs);
+                }
+            }
+            mPrevByteCount = stats.byte_count;
+            mPrevStatsTime = now;
+        }
     }
 }
 
@@ -447,6 +478,68 @@ std::optional<float> PeerCandidate::getIceRtt() const
 {
     // RTT from STUN requests / responses
     return mIceRttFilter.value();
+}
+
+void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
+{
+    if (mDtlsState != DtlsState::Completed) {
+        LOG(SRTC_LOG_E, "SCTP wants to send but DTLS is not connected");
+        return;
+    }
+
+    const auto r = SSL_write(mDtlsSsl, packet.data(), static_cast<int>(packet.size()));
+    if (r <= 0) {
+        const auto err = SSL_get_error(mDtlsSsl, r);
+        LOG(SRTC_LOG_E, "SSL_write failed for SCTP packet, ssl error = %d", err);
+    }
+}
+
+void PeerCandidate::onSctpDataChannelOpen(const std::string& label)
+{
+    mListener->onSctpDataChannelOpen(label);
+
+    // Flush messages queued before the channel was open
+    auto it = mDataSendQueue.begin();
+    while (it != mDataSendQueue.end()) {
+        if (it->label == label) {
+            mSctpSession->send(std::move(*it));
+            it = mDataSendQueue.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void PeerCandidate::onSctpDataChannelText(const std::string& label, const std::string& text)
+{
+    mListener->onSctpDataChannelText(label, text);
+}
+
+void PeerCandidate::onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data)
+{
+    mListener->onSctpDataChannelBinary(label, data);
+}
+
+void PeerCandidate::onSctpDataChannelClose(const std::string& label)
+{
+    mListener->onSctpDataChannelClosed(label);
+}
+
+void PeerCandidate::sendDataChannelMessage(DataChannelMessage&& message)
+{
+    if (mSctpSession) {
+        if (mSctpSession->isChannelOpen(message.label)) {
+            mSctpSession->send(std::move(message));
+        } else {
+            mDataSendQueue.emplace_back(std::move(message));
+
+            while (mDataSendQueue.size() > 64) {
+                mDataSendQueue.pop_front();
+            }
+        }
+    } else {
+        LOG(SRTC_LOG_E, "Trying to send a data channel message but there is no SCTP session negotiated");
+    }
 }
 
 [[nodiscard]] int PeerCandidate::getTimeoutMillis(int defaultValue) const
@@ -465,13 +558,7 @@ void PeerCandidate::run()
     }
 
     // Raw data
-    while (!mRawSendQueue.empty()) {
-        const auto buf = std::move(mRawSendQueue.front());
-        mRawSendQueue.erase(mRawSendQueue.begin());
-
-        const auto w = mSocket->send(buf);
-        LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
-    }
+    flushSendRaw();
 
     // Frames
     while (!mFrameSendQueue.empty()) {
@@ -523,8 +610,7 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(layerList,
-                                item.track->getSimulcastLayer());
+                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }
@@ -630,6 +716,21 @@ void PeerCandidate::addSendRaw(ByteBuffer&& buf)
 {
     mRawSendQueue.push_back(std::move(buf));
     mListener->onCandidateHasDataToSend(this);
+}
+
+void PeerCandidate::flushSendRaw()
+{
+    while (!mRawSendQueue.empty()) {
+        const auto buf = std::move(mRawSendQueue.front());
+        mRawSendQueue.erase(mRawSendQueue.begin());
+
+        const auto w = mSocket->send(buf);
+        if (w < 0) {
+            LOG(SRTC_LOG_E, "Error sending %zd raw bytes", buf.size());
+        } else {
+            LOG(SRTC_LOG_V, "Sent %zd raw bytes", w);
+        }
+    }
 }
 
 void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
@@ -768,6 +869,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                             mIceRttFilter.value());
 
                         onReceivedFromRemote();
+
+                        if (mSctpSession) {
+                            mSctpSession->start();
+                        }
                     } else {
                         // Error, failed to initialize SRTP
                         LOG(SRTC_LOG_E,
@@ -802,10 +907,14 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
             freeDTLS();
         }
     } else if (mDtlsState == DtlsState::Completed) {
-        uint8_t tmp[1];
+        uint8_t tmp[4096];
         const auto r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
 
-        if (r <= 0) {
+        if (r > 0) {
+            if (mSctpSession) {
+                mSctpSession->onReceiveData({ tmp, static_cast<size_t>(r) });
+            }
+        } else {
             if ((SSL_get_shutdown(mDtlsSsl) & SSL_RECEIVED_SHUTDOWN) != 0) {
                 LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");
                 emitOnDtlsDisconnected(Error::OK);
@@ -1270,11 +1379,7 @@ void PeerCandidate::freeDTLS()
     mDtlsBio = nullptr;
 
     // Flush the send queue to send the DTLS_close message
-    while (!mRawSendQueue.empty()) {
-        const auto buf = std::move(mRawSendQueue.front());
-        mRawSendQueue.erase(mRawSendQueue.begin());
-        (void) mSocket->send(buf);
-    }
+    flushSendRaw();
 }
 
 // State

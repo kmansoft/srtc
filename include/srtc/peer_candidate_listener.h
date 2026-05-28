@@ -2,10 +2,12 @@
 
 #include <memory>
 #include <vector>
+#include <string>
 
 namespace srtc
 {
 
+class ByteBuffer;
 class PeerCandidate;
 class Error;
 class RtpPacket;
@@ -17,7 +19,7 @@ struct SimulcastLayer;
 class PeerCandidateListener
 {
 public:
-    virtual ~PeerCandidateListener() = default;
+    virtual ~PeerCandidateListener();
 
     virtual void onCandidateHasDataToSend(PeerCandidate* candidate) = 0;
 
@@ -35,6 +37,11 @@ public:
     virtual void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) = 0;
 
     [[nodiscard]] virtual const std::vector<SimulcastLayer>& getSimulcastLayerList() const = 0;
+
+    virtual void onSctpDataChannelOpen(const std::string& label) = 0;
+    virtual void onSctpDataChannelText(const std::string& label, const std::string& data) = 0;
+    virtual void onSctpDataChannelBinary(const std::string& label, const ByteBuffer& data) = 0;
+    virtual void onSctpDataChannelClosed(const std::string& label) = 0;
 };
 
 } // namespace srtc

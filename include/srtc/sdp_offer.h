@@ -21,12 +21,17 @@ class PeerCandidate;
 class SendPacer;
 class X509Certificate;
 
+struct DataChannelConfig {
+    std::vector<std::string> data_channels;
+};
+
 struct PubOfferConfig {
     std::string cname;
     bool enable_rtx = true;
     bool enable_bwe = false;
     bool enable_rfc8851 = false;
     bool debug_drop_packets = false;
+    DataChannelConfig data_channel_config;
 };
 
 struct SubOfferConfig {
@@ -35,6 +40,7 @@ struct SubOfferConfig {
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
     bool debug_drop_packets = false;
+    DataChannelConfig data_channel_config;
 };
 
 class SdpOffer
@@ -48,6 +54,8 @@ private:
         // Common
         std::string cname;
         bool debug_drop_packets = false;
+        // Data channels
+        std::vector<std::string> data_channels;
         // Publish
         bool enable_rtx = true;
         bool enable_bwe = false;
@@ -116,6 +124,10 @@ public:
     [[nodiscard]] uint32_t getRtxAudioSSRC() const;
 
     [[nodiscard]] std::pair<uint32_t, uint32_t> getVideoSimulastSSRC(const std::string& name) const;
+
+    [[nodiscard]] bool hasDataChannel() const;
+    [[nodiscard]] uint16_t getSctpPort() const;
+    [[nodiscard]] uint32_t getSctpMaxMessageSize() const;
 
 private:
     std::string generateRandomUUID();
