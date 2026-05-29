@@ -542,6 +542,13 @@ install(FILES
         DESTINATION include/srtc
 )
 
+file(GLOB SCTP_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include/sctp/*.h")
+
+install(FILES
+        ${SCTP_INCLUDES}
+        DESTINATION include/sctp
+)
+
 install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/libsrtc.a
         ${CMAKE_CURRENT_BINARY_DIR}/stun/libsrtc_stun.a
