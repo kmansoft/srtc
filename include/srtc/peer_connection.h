@@ -81,8 +81,8 @@ public:
     using PublishConnectionStatsListener = std::function<void(const PublishConnectionStats&)>;
     void setPublishConnectionStatsListener(const PublishConnectionStatsListener& listener);
 
-    using PublishKeyFrameRequestedListner = std::function<void()>;
-    void setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListner& listener);
+    using PublishKeyFrameRequestedListener = std::function<void()>;
+    void setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListener& listener);
 
     // Publishing media
     Error setVideoSingleCodecSpecificData(std::vector<ByteBuffer>&& list);
@@ -209,7 +209,7 @@ private:
     std::mutex mListenerMutex;
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
     PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
-    PublishKeyFrameRequestedListner mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
+    PublishKeyFrameRequestedListener mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
     std::shared_ptr<DataChannelListener> mDataChannelListener SRTC_GUARDED_BY(mListenerMutex);

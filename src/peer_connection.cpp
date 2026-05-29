@@ -301,7 +301,7 @@ void PeerConnection::setPublishConnectionStatsListener(const PublishConnectionSt
     mPublishConnectionStatsListener = listener;
 }
 
-void PeerConnection::setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListner& listener)
+void PeerConnection::setPublishKeyFrameRequestedListener(const PublishKeyFrameRequestedListener& listener)
 {
     std::lock_guard lock(mListenerMutex);
     mPublishKeyFrameRequestedListener = listener;
