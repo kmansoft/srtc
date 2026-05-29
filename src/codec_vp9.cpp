@@ -51,12 +51,21 @@ bool parsePayloadDescriptor(const uint8_t* data,
         }
     }
 
-    // L: layer indices (TL0PICIDX + TID/U/SID/D byte)
+    // L: layer indices (TID/U/SID/D byte, then TL0PICIDX when F=0 and D=0)
     if (flagL) {
-        if (pos + 2 > size) {
+        if (pos >= size) {
             return false;
         }
-        pos += 2;
+        const uint8_t l_byte = data[pos];
+        pos++;
+
+        const bool d_bit = (l_byte & 0x01) != 0;
+        if (!flagF && !d_bit) {
+            if (pos >= size) {
+                return false;
+            }
+            pos++;
+        }
     }
 
     // F: flexible mode reference indices (only when P=1)
