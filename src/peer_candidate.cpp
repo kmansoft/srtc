@@ -1,4 +1,3 @@
-#include "sctp/sctp_session.h"
 #ifdef _WIN32
 #include "srtc/srtc.h"
 #include <wincrypt.h>
