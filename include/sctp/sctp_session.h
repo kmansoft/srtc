@@ -58,7 +58,6 @@ private:
         DataChannelState state;
         DataChannelReceiveBuffer receiveBuffer;
         uint16_t sendSsn = 0;
-        std::weak_ptr<Task> taskT1Open;
 
         DataChannel(const std::string& label, uint16_t streamId, bool unordered)
             : label(label)
@@ -109,7 +108,7 @@ private:
     void onReceiveInit(const SctpPacket::Chunk& chunk);
     void onReceiveCookieEcho(const SctpPacket::Chunk& chunk);
     void onAssociationEstablished();
-    void sendDataChannelOpen(DataChannel& channel, unsigned iteration);
+    void sendDataChannelOpen(DataChannel& channel);
     void onReceiveDataChunk(const SctpPacket::Chunk& chunk);
     void onReceiveReconfig(const SctpPacket::Chunk& chunk);
     void onReceiveSack(const SctpPacket::Chunk& chunk);

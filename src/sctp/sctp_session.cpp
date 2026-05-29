@@ -79,8 +79,6 @@ SctpSession::SctpSession(const std::shared_ptr<RealScheduler>& scheduler,
 SctpSession::~SctpSession()
 {
     for (auto& channel : mDataChannels) {
-        Task::cancelHelper(channel.taskT1Open);
-
         if (channel.state == DataChannelState::kOpen) {
             mListener->onSctpDataChannelClose(channel.label);
         }
@@ -458,17 +456,12 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 void SctpSession::onAssociationEstablished()
 {
     for (auto& channel : mDataChannels) {
-        sendDataChannelOpen(channel, 0);
+        sendDataChannelOpen(channel);
     }
 }
 
-void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
+void SctpSession::sendDataChannelOpen(DataChannel& channel)
 {
-    if (iteration > kMaxInitRetransmits) {
-        LOG(SRTC_LOG_W, "DATA_CHANNEL_OPEN: max retransmits reached for \"%s\", giving up", channel.label.c_str());
-        return;
-    }
-
     ByteBuffer payload;
     ByteWriter pw(payload);
     pw.writeU8(kDcepMsgOpen);
@@ -479,9 +472,13 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
     pw.writeU16(0); // protocol length
     pw.write(reinterpret_cast<const uint8_t*>(channel.label.data()), channel.label.size());
 
+    const bool wasEmpty = mSentChunks.empty();
+    const uint32_t tsn = mCurrentTsn++;
+    const size_t payloadSize = payload.size();
+
     ByteBuffer chunkBody;
     ByteWriter cw(chunkBody);
-    cw.writeU32(mCurrentTsn++);
+    cw.writeU32(tsn);
     cw.writeU16(channel.streamId);
     cw.writeU16(0); // SSN = 0 for DCEP (RFC 8832)
     cw.writeU32(kPpidDcep);
@@ -489,14 +486,16 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel, unsigned iteration)
 
     SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
     builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
-    auto packet = builder.build();
+    mListener->onSctpSendPacket(builder.build());
 
-    mListener->onSctpSendPacket(packet);
     channel.state = DataChannelState::kOpening;
 
-    const auto delay = retransmitDelay(iteration);
-    channel.taskT1Open = mScheduler.submit(
-        delay, __FILE__, __LINE__, [this, &channel, iteration] { sendDataChannelOpen(channel, iteration + 1); });
+    mSentChunks.push_back(SentChunk{ tsn, kDataFlagComplete, payloadSize, std::move(chunkBody) });
+    mFlightSize += payloadSize;
+
+    if (wasEmpty) {
+        startT3Rtx();
+    }
 }
 
 void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
@@ -565,7 +564,6 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     if (msgType == kDcepMsgAck) {
         for (auto& channel : mDataChannels) {
             if (channel.streamId == streamId && channel.state == DataChannelState::kOpening) {
-                Task::cancelHelper(channel.taskT1Open);
                 channel.state = DataChannelState::kOpen;
                 channel.receiveBuffer.consumeSsn(ssn);
                 mListener->onSctpDataChannelOpen(channel.label);
@@ -591,9 +589,13 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
         channel.receiveBuffer.consumeSsn(ssn);
 
         // Send ACK
+        const bool wasEmpty = mSentChunks.empty();
+        const uint32_t tsn = mCurrentTsn++;
+        constexpr size_t kAckPayloadSize = 1;
+
         ByteBuffer chunkBody;
         ByteWriter cw(chunkBody);
-        cw.writeU32(mCurrentTsn++);
+        cw.writeU32(tsn);
         cw.writeU16(streamId);
         cw.writeU16(0);
         cw.writeU32(kPpidDcep);
@@ -601,9 +603,15 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
 
         SctpPacketBuilder builder(mLocalPort, mRemotePort, mPeerTag);
         builder.addChunk(kChunkData, kDataFlagComplete, chunkBody);
-        auto packet = builder.build();
+        mListener->onSctpSendPacket(builder.build());
 
-        mListener->onSctpSendPacket(packet);
+        mSentChunks.push_back(SentChunk{ tsn, kDataFlagComplete, kAckPayloadSize, std::move(chunkBody) });
+        mFlightSize += kAckPayloadSize;
+
+        if (wasEmpty) {
+            startT3Rtx();
+        }
+
         mListener->onSctpDataChannelOpen(label);
     }
 }
@@ -632,7 +640,6 @@ void SctpSession::onReceiveReconfig(const SctpPacket::Chunk& chunk)
         for (const auto streamId : streamIds) {
             for (auto it = mDataChannels.begin(); it != mDataChannels.end(); ++it) {
                 if (it->streamId == streamId) {
-                    Task::cancelHelper(it->taskT1Open);
                     mListener->onSctpDataChannelClose(it->label);
                     mDataChannels.erase(it);
                     break;
