@@ -93,6 +93,10 @@ public:
 
     Error publishAudioFrame(int64_t pts_usec, ByteBuffer&& buf);
 
+    // Subscribe listeners
+    using SubscribeConnectionStatsListener = std::function<void(const SubscribeConnectionStats&)>;
+    void setSubscribeConnectionStatsListener(const SubscribeConnectionStatsListener& listener);
+
     // Subscribing
     using SubscribeEncodedFrameListener = std::function<void(const std::shared_ptr<EncodedFrame>&)>;
     void setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener);
@@ -209,6 +213,7 @@ private:
     ConnectionStateListener mConnectionStateListener SRTC_GUARDED_BY(mListenerMutex);
     PublishConnectionStatsListener mPublishConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
     PublishKeyFrameRequestedListener mPublishKeyFrameRequestedListener SRTC_GUARDED_BY(mListenerMutex);
+    SubscribeConnectionStatsListener mSubscribeConnectionStatsListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeEncodedFrameListener mSubscribeEncodedFrameListener SRTC_GUARDED_BY(mListenerMutex);
     SubscribeSenderReportListener mSubscribeSenderReportsListener SRTC_GUARDED_BY(mListenerMutex);
     std::shared_ptr<DataChannelListener> mDataChannelListener SRTC_GUARDED_BY(mListenerMutex);

@@ -2,9 +2,9 @@
 #include "srtc/encoded_frame.h"
 #include "srtc/logging.h"
 #include "srtc/peer_connection.h"
-#include "srtc/sender_report.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
+#include "srtc/sender_report.h"
 #include "srtc/track.h"
 
 #include "media_writer_av1.h"
@@ -280,6 +280,12 @@ int main(int argc, char* argv[])
             connectionStateCond.notify_one();
         });
 
+    peerConnection->setSubscribeConnectionStatsListener([](const SubscribeConnectionStats& stats) {
+        std::cout << "*** PeerConnection stats: received " << stats.frame_count << " frames, " << stats.packet_count
+                  << " packets, " << stats.byte_count << " bytes, " << std::setprecision(3) << stats.rtt_ms << " ms rtt"
+                  << std::endl;
+    });
+
     if (gPrintSenderReports) {
         peerConnection->setSubscribeSenderReportsListener(
             [](const std::shared_ptr<Track>& track, const SenderReport& sr) { printSenderReport(track, sr); });
@@ -471,7 +477,7 @@ int main(int argc, char* argv[])
             std::cout << "The connection has closed, exiting..." << std::endl;
             break;
         }
-}
+    }
 
     // Wait a little and exit
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

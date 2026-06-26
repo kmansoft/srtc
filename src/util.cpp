@@ -162,8 +162,7 @@ int64_t getStableTimeMicros()
 uint32_t getSystemTimeSecs()
 {
     const auto sinceEpoch = std::chrono::system_clock::now().time_since_epoch();
-    return static_cast<uint32_t>(
-        std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch).count());
+    return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(sinceEpoch).count());
 }
 
 size_t compressNackList(const std::vector<uint16_t>& nackList, uint16_t* buf_seq, uint16_t* buf_blp)
@@ -233,9 +232,13 @@ T Filter<T>::value() const
 }
 
 template <class T>
-std::chrono::steady_clock::time_point Filter<T>::getWhenUpdated() const
+bool Filter<T>::isRecentlyUpdated(const std::chrono::steady_clock::time_point& now,
+                                  const std::chrono::steady_clock::duration& recentEnough) const
 {
-    return mWhenUpdated;
+    if (mWhenUpdated != std::chrono::steady_clock::time_point::min()) {
+        return now - mWhenUpdated <= recentEnough;
+    }
+    return false;
 }
 
 template class Filter<float>;

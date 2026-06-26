@@ -84,6 +84,7 @@ public:
     void sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
+    void updateSubscribeConnectionStats(SubscribeConnectionStats& stats) const;
 
     [[nodiscard]] std::optional<float> getIceRtt() const;
 
@@ -101,6 +102,7 @@ private:
     void startConnecting();
     void addSendRaw(ByteBuffer&& buf);
     void flushSendRaw();
+
 
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
@@ -146,7 +148,7 @@ private:
     Filter<float> mIceRttFilter;
     Filter<float> mControlRttFilter;
 
-    mutable uint64_t mPrevByteCount = 0;
+    mutable uint64_t mPrevPublishByteCount = 0;
     mutable std::chrono::steady_clock::time_point mPrevStatsTime = {};
 
     std::shared_ptr<SrtpConnection> mSrtpConnection;
@@ -191,6 +193,9 @@ private:
     static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
 
     void freeDTLS();
+
+    // RTT
+    std::optional<float> calculateRtt(const std::chrono::steady_clock::time_point& now) const;
 
     // State
     void emitOnConnecting();

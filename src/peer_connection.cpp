@@ -489,6 +489,12 @@ Error PeerConnection::publishAudioFrame(int64_t pts_usec, ByteBuffer&& buf)
     return Error::OK;
 }
 
+void PeerConnection::setSubscribeConnectionStatsListener(const SubscribeConnectionStatsListener& listener)
+{
+    std::lock_guard lock(mListenerMutex);
+    mSubscribeConnectionStatsListener = listener;
+}
+
 void PeerConnection::setSubscribeEncodedFrameListener(const SubscribeEncodedFrameListener& listener)
 {
     std::lock_guard lock(mListenerMutex);
@@ -787,15 +793,20 @@ void PeerConnection::startConnecting()
 
 void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& buffer)
 {
+    const auto track = buffer->getTrack();
+    const auto stats = track->getStats();
+
     const auto nackList = buffer->processNack();
     if (!nackList.empty()) {
         if (mSelectedCandidate) {
-            mSelectedCandidate->sendNacks(buffer->getTrack(), nackList);
+            mSelectedCandidate->sendNacks(track, nackList);
         }
     }
 
     const auto frameList = buffer->processDeque();
     if (!frameList.empty()) {
+        stats->incrementReceivedFrames(frameList.size());
+
         std::lock_guard lock(mListenerMutex);
         if (mSubscribeEncodedFrameListener) {
             for (const auto& frame : frameList) {
@@ -1072,15 +1083,9 @@ void PeerConnection::sendConnectionStats()
         mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 
     PublishConnectionStats publishConnectionStats = {};
+    SubscribeConnectionStats subscribeConnectionStats = {};
 
     {
-        publishConnectionStats.packet_count = 0;
-        publishConnectionStats.byte_count = 0;
-        publishConnectionStats.packets_lost_percent = -1.0f;
-        publishConnectionStats.rtt_ms = -1.0f;
-        publishConnectionStats.bandwidth_actual_kbit_per_second = -1.0f;
-        publishConnectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
-
         std::lock_guard lock(mMutex);
         if (mConnectionState != ConnectionState::Connected) {
             return;
@@ -1089,16 +1094,22 @@ void PeerConnection::sendConnectionStats()
         const auto trackList = collectTracks();
 
         for (const auto& trackItem : trackList) {
+            const auto stats = trackItem->getStats();
+
             if (trackItem->getDirection() == Direction::Publish) {
-                const auto stats = trackItem->getStats();
                 publishConnectionStats.frame_count += stats->getSentFrames();
                 publishConnectionStats.packet_count += stats->getSentPackets();
                 publishConnectionStats.byte_count += stats->getSentBytes();
+            } else if (trackItem->getDirection() == Direction::Subscribe) {
+                subscribeConnectionStats.frame_count += stats->getReceivedFrames();
+                subscribeConnectionStats.packet_count += stats->getReceivedPackets();
+                subscribeConnectionStats.byte_count += stats->getReceivedBytes();
             }
         }
 
         if (mSelectedCandidate) {
             mSelectedCandidate->updatePublishConnectionStats(publishConnectionStats);
+            mSelectedCandidate->updateSubscribeConnectionStats(subscribeConnectionStats);
         }
     }
 
@@ -1106,6 +1117,10 @@ void PeerConnection::sendConnectionStats()
 
     if (mPublishConnectionStatsListener && mDirection == Direction::Publish) {
         mPublishConnectionStatsListener(publishConnectionStats);
+    }
+
+    if (mSubscribeConnectionStatsListener && mDirection == Direction::Subscribe) {
+        mSubscribeConnectionStatsListener(subscribeConnectionStats);
     }
 }
 

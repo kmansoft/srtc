@@ -220,7 +220,7 @@ unsigned int PublishPacketHistory::getPacingSpreadMillis(size_t totalSize,
                                                          unsigned int defaultValue) const
 {
     const auto now = std::chrono::steady_clock::now();
-    if (mPacketList && now - mBandwidthActualFilter.getWhenUpdated() <= kMaxRecentEnough) {
+    if (mPacketList && mBandwidthActualFilter.isRecentlyUpdated(now, kMaxRecentEnough)) {
         const auto bitsPerSecond = mBandwidthActualFilter.value();
         if (bitsPerSecond >= 10000.0f) {
             const auto bytesPerSecond = bitsPerSecond * bandwidthScale / 8.0f;
@@ -243,12 +243,12 @@ void PublishPacketHistory::updatePublishConnectionStats(PublishConnectionStats& 
 
     const auto now = std::chrono::steady_clock::now();
 
-    if (now - mPacketsLostPercentFilter.getWhenUpdated() <= kMaxRecentEnough) {
+    if (mPacketsLostPercentFilter.isRecentlyUpdated(now, kMaxRecentEnough)) {
         stats.packets_lost_percent = mPacketsLostPercentFilter.value();
     }
 
     // Actual bandwidth
-    if (now - mBandwidthActualFilter.getWhenUpdated() <= kMaxRecentEnough) {
+    if (mBandwidthActualFilter.isRecentlyUpdated(now, kMaxRecentEnough)) {
         stats.bandwidth_actual_kbit_per_second = mBandwidthActualFilter.value() / 1024.0f;
     }
 

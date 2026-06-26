@@ -444,12 +444,9 @@ void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::ve
 void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) const
 {
     const auto now = std::chrono::steady_clock::now();
-    if (now - mControlRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-        // RTT from sender / receiver reports
-        stats.rtt_ms = mControlRttFilter.value();
-    } else if (now - mIceRttFilter.getWhenUpdated() <= kMaxRecentEnough) {
-        // RTT from STUN requests / responses
-        stats.rtt_ms = mIceRttFilter.value();
+    const auto rtt_ms = calculateRtt(now);
+    if (rtt_ms.has_value()) {
+        stats.rtt_ms = rtt_ms.value();
     }
 
     if (mExtensionSourceTWCC) {
@@ -460,16 +457,25 @@ void PeerCandidate::updatePublishConnectionStats(PublishConnectionStats& stats) 
             if (mPrevStatsTime != std::chrono::steady_clock::time_point{}) {
                 const auto deltaMs =
                     std::chrono::duration_cast<std::chrono::milliseconds>(now - mPrevStatsTime).count();
-                const auto deltaBytes = stats.byte_count - mPrevByteCount;
+                const auto deltaBytes = stats.byte_count - mPrevPublishByteCount;
                 if (deltaMs > 0) {
                     // bits / milliseconds == kbits / second
                     stats.bandwidth_actual_kbit_per_second =
                         static_cast<float>(deltaBytes) * 8.0f / static_cast<float>(deltaMs);
                 }
             }
-            mPrevByteCount = stats.byte_count;
+            mPrevPublishByteCount = stats.byte_count;
             mPrevStatsTime = now;
         }
+    }
+}
+
+void PeerCandidate::updateSubscribeConnectionStats(SubscribeConnectionStats& stats) const
+{
+    const auto now = std::chrono::steady_clock::now();
+    const auto rtt_ms = calculateRtt(now);
+    if (rtt_ms.has_value()) {
+        stats.rtt_ms = rtt_ms.value();
     }
 }
 
@@ -1377,6 +1383,22 @@ void PeerCandidate::freeDTLS()
 
     // Flush the send queue to send the DTLS_close message
     flushSendRaw();
+}
+
+// RTT
+
+std::optional<float> PeerCandidate::calculateRtt(const std::chrono::steady_clock::time_point& now) const
+{
+    if (mControlRttFilter.isRecentlyUpdated(now, kMaxRecentEnough)) {
+        // RTT from sender / receiver reports
+        return mControlRttFilter.value();
+    } else if (mIceRttFilter.isRecentlyUpdated(now, kMaxRecentEnough)) {
+        // RTT from STUN requests / responses
+        return mIceRttFilter.value();
+    }
+
+    return {};
+
 }
 
 // State

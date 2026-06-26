@@ -56,13 +56,21 @@ struct Host {
 };
 
 struct PublishConnectionStats {
-    size_t frame_count;
-    size_t packet_count;
-    size_t byte_count;
-    float packets_lost_percent;
-    float rtt_ms;
-    float bandwidth_actual_kbit_per_second;
-    float bandwidth_suggested_kbit_per_second;
+    size_t frame_count = 0;
+    size_t packet_count = 0;
+    size_t byte_count = 0;
+    float packets_lost_percent = 0.0f;
+    float rtt_ms = 0.0f;
+    float bandwidth_actual_kbit_per_second = 0.0f;
+    float bandwidth_suggested_kbit_per_second = 0.0f;
+};
+
+struct SubscribeConnectionStats
+{
+    size_t frame_count = 0;
+    size_t packet_count = 0;
+    size_t byte_count = 0;
+    float rtt_ms = 0.0f;
 };
 
 #if defined(__clang__) || defined(__GNUC__)
