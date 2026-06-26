@@ -5,7 +5,6 @@
 #include "srtc/jitter_buffer.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/publish_config.h"
-#include "srtc/random_generator.h"
 #include "srtc/scheduler.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/srtc.h"
@@ -226,7 +225,7 @@ private:
     std::shared_ptr<JitterBuffer> mJitterBufferVideo;
     std::shared_ptr<JitterBuffer> mJitterBufferAudio;
 
-    // Sender and received reports
+    // Sender and receiver reports
     void sendReports();
     std::weak_ptr<Task> mTaskReports;
 

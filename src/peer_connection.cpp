@@ -1071,15 +1071,15 @@ void PeerConnection::sendConnectionStats()
     mTaskConnectionStats =
         mLoopScheduler->submit(kConnectionStatsInterval, __FILE__, __LINE__, [this] { sendConnectionStats(); });
 
-    PublishConnectionStats connectionStats = {};
+    PublishConnectionStats publishConnectionStats = {};
 
     {
-        connectionStats.packet_count = 0;
-        connectionStats.byte_count = 0;
-        connectionStats.packets_lost_percent = -1.0f;
-        connectionStats.rtt_ms = -1.0f;
-        connectionStats.bandwidth_actual_kbit_per_second = -1.0f;
-        connectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
+        publishConnectionStats.packet_count = 0;
+        publishConnectionStats.byte_count = 0;
+        publishConnectionStats.packets_lost_percent = -1.0f;
+        publishConnectionStats.rtt_ms = -1.0f;
+        publishConnectionStats.bandwidth_actual_kbit_per_second = -1.0f;
+        publishConnectionStats.bandwidth_suggested_kbit_per_second = -1.0f;
 
         std::lock_guard lock(mMutex);
         if (mConnectionState != ConnectionState::Connected) {
@@ -1087,20 +1087,25 @@ void PeerConnection::sendConnectionStats()
         }
 
         const auto trackList = collectTracks();
+
         for (const auto& trackItem : trackList) {
-            const auto stats = trackItem->getStats();
-            connectionStats.packet_count += stats->getSentPackets();
-            connectionStats.byte_count += stats->getSentBytes();
+            if (trackItem->getDirection() == Direction::Publish) {
+                const auto stats = trackItem->getStats();
+                publishConnectionStats.frame_count += stats->getSentFrames();
+                publishConnectionStats.packet_count += stats->getSentPackets();
+                publishConnectionStats.byte_count += stats->getSentBytes();
+            }
         }
 
         if (mSelectedCandidate) {
-            mSelectedCandidate->updatePublishConnectionStats(connectionStats);
+            mSelectedCandidate->updatePublishConnectionStats(publishConnectionStats);
         }
     }
 
     std::lock_guard lock(mListenerMutex);
-    if (mPublishConnectionStatsListener) {
-        mPublishConnectionStatsListener(connectionStats);
+
+    if (mPublishConnectionStatsListener && mDirection == Direction::Publish) {
+        mPublishConnectionStatsListener(publishConnectionStats);
     }
 }
 

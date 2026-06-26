@@ -601,7 +601,8 @@ void PeerCandidate::run()
 
             // Use the pacer to send
             if (!packetList.empty()) {
-                if (packetList.size() <= 1) {
+                // Send at once or pace it out
+                if (packetList.size() == 1) {
                     mSendPacer->sendNow(packetList.front());
                 } else {
                     auto spread = SendPacer::kDefaultSpreadMillis;

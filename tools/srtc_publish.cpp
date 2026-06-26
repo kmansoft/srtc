@@ -23,16 +23,20 @@
 class PublishDataChannelListener : public srtc::PeerConnection::DataChannelListener
 {
 public:
-    void onDataChannelOpened(const std::string& label) override {
+    void onDataChannelOpened(const std::string& label) override
+    {
         std::cout << "*** Data channel opened: \"" << label << "\"" << std::endl;
     }
-    void onDataChannelClosed(const std::string& label) override {
+    void onDataChannelClosed(const std::string& label) override
+    {
         std::cout << "*** Data channel closed: \"" << label << "\"" << std::endl;
     }
-    void onDataChannelReceivedText(const std::string& label, const std::string& data) override {
+    void onDataChannelReceivedText(const std::string& label, const std::string& data) override
+    {
         std::cout << "*** Data channel text \"" << label << "\": \"" << data << "\"" << std::endl;
     }
-    void onDataChannelReceivedBinary(const std::string& label, const srtc::ByteBuffer& data) override {
+    void onDataChannelReceivedBinary(const std::string& label, const srtc::ByteBuffer& data) override
+    {
         std::cout << "*** Data channel binary \"" << label << "\": " << data.size() << " bytes" << std::endl;
     }
 };
@@ -79,7 +83,8 @@ std::string generateText(size_t size)
     std::string result;
     result.reserve(size);
     while (result.size() < size) {
-        if (!result.empty()) result += ' ';
+        if (!result.empty())
+            result += ' ';
         result += phrase;
     }
     return result;
@@ -153,7 +158,8 @@ void printUsage(const char* programName)
 {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  -f, --file <path>    Path to input file, H264/H265/WEBM (default: " << gInputFile << ")" << std::endl;
+    std::cout << "  -f, --file <path>    Path to input file, H264/H265/WEBM (default: " << gInputFile << ")"
+              << std::endl;
     std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
     std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
     std::cout << "  -l, --loop           Loop the file" << std::endl;
@@ -284,11 +290,12 @@ int main(int argc, char* argv[])
         });
 
     peerConnection->setPublishConnectionStatsListener([](const PublishConnectionStats& stats) {
-        std::cout << "*** PeerConnection stats: sent " << stats.packet_count << " packets, " << stats.byte_count
-                  << " bytes, act " << std::setprecision(6) << stats.bandwidth_actual_kbit_per_second << " kb/s, sugg "
-                  << std::setprecision(6) << stats.bandwidth_suggested_kbit_per_second << " kb/s, "
-                  << std::setprecision(3) << stats.packets_lost_percent << "% packet loss, " << std::setprecision(3)
-                  << stats.rtt_ms << " ms rtt" << std::endl;
+        std::cout << "*** PeerConnection stats: sent " << stats.frame_count << " frames, " << stats.packet_count
+                  << " packets, " << stats.byte_count << " bytes, act " << std::setprecision(6)
+                  << stats.bandwidth_actual_kbit_per_second << " kb/s, sugg " << std::setprecision(6)
+                  << stats.bandwidth_suggested_kbit_per_second << " kb/s, " << std::setprecision(3)
+                  << stats.packets_lost_percent << "% packet loss, " << std::setprecision(3) << stats.rtt_ms
+                  << " ms rtt" << std::endl;
     });
 
     // Data channel listener

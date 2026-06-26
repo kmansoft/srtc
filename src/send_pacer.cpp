@@ -60,6 +60,10 @@ void SendPacer::flush(const std::shared_ptr<Track>& track)
 
 void SendPacer::sendNow(const std::shared_ptr<RtpPacket>& packet)
 {
+    RtpPacket::SendInfo sendInfo = {};
+    sendInfo.is_last_packet_in_frame = true;
+
+    packet->setSendInfo(sendInfo);
     sendImpl(packet);
 }
 
@@ -73,6 +77,11 @@ void SendPacer::sendPaced(const std::vector<std::shared_ptr<RtpPacket>>& packetL
         sendImpl(packetList.front());
         return;
     }
+
+    RtpPacket::SendInfo sendInfo = {};
+    sendInfo.is_last_packet_in_frame = true;
+    packetList.back()->setSendInfo(sendInfo);
+
     if (spreadMillis == 0) {
         for (const auto& packet : packetList) {
             sendImpl(packet);
@@ -135,11 +144,18 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
     // Stats
     const auto stats = track->getStats();
 
+    // Send info
+    const auto sendInfo = packet->getSendInfo();
+
     // Generate
     const auto packetData = packet->generate();
     ByteBuffer protectedData;
     if (mSrtp->protectSendMedia(packetData.buf, packetData.rollover, protectedData)) {
         // Keep stats
+        if (sendInfo.has_value() && sendInfo->is_last_packet_in_frame) {
+            stats->incrementSentFrames(1);
+        }
+
         stats->incrementSentPackets(1);
         stats->incrementSentBytes(protectedData.size());
 

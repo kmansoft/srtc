@@ -258,6 +258,16 @@ RtpPacket::Output RtpPacket::generateRtx(const RtpExtension& extension) const
 	return { std::move(buf), rtxRollover };
 }
 
+void RtpPacket::setSendInfo(const SendInfo& sendInfo)
+{
+    mSendInfo = sendInfo;
+}
+
+std::optional<RtpPacket::SendInfo> RtpPacket::getSendInfo() const
+{
+    return mSendInfo;
+}
+
 std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>& track, const srtc::ByteBuffer& data)
 {
 	ByteReader reader(data);

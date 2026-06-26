@@ -56,6 +56,7 @@ struct Host {
 };
 
 struct PublishConnectionStats {
+    size_t frame_count;
     size_t packet_count;
     size_t byte_count;
     float packets_lost_percent;
