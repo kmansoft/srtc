@@ -282,8 +282,8 @@ int main(int argc, char* argv[])
 
     peerConnection->setSubscribeConnectionStatsListener([](const SubscribeConnectionStats& stats) {
         std::cout << "*** PeerConnection stats: received " << stats.frame_count << " frames, " << stats.packet_count
-                  << " packets, " << stats.byte_count << " bytes, " << std::setprecision(3) << stats.rtt_ms << " ms rtt"
-                  << std::endl;
+                  << " packets, " << stats.byte_count << " bytes, " << std::setprecision(3) << stats.packets_lost_percent
+                  << "% packet loss, " << std::setprecision(3) << stats.rtt_ms << " ms rtt" << std::endl;
     });
 
     if (gPrintSenderReports) {

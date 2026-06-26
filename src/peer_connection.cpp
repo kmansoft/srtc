@@ -202,8 +202,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 
         mDataChannelsNegotiated = mSdpOffer->hasDataChannel() && mSdpAnswer->hasDataChannel();
         if (mDataChannelsNegotiated) {
-            mDataChannelMaxMessageSize =
-                std::min(mSdpOffer->getSctpMaxMessageSize(), mSdpAnswer->getMaxMessageSize());
+            mDataChannelMaxMessageSize = std::min(mSdpOffer->getSctpMaxMessageSize(), mSdpAnswer->getMaxMessageSize());
         }
 
         if (mDirection == Direction::Publish) {
@@ -438,9 +437,10 @@ Error PeerConnection::updateVideoSimulcastLayer(const SimulcastLayer& updated)
         return Error::OK;
     }
 
-    const auto iter = std::find_if(mVideoSimulcastLayerList.begin(),
-                                   mVideoSimulcastLayerList.end(),
-                                   [layerName = updated.name](const auto& layer) { return layer.ridName == layerName; });
+    const auto iter =
+        std::find_if(mVideoSimulcastLayerList.begin(),
+                     mVideoSimulcastLayerList.end(),
+                     [layerName = updated.name](const auto& layer) { return layer.ridName == layerName; });
     if (iter == mVideoSimulcastLayerList.end()) {
         return { Error::Code::InvalidData, "There is no video layer named " + updated.name };
     }
@@ -662,7 +662,7 @@ void PeerConnection::networkThreadWorkerFunc()
             }
         }
 
-         if (mSelectedCandidate) {
+        if (mSelectedCandidate) {
             for (auto& item : dataSendQueue) {
                 mSelectedCandidate->sendDataChannelMessage(std::move(item));
             }
@@ -799,6 +799,7 @@ void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& bu
     const auto nackList = buffer->processNack();
     if (!nackList.empty()) {
         if (mSelectedCandidate) {
+            stats->incrementReceivedPacketsLost(nackList.size());
             mSelectedCandidate->sendNacks(track, nackList);
         }
     }
@@ -941,10 +942,7 @@ void PeerConnection::onCandidateDtlsDisconnected(PeerCandidate* candidate, const
         if (error.isOk()) {
             setConnectionState(ConnectionState::Closed);
         } else {
-            LOG(SRTC_LOG_E,
-                "DTLS disconnected with error: %d %s",
-                static_cast<int>(error.code),
-                error.message.c_str());
+            LOG(SRTC_LOG_E, "DTLS disconnected with error: %d %s", static_cast<int>(error.code), error.message.c_str());
             setConnectionState(ConnectionState::Failed);
         }
     }
@@ -1085,6 +1083,8 @@ void PeerConnection::sendConnectionStats()
     PublishConnectionStats publishConnectionStats = {};
     SubscribeConnectionStats subscribeConnectionStats = {};
 
+    size_t subscribePacketsLost = 0;
+
     {
         std::lock_guard lock(mMutex);
         if (mConnectionState != ConnectionState::Connected) {
@@ -1104,6 +1104,7 @@ void PeerConnection::sendConnectionStats()
                 subscribeConnectionStats.frame_count += stats->getReceivedFrames();
                 subscribeConnectionStats.packet_count += stats->getReceivedPackets();
                 subscribeConnectionStats.byte_count += stats->getReceivedBytes();
+                subscribePacketsLost += stats->getReceivedPacketsLost();
             }
         }
 
@@ -1111,6 +1112,12 @@ void PeerConnection::sendConnectionStats()
             mSelectedCandidate->updatePublishConnectionStats(publishConnectionStats);
             mSelectedCandidate->updateSubscribeConnectionStats(subscribeConnectionStats);
         }
+    }
+
+    if (subscribeConnectionStats.packet_count > 0 && subscribePacketsLost > 0) {
+        subscribeConnectionStats.packets_lost_percent =
+            static_cast<float>(static_cast<double>(subscribePacketsLost) * 100.0 /
+                               static_cast<double>(subscribeConnectionStats.packet_count + subscribePacketsLost));
     }
 
     std::lock_guard lock(mListenerMutex);

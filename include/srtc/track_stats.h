@@ -28,6 +28,7 @@ public:
     [[nodiscard]] size_t getReceivedFrames() const;
 	[[nodiscard]] size_t getReceivedPackets() const;
 	[[nodiscard]] size_t getReceivedBytes() const;
+    [[nodiscard]] size_t getReceivedPacketsLost() const;
 
 	void setHighestReceivedSeq(uint16_t seq);
 	[[nodiscard]] uint64_t getReceivedHighestSeqEx() const;
@@ -35,6 +36,7 @@ public:
     void incrementReceivedFrames(size_t increment);
 	void incrementReceivedPackets(size_t increment);
 	void incrementReceivedBytes(size_t increment);
+    void incrementReceivedPacketsLost(size_t increment);
 
 	void setReceivedSenderReport(const SenderReport& sr);
 	[[nodiscard]] std::optional<SenderReport> getReceivedSenderReport() const;
@@ -46,6 +48,7 @@ private:
     size_t mReceivedFrames;
     size_t mReceivedPackets;
     size_t mReceivedBytes;
+    size_t mReceivedPacketsLost;
 	ExtendedValue<uint16_t> mReceivedHighestSeq;
 	std::optional<SenderReport> mReceivedSenderReport;
 };

@@ -10,6 +10,7 @@ TrackStats::TrackStats()
     , mReceivedFrames(0)
     , mReceivedPackets(0)
     , mReceivedBytes(0)
+    , mReceivedPacketsLost(0)
 {
 }
 
@@ -23,6 +24,7 @@ void TrackStats::clear()
     mReceivedFrames = 0;
     mReceivedPackets = 0;
     mReceivedBytes = 0;
+    mReceivedPacketsLost = 0;
 }
 
 size_t TrackStats::getSentFrames() const
@@ -70,6 +72,11 @@ size_t TrackStats::getReceivedBytes() const
     return mReceivedBytes;
 }
 
+size_t TrackStats::getReceivedPacketsLost() const
+{
+    return mReceivedPacketsLost;
+}
+
 void TrackStats::setHighestReceivedSeq(uint16_t seq)
 {
     (void)mReceivedHighestSeq.extend(seq);
@@ -98,6 +105,11 @@ void TrackStats::incrementReceivedPackets(size_t increment)
 void TrackStats::incrementReceivedBytes(size_t increment)
 {
     mReceivedBytes += increment;
+}
+
+void TrackStats::incrementReceivedPacketsLost(size_t increment)
+{
+    mReceivedPacketsLost += increment;
 }
 
 void TrackStats::setReceivedSenderReport(const SenderReport& sr)

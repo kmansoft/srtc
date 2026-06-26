@@ -70,6 +70,7 @@ struct SubscribeConnectionStats
     size_t frame_count = 0;
     size_t packet_count = 0;
     size_t byte_count = 0;
+    float packets_lost_percent = 0.0f;
     float rtt_ms = 0.0f;
 };
 
