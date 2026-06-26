@@ -350,8 +350,8 @@ void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>
 {
     for (const auto& track : trackList) {
         const auto direction = track->getDirection();
-        if (direction == Direction::Subscribe || (direction == Direction::Publish && track->getRemoteSSRC() != 0)) {
-            const auto ssrc = direction == Direction::Subscribe ? track->getSSRC() : track->getRemoteSSRC();
+        if (direction == Direction::Subscribe) {
+            const auto ssrc = track->getSSRC();
             const auto stats = track->getStats();
 
             const auto seq = stats->getReceivedHighestSeqEx();
@@ -967,7 +967,7 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
             if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
                 LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 
-                if (const auto track = findTrack(output)) {
+                if (const auto track = findReceiveTrack(output)) {
                     const auto packet = RtpPacket::fromUdpPacket(track, output);
                     if (packet) {
                         const auto stats = track->getStats();
@@ -1061,7 +1061,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 
 void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader& rtcpReader)
 {
-    const auto track = findTrack(ssrc);
+    const auto track = findReceiveTrack(ssrc);
 
     if (track) {
         if (rtcpReader.remaining() >= 20) {
@@ -1225,13 +1225,10 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
     }
 }
 
-std::shared_ptr<Track> PeerCandidate::findTrack(uint32_t ssrc)
+std::shared_ptr<Track> PeerCandidate::findReceiveTrack(uint32_t ssrc) const
 {
     for (const auto& track : mTrackList) {
         if (track->getSSRC() == ssrc) {
-            return track;
-        }
-        if (track->getDirection() == Direction::Publish && track->getRemoteSSRC() == ssrc) {
             return track;
         }
     }
@@ -1239,7 +1236,7 @@ std::shared_ptr<Track> PeerCandidate::findTrack(uint32_t ssrc)
     return {};
 }
 
-std::shared_ptr<Track> PeerCandidate::findTrack(ByteBuffer& packet)
+std::shared_ptr<Track> PeerCandidate::findReceiveTrack(ByteBuffer& packet) const
 {
     if (packet.size() < 12) {
         return {};

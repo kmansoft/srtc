@@ -17,7 +17,6 @@ Track::Track(uint32_t trackId,
              uint8_t payloadId,
              uint32_t rtxSsrc,
              uint8_t rtxPayloadId,
-             uint32_t remoteSsrc,
              Codec codec,
              const std::shared_ptr<Track::CodecOptions>& codecOptions,
              const std::shared_ptr<SimulcastLayer>& simulcastLayer,
@@ -32,7 +31,6 @@ Track::Track(uint32_t trackId,
     , mPayloadId(payloadId)
     , mRtxSSRC(rtxSsrc)
     , mRtxPayloadId(rtxPayloadId)
-    , mRemoteSSRC(remoteSsrc)
     , mCodec(codec)
     , mCodecOptions(codecOptions)
     , mSimulcastLayer(simulcastLayer)
@@ -122,11 +120,6 @@ uint32_t Track::getRtxSSRC() const
     return mRtxSSRC;
 }
 
-uint32_t Track::getRemoteSSRC() const
-{
-    return mRemoteSSRC;
-}
-
 std::shared_ptr<RtcpPacketSource> Track::getRtcpPacketSource() const
 {
     return mRtcpPacketSource;
@@ -168,6 +161,12 @@ TrackBuilder::TrackBuilder(uint32_t trackId,
     , mSSRC(ssrc)
     , mPayloadId(payloadId)
     , mClockRate(clockRate)
+    , mRtxSSRC(0)
+    , mRtxPayloadId(0)
+    , mCodec(Codec::H264)
+    , mHasNack(false)
+    , mHasPli(false)
+
 {
 }
 
@@ -175,12 +174,6 @@ TrackBuilder& TrackBuilder::rtx(uint32_t rtxSsrc, uint8_t rtxPayloadId)
 {
     mRtxSSRC = rtxSsrc;
     mRtxPayloadId = rtxPayloadId;
-    return *this;
-}
-
-TrackBuilder& TrackBuilder::remoteSSRC(uint32_t remoteSSRC)
-{
-    mRemoteSSRC = remoteSSRC;
     return *this;
 }
 
@@ -219,7 +212,6 @@ std::shared_ptr<Track> TrackBuilder::build() const
                                    mPayloadId,
                                    mRtxSSRC,
                                    mRtxPayloadId,
-                                   mRemoteSSRC,
                                    mCodec,
                                    mCodecOptions,
                                    mSimulcastLayer,

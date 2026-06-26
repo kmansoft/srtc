@@ -119,8 +119,8 @@ private:
 
     void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
 
-    std::shared_ptr<Track> findTrack(uint32_t ssrc);
-    std::shared_ptr<Track> findTrack(ByteBuffer& packet);
+    [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(uint32_t ssrc) const;
+    [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(ByteBuffer& packet) const;
 
     PeerCandidateListener* const mListener;
 

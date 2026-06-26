@@ -2,6 +2,7 @@
 #include "srtc/encoded_frame.h"
 #include "srtc/logging.h"
 #include "srtc/peer_connection.h"
+#include "srtc/sender_report.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
