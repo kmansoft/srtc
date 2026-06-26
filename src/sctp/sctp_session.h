@@ -1,7 +1,7 @@
 #pragma once
 
-#include "sctp/data_channel_receive_buffer.h"
-#include "sctp/sctp_packet.h"
+#include "data_channel_receive_buffer.h"
+#include "sctp_packet.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/data_channel_message.h"
 #include "srtc/random_generator.h"

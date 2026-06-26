@@ -184,13 +184,13 @@ add_library(srtc
         src/x509_certificate.cpp
         src/x509_hash.cpp
         # sctp
-        include/sctp/sctp_crc32.h
-        include/sctp/sctp_defs.h
-        include/sctp/sctp_packet_builder.h
-        include/sctp/sctp_packet.h
-        include/sctp/data_channel_receive_buffer.h
-        include/sctp/sctp_session.h
-        include/sctp/sctp_session_listener.h
+        src/sctp/sctp_crc32.h
+        src/sctp/sctp_defs.h
+        src/sctp/sctp_packet_builder.h
+        src/sctp/sctp_packet.h
+        src/sctp/data_channel_receive_buffer.h
+        src/sctp/sctp_session.h
+        src/sctp/sctp_session_listener.h
         src/sctp/sctp_crc32.cpp
         src/sctp/sctp_defs.cpp
         src/sctp/sctp_packet_builder.cpp

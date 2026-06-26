@@ -1,5 +1,5 @@
-#include "sctp/data_channel_receive_buffer.h"
-#include "sctp/sctp_defs.h"
+#include "data_channel_receive_buffer.h"
+#include "sctp_defs.h"
 
 namespace srtc::sctp
 {

@@ -1,8 +1,8 @@
-#include "sctp/sctp_session.h"
-#include "sctp/sctp_defs.h"
-#include "sctp/sctp_packet.h"
-#include "sctp/sctp_packet_builder.h"
-#include "sctp/sctp_session_listener.h"
+#include "sctp_defs.h"
+#include "sctp_session.h"
+#include "sctp_packet.h"
+#include "sctp_packet_builder.h"
+#include "sctp_session_listener.h"
 
 #include "srtc/byte_buffer.h"
 #include "srtc/data_channel_message.h"

@@ -9,7 +9,7 @@
 #include "srtc/srtc.h"
 #include "srtc/util.h"
 
-#include "sctp/sctp_session_listener.h"
+#include "../../src/sctp/sctp_session_listener.h"
 
 #include <list>
 #include <memory>

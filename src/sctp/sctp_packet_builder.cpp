@@ -1,5 +1,5 @@
-#include "sctp/sctp_packet_builder.h"
-#include "sctp/sctp_crc32.h"
+#include "sctp_packet_builder.h"
+#include "sctp_crc32.h"
 
 #include <utility>
 

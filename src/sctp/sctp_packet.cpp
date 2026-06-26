@@ -1,5 +1,5 @@
-#include "sctp/sctp_packet.h"
-#include "sctp/sctp_crc32.h"
+#include "sctp_packet.h"
+#include "sctp_crc32.h"
 #include "srtc/byte_buffer.h"
 
 #include <algorithm>

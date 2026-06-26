@@ -42,10 +42,10 @@
  * Generator Polynomial = 0x1EDC6F41, Reflected, 8 slices of 8 bits.
  */
 
-#include "sctp/sctp_crc32.h"
+#include "sctp_crc32.h"
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 // Portable byte-order detection (mirrors usrsctplib/netinet/sctp_os_userspace.h)
 #if defined(_WIN32)

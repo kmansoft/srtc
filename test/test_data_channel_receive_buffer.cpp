@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "sctp/data_channel_receive_buffer.h"
-#include "sctp/sctp_defs.h"
+#include "../src/sctp/data_channel_receive_buffer.h"
+#include "../src/sctp/sctp_defs.h"
 
 using namespace srtc::sctp;
 

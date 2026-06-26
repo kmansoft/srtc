@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "sctp/sctp_crc32.h"
+#include "../src/sctp/sctp_crc32.h"
 
 #include <cstring>
 

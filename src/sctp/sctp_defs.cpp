@@ -1,4 +1,4 @@
-#include "sctp/sctp_defs.h"
+#include "sctp_defs.h"
 
 namespace srtc::sctp {
 
