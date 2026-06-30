@@ -52,4 +52,11 @@ std::string ExtensionMap::findById(uint8_t id) const
     return {};
 }
 
+void ExtensionMap::clear()
+{
+    mLastName.clear();
+    mLastId = 0;
+    mEntryList.clear();
+}
+
 } // namespace srtc
