@@ -9,6 +9,13 @@ Media::Media(const std::string& id, MediaType type)
 {
 }
 
+Media::Media(const std::string& id, MediaType type, const ExtensionMap& extensionMap)
+    : mId(id)
+    , mType(type)
+    , mExtensionMap(extensionMap)
+{
+}
+
 Media::~Media()
 {
 }
@@ -21,6 +28,11 @@ std::string Media::getId() const
 MediaType Media::getType() const
 {
     return mType;
+}
+
+const ExtensionMap& Media::getExtensionMap() const
+{
+    return mExtensionMap;
 }
 
 } // namespace srtc

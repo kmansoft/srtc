@@ -43,8 +43,6 @@ public:
     [[nodiscard]] std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
     [[nodiscard]] bool hasAudioMedia() const;
     [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;
-    [[nodiscard]] const ExtensionMap& getVideoExtensionMap() const;
-    [[nodiscard]] const ExtensionMap& getAudioExtensionMap() const;
     [[nodiscard]] bool isSetupActive() const;
     [[nodiscard]] const X509Hash& getCertificateHash() const;
     [[nodiscard]] bool hasDataChannel() const;
@@ -59,8 +57,6 @@ private:
     const std::shared_ptr<Track> mVideoSingleTrack;
     const std::vector<std::shared_ptr<Track>> mVideoSimulcastTrackList;
     const std::shared_ptr<Track> mAudioTrack;
-    const ExtensionMap mVideoExtensionMap;
-    const ExtensionMap mAudioExtensionMap;
     const bool mIsSetupActive;
     const X509Hash mCertHash;
     const bool mHasDataChannel;
@@ -74,8 +70,6 @@ private:
               const std::shared_ptr<Track>& videoSingleTrack,
               const std::vector<std::shared_ptr<Track>>& videoSimulcastTrackList,
               const std::shared_ptr<Track>& audioTrack,
-              const ExtensionMap& videoExtensionMap,
-              const ExtensionMap& audioExtensionMap,
               bool isSetupActive,
               const X509Hash& certHash,
               bool hasDataChannel,

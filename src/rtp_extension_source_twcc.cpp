@@ -21,11 +21,6 @@
 namespace
 {
 
-uint8_t findTWCCExtension(const srtc::ExtensionMap& map)
-{
-    return map.findByName(srtc::RtpStandardExtensions::kExtGoogleTWCC);
-}
-
 bool isReceivedWithTime(uint8_t status)
 {
     return status == srtc::twcc::kSTATUS_RECEIVED_SMALL_DELTA || status == srtc::twcc::kSTATUS_RECEIVED_LARGE_DELTA;
@@ -40,12 +35,8 @@ constexpr std::chrono::milliseconds kProbeDuration = std::chrono::milliseconds(1
 namespace srtc
 {
 
-RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
-                                               uint8_t nAudioExtTWCC,
-                                               const std::shared_ptr<RealScheduler>& scheduler)
-    : mVideoExtTWCC(nVideoExtTWCC)
-    , mAudioExtTWCC(nAudioExtTWCC)
-    , mNextPacketSEQ(1)
+RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(const std::shared_ptr<RealScheduler>& scheduler)
+    : mNextPacketSEQ(1)
     , mPacketHistory(std::make_unique<twcc::PublishPacketHistory>())
     , mIsConnected(false)
     , mIsProbing(false)
@@ -69,21 +60,7 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
         return {};
     }
 
-    uint8_t nVideoExtTWCC = 0;
-    if (answer->hasVideoMedia()) {
-        nVideoExtTWCC = findTWCCExtension(answer->getVideoExtensionMap());
-    }
-
-    uint8_t nAudioExtTWCC = 0;
-    if (answer->hasAudioMedia()) {
-        nAudioExtTWCC = findTWCCExtension(answer->getAudioExtensionMap());
-    }
-
-    if (nVideoExtTWCC == 0 && nAudioExtTWCC == 0) {
-        return {};
-    }
-
-    return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC, scheduler);
+    return std::make_shared<RtpExtensionSourceTWCC>(scheduler);
 }
 
 void RtpExtensionSourceTWCC::onPeerConnected()
@@ -373,13 +350,9 @@ void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
-    const auto type = track->getMedia()->getType();
-    if (type == MediaType::Video) {
-        return mVideoExtTWCC;
-    } else if (type == MediaType::Audio) {
-        return mAudioExtTWCC;
-    }
-    return 0;
+    const auto media = track->getMedia();
+    const auto& extensionMap = media->getExtensionMap();
+    return extensionMap.findByName(RtpStandardExtensions::kExtGoogleTWCC);
 }
 
 void RtpExtensionSourceTWCC::onStartProbing()

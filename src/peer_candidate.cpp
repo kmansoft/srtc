@@ -189,11 +189,6 @@ bool is_rtcp_message(const srtc::ByteBuffer& buf)
     return false;
 }
 
-uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer, const std::string& name)
-{
-    return answer->getVideoExtensionMap().findByName(name);
-}
-
 float calculateLayerBandwidthScale(const std::vector<srtc::SimulcastLayer>& layerList,
                                    const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
 {
@@ -234,15 +229,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendRtpHistory(std::make_shared<SendRtpHistory>())
     , mUniqueId(++gNextUniqueId)
-    , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
-    , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
-    , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
-    , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
-    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast(),
-                                                                     mVideoExtMediaId,
-                                                                     mVideoExtStreamId,
-                                                                     mVideoExtRepairedStreamId,
-                                                                     mVideoExtGoogleVLA))
+    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
     , mResponderTWCC(RtpResponderTWCC::factory(offer, answer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())

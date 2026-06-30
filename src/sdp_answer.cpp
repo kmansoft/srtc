@@ -256,7 +256,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
         }
     }
 
-    const auto media = std::make_shared<srtc::Media>(mediaId, mediaType.value());
+    const auto media = std::make_shared<srtc::Media>(mediaId, mediaType.value(), extensionMap);
 
     std::vector<std::shared_ptr<srtc::Track>> list;
     for (size_t i = 0u; i < payloadStateSize; i += 1) {
@@ -431,8 +431,6 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::s
                       videoSingleTrack,
                       videoSimulcastTrackList,
                       audioTrack,
-                      mediaStateVideo.extensionMap,
-                      mediaStateAudio.extensionMap,
                       mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive || dataChannelSetupActive,
                       { certHashAlg, certHashBin, certHashHex },
                       hasDataChannel,
@@ -755,8 +753,6 @@ SdpAnswer::SdpAnswer(Direction direction,
                      const std::shared_ptr<Track>& videoSingleTrack,
                      const std::vector<std::shared_ptr<Track>>& videoSimulcastTrackList,
                      const std::shared_ptr<Track>& audioTrack,
-                     const ExtensionMap& videoExtensionMap,
-                     const ExtensionMap& audioExtensionMap,
                      bool isSetupActive,
                      const X509Hash& certHash,
                      bool hasDataChannel,
@@ -769,8 +765,6 @@ SdpAnswer::SdpAnswer(Direction direction,
     , mVideoSingleTrack(videoSingleTrack)
     , mVideoSimulcastTrackList(videoSimulcastTrackList)
     , mAudioTrack(audioTrack)
-    , mVideoExtensionMap(videoExtensionMap)
-    , mAudioExtensionMap(audioExtensionMap)
     , mIsSetupActive(isSetupActive)
     , mCertHash(certHash)
     , mHasDataChannel(hasDataChannel)
@@ -794,16 +788,6 @@ std::string SdpAnswer::getIceUFrag() const
 std::string SdpAnswer::getIcePassword() const
 {
     return mIcePassword;
-}
-
-const ExtensionMap& SdpAnswer::getVideoExtensionMap() const
-{
-    return mVideoExtensionMap;
-}
-
-const ExtensionMap& SdpAnswer::getAudioExtensionMap() const
-{
-    return mAudioExtensionMap;
 }
 
 std::vector<Host> SdpAnswer::getHostList() const

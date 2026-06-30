@@ -3,6 +3,7 @@
 #include "srtc/media.h"
 #include "srtc/packetizer.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_std_extensions.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 
@@ -11,102 +12,104 @@
 namespace srtc
 {
 
-RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast(uint8_t nVideoExtMediaId,
-														 uint8_t nVideoExtStreamId,
-														 uint8_t nVideoExtRepairedStreamId,
-														 uint8_t nVideoExtGoogleVLA)
-	: mVideoExtMediaId(nVideoExtMediaId)
-	, mVideoExtStreamId(nVideoExtStreamId)
-	, mVideoExtRepairedStreamId(nVideoExtRepairedStreamId)
-	, mVideoExtGoogleVLA(nVideoExtGoogleVLA)
-	, mIsExtensionsValid(mVideoExtMediaId > 0 && mVideoExtStreamId > 0 && mVideoExtGoogleVLA > 0)
+RtpExtensionSourceSimulcast::RtpExtensionSourceSimulcast()
+    : mCurExtMediaId(0)
+    , mCurExtStreamId(0)
+    , mCurExtGoogleVLA(0)
 {
 }
 
 RtpExtensionSourceSimulcast::~RtpExtensionSourceSimulcast() = default;
 
-std::shared_ptr<RtpExtensionSourceSimulcast> RtpExtensionSourceSimulcast::factory(bool isVideoSimulcast,
-																				  uint8_t nVideoExtMediaId,
-																				  uint8_t nVideoExtStreamId,
-																				  uint8_t nVideoExtRepairedStreamId,
-																				  uint8_t nVideoExtGoogleVLA)
+std::shared_ptr<RtpExtensionSourceSimulcast> RtpExtensionSourceSimulcast::factory(bool isVideoSimulcast)
 {
-	if (isVideoSimulcast) {
-		if (nVideoExtMediaId > 0 && nVideoExtStreamId > 0 && nVideoExtGoogleVLA > 0) {
-			return std::make_shared<RtpExtensionSourceSimulcast>(
-				nVideoExtMediaId, nVideoExtStreamId, nVideoExtRepairedStreamId, nVideoExtGoogleVLA);
-		}
-	}
+    if (isVideoSimulcast) {
+        return std::make_shared<RtpExtensionSourceSimulcast>();
+    }
 
-	return {};
+    return {};
 }
 
 bool RtpExtensionSourceSimulcast::shouldAdd(const std::shared_ptr<Track>& track,
-											const std::shared_ptr<Packetizer>& packetizer,
-											const ByteBuffer& frame)
+                                            const std::shared_ptr<Packetizer>& packetizer,
+                                            const ByteBuffer& frame)
 {
-	if (mIsExtensionsValid && track->isSimulcast()) {
-		const auto stats = track->getStats();
-		return stats->getSentPackets() < 100 || packetizer->isKeyFrame(frame);
-	}
-	return false;
+    if (track->isSimulcast()) {
+        const auto media = track->getMedia();
+        const auto& extensionMap = media->getExtensionMap();
+        mCurExtMediaId = extensionMap.findByName(RtpStandardExtensions::kExtSdesMid);
+        mCurExtStreamId = extensionMap.findByName(RtpStandardExtensions::kExtSdesRtpStreamId);
+        mCurExtGoogleVLA = extensionMap.findByName(RtpStandardExtensions::kExtGoogleVLA);
+
+        if (mCurExtMediaId > 0 && mCurExtStreamId > 0 && mCurExtGoogleVLA > 0) {
+            const auto stats = track->getStats();
+            return stats->getSentPackets() < 100 || packetizer->isKeyFrame(frame);
+        }
+    }
+    return false;
 }
 
 void RtpExtensionSourceSimulcast::prepare(const std::shared_ptr<Track>& track,
-										  const std::vector<SimulcastLayer>& layerList)
+                                          const std::vector<SimulcastLayer>& layerList)
 {
-	const auto layer = track->getSimulcastLayer();
+    const auto layer = track->getSimulcastLayer();
 
-	mCurMediaId = track->getMedia()->getId();
-	mCurLayerName = layer->name;
+    mCurMediaId = track->getMedia()->getId();
+    mCurLayerName = layer->name;
 
-	buildGoogleVLA(mCurGoogleVLA, layer->index, layerList);
+    buildGoogleVLA(mCurGoogleVLA, layer->index, layerList);
 }
 
 void RtpExtensionSourceSimulcast::clear()
 {
-	mCurMediaId.clear();
-	mCurLayerName.clear();
-	mCurGoogleVLA.resize(0);
+    mCurMediaId.clear();
+    mCurLayerName.clear();
+    mCurGoogleVLA.resize(0);
 }
 
 uint8_t RtpExtensionSourceSimulcast::getPadding([[maybe_unused]] const std::shared_ptr<Track>& track,
-												[[maybe_unused]] size_t remainingDataSize)
+                                                [[maybe_unused]] size_t remainingDataSize)
 {
-	return 0;
+    return 0;
 }
 
 bool RtpExtensionSourceSimulcast::wantsExtension(const std::shared_ptr<Track>& track,
-												 bool isKeyFrame,
-												 unsigned int packetNumber) const
+                                                 bool isKeyFrame,
+                                                 unsigned int packetNumber) const
 {
-	return !mCurGoogleVLA.empty();
+    return !mCurGoogleVLA.empty();
 }
 
 void RtpExtensionSourceSimulcast::addExtension(RtpExtensionBuilder& builder,
-											   const std::shared_ptr<Track>& track,
-											   bool isKeyFrame,
-											   unsigned int packetNumber)
+                                               const std::shared_ptr<Track>& track,
+                                               bool isKeyFrame,
+                                               unsigned int packetNumber)
 {
-	builder.addStringValue(mVideoExtMediaId, mCurMediaId);
-	builder.addStringValue(mVideoExtStreamId, mCurLayerName);
-	builder.addBinaryValue(mVideoExtGoogleVLA, mCurGoogleVLA);
+    builder.addStringValue(mCurExtMediaId, mCurMediaId);
+    builder.addStringValue(mCurExtStreamId, mCurLayerName);
+    builder.addBinaryValue(mCurExtGoogleVLA, mCurGoogleVLA);
 }
 
 void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, const std::shared_ptr<Track>& track) const
 {
-	const auto layer = track->getSimulcastLayer();
+    const auto media = track->getMedia();
+    const auto& extensionMap = media->getExtensionMap();
 
-	if (const auto id = mVideoExtMediaId; id != 0) {
-		if (!builder.contains(id)) {
-			builder.addStringValue(id, track->getMedia()->getId());
-		}
-	}
-	if (const auto id = mVideoExtRepairedStreamId; id != 0) {
-		if (!builder.contains(id)) {
-			builder.addStringValue(id, layer->name);
-		}
-	}
+    const auto extMediaId = extensionMap.findByName(RtpStandardExtensions::kExtSdesMid);
+    const auto extRepairedStreamId = extensionMap.findByName(RtpStandardExtensions::kExtSdesRtpRepairedStreamId);
+
+    const auto layer = track->getSimulcastLayer();
+
+    if (const auto id = extMediaId; id != 0) {
+        if (!builder.contains(id)) {
+            builder.addStringValue(id, track->getMedia()->getId());
+        }
+    }
+    if (const auto id = extRepairedStreamId; id != 0) {
+        if (!builder.contains(id)) {
+            builder.addStringValue(id, layer->name);
+        }
+    }
 }
 
 } // namespace srtc

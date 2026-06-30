@@ -136,10 +136,6 @@ private:
     const std::unique_ptr<uint8_t[]> mIceMessageBuffer;
     const std::shared_ptr<SendRtpHistory> mSendRtpHistory;
     const uint32_t mUniqueId;
-    const uint8_t mVideoExtMediaId;
-    const uint8_t mVideoExtStreamId;
-    const uint8_t mVideoExtRepairedStreamId;
-    const uint8_t mVideoExtGoogleVLA;
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
     const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;

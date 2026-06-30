@@ -83,10 +83,10 @@ TEST(Packetizer, h264)
 
     int64_t pts_usec = 1000u;
 
-    const auto extensionSimulcast = std::make_shared<srtc::RtpExtensionSourceSimulcast>(1, 2, 3, 4);
+    const auto extensionSimulcast = std::make_shared<srtc::RtpExtensionSourceSimulcast>();
 
     const auto scheduler = std::make_shared<srtc::ThreadScheduler>("test");
-    const auto extensionTWCC = std::make_shared<srtc::RtpExtensionSourceTWCC>(5, 6, scheduler);
+    const auto extensionTWCC = std::make_shared<srtc::RtpExtensionSourceTWCC>(scheduler);
 
     srtc::ExtendedValue<uint16_t> extendedSeq;
     srtc::ExtendedValue<uint32_t> extendedRtpTime;
