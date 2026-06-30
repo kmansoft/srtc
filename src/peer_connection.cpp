@@ -5,6 +5,7 @@
 #include "srtc/ice_agent.h"
 #include "srtc/jitter_buffer.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
 #include "srtc/rtcp_packet_source.h"
@@ -188,7 +189,7 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 
     mSendSimulcastLayerList.clear();
     for (const auto& track : mVideoSimulcastTrackList) {
-        if (track->getMediaType() == MediaType::Video && track->isSimulcast()) {
+        if (track->getMedia()->getType() == MediaType::Video && track->isSimulcast()) {
             const auto layer = track->getSimulcastLayer();
             assert(layer != nullptr);
             mSendSimulcastLayerList.push_back(*layer);

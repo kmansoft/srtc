@@ -1,5 +1,6 @@
 #include "srtc/rtp_responder_twcc.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
@@ -103,10 +104,10 @@ std::vector<std::shared_ptr<RtcpPacket>> RtpResponderTWCC::run(const std::shared
 
 uint8_t RtpResponderTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
-    const auto media = track->getMediaType();
-    if (media == MediaType::Video) {
+    const auto type = track->getMedia()->getType();
+    if (type == MediaType::Video) {
         return mVideoExtTWCC;
-    } else if (media == MediaType::Audio) {
+    } else if (type == MediaType::Audio) {
         return mAudioExtTWCC;
     }
     return 0;

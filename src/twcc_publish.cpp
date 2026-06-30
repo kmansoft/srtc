@@ -1,5 +1,6 @@
 #include "srtc/twcc_publish.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/track.h"
 #include "srtc/twcc_common.h"
 
@@ -133,7 +134,7 @@ void PublishPacketHistory::saveOutgoingPacket(uint16_t seq,
     curr->generated_size = static_cast<uint16_t>(generatedSize);
     curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
     curr->sent_time_micros = getStableTimeMicros();
-    curr->media_type = track->getMediaType();
+    curr->media_type = track->getMedia()->getType();
 }
 
 PublishPacket* PublishPacketHistory::get(uint16_t seq) const

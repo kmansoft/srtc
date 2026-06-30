@@ -14,6 +14,7 @@
 #include "media_writer_vp9.h"
 
 #include "http_whip_whep.h"
+#include "srtc/media.h"
 
 #include <csignal>
 #include <iomanip>
@@ -106,7 +107,8 @@ void printSenderReport(const std::shared_ptr<srtc::Track>& track, const srtc::Se
     static SenderReportState stateAudio;
     static SenderReportState stateVideo;
 
-    const auto type = track->getMediaType();
+    const auto media = track->getMedia();
+    const auto type = media->getType();
 
     const char* label;
     SenderReportState* state;
@@ -416,12 +418,13 @@ int main(int argc, char* argv[])
                 std::cout << "*** Received " << frameCount << " frames of audio / video media" << std::endl;
             }
 
-            const auto mediaType = frame->track->getMediaType();
-            if (mediaType == MediaType::Audio) {
+            const auto media = frame->track->getMedia();
+            const auto type = media->getType();
+            if (type == MediaType::Audio) {
                 if (mediaWriterAudio) {
                     mediaWriterAudio->send(frame);
                 }
-            } else if (mediaType == MediaType::Video) {
+            } else if (type == MediaType::Video) {
                 if (mediaWriterVideo) {
                     mediaWriterVideo->send(frame);
                 }

@@ -4,6 +4,7 @@
 #include "srtc/codec_h264.h"
 #include "srtc/depacketizer_h264.h"
 #include "srtc/extended_value.h"
+#include "srtc/media.h"
 #include "srtc/packetizer_h264.h"
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
@@ -64,13 +65,16 @@ TEST(Packetizer, h264)
 
     const auto codecOptions = std::make_shared<srtc::Track::CodecOptions>(0x42e01fu, 0, false);
 
+    const auto mediaPublish = std::make_shared<srtc::Media>("video_0", srtc::MediaType::Video);
     const auto trackPublish =
-        srtc::TrackBuilder(0, srtc::Direction::Publish, srtc::MediaType::Video, "video_0", 1234u, 96u, 90000u)
+        srtc::TrackBuilder(mediaPublish, srtc::Direction::Publish, 1234u, 96u, 90000u)
             .codec(srtc::Codec::H264, codecOptions)
             .simulcastLayer(std::make_shared<srtc::Track::SimulcastLayer>(layer0))
             .build();
+
+    const auto mediaSubscribe = std::make_shared<srtc::Media>("video_0", srtc::MediaType::Video);
     const auto trackSubscribe =
-        srtc::TrackBuilder(0, srtc::Direction::Subscribe, srtc::MediaType::Video, "video_0", 5678u, 96u, 90000u)
+        srtc::TrackBuilder(mediaSubscribe, srtc::Direction::Subscribe, 5678u, 96u, 90000u)
             .codec(srtc::Codec::H264, codecOptions)
             .build();
 

@@ -9,6 +9,7 @@
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
 #include "srtc/rtcp_packet.h"
@@ -389,7 +390,7 @@ void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>
 void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
 {
     for (const auto& track : trackList) {
-        if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+        if (track->getMedia()->getType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
 
             LOG(SRTC_LOG_V, "Sending PLI for ssrc = %u", ssrc);
@@ -431,7 +432,7 @@ void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::ve
 
         LOG(SRTC_LOG_V,
             "Sending NACK for media %s, SSRC = %u, SEQ = %u, BLP = 0x%x",
-            to_string(track->getMediaType()).c_str(),
+            to_string(track->getMedia()->getType()).c_str(),
             ssrc,
             seq,
             blp);
@@ -587,7 +588,7 @@ void PeerCandidate::run()
 
             // Frame data
             if (mExtensionSourceSimulcast) {
-                if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast() &&
+                if (item.track->getMedia()->getType() == MediaType::Video && item.track->isSimulcast() &&
                     mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
                     mExtensionSourceSimulcast->prepare(item.track, layerList);
                 } else {
@@ -1053,7 +1054,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 
     LOG(SRTC_LOG_V,
         "RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
-        to_string(track->getMediaType()).c_str(),
+        to_string(track->getMedia()->getType()).c_str(),
         packet->getSSRC(),
         packet->getSequence(),
         packet->getPayloadId(),
@@ -1085,7 +1086,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
                 ntp_low,
                 packet_count,
                 octet_count,
-                to_string(track->getMediaType()).c_str());
+                to_string(track->getMedia()->getType()).c_str());
 
             SenderReport sr;
             sr.when = std::chrono::steady_clock::now();
@@ -1398,7 +1399,6 @@ std::optional<float> PeerCandidate::calculateRtt(const std::chrono::steady_clock
     }
 
     return {};
-
 }
 
 // State

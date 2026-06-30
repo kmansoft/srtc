@@ -1,6 +1,7 @@
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/extension_map.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/rtp_std_extensions.h"
@@ -100,12 +101,12 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
             return 50;
         }
 
-        const auto mediaType = track->getMediaType();
-        if (mediaType == MediaType::Video) {
+        const auto type = track->getMedia()->getType();
+        if (type == MediaType::Video) {
             // Video gets packetized, we can always add 10% to outgoing packets
             mProbingPacketCount += 1;
             return 120;
-        } else if (mediaType == MediaType::Audio) {
+        } else if (type == MediaType::Audio) {
             // Audio doesn't create split packets, we have to stay within the MTU
             if (remainingDataSize < 1060) {
                 mProbingPacketCount += 1;
@@ -372,10 +373,10 @@ void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
-    const auto media = track->getMediaType();
-    if (media == MediaType::Video) {
+    const auto type = track->getMedia()->getType();
+    if (type == MediaType::Video) {
         return mVideoExtTWCC;
-    } else if (media == MediaType::Audio) {
+    } else if (type == MediaType::Audio) {
         return mAudioExtTWCC;
     }
     return 0;

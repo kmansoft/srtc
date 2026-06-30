@@ -3,6 +3,7 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/media.h"
 #include "srtc/track.h"
 #include "srtc/util.h"
 
@@ -75,10 +76,9 @@ TEST(RtpPacket, Serialize)
     const auto kSSRC = 0x12345678u;
     const auto kPayloadId = 96u;
 
-    const auto track = std::make_shared<srtc::Track>(1,
+    const auto media = std::make_shared<srtc::Media>("0", srtc::MediaType::Video);
+    const auto track = std::make_shared<srtc::Track>(media,
                                                      srtc::Direction::Subscribe,
-                                                     srtc::MediaType::Video,
-                                                     "0",
                                                      kSSRC,
                                                      kPayloadId,
                                                      0,

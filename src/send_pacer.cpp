@@ -1,5 +1,6 @@
 #include "srtc/send_pacer.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/send_rtp_history.h"
@@ -175,7 +176,7 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
 #else
         // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
         const auto randomValue = mLosePacketsRandomGenerator.next();
-        if (mOfferConfig.debug_drop_packets && randomValue < 5 && track->getMediaType() == MediaType::Video) {
+        if (mOfferConfig.debug_drop_packets && randomValue < 5 && track->getMedia()->getType() == MediaType::Video) {
             const auto twcc = mTWCC ? mTWCC->getFeedbackSeq(packet) : std::nullopt;
             if (twcc.has_value()) {
                 LOG(SRTC_LOG_V, "NOT sending packet %u, twcc %u", packet->getSequence(), twcc.value());

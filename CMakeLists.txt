@@ -62,6 +62,7 @@ add_library(srtc
         include/srtc/jitter_buffer_item.h
         include/srtc/jitter_buffer.h
         include/srtc/logging.h
+        include/srtc/media.h
         include/srtc/packetizer.h
         include/srtc/packetizer_av1.h
         include/srtc/packetizer_h264.h
@@ -134,6 +135,7 @@ add_library(srtc
         src/ice_agent.cpp
         src/jitter_buffer.cpp
         src/logging.cpp
+        src/media.cpp
         src/packetizer.cpp
         src/packetizer_av1.cpp
         src/packetizer_h264.cpp

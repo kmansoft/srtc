@@ -1,5 +1,6 @@
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/packetizer.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/track.h"
@@ -56,7 +57,7 @@ void RtpExtensionSourceSimulcast::prepare(const std::shared_ptr<Track>& track,
 {
 	const auto layer = track->getSimulcastLayer();
 
-	mCurMediaId = track->getMediaId();
+	mCurMediaId = track->getMedia()->getId();
 	mCurLayerName = layer->name;
 
 	buildGoogleVLA(mCurGoogleVLA, layer->index, layerList);
@@ -98,7 +99,7 @@ void RtpExtensionSourceSimulcast::updateForRtx(RtpExtensionBuilder& builder, con
 
 	if (const auto id = mVideoExtMediaId; id != 0) {
 		if (!builder.contains(id)) {
-			builder.addStringValue(id, track->getMediaId());
+			builder.addStringValue(id, track->getMedia()->getId());
 		}
 	}
 	if (const auto id = mVideoExtRepairedStreamId; id != 0) {
