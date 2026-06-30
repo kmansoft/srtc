@@ -285,7 +285,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
         return nullptr;
     }
 
-    const auto selected = selector == nullptr ? list[0] : selector->selectTrack(mediaType.value(), list);
+    const auto selected = selector == nullptr ? list[0] : selector->selectTrack(list);
     assert(selected != nullptr);
     return selected;
 }
