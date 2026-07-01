@@ -301,9 +301,9 @@ void PeerCandidate::addSendFrame(FrameToSend&& frame)
     mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendSenderReports()
 {
-    for (const auto& track : trackList) {
+    for (const auto& track : mTrackList) {
         if (track->getDirection() == Direction::Publish) {
             const auto ssrc = track->getSSRC();
 
@@ -334,9 +334,9 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
     }
 }
 
-void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendReceiverReports()
 {
-    for (const auto& track : trackList) {
+    for (const auto& track : mTrackList) {
         const auto direction = track->getDirection();
         if (direction == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
@@ -374,10 +374,10 @@ void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>
     }
 }
 
-void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendPictureLossIndicators()
 {
-    for (const auto& track : trackList) {
-        if (track->getMedia()->getType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+    for (const auto& track : mTrackList) {
+        if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
 
             LOG(SRTC_LOG_V, "Sending PLI for ssrc = %u", ssrc);
@@ -419,7 +419,7 @@ void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::ve
 
         LOG(SRTC_LOG_V,
             "Sending NACK for media %s, SSRC = %u, SEQ = %u, BLP = 0x%x",
-            to_string(track->getMedia()->getType()).c_str(),
+            to_string(track->getMediaType()).c_str(),
             ssrc,
             seq,
             blp);
@@ -571,13 +571,14 @@ void PeerCandidate::run()
 
         if (!item.buf.empty()) {
             // Simulcast layer list
-            const auto& layerList = mListener->getSimulcastLayerList();
+            mSimulcastLayerList.clear();
+            mListener->getSimulcastLayerList(item.track->getMedia(), mSimulcastLayerList);
 
             // Frame data
             if (mExtensionSourceSimulcast) {
-                if (item.track->getMedia()->getType() == MediaType::Video && item.track->isSimulcast() &&
+                if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast() &&
                     mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
-                    mExtensionSourceSimulcast->prepare(item.track, layerList);
+                    mExtensionSourceSimulcast->prepare(item.track, mSimulcastLayerList);
                 } else {
                     mExtensionSourceSimulcast->clear();
                 }
@@ -604,7 +605,7 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
+                            bandwidthScale = calculateLayerBandwidthScale(mSimulcastLayerList, item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }
@@ -938,27 +939,6 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
                 }
             }
         } else {
-#ifdef NDEBUG
-#else
-            {
-                const auto config = mOffer->getConfig();
-                const auto randomValue = mLosePacketsRandomGenerator.next();
-
-                // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-                const auto seq = ntohs(*reinterpret_cast<const uint16_t*>(buf.data() + 2));
-                const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(buf.data() + 8));
-
-                if (ssrc == mAnswer->getVideoSingleTrack()->getSSRC()) {
-                    if (config.debug_drop_packets && randomValue < 5) {
-                        if (mLosePacketHistory.shouldLosePacket(ssrc, seq)) {
-                            LOG(SRTC_LOG_V, "Dropping incoming packet with SSRC = %u, SEQ = %u", ssrc, seq);
-                            return;
-                        }
-                    }
-                }
-            }
-#endif
-
             if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
                 LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 
@@ -1041,7 +1021,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
 
     LOG(SRTC_LOG_V,
         "RTP media packet: media = %s, ssrc = %12" PRIu32 ", seq = %5u, pt = %u, size = %zu",
-        to_string(track->getMedia()->getType()).c_str(),
+        to_string(track->getMediaType()).c_str(),
         packet->getSSRC(),
         packet->getSequence(),
         packet->getPayloadId(),
@@ -1073,7 +1053,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
                 ntp_low,
                 packet_count,
                 octet_count,
-                to_string(track->getMedia()->getType()).c_str());
+                to_string(track->getMediaType()).c_str());
 
             SenderReport sr;
             sr.when = std::chrono::steady_clock::now();

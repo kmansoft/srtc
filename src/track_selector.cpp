@@ -36,7 +36,7 @@ std::shared_ptr<Track> HighestTrackSelector::selectTrack(const std::vector<std::
     }
 
     // All tracks must have the same media
-    const auto type = list[0]->getMedia()->getType();
+    const auto type = list[0]->getMediaType();
 
     if (type == MediaType::Audio) {
         return list[0];

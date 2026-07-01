@@ -1,4 +1,6 @@
 #include "srtc/track.h"
+
+#include "srtc/media.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_packet_source.h"
 #include "srtc/rtp_time_source.h"
@@ -44,6 +46,11 @@ Track::Track(const std::shared_ptr<Media>& media,
 std::shared_ptr<Media> Track::getMedia() const
 {
     return mMedia;
+}
+
+MediaType Track::getMediaType() const
+{
+    return mMedia->getType();
 }
 
 Direction Track::getDirection() const

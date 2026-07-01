@@ -22,7 +22,6 @@
 #endif
 
 #include <cassert>
-#include <cstring>
 
 namespace
 {
@@ -318,7 +317,7 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
     std::vector<std::shared_ptr<srtc::Track>> result;
 
     for (const auto& layer : layerList) {
-        const auto layerSsrc = offer->getVideoSimulastSSRC(layer.name);
+        const auto layerSsrc = offer->getVideoSimulastSSRC(mediaId, layer.name);
         const auto track = std::make_shared<srtc::Track>(singleTrack->getMedia(),
                                                          singleTrack->getDirection(),
                                                          layerSsrc.first,
@@ -662,8 +661,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         // a=simulcast recv low;mid;hi
         if (isInMediaSection && mediaState.mediaType.value() == MediaType::Video) {
             if (value == "recv" && props.size() == 1) {
-                const auto offerLayerList = offer->getVideoSimulcastLayerList();
-                if (offerLayerList.has_value()) {
+                const auto offerLayerList = offer->getVideoSimulcastLayerList(mediaState.mediaId);
+                if (offerLayerList.has_value() && !offerLayerList->empty()) {
                     const auto ridList = split_list(props[0]);
                     for (const auto& ridName : ridList) {
                         mediaState.addSimulcastLayer(offerLayerList.value(), ridName);
@@ -754,16 +753,11 @@ Error SdpAnswerParser::flush_m()
             return { Error::Code::InvalidData, "Media id cannot be empty" };
         }
 
-        const auto type = mediaState.mediaType.value();
-
         if (direction == Direction::Publish) {
-            if (type == MediaType::Video) {
-                mediaState.ssrc = offer->getVideoSSRC();
-                mediaState.rtxSsrc = offer->getRtxVideoSSRC();
-            } else if (type == MediaType::Audio) {
-                mediaState.ssrc = offer->getAudioSSRC();
-                mediaState.rtxSsrc = offer->getRtxAudioSSRC();
-            }
+            const auto publishSSRC = offer->getMediaSSRC(mediaState.mediaId);
+
+            mediaState.ssrc = publishSSRC.first;
+            mediaState.rtxSsrc = publishSSRC.second;
         }
 
         // Create media and track
@@ -852,52 +846,6 @@ std::vector<Host> SdpAnswer::getHostList() const
     return mHostList;
 }
 
-bool SdpAnswer::isVideoSimulcast() const
-{
-    return std::find_if(mTrackList.begin(), mTrackList.end(), [](const std::shared_ptr<Track>& track) {
-               return track->getMedia()->getType() == MediaType::Video && track->isSimulcast();
-           }) != mTrackList.end();
-}
-
-std::shared_ptr<Track> SdpAnswer::getVideoSingleTrack() const
-{
-    for (const auto& track : mTrackList) {
-        if (track->getMedia()->getType() == MediaType::Video) {
-            if (!track->isSimulcast()) {
-                return track;
-            }
-        }
-    }
-
-    return {};
-}
-
-std::vector<std::shared_ptr<Track>> SdpAnswer::getVideoSimulcastTrackList() const
-{
-    std::vector<std::shared_ptr<Track>> list;
-
-    for (const auto& track : mTrackList) {
-        if (track->getMedia()->getType() == MediaType::Video) {
-            if (track->isSimulcast()) {
-                list.push_back(track);
-            }
-        }
-    }
-
-    return list;
-}
-
-std::shared_ptr<Track> SdpAnswer::getAudioTrack() const
-{
-    for (const auto& track : mTrackList) {
-        if (track->getMedia()->getType() == MediaType::Audio) {
-            return track;
-        }
-    }
-
-    return {};
-}
-
 std::vector<std::shared_ptr<Media>> SdpAnswer::getMediaList() const
 {
     return mMediaList;
@@ -911,6 +859,13 @@ std::vector<std::shared_ptr<Track>> SdpAnswer::getTrackList() const
 bool SdpAnswer::isSetupActive() const
 {
     return mIsSetupActive;
+}
+
+bool SdpAnswer::isVideoSimulcast() const
+{
+    return std::any_of(mTrackList.begin(), mTrackList.end(), [](const std::shared_ptr<Track>& track) {
+        return track->getMediaType() == MediaType::Video && track->isSimulcast();
+    });
 }
 
 const X509Hash& SdpAnswer::getCertificateHash() const

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace srtc
 {
@@ -11,6 +11,7 @@ class ByteBuffer;
 class PeerCandidate;
 class Error;
 class RtpPacket;
+class Media;
 class Track;
 
 struct SenderReport;
@@ -36,7 +37,8 @@ public:
 
     virtual void onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate) = 0;
 
-    [[nodiscard]] virtual const std::vector<SimulcastLayer>& getSimulcastLayerList() const = 0;
+    virtual void getSimulcastLayerList(const std::shared_ptr<Media>& media,
+                                       std::vector<SimulcastLayer>& layerList) const = 0;
 
     virtual void onSctpDataChannelOpen(const std::string& label) = 0;
     virtual void onSctpDataChannelText(const std::string& label, const std::string& data) = 0;

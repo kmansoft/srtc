@@ -78,7 +78,7 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
             return 50;
         }
 
-        const auto type = track->getMedia()->getType();
+        const auto type = track->getMediaType();
         if (type == MediaType::Video) {
             // Video gets packetized, we can always add 10% to outgoing packets
             mProbingPacketCount += 1;

@@ -51,6 +51,7 @@ public:
           bool hasPli);
 
     [[nodiscard]] std::shared_ptr<Media> getMedia() const;
+    [[nodiscard]] MediaType getMediaType() const;
     [[nodiscard]] Direction getDirection() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint8_t getRtxPayloadId() const;

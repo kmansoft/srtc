@@ -38,13 +38,10 @@ public:
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::vector<Host> getHostList() const;
-    [[nodiscard]] bool isVideoSimulcast() const;
-    [[nodiscard]] std::shared_ptr<Track> getVideoSingleTrack() const;
-    [[nodiscard]] std::vector<std::shared_ptr<Track>> getVideoSimulcastTrackList() const;
-    [[nodiscard]] std::shared_ptr<Track> getAudioTrack() const;
     [[nodiscard]] std::vector<std::shared_ptr<Media>> getMediaList() const;
     [[nodiscard]] std::vector<std::shared_ptr<Track>> getTrackList() const;
     [[nodiscard]] bool isSetupActive() const;
+    [[nodiscard]] bool isVideoSimulcast() const;
     [[nodiscard]] const X509Hash& getCertificateHash() const;
     [[nodiscard]] bool hasDataChannel() const;
     [[nodiscard]] uint16_t getSctpPort() const;

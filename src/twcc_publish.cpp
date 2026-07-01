@@ -134,7 +134,7 @@ void PublishPacketHistory::saveOutgoingPacket(uint16_t seq,
     curr->generated_size = static_cast<uint16_t>(generatedSize);
     curr->encrypted_size = static_cast<uint16_t>(encryptedSize);
     curr->sent_time_micros = getStableTimeMicros();
-    curr->media_type = track->getMedia()->getType();
+    curr->media_type = track->getMediaType();
 }
 
 PublishPacket* PublishPacketHistory::get(uint16_t seq) const

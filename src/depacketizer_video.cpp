@@ -11,7 +11,7 @@ namespace srtc
 DepacketizerVideo::DepacketizerVideo(const std::shared_ptr<Track>& track)
     : Depacketizer(track)
 {
-    assert(track->getMedia()->getType() == MediaType::Video);
+    assert(track->getMediaType() == MediaType::Video);
 }
 
 DepacketizerVideo::~DepacketizerVideo() = default;

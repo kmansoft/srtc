@@ -78,9 +78,9 @@ public:
     [[nodiscard]] int getTimeoutMillis(int defaultValue) const;
     void run();
 
-    void sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList);
-    void sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList);
-    void sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList);
+    void sendSenderReports();
+    void sendReceiverReports();
+    void sendPictureLossIndicators();
     void sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
@@ -158,6 +158,8 @@ private:
     std::list<ByteBuffer> mRawSendQueue;
     std::list<FrameToSend> mFrameSendQueue;
     std::list<DataChannelMessage> mDataSendQueue;
+
+    std::vector<SimulcastLayer> mSimulcastLayerList;
 
     bool mSentUseCandidate;
     bool mIsConnected;

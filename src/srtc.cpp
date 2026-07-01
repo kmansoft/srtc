@@ -12,6 +12,39 @@
 namespace srtc
 {
 
+bool isVideoCodec(Codec codec)
+{
+    switch (codec) {
+    case Codec::VP8:
+    case Codec::VP9:
+    case Codec::H264:
+    case Codec::H265:
+    case Codec::AV1:
+        return true;
+    case Codec::Opus:
+    case Codec::Rtx:
+        break;
+    }
+    return false;
+}
+
+bool isAudioCodec(Codec codec)
+{
+    switch (codec) {
+    case Codec::VP8:
+    case Codec::VP9:
+    case Codec::H264:
+    case Codec::H265:
+    case Codec::AV1:
+    case Codec::Rtx:
+        break;
+    case Codec::Opus:
+        return true;
+    }
+
+    return false;
+}
+
 std::string to_string(MediaType m)
 {
     switch (m) {

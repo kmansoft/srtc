@@ -59,7 +59,7 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
 
     LOG(SRTC_LOG_V,
         "Constructed for %s with length = %ld, nack delay = %ld",
-        to_string(mTrack->getMedia()->getType()).c_str(),
+        to_string(mTrack->getMediaType()).c_str(),
         static_cast<long>(length.count()),
         static_cast<long>(nackDelay.count()));
 }
@@ -641,7 +641,7 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<EncodedFrame>>& re
         if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > item->rtp_timestamp_ext) {
             LOG(SRTC_LOG_W,
                 "Will not de-queue %s frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
-                to_string(mTrack->getMedia()->getType()).c_str(),
+                to_string(mTrack->getMediaType()).c_str(),
                 item->rtp_timestamp_ext,
                 mLastFrameTimeStamp.value());
             return;

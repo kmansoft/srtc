@@ -12,6 +12,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <cassert>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -95,6 +96,11 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
     std::optional<int64_t> pts_usec;
     uint32_t msg_seq = 0;
 
+    const auto trackList = peerConnection->getTrackList();
+    assert(trackList.size() == 1);
+
+    const auto track = trackList[0];
+
     while (true) {
         uint32_t frame_count = 0;
 
@@ -111,10 +117,10 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                     csd_copy.push_back(item.copy());
                 }
 
-                peerConnection->setVideoSingleCodecSpecificData(std::move(csd_copy));
+                peerConnection->setVideoCodecSpecificData(track, std::move(csd_copy));
             }
 
-            peerConnection->publishVideoSingleFrame(frame.pts_usec, frame.frame.copy());
+            peerConnection->publishVideoFrame(track, frame.pts_usec, frame.frame.copy());
 
             frame_count += 1;
 
@@ -313,16 +319,21 @@ int main(int argc, char* argv[])
         offer_config.data_channel_config.data_channels.emplace_back("foo");
     }
 
-    PubVideoCodec video_codec = {};
+    PubCodec video_codec = {};
     video_codec.codec = media_file.codec;
     if (video_codec.codec == Codec::H264) {
         video_codec.profile_level_id = 0x42e01f;
     }
 
-    PubVideoConfig video_config = {};
-    video_config.codec_list.push_back(video_codec);
+    PubMediaItem media_item = {};
+    media_item.media_type = MediaType::Video;
+    media_item.media_id = "video_0";
+    media_item.codec_list.push_back(video_codec);
 
-    const auto [offer, offerCreateError] = peerConnection->createPublishOffer(offer_config, video_config, std::nullopt);
+    PubMediaConfig media_config = {};
+    media_config.media_list.push_back(media_item);
+
+    const auto [offer, offerCreateError] = peerConnection->createPublishOffer(offer_config, media_config);
     if (offerCreateError.isError()) {
         std::cout << "Error: cannot create offer: " << offerCreateError.message << std::endl;
         exit(1);
