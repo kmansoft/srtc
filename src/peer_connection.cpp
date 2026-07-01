@@ -164,6 +164,9 @@ Error PeerConnection::setOffer(const std::shared_ptr<SdpOffer>& offer)
 
     assert(!mIsQuit);
 
+    if (mSdpOffer) {
+        return { Error::Code::InvalidData, "Connection already has an SDP offer" };
+    }
     if (mIsStarted) {
         return { Error::Code::InvalidData, "Connection is already started" };
     }
@@ -201,6 +204,9 @@ Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
 
     if (mIsStarted) {
         return { Error::Code::InvalidData, "Connection is already started" };
+    }
+    if (mSdpAnswer) {
+        return { Error::Code::InvalidData, "Connection already has an SDP answer" };
     }
 
     mSdpAnswer = answer;
