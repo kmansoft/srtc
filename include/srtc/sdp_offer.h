@@ -30,7 +30,6 @@ struct PubOfferConfig {
     bool enable_rtx = true;
     bool enable_bwe = false;
     bool enable_rfc8851 = false;
-    bool debug_drop_packets = false;
     DataChannelConfig data_channel_config;
 };
 
@@ -39,7 +38,6 @@ struct SubOfferConfig {
     uint16_t pli_interval_millis = 2000;
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
-    bool debug_drop_packets = false;
     DataChannelConfig data_channel_config;
 };
 
@@ -53,7 +51,6 @@ private:
     struct Config {
         // Common
         std::string cname;
-        bool debug_drop_packets = false;
         // Data channels
         std::vector<std::string> data_channels;
         // Publish

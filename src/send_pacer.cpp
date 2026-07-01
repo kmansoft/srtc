@@ -169,27 +169,6 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
         if (mOnSend) {
             mOnSend();
         }
-
-#ifdef NDEBUG
-        // Send
-        (void)mSocket->send(protectedData.data(), protectedData.size());
-#else
-        // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-        const auto randomValue = mLosePacketsRandomGenerator.next();
-        if (mOfferConfig.debug_drop_packets && randomValue < 5 && track->getMediaType() == MediaType::Video) {
-            const auto twcc = mTWCC ? mTWCC->getFeedbackSeq(packet) : std::nullopt;
-            if (twcc.has_value()) {
-                LOG(SRTC_LOG_V, "NOT sending packet %u, twcc %u", packet->getSequence(), twcc.value());
-            } else {
-                LOG(SRTC_LOG_V, "NOT sending packet %u", packet->getSequence());
-            }
-        } else {
-            const auto w = mSocket->send(protectedData.data(), protectedData.size());
-            // This is too much
-            // LOG(SRTC_LOG_V, "Sent %zu bytes of RTP media", w);
-            (void)w;
-        }
-#endif
     }
 }
 

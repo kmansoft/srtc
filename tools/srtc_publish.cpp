@@ -50,7 +50,6 @@ static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintInfo = false;
-static bool gDropPackets = false;
 static bool gEnableBWE = false;
 static bool gLoopVideo = false;
 static bool gDataChannels = false;
@@ -173,7 +172,6 @@ void printUsage(const char* programName)
     std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  -i, --info           Print input file info" << std::endl;
-    std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
     std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
     std::cout << "  -c, --datachannels   Enable data channels" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
@@ -224,8 +222,6 @@ int main(int argc, char* argv[])
             gPrintSDP = true;
         } else if (arg == "-i" || arg == "--info") {
             gPrintInfo = true;
-        } else if (arg == "-d" || arg == "--drop") {
-            gDropPackets = true;
         } else if (arg == "-b" || arg == "--bwe") {
             gEnableBWE = true;
         } else if (arg == "-c" || arg == "--datachannels") {
@@ -314,7 +310,6 @@ int main(int argc, char* argv[])
     offer_config.cname = "foo";
     offer_config.enable_rtx = true;
     offer_config.enable_bwe = gEnableBWE;
-    offer_config.debug_drop_packets = gDropPackets;
     if (gDataChannels) {
         offer_config.data_channel_config.data_channels.emplace_back("foo");
     }

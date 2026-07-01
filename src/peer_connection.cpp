@@ -85,7 +85,6 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(c
     config.enable_rtx = pubConfig.enable_rtx;
     config.enable_bwe = pubConfig.enable_bwe;
     config.enable_rfc8851 = pubConfig.enable_rfc8851;
-    config.debug_drop_packets = pubConfig.debug_drop_packets;
 
     std::vector<SdpOffer::MediaLine> media;
 
@@ -131,7 +130,6 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
     config.pli_interval_millis = subConfig.pli_interval_millis;
     config.jitter_buffer_length_millis = subConfig.jitter_buffer_length_millis;
     config.jitter_buffer_nack_delay_millis = subConfig.jitter_buffer_nack_delay_millis;
-    config.debug_drop_packets = subConfig.debug_drop_packets;
 
     std::vector<SdpOffer::MediaLine> media;
 
@@ -867,7 +865,7 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
             }
         }
 
-        for (auto trackEntry : mTrackEntryList) {
+        for (auto& trackEntry : mTrackEntryList) {
             trackEntry.depacketizer->reset();
             trackEntry.jitterBuffer = std::make_shared<JitterBuffer>(
                 trackEntry.track, trackEntry.depacketizer, kJitterBufferSize, length, nackDelay);

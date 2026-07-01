@@ -40,7 +40,6 @@ static bool gPrintSDP = false;
 static bool gPrintSenderReports = false;
 static std::string gOutputAudioFilename;
 static std::string gOutputVideoFilename;
-static bool gDropPackets = false;
 
 // Signals
 
@@ -73,7 +72,6 @@ void printUsage(const char* programName)
     std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
     std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
     std::cout << "  --ov <filename>      Save video to a file (h264 or webm format)" << std::endl;
-    std::cout << "  -d, --drop           Drop some packets at random (test NACK and RTX handling)" << std::endl;
     std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -220,8 +218,6 @@ int main(int argc, char* argv[])
                 std::cerr << "Error: --ov requires a filename" << std::endl;
                 return 1;
             }
-        } else if (arg == "-d" || arg == "--drop") {
-            gDropPackets = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -296,40 +292,49 @@ int main(int argc, char* argv[])
     // Offer
     SubOfferConfig offerConfig = {};
     offerConfig.cname = "foo";
-    offerConfig.debug_drop_packets = gDropPackets;
 
-    SubVideoCodec videoCodecVP8 = {};
+    SubCodec videoCodecVP8 = {};
     videoCodecVP8.codec = Codec::VP8;
 
-    SubVideoCodec videoCodecVP9 = {};
+    SubCodec videoCodecVP9 = {};
     videoCodecVP9.codec = Codec::VP9;
 
-    SubVideoCodec videoCodecH264 = {};
+    SubCodec videoCodecH264 = {};
     videoCodecH264.codec = Codec::H264;
     videoCodecH264.profile_level_id = 0x42e01f;
 
-    SubVideoCodec videoCodecH265 = {};
+    SubCodec videoCodecH265 = {};
     videoCodecH265.codec = Codec::H265;
 
-    SubVideoCodec videoCodecAV1 = {};
+    SubCodec videoCodecAV1 = {};
     videoCodecAV1.codec = Codec::AV1;
 
-    SubVideoConfig videoConfig = {};
-    videoConfig.codec_list.push_back(videoCodecVP8);
-    videoConfig.codec_list.push_back(videoCodecVP9);
-    videoConfig.codec_list.push_back(videoCodecH264);
-    videoConfig.codec_list.push_back(videoCodecH265);
-    videoConfig.codec_list.push_back(videoCodecAV1);
+    SubMediaItem videoMediaItem = {};
+    videoMediaItem.media_id = "video_0";
+    videoMediaItem.media_type = MediaType::Video;
 
-    SubAudioCodec audioCodec = {};
+    videoMediaItem.codec_list.push_back(videoCodecVP8);
+    videoMediaItem.codec_list.push_back(videoCodecVP9);
+    videoMediaItem.codec_list.push_back(videoCodecH264);
+    videoMediaItem.codec_list.push_back(videoCodecH265);
+    videoMediaItem.codec_list.push_back(videoCodecAV1);
+
+    SubCodec audioCodec = {};
     audioCodec.codec = Codec::Opus;
     audioCodec.minptime = 20;
     audioCodec.stereo = true;
 
-    SubAudioConfig audioConfig = {};
-    audioConfig.codec_list.push_back(audioCodec);
+    SubMediaItem audioMediaItem = {};
+    audioMediaItem.media_id = "audio_0";
+    audioMediaItem.media_type = MediaType::Audio;
 
-    const auto [offer, offerCreateError] = peerConnection->createSubscribeOffer(offerConfig, videoConfig, audioConfig);
+    audioMediaItem.codec_list.push_back(audioCodec);
+
+    SubMediaConfig subMediaConfig = {};
+    subMediaConfig.media_list.push_back(videoMediaItem);
+    subMediaConfig.media_list.push_back(audioMediaItem);
+
+    const auto [offer, offerCreateError] = peerConnection->createSubscribeOffer(offerConfig, subMediaConfig);
     if (offerCreateError.isError()) {
         std::cout << "Error: cannot create offer: " << offerCreateError.message << std::endl;
         exit(1);
@@ -357,20 +362,31 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    // Tracks
+    std::shared_ptr<Track> trackAudio;
+    std::shared_ptr<Track> trackVideo;
+
+    for (const auto& track : answer->getTrackList()) {
+        if (track->getMediaType() == MediaType::Audio) {
+            trackAudio = track;
+        } else if (track->getMediaType() == MediaType::Video) {
+            trackVideo = track;
+        }
+    }
+
     // Media writers
     std::shared_ptr<MediaWriter> mediaWriterAudio;
     std::shared_ptr<MediaWriter> mediaWriterVideo;
 
     if (!gOutputAudioFilename.empty()) {
-        const auto track = answer->getAudioTrack();
-        if (!track) {
+        if (!trackAudio) {
             std::cout << "Saving audio output is requested, but there is no audio track" << std::endl;
             exit(1);
         }
 
-        const auto codec = track->getCodec();
+        const auto codec = trackAudio->getCodec();
         if (codec == Codec::Opus) {
-            mediaWriterAudio = std::make_shared<MediaWriterOgg>(gOutputAudioFilename, track);
+            mediaWriterAudio = std::make_shared<MediaWriterOgg>(gOutputAudioFilename, trackAudio);
             mediaWriterAudio->start();
         } else {
             std::cout << "Saving audio output is requested, but the audio codec is not one we support" << std::endl;
@@ -379,24 +395,23 @@ int main(int argc, char* argv[])
     }
 
     if (!gOutputVideoFilename.empty()) {
-        const auto track = answer->getVideoSingleTrack();
-        if (!track) {
+        if (!trackVideo) {
             std::cout << "Saving audio output is requested, but there is no video track" << std::endl;
             exit(1);
         }
 
-        const auto codec = track->getCodec();
+        const auto codec = trackVideo->getCodec();
         if (codec == Codec::VP8) {
-            mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, track);
+            mediaWriterVideo = std::make_shared<MediaWriterVP8>(gOutputVideoFilename, trackVideo);
             mediaWriterVideo->start();
         } else if (codec == Codec::VP9) {
-            mediaWriterVideo = std::make_shared<MediaWriterVP9>(gOutputVideoFilename, track);
+            mediaWriterVideo = std::make_shared<MediaWriterVP9>(gOutputVideoFilename, trackVideo);
             mediaWriterVideo->start();
         } else if (codec == Codec::H264 || codec == Codec::H265) {
-            mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, track);
+            mediaWriterVideo = std::make_shared<MediaWriterH26x>(gOutputVideoFilename, trackVideo);
             mediaWriterVideo->start();
         } else if (codec == Codec::AV1) {
-            mediaWriterVideo = std::make_shared<MediaWriterAV1>(gOutputVideoFilename, track);
+            mediaWriterVideo = std::make_shared<MediaWriterAV1>(gOutputVideoFilename, trackVideo);
             mediaWriterVideo->start();
         } else {
             std::cout << "Saving video output is requested, but the video codec is not one we support" << std::endl;
