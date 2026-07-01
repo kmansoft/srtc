@@ -196,7 +196,7 @@ private:
         {
         }
     };
-    std::vector<MediaEntry> mMediaEntryList SRTC_GUARDED_BY(mMutex);
+    std::vector<MediaEntry> mMediaEntryList;
 
     // Tracks
     struct TrackEntry {
@@ -214,7 +214,7 @@ private:
         {
         }
     };
-    std::vector<TrackEntry> mTrackEntryList SRTC_GUARDED_BY(mMutex);
+    std::vector<TrackEntry> mTrackEntryList;
 
     // Sender and receiver reports
     void sendReports();

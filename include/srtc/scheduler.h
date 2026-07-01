@@ -40,7 +40,7 @@ public:
     virtual ~Scheduler();
 
     using Delay = std::chrono::milliseconds;
-    using Func = std::function<void(void)>;
+    using Func = std::function<void()>;
 
     std::weak_ptr<Task> submit(const char* file, int line, const Func& func)
     {

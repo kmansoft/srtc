@@ -704,10 +704,10 @@ void PeerConnection::startConnecting()
         }
     }
 
+    const auto maxHostSize = std::max(hostList4.size(), hostList6.size());
     auto connectDelay = 0;
-    for (size_t i = 0; i < std::max(hostList4.size(), hostList6.size()); i += 1) {
+    for (size_t i = 0; i < maxHostSize; i += 1) {
         if (i < hostList4.size()) {
-            const auto host = hostList4[i];
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
@@ -715,13 +715,12 @@ void PeerConnection::startConnecting()
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
-                                                                   host,
+                                                                   hostList4[i],
                                                                    mEventLoop,
                                                                    std::chrono::milliseconds(connectDelay));
             mConnectingCandidateList.push_back(candidate);
         }
         if (i < hostList6.size()) {
-            const auto host = hostList6[i];
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
                                                                    trackList,
@@ -729,7 +728,7 @@ void PeerConnection::startConnecting()
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
                                                                    mLoopScheduler,
-                                                                   host,
+                                                                   hostList6[i],
                                                                    mEventLoop,
                                                                    std::chrono::milliseconds(connectDelay));
             mConnectingCandidateList.push_back(candidate);
@@ -806,8 +805,8 @@ void PeerConnection::onCandidateIceConnected(PeerCandidate* candidate)
 
     mLoopScheduler->dump();
 
-    const auto trackList = collectTracks();
-    for (const auto& trackItem : trackList) {
+    for (const auto& trackEntry : mTrackEntryList) {
+        const auto trackItem = trackEntry.track;
         trackItem->getStats()->clear();
 
         trackItem->getRtpPacketSource()->clear();
