@@ -571,16 +571,16 @@ void PeerCandidate::run()
 
         if (!item.buf.empty()) {
             // Simulcast layer list
-            mSimulcastLayerList.clear();
-            mListener->getSimulcastLayerList(item.track->getMedia(), mSimulcastLayerList);
-
-            // Frame data
             if (mExtensionSourceSimulcast) {
-                if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast() &&
-                    mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
-                    mExtensionSourceSimulcast->prepare(item.track, mSimulcastLayerList);
-                } else {
-                    mExtensionSourceSimulcast->clear();
+                mExtensionSourceSimulcast->clear();
+
+                if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast()) {
+                    mSimulcastLayerList.clear();
+                    mListener->getSimulcastLayerList(item.track->getMedia(), mSimulcastLayerList);
+
+                    if (mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
+                        mExtensionSourceSimulcast->prepare(item.track, mSimulcastLayerList);
+                    }
                 }
             }
 
@@ -603,7 +603,7 @@ void PeerCandidate::run()
                     auto spread = SendPacer::kDefaultSpreadMillis;
                     if (mExtensionSourceTWCC) {
                         auto bandwidthScale = 1.0f;
-                        if (item.track->isSimulcast()) {
+                        if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
                             bandwidthScale = calculateLayerBandwidthScale(mSimulcastLayerList, item.track->getSimulcastLayer());
                         }

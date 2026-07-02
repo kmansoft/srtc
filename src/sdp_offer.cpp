@@ -332,6 +332,8 @@ std::pair<uint32_t, uint32_t> SdpOffer::getMediaSSRC(const std::string& mediaId)
         }
     }
 
+    // We should not get here
+    assert(false);
     return {};
 }
 
@@ -347,6 +349,8 @@ std::pair<uint32_t, uint32_t> SdpOffer::getVideoSimulastSSRC(const std::string& 
         }
     }
 
+    // We should not get here
+    assert(false);
     return {};
 }
 

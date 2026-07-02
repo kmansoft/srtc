@@ -169,6 +169,9 @@ void SendPacer::sendImpl(const std::shared_ptr<RtpPacket>& packet)
         if (mOnSend) {
             mOnSend();
         }
+
+        // Send
+        (void)mSocket->send(protectedData.data(), protectedData.size());
     }
 }
 
