@@ -103,7 +103,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     // Is this packet too late?
     if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
         LOG(SRTC_LOG_W,
-            "Will not en-queue %s frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
+            "Jitter buffer for SSRC = %" PRIu32 ", media = %s: Will not enqueue frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
+            mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
             rtp_timestamp_ext,
             mLastFrameTimeStamp.value());
@@ -116,8 +117,9 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     if (mItemList) {
         const auto elapsed = now - mLastPacketTime;
         if (elapsed >= kNoPacketsResetDelay && seq_ext >= mMaxSeq + mCapacity / 8) {
-            LOG(SRTC_LOG_E,
-                "We have not had %s packets for %ld milliseconds, resetting the jitter buffer",
+            LOG(SRTC_LOG_W,
+                "Jitter buffer for SSRC = %" PRIu32 ", media = %s: no packets for %ld ms, resetting",
+                mTrack->getSSRC(),
                 to_string(media->getType()).c_str(),
                 static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
             freeEverything();
@@ -141,21 +143,21 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         mItemList[seq_ext & mCapacityMask] = item;
     } else if (seq_ext + mCapacity / 4 <= mMinSeq) {
         // Out of range, much less than min
-        LOG(SRTC_LOG_E,
-            "The new packet SEQ = %u is too late, SSRC = %u, media = %s, min = %u, max = %u",
-            seq,
+        LOG(SRTC_LOG_W,
+            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too late, min = %" PRIu16 ", max = %" PRIu16 ,
             mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
+            seq,
             static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
     } else if (seq_ext >= mMaxSeq + mCapacity / 4) {
         // Out of range, much greater than max
-        LOG(SRTC_LOG_E,
-            "The new packet SEQ = %u is too early, SSRC = %u, media = %s, min = %u, max = %u",
-            seq,
+        LOG(SRTC_LOG_W,
+            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too early, s, min = %" PRIu16 ", max = %" PRIu16,
             mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
+            seq,
             static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
@@ -173,11 +175,11 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     if (seq_ext < mMinSeq) {
         // Before min
         if (seq_ext + mCapacity < mMaxSeq) {
-            LOG(SRTC_LOG_E,
-                "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
-                static_cast<uint16_t>(seq_ext),
+            LOG(SRTC_LOG_W,
+                "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu32 "would exceed the capacity, min = %" PRIu32 ", max = %" PRIu32,
                 mTrack->getSSRC(),
                 to_string(media->getType()).c_str(),
+                seq,
                 static_cast<uint16_t>(mMinSeq),
                 static_cast<uint16_t>(mMaxSeq));
             return;
@@ -214,10 +216,10 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // Above max
         if (seq_ext > mMinSeq + mCapacity) {
             LOG(SRTC_LOG_E,
-                "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
-                static_cast<uint16_t>(seq_ext),
+                "Jitter buffer for SSRC = %" PRIu32 ", media = %s: The new packet SEQ = %" PRIu16 " would exceed the capacity, min = %" PRIu16 ", max = %" PRIu16,
                 mTrack->getSSRC(),
                 to_string(media->getType()).c_str(),
+                seq,
                 static_cast<uint16_t>(mMinSeq),
                 static_cast<uint16_t>(mMaxSeq));
             return;
