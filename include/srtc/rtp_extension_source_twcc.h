@@ -31,9 +31,7 @@ class RealScheduler;
 class RtpExtensionSourceTWCC : public RtpExtensionSource
 {
 public:
-    RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
-                           uint8_t nAudioExtTWCC,
-                           const std::shared_ptr<RealScheduler>& scheduler);
+    RtpExtensionSourceTWCC(const std::shared_ptr<RealScheduler>& scheduler);
     ~RtpExtensionSourceTWCC() override;
 
     static std::shared_ptr<RtpExtensionSourceTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
@@ -67,8 +65,6 @@ public:
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;
 
 private:
-    const uint8_t mVideoExtTWCC;
-    const uint8_t mAudioExtTWCC;
     uint16_t mNextPacketSEQ;
     std::unique_ptr<twcc::PublishPacketHistory> mPacketHistory;
 

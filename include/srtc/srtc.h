@@ -31,6 +31,9 @@ enum class Codec {
     Rtx = 200
 };
 
+bool isVideoCodec(Codec codec);
+bool isAudioCodec(Codec codec);
+
 enum class MediaType {
     Video = 1,
     Audio = 2

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "srtc/byte_buffer.h"
+#include "srtc/media.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
@@ -138,20 +139,9 @@ TEST(SrtpCrypto, SendMedia)
 
         std::optional<uint16_t> prevSequence;
 
-        const auto track = std::make_shared<srtc::Track>(0,
-                                                         srtc::Direction::Publish,
-                                                         srtc::MediaType::Video,
-                                                         "0",
-                                                         ssrc,
-                                                         96,
-                                                         0,
-                                                         0,
-                                                         srtc::Codec::H264,
-                                                         nullptr,
-                                                         nullptr,
-                                                         90000,
-                                                         false,
-                                                         false);
+        const auto media = std::make_shared<srtc::Media>("0", srtc::MediaType::Video);
+        const auto track = std::make_shared<srtc::Track>(
+            media, srtc::Direction::Publish, ssrc, 96, 0, 0, srtc::Codec::H264, nullptr, nullptr, 90000, false, false);
 
         {
             // Edge case 1: empty payload with an extension, not valid in our library
@@ -350,10 +340,9 @@ TEST(SrtpCrypto, ReceiveMedia)
 
         std::optional<uint16_t> prevSequence;
 
-        const auto track = std::make_shared<srtc::Track>(0,
+        const auto media = std::make_shared<srtc::Media>("0", srtc::MediaType::Video);
+        const auto track = std::make_shared<srtc::Track>(media,
                                                          srtc::Direction::Subscribe,
-                                                         srtc::MediaType::Video,
-                                                         "0",
                                                          ssrc,
                                                          96,
                                                          0,

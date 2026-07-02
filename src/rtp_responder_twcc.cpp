@@ -1,5 +1,6 @@
 #include "srtc/rtp_responder_twcc.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtcp_packet.h"
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
@@ -11,23 +12,11 @@
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
-namespace
-{
-
-uint8_t findTWCCExtension(const srtc::ExtensionMap& map)
-{
-    return map.findByName(srtc::RtpStandardExtensions::kExtGoogleTWCC);
-}
-
-} // namespace
-
 namespace srtc
 {
 
-RtpResponderTWCC::RtpResponderTWCC(uint8_t nVideoExtTWCC, uint8_t nAudioExtTWCC)
+RtpResponderTWCC::RtpResponderTWCC()
     : mPacketHistory(std::make_unique<twcc::SubscribePacketHistory>(getStableTimeMicros()))
-    , mVideoExtTWCC(nVideoExtTWCC)
-    , mAudioExtTWCC(nAudioExtTWCC)
 {
 }
 
@@ -40,23 +29,7 @@ std::shared_ptr<RtpResponderTWCC> RtpResponderTWCC::factory(const std::shared_pt
         return {};
     }
 
-    uint8_t nVideoExtTWCC = 0;
-    if (answer->hasVideoMedia()) {
-        nVideoExtTWCC = findTWCCExtension(answer->getVideoExtensionMap());
-        if (nVideoExtTWCC == 0) {
-            return {};
-        }
-    }
-
-    uint8_t nAudioExtTWCC = 0;
-    if (answer->hasAudioMedia()) {
-        nAudioExtTWCC = findTWCCExtension(answer->getAudioExtensionMap());
-        if (nAudioExtTWCC == 0) {
-            return {};
-        }
-    }
-
-    return std::make_shared<RtpResponderTWCC>(nVideoExtTWCC, nAudioExtTWCC);
+    return std::make_shared<RtpResponderTWCC>();
 }
 
 void RtpResponderTWCC::onMediaPacket(const std::shared_ptr<RtpPacket>& packet)
@@ -103,13 +76,10 @@ std::vector<std::shared_ptr<RtcpPacket>> RtpResponderTWCC::run(const std::shared
 
 uint8_t RtpResponderTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
-    const auto media = track->getMediaType();
-    if (media == MediaType::Video) {
-        return mVideoExtTWCC;
-    } else if (media == MediaType::Audio) {
-        return mAudioExtTWCC;
-    }
-    return 0;
+    const auto media = track->getMedia();
+    const auto& extensionMap = media->getExtensionMap();
+
+    return extensionMap.findByName(RtpStandardExtensions::kExtGoogleTWCC);
 }
 
 } // namespace srtc

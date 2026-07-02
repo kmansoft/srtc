@@ -1,5 +1,6 @@
 #include "srtc/twcc_publish.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/track.h"
 #include "srtc/twcc_common.h"
 

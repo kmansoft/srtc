@@ -1,6 +1,7 @@
 #include "srtc/jitter_buffer.h"
 #include "srtc/depacketizer.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/track.h"
 
@@ -77,6 +78,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
 {
     assert(mTrack == packet->getTrack());
 
+    const auto media = mTrack->getMedia();
+
     auto seq = packet->getSequence();
     auto payload = packet->movePayload();
 
@@ -101,7 +104,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
         LOG(SRTC_LOG_W,
             "Will not en-queue %s frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
-            to_string(mTrack->getMediaType()).c_str(),
+            to_string(media->getType()).c_str(),
             rtp_timestamp_ext,
             mLastFrameTimeStamp.value());
         return;
@@ -115,7 +118,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         if (elapsed >= kNoPacketsResetDelay && seq_ext >= mMaxSeq + mCapacity / 8) {
             LOG(SRTC_LOG_E,
                 "We have not had %s packets for %ld milliseconds, resetting the jitter buffer",
-                to_string(mTrack->getMediaType()).c_str(),
+                to_string(media->getType()).c_str(),
                 static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
             freeEverything();
             mDepacketizer->reset();
@@ -142,7 +145,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             "The new packet SEQ = %u is too late, SSRC = %u, media = %s, min = %u, max = %u",
             seq,
             mTrack->getSSRC(),
-            to_string(mTrack->getMediaType()).c_str(),
+            to_string(media->getType()).c_str(),
             static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
@@ -152,7 +155,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
             "The new packet SEQ = %u is too early, SSRC = %u, media = %s, min = %u, max = %u",
             seq,
             mTrack->getSSRC(),
-            to_string(mTrack->getMediaType()).c_str(),
+            to_string(media->getType()).c_str(),
             static_cast<uint16_t>(mMinSeq),
             static_cast<uint16_t>(mMaxSeq));
         return;
@@ -174,7 +177,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
                 "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
                 static_cast<uint16_t>(seq_ext),
                 mTrack->getSSRC(),
-                to_string(mTrack->getMediaType()).c_str(),
+                to_string(media->getType()).c_str(),
                 static_cast<uint16_t>(mMinSeq),
                 static_cast<uint16_t>(mMaxSeq));
             return;
@@ -214,7 +217,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
                 "The new packet with SEQ = %u would exceed the capacity, SSRC = %u, media = %s, min = %u, max = %u",
                 static_cast<uint16_t>(seq_ext),
                 mTrack->getSSRC(),
-                to_string(mTrack->getMediaType()).c_str(),
+                to_string(media->getType()).c_str(),
                 static_cast<uint16_t>(mMinSeq),
                 static_cast<uint16_t>(mMaxSeq));
             return;

@@ -9,24 +9,22 @@
 namespace srtc
 {
 
-struct PubVideoCodec {
-    Codec codec;
-    uint32_t profile_level_id; // for h264
+struct PubCodec {
+    Codec codec = Codec::H264;
+    uint32_t profile_level_id = 0; // for h264
+    uint32_t minptime = 10;        // for audio
+    bool stereo = false;
 };
 
-struct PubVideoConfig {
-    std::vector<PubVideoCodec> codec_list;
-    std::vector<SimulcastLayer> simulcast_layer_list;
+struct PubMediaItem {
+    std::string media_id;
+    MediaType media_type;
+    std::vector<PubCodec> codec_list;
+    std::vector<SimulcastLayer> layer_list;
 };
 
-struct PubAudioCodec {
-    Codec codec;
-    uint32_t minptime;
-    bool stereo;
-};
-
-struct PubAudioConfig {
-    std::vector<PubAudioCodec> codec_list;
+struct PubMediaConfig {
+    std::vector<PubMediaItem> media_list;
 };
 
 } // namespace srtc

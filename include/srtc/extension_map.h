@@ -10,13 +10,15 @@ namespace srtc
 class ExtensionMap
 {
 public:
-    ExtensionMap() = default;
-    ~ExtensionMap() = default;
+    ExtensionMap();
+    ~ExtensionMap();
 
     void add(uint8_t id, const std::string& name);
 
     [[nodiscard]] uint8_t findByName(const std::string& name) const;
     [[nodiscard]] std::string findById(uint8_t id) const;
+
+    void clear();
 
 private:
     struct Entry {
@@ -31,6 +33,9 @@ private:
     };
 
     std::vector<Entry> mEntryList;
+
+    mutable std::string mLastName;
+    mutable uint8_t mLastId;
 };
 
 } // namespace srtc

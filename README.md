@@ -11,8 +11,9 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 - Audo codec: Opus.
 - SDP offer generation and SDP response parsing.
 - ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
+- IPv4 and IPv6.
 - Data channels (both sending and receiving).
-- Support for IPv4 and IPv6.
+- Multiple data streams (SDP "media lines")
 - Tested with Pion and Amazon IVS (Interactive Video Service)
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
@@ -39,9 +40,9 @@ Efficient. Can be used for publishing media from a server side system i.e. where
 perhaps thousands) of simultaneous WebRTC sessions on a single computer so Google's implementation is not a good choice
 due to its hunger for threads.
 
-Has a command line tool to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
+Has a command line tool / sample code to publish video, [which has already seen some use](https://www.linkedin.com/posts/toddrsharp_releases-kmansoftsrtc-activity-7342987919445385216-N74_?utm_source=share&utm_medium=member_desktop&rcm=ACoAADsOqaEBZ5sFObLsqWe6Ii4d-zOg-Q6-iVM).
 
-Has a command line tool to subscribe to audio and/or video, which can save media to files.
+Has a command line tool / sample code to subscribe to audio and/or video, which can save media to files.
 
 Media encoding / decoding and presentation are deliberately out of scope of this library. For publishing, the application needs to
 provide encoded media samples. For subscribing, the application receives encoded media samples which it needs to decode and present.
@@ -61,15 +62,20 @@ state callback.
 
 Once the peer is connected, you can start publishing audio and video samples using these methods:
 
-- setVideoSingleCodecSpecificData
-- publishVideoSingleFrame
+- setVideoCodecSpecificData
+- publishVideoFrame
 - publishAudioFrame
 
-For simulcast, the methods are similar but different:
+You will need to provide a `Track` for the above methods. The list of negotiated tracks can be obtained from the SDP
+answer after parsing.
+
+For simulcast, the flow is:
 
 - Configure your layers when generating the offer
-- setVideoSimulcastCodecSpecificData
-- publishVideoSimulcastFrame
+- setVideoCodecSpecificData
+- publishVideoFrame
+
+The SDP answer will have a `Track` per layer you requested. Use one of these tracks to address the layer. 
 
 For subscribing, use the `setSubscribeEncodedFrameListener` method to receive encoded frames as they come out of the jitter buffer.
 

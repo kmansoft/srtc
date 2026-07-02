@@ -9,6 +9,7 @@
 #include "srtc/event_loop.h"
 #include "srtc/ice_agent.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/packetizer.h"
 #include "srtc/peer_candidate.h"
 #include "srtc/rtcp_packet.h"
@@ -188,11 +189,6 @@ bool is_rtcp_message(const srtc::ByteBuffer& buf)
     return false;
 }
 
-uint8_t findVideoExtension(const std::shared_ptr<srtc::SdpAnswer>& answer, const std::string& name)
-{
-    return answer->getVideoExtensionMap().findByName(name);
-}
-
 float calculateLayerBandwidthScale(const std::vector<srtc::SimulcastLayer>& layerList,
                                    const std::shared_ptr<srtc::SimulcastLayer>& trackLayer)
 {
@@ -233,15 +229,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mIceMessageBuffer(std::make_unique<uint8_t[]>(kIceMessageBufferSize))
     , mSendRtpHistory(std::make_shared<SendRtpHistory>())
     , mUniqueId(++gNextUniqueId)
-    , mVideoExtMediaId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesMid))
-    , mVideoExtStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpStreamId))
-    , mVideoExtRepairedStreamId(findVideoExtension(answer, RtpStandardExtensions::kExtSdesRtpRepairedStreamId))
-    , mVideoExtGoogleVLA(findVideoExtension(answer, RtpStandardExtensions::kExtGoogleVLA))
-    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast(),
-                                                                     mVideoExtMediaId,
-                                                                     mVideoExtStreamId,
-                                                                     mVideoExtRepairedStreamId,
-                                                                     mVideoExtGoogleVLA))
+    , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
     , mResponderTWCC(RtpResponderTWCC::factory(offer, answer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
@@ -313,9 +301,9 @@ void PeerCandidate::addSendFrame(FrameToSend&& frame)
     mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendSenderReports()
 {
-    for (const auto& track : trackList) {
+    for (const auto& track : mTrackList) {
         if (track->getDirection() == Direction::Publish) {
             const auto ssrc = track->getSSRC();
 
@@ -346,9 +334,9 @@ void PeerCandidate::sendSenderReports(const std::vector<std::shared_ptr<Track>>&
     }
 }
 
-void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendReceiverReports()
 {
-    for (const auto& track : trackList) {
+    for (const auto& track : mTrackList) {
         const auto direction = track->getDirection();
         if (direction == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
@@ -386,9 +374,9 @@ void PeerCandidate::sendReceiverReports(const std::vector<std::shared_ptr<Track>
     }
 }
 
-void PeerCandidate::sendPictureLossIndicators(const std::vector<std::shared_ptr<Track>>& trackList)
+void PeerCandidate::sendPictureLossIndicators()
 {
-    for (const auto& track : trackList) {
+    for (const auto& track : mTrackList) {
         if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
 
@@ -583,13 +571,14 @@ void PeerCandidate::run()
 
         if (!item.buf.empty()) {
             // Simulcast layer list
-            const auto& layerList = mListener->getSimulcastLayerList();
+            mSimulcastLayerList.clear();
+            mListener->getSimulcastLayerList(item.track->getMedia(), mSimulcastLayerList);
 
             // Frame data
             if (mExtensionSourceSimulcast) {
                 if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast() &&
                     mExtensionSourceSimulcast->shouldAdd(item.track, item.packetizer, item.buf)) {
-                    mExtensionSourceSimulcast->prepare(item.track, layerList);
+                    mExtensionSourceSimulcast->prepare(item.track, mSimulcastLayerList);
                 } else {
                     mExtensionSourceSimulcast->clear();
                 }
@@ -616,7 +605,7 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(layerList, item.track->getSimulcastLayer());
+                            bandwidthScale = calculateLayerBandwidthScale(mSimulcastLayerList, item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }
@@ -950,27 +939,6 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
                 }
             }
         } else {
-#ifdef NDEBUG
-#else
-            {
-                const auto config = mOffer->getConfig();
-                const auto randomValue = mLosePacketsRandomGenerator.next();
-
-                // In debug mode, we have deliberate 5% packet loss to validate that NACK / RTX processing works
-                const auto seq = ntohs(*reinterpret_cast<const uint16_t*>(buf.data() + 2));
-                const auto ssrc = ntohl(*reinterpret_cast<const uint32_t*>(buf.data() + 8));
-
-                if (ssrc == mAnswer->getVideoSingleTrack()->getSSRC()) {
-                    if (config.debug_drop_packets && randomValue < 5) {
-                        if (mLosePacketHistory.shouldLosePacket(ssrc, seq)) {
-                            LOG(SRTC_LOG_V, "Dropping incoming packet with SSRC = %u, SEQ = %u", ssrc, seq);
-                            return;
-                        }
-                    }
-                }
-            }
-#endif
-
             if (mSrtpConnection->unprotectReceiveMedia(buf, output)) {
                 LOG(SRTC_LOG_V, "RTP unprotect: size = %zd", output.size());
 
@@ -1398,7 +1366,6 @@ std::optional<float> PeerCandidate::calculateRtt(const std::chrono::steady_clock
     }
 
     return {};
-
 }
 
 // State

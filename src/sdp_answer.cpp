@@ -1,5 +1,6 @@
 #include "srtc/sdp_answer.h"
 #include "srtc/extension_map.h"
+#include "srtc/media.h"
 #include "srtc/sdp_offer.h"
 #include "srtc/track.h"
 #include "srtc/track_selector.h"
@@ -21,7 +22,6 @@
 #endif
 
 #include <cassert>
-#include <cstring>
 
 namespace
 {
@@ -167,11 +167,9 @@ struct ParsePayloadState {
 };
 
 struct ParseMediaState {
-    std::optional<int> id;
     std::optional<srtc::MediaType> mediaType;
-    srtc::ExtensionMap extensionMap;
-    bool isSetupActive = { false };
     std::string mediaId;
+    srtc::ExtensionMap extensionMap;
     std::vector<std::string> ridList;
     std::vector<srtc::Track::SimulcastLayer> layerList;
 
@@ -182,18 +180,37 @@ struct ParseMediaState {
     uint32_t rtxSsrc = { 0u };
     std::vector<uint32_t> ssrcList;
 
+    void clear();
+
     void addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList, const std::string& ridName);
 
     void setPayloadList(const std::vector<uint8_t>& list);
 
     [[nodiscard]] ParsePayloadState* getPayloadState(uint8_t payloadId) const;
 
+    [[nodiscard]] std::shared_ptr<srtc::Media> createMedia() const;
+
     [[nodiscard]] std::shared_ptr<srtc::Track> selectTrack(srtc::Direction direction,
+                                                           const std::shared_ptr<srtc::Media>& media,
                                                            const std::shared_ptr<srtc::TrackSelector>& selector) const;
 
     [[nodiscard]] std::vector<std::shared_ptr<srtc::Track>> makeSimulcastTrackList(
         const std::shared_ptr<srtc::SdpOffer>& offer, const std::shared_ptr<srtc::Track>& singleTrack) const;
 };
+
+void ParseMediaState::clear()
+{
+    mediaType.reset();
+    mediaId.clear();
+    extensionMap.clear();
+    ridList.clear();
+    layerList.clear();
+    payloadStateSize = 0;
+    payloadStateList.reset();
+    ssrc = 0;
+    rtxSsrc = 0;
+    ssrcList.clear();
+}
 
 void ParseMediaState::addSimulcastLayer(const std::vector<srtc::SimulcastLayer>& offerLayerList,
                                         const std::string& ridName)
@@ -235,14 +252,20 @@ ParsePayloadState* ParseMediaState::getPayloadState(uint8_t payloadId) const
     return nullptr;
 }
 
+std::shared_ptr<srtc::Media> ParseMediaState::createMedia() const
+{
+    return std::make_shared<srtc::Media>(mediaId, mediaType.value(), extensionMap);
+}
+
 std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direction,
+                                                          const std::shared_ptr<srtc::Media>& media,
                                                           const std::shared_ptr<srtc::TrackSelector>& selector) const
 {
-    if (!id.has_value()) {
-        return nullptr;
+    if (mediaId.empty()) {
+        return {};
     }
     if (!mediaType.has_value()) {
-        return nullptr;
+        return {};
     }
 
     auto ssrcMedia = ssrc;
@@ -252,7 +275,7 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
             ssrcMedia = ssrcList.front();
         }
         if (ssrcMedia <= 0) {
-            return nullptr;
+            return {};
         }
     }
 
@@ -263,10 +286,8 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
             const auto trackSsrc = layerList.empty() ? ssrcMedia : 0;
             const auto trackRtxSsrc = layerList.empty() && payloadState.rtxPayloadId != 0 ? rtxSsrc : 0;
 
-            const auto track = std::make_shared<srtc::Track>(id.value(),
+            const auto track = std::make_shared<srtc::Track>(media,
                                                              direction,
-                                                             mediaType.value(),
-                                                             mediaId,
                                                              trackSsrc,
                                                              payloadState.payloadId,
                                                              trackRtxSsrc,
@@ -282,10 +303,10 @@ std::shared_ptr<srtc::Track> ParseMediaState::selectTrack(srtc::Direction direct
     }
 
     if (list.empty()) {
-        return nullptr;
+        return {};
     }
 
-    const auto selected = selector == nullptr ? list[0] : selector->selectTrack(mediaType.value(), list);
+    const auto selected = selector == nullptr ? list[0] : selector->selectTrack(list);
     assert(selected != nullptr);
     return selected;
 }
@@ -296,11 +317,9 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
     std::vector<std::shared_ptr<srtc::Track>> result;
 
     for (const auto& layer : layerList) {
-        const auto layerSsrc = offer->getVideoSimulastSSRC(layer.name);
-        const auto track = std::make_shared<srtc::Track>(id.value(),
-                                                         offer->getDirection(),
-                                                         mediaType.value(),
-                                                         mediaId,
+        const auto layerSsrc = offer->getVideoSimulastSSRC(mediaId, layer.name);
+        const auto track = std::make_shared<srtc::Track>(singleTrack->getMedia(),
+                                                         singleTrack->getDirection(),
                                                          layerSsrc.first,
                                                          singleTrack->getPayloadId(),
                                                          layerSsrc.second,
@@ -321,13 +340,13 @@ std::vector<std::shared_ptr<srtc::Track>> ParseMediaState::makeSimulcastTrackLis
 
 namespace srtc
 {
+
 class SdpAnswerParser
 {
 public:
-    SdpAnswerParser(Direction direction, const std::shared_ptr<SdpOffer>& offer);
+    SdpAnswerParser(const std::shared_ptr<SdpOffer>& offer, const std::shared_ptr<TrackSelector>& selector);
 
-    std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::string& answer,
-                                                       const std::shared_ptr<TrackSelector>& selector);
+    std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::string& answer);
 
 private:
     Error parseLine(const std::string& line);
@@ -341,22 +360,28 @@ private:
                       const std::string& value,
                       const std::vector<std::string>& props);
 
-    Direction direction;
-    std::shared_ptr<SdpOffer> offer;
+    Error flush_m();
+
+    const std::shared_ptr<SdpOffer> offer;
+    const Direction direction;
+    const std::shared_ptr<TrackSelector> selector;
 
     std::string iceUFrag, icePassword;
 
     bool isRtcpMux = false;
+    bool isSetupActive = false;
 
-    ParseMediaState mediaStateVideo, mediaStateAudio;
-    ParseMediaState* mediaStateCurr = nullptr;
+    bool isInMediaSection = false;
+    bool hasMedia = false;
+    ParseMediaState mediaState;
 
-    bool mIsApplicationSection = false;
-    bool mHasDataChannel = false;
-    bool mDataChannelSetupActive = false;
-    uint16_t mSctpPort = 5000;
-    uint32_t mMaxMessageSize = 262144;
+    bool isInApplicationSection = false;
+    bool hasDataChannel = false;
+    uint16_t sctpPort = 5000;
+    uint32_t maxSctpMessageSize = 262144;
 
+    std::vector<std::shared_ptr<Media>> mediaList;
+    std::vector<std::shared_ptr<Track>> trackList;
     std::vector<Host> hostList;
 
     std::string certHashAlg;
@@ -364,24 +389,14 @@ private:
     std::string certHashHex;
 };
 
-SdpAnswerParser::SdpAnswerParser(Direction direction, const std::shared_ptr<SdpOffer>& offer)
-    : direction(direction)
-    , offer(offer)
+SdpAnswerParser::SdpAnswerParser(const std::shared_ptr<SdpOffer>& offer, const std::shared_ptr<TrackSelector>& selector)
+    : offer(offer)
+    , direction(offer->getDirection())
+    , selector(selector)
 {
-    mediaStateVideo.mediaType = MediaType::Video;
-    mediaStateAudio.mediaType = MediaType::Audio;
-
-    if (direction == Direction::Publish) {
-        mediaStateVideo.ssrc = offer->getVideoSSRC();
-        mediaStateVideo.rtxSsrc = offer->getRtxVideoSSRC();
-
-        mediaStateAudio.ssrc = offer->getAudioSSRC();
-        mediaStateAudio.rtxSsrc = offer->getRtxAudioSSRC();
-    }
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::string& answer,
-                                                                    const std::shared_ptr<TrackSelector>& selector)
+std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::string& answer)
 {
     std::stringstream ss(answer);
 
@@ -400,46 +415,32 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswerParser::parse(const std::s
         }
     }
 
-    const bool hasMediaSection = mediaStateVideo.id.has_value() || mediaStateAudio.id.has_value();
-    if (hasMediaSection && !isRtcpMux) {
+    if (const auto error = flush_m(); error.isError()) {
+        return { {}, error };
+    }
+
+    if (hasMedia && !isRtcpMux) {
         return { {}, { Error::Code::InvalidData, "The rtcp-mux extension is required" } };
     }
     if (hostList.empty()) {
         return { {}, { Error::Code::InvalidData, "No hosts to connect to" } };
     }
 
-    if (!hasMediaSection && !mHasDataChannel) {
+    if (!hasMedia && !hasDataChannel) {
         return { {}, { Error::Code::InvalidData, "No media tracks or data channels" } };
-    }
-
-    auto videoSingleTrack = mediaStateVideo.selectTrack(direction, selector);
-    const auto audioTrack = mediaStateAudio.selectTrack(direction, selector);
-
-    if (!videoSingleTrack && !audioTrack && !mHasDataChannel) {
-        return { nullptr, { Error::Code::InvalidData, "No media tracks or data channels" } };
-    }
-
-    std::vector<std::shared_ptr<Track>> videoSimulcastTrackList;
-    if (!mediaStateVideo.layerList.empty()) {
-        videoSimulcastTrackList = mediaStateVideo.makeSimulcastTrackList(offer, videoSingleTrack);
-        videoSingleTrack.reset();
     }
 
     std::shared_ptr<SdpAnswer> sdpAnswer(new SdpAnswer(direction,
                                                        iceUFrag,
                                                        icePassword,
                                                        hostList,
-                                                       videoSingleTrack,
-                                                       videoSimulcastTrackList,
-                                                       audioTrack,
-                                                       mediaStateVideo.extensionMap,
-                                                       mediaStateAudio.extensionMap,
-                                                       mediaStateVideo.isSetupActive || mediaStateAudio.isSetupActive ||
-                                                           mDataChannelSetupActive,
+                                                       mediaList,
+                                                       trackList,
+                                                       isSetupActive,
                                                        { certHashAlg, certHashBin, certHashHex },
-                                                       mHasDataChannel,
-                                                       mSctpPort,
-                                                       mMaxMessageSize));
+                                                       hasDataChannel,
+                                                       sctpPort,
+                                                       maxSctpMessageSize));
 
     return { sdpAnswer, Error::OK };
 }
@@ -471,14 +472,20 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
                                    const std::string& value,
                                    const std::vector<std::string>& props)
 {
-    mIsApplicationSection = false;
+    if (const auto error = flush_m(); error.isError()) {
+        return error;
+    }
+
+    mediaState.clear();
+
+    isInApplicationSection = false;
+    isInMediaSection = false;
 
     // "m=application 9 UDP/DTLS/SCTP webrtc-datachannel"
     if (key == "application") {
-        mediaStateCurr = nullptr;
         if (props.size() >= 2 && props[1] == "UDP/DTLS/SCTP") {
-            mIsApplicationSection = true;
-            mHasDataChannel = true;
+            isInApplicationSection = true;
+            hasDataChannel = true;
         }
         return Error::OK;
     }
@@ -488,18 +495,8 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
         return { Error::Code::InvalidData, "Only SAVPF over DTLS is supported" };
     }
 
-    if (key == "video") {
-        mediaStateCurr = &mediaStateVideo;
-    } else if (key == "audio") {
-        mediaStateCurr = &mediaStateAudio;
-    } else {
-        mediaStateCurr = nullptr;
-    }
-
-    if (mediaStateCurr) {
-        if (const auto id = parse_u32(props[0]); id.has_value()) {
-            mediaStateCurr->id = id.value();
-        }
+    if (key == "video" || key == "audio") {
+        isInMediaSection = true;
 
         std::vector<uint8_t> payloadIdList;
         for (size_t i = 2u; i < props.size(); i += 1) {
@@ -509,7 +506,13 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
             }
         }
 
-        mediaStateCurr->setPayloadList(payloadIdList);
+        mediaState.setPayloadList(payloadIdList);
+
+        if (key == "video") {
+            mediaState.mediaType = MediaType::Video;
+        } else if (key == "audio") {
+            mediaState.mediaType = MediaType::Audio;
+        }
     }
 
     return Error::OK;
@@ -527,10 +530,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
     } else if (key == "ice-pwd") {
         icePassword = value;
     } else if (key == "setup") {
-        if (mediaStateCurr) {
-            mediaStateCurr->isSetupActive = value == "active";
-        } else if (mIsApplicationSection) {
-            mDataChannelSetupActive = value == "active";
+        if (value == "active") {
+            isSetupActive = true;
         }
     } else if (key == "fingerprint") {
         if (props.size() == 1) {
@@ -543,21 +544,21 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         }
     } else if (key == "extmap") {
         const auto id = parse_u32(value);
-        if (id.has_value() && id >= 0u && id <= 255u) {
-            if (props.size() == 1 && mediaStateCurr) {
-                mediaStateCurr->extensionMap.add(static_cast<uint8_t>(id.value()), props[0]);
+        if (id.has_value() && id > 0 && id <= 255) {
+            if (props.size() == 1 && isInMediaSection) {
+                mediaState.extensionMap.add(static_cast<uint8_t>(id.value()), props[0]);
             }
         }
     } else if (key == "mid") {
         // a=mid:0
-        if (mediaStateCurr && !value.empty()) {
-            mediaStateCurr->mediaId = value;
+        if (isInMediaSection && !value.empty()) {
+            mediaState.mediaId = value;
         }
     } else if (key == "rtpmap") {
         // a=rtpmap:100 H264/90000
         // a=rtpmap:99 opus/48000/2
         if (const auto payloadId = parse_u32(value); payloadId.has_value() && is_valid_payload_id(payloadId.value())) {
-            if (props.size() == 1 && mediaStateCurr) {
+            if (props.size() == 1 && isInMediaSection) {
                 const auto posSlash = props[0].find('/');
                 if (posSlash != std::string::npos) {
                     const auto codecString = props[0].substr(0, posSlash);
@@ -569,7 +570,7 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                         }
                         if (const auto clockRate = parse_u32(clockRateString);
                             clockRate.has_value() && clockRate >= 10000u) {
-                            const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
+                            const auto payloadState = mediaState.getPayloadState(payloadId.value());
                             if (payloadState) {
                                 payloadState->codec = codec;
                                 payloadState->clockRate = clockRate.value();
@@ -583,18 +584,17 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
     } else if (key == "fmtp") {
         // a=fmtp:100 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
         if (const auto payloadId = parse_u32(value);
-            payloadId.has_value() && is_valid_payload_id(payloadId.value()) && mediaStateCurr) {
+            payloadId.has_value() && is_valid_payload_id(payloadId.value()) && isInMediaSection) {
             if (props.size() == 1) {
                 std::unordered_map<std::string, std::string> map;
                 parse_map(props[0], map);
 
                 if (const auto iter1 = map.find("apt"); iter1 != map.end()) {
-                    const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
+                    const auto payloadState = mediaState.getPayloadState(payloadId.value());
                     if (payloadState && payloadState->codec == Codec::Rtx) {
                         if (const auto referencedPayloadId = parse_u32(iter1->second);
                             referencedPayloadId.has_value() && is_valid_payload_id(referencedPayloadId.value())) {
-                            const auto referencedPayloadState =
-                                mediaStateCurr->getPayloadState(referencedPayloadId.value());
+                            const auto referencedPayloadState = mediaState.getPayloadState(referencedPayloadId.value());
                             if (referencedPayloadState) {
                                 referencedPayloadState->rtxPayloadId = payloadId.value();
                             }
@@ -602,19 +602,19 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                     }
                 }
 
-                const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
+                const auto payloadState = mediaState.getPayloadState(payloadId.value());
                 if (payloadState) {
                     uint32_t profileLevelId = 0;
                     uint32_t minptime = 0;
                     bool stereo = false;
 
-                    if (mediaStateCurr == &mediaStateVideo) {
+                    if (mediaState.mediaType.value() == MediaType::Video) {
                         if (const auto iter2 = map.find("profile-level-id"); iter2 != map.end()) {
                             if (const auto parsed = parse_u32(iter2->second, 16); parsed.has_value()) {
                                 profileLevelId = parsed.value();
                             }
                         }
-                    } else if (mediaStateCurr == &mediaStateAudio) {
+                    } else if (mediaState.mediaType.value() == MediaType::Audio) {
                         if (const auto iter2 = map.find("minptime"); iter2 != map.end()) {
                             if (const auto parsed = parse_u32(iter2->second); parsed.has_value()) {
                                 minptime = parsed.value();
@@ -637,8 +637,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
     } else if (key == "rtcp-fb") {
         // a=rtcp-fb:98 nack pli
         if (const auto payloadId = parse_u32(value);
-            payloadId.has_value() && is_valid_payload_id(payloadId.value()) && mediaStateCurr) {
-            const auto payloadState = mediaStateCurr->getPayloadState(payloadId.value());
+            payloadId.has_value() && is_valid_payload_id(payloadId.value()) && isInMediaSection) {
+            const auto payloadState = mediaState.getPayloadState(payloadId.value());
             if (payloadState) {
                 for (size_t i = 0u; i < props.size(); i += 1) {
                     const auto& token = props[i];
@@ -652,20 +652,20 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         }
     } else if (key == "rid") {
         // a=rid:low
-        if (mediaStateCurr && mediaStateCurr == &mediaStateVideo) {
+        if (isInMediaSection && mediaState.mediaType.value() == MediaType::Video) {
             if (props.size() == 1 && props[0] == "recv") {
-                mediaStateCurr->ridList.push_back(value);
+                mediaState.ridList.push_back(value);
             }
         }
     } else if (key == "simulcast") {
         // a=simulcast recv low;mid;hi
-        if (mediaStateCurr && mediaStateCurr == &mediaStateVideo) {
+        if (isInMediaSection && mediaState.mediaType.value() == MediaType::Video) {
             if (value == "recv" && props.size() == 1) {
-                const auto offerLayerList = offer->getVideoSimulcastLayerList();
-                if (offerLayerList.has_value()) {
+                const auto offerLayerList = offer->getVideoSimulcastLayerList(mediaState.mediaId);
+                if (offerLayerList.has_value() && !offerLayerList->empty()) {
                     const auto ridList = split_list(props[0]);
                     for (const auto& ridName : ridList) {
-                        mediaStateCurr->addSimulcastLayer(offerLayerList.value(), ridName);
+                        mediaState.addSimulcastLayer(offerLayerList.value(), ridName);
                     }
                 }
             }
@@ -712,33 +712,79 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         if (value == "FID" && props.size() == 2) {
             const auto ssrcMedia = parse_u32(props[0]);
             const auto ssrcRtx = parse_u32(props[1]);
-            if (mediaStateCurr && ssrcMedia.has_value() && ssrcRtx.has_value()) {
-                mediaStateCurr->ssrc = ssrcMedia.value();
-                mediaStateCurr->rtxSsrc = ssrcRtx.value();
+            if (isInMediaSection && ssrcMedia.has_value() && ssrcRtx.has_value()) {
+                mediaState.ssrc = ssrcMedia.value();
+                mediaState.rtxSsrc = ssrcRtx.value();
             }
         }
     } else if (key == "ssrc") {
         const auto ssrcMedia = parse_u32(value);
-        if (mediaStateCurr && ssrcMedia.has_value()) {
-            if (std::find_if(
-                    mediaStateCurr->ssrcList.begin(), mediaStateCurr->ssrcList.end(), [ssrcMedia](uint32_t ssrc) {
-                        return ssrc == ssrcMedia;
-                    }) == mediaStateCurr->ssrcList.end()) {
-                mediaStateCurr->ssrcList.push_back(ssrcMedia.value());
+        if (isInMediaSection && ssrcMedia.has_value()) {
+            if (std::find_if(mediaState.ssrcList.begin(), mediaState.ssrcList.end(), [ssrcMedia](uint32_t ssrc) {
+                    return ssrc == ssrcMedia;
+                }) == mediaState.ssrcList.end()) {
+                mediaState.ssrcList.push_back(ssrcMedia.value());
             }
         }
     } else if (key == "sctp-port") {
-        if (mIsApplicationSection) {
+        if (isInApplicationSection) {
             if (const auto port = parse_u32(value); port.has_value() && port > 0u && port <= 65535u) {
-                mSctpPort = static_cast<uint16_t>(port.value());
+                sctpPort = static_cast<uint16_t>(port.value());
             }
         }
     } else if (key == "max-message-size") {
-        if (mIsApplicationSection) {
+        if (isInApplicationSection) {
             if (const auto size = parse_u32(value); size.has_value()) {
-                mMaxMessageSize = size.value();
+                maxSctpMessageSize = size.value();
             }
         }
+    }
+
+    return Error::OK;
+}
+
+Error SdpAnswerParser::flush_m()
+{
+    if (isInMediaSection) {
+        if (!mediaState.mediaType.has_value()) {
+            return { Error::Code::InvalidData, "An unsupported media type" };
+        }
+        if (mediaState.mediaId.empty()) {
+            return { Error::Code::InvalidData, "Media id cannot be empty" };
+        }
+
+        if (direction == Direction::Publish) {
+            const auto publishSSRC = offer->getMediaSSRC(mediaState.mediaId);
+
+            mediaState.ssrc = publishSSRC.first;
+            mediaState.rtxSsrc = publishSSRC.second;
+        }
+
+        // Create media and track
+        const auto media = mediaState.createMedia();
+
+        auto track = mediaState.selectTrack(direction, media, selector);
+        if (track == nullptr) {
+            return { Error::Code::InvalidData, "Cannot create a media track" };
+        }
+
+        // If simulcast, create layer tracks
+        std::vector<std::shared_ptr<Track>> simulcastTrackList;
+        if (!mediaState.layerList.empty()) {
+            simulcastTrackList = mediaState.makeSimulcastTrackList(offer, track);
+            track.reset();
+        }
+
+        mediaList.push_back(media);
+
+        if (track) {
+            trackList.push_back(track);
+        } else if (!simulcastTrackList.empty()) {
+            trackList.insert(trackList.end(), simulcastTrackList.begin(), simulcastTrackList.end());
+        }
+
+        // We know that we have media
+        hasMedia = true;
     }
 
     return Error::OK;
@@ -749,19 +795,16 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction directio
                                                               const std::string& answer,
                                                               const std::shared_ptr<TrackSelector>& selector)
 {
-    SdpAnswerParser parser(direction, offer);
-    return parser.parse(answer, selector);
+    SdpAnswerParser parser(offer, selector);
+    return parser.parse(answer);
 }
 
 SdpAnswer::SdpAnswer(Direction direction,
                      const std::string& iceUFrag,
                      const std::string& icePassword,
                      const std::vector<Host>& hostList,
-                     const std::shared_ptr<Track>& videoSingleTrack,
-                     const std::vector<std::shared_ptr<Track>>& videoSimulcastTrackList,
-                     const std::shared_ptr<Track>& audioTrack,
-                     const ExtensionMap& videoExtensionMap,
-                     const ExtensionMap& audioExtensionMap,
+                     const std::vector<std::shared_ptr<Media>>& mediaList,
+                     const std::vector<std::shared_ptr<Track>>& trackList,
                      bool isSetupActive,
                      const X509Hash& certHash,
                      bool hasDataChannel,
@@ -771,11 +814,8 @@ SdpAnswer::SdpAnswer(Direction direction,
     , mIceUFrag(iceUFrag)
     , mIcePassword(icePassword)
     , mHostList(hostList)
-    , mVideoSingleTrack(videoSingleTrack)
-    , mVideoSimulcastTrackList(videoSimulcastTrackList)
-    , mAudioTrack(audioTrack)
-    , mVideoExtensionMap(videoExtensionMap)
-    , mAudioExtensionMap(audioExtensionMap)
+    , mMediaList(mediaList)
+    , mTrackList(trackList)
     , mIsSetupActive(isSetupActive)
     , mCertHash(certHash)
     , mHasDataChannel(hasDataChannel)
@@ -801,54 +841,31 @@ std::string SdpAnswer::getIcePassword() const
     return mIcePassword;
 }
 
-const ExtensionMap& SdpAnswer::getVideoExtensionMap() const
-{
-    return mVideoExtensionMap;
-}
-
-const ExtensionMap& SdpAnswer::getAudioExtensionMap() const
-{
-    return mAudioExtensionMap;
-}
-
 std::vector<Host> SdpAnswer::getHostList() const
 {
     return mHostList;
 }
 
-bool SdpAnswer::hasVideoMedia() const
+std::vector<std::shared_ptr<Media>> SdpAnswer::getMediaList() const
 {
-    return mVideoSingleTrack != nullptr || !mVideoSimulcastTrackList.empty();
+    return mMediaList;
 }
 
-bool SdpAnswer::isVideoSimulcast() const
+std::vector<std::shared_ptr<Track>> SdpAnswer::getTrackList() const
 {
-    return mVideoSingleTrack == nullptr && !mVideoSimulcastTrackList.empty();
-}
-
-std::shared_ptr<Track> SdpAnswer::getVideoSingleTrack() const
-{
-    return mVideoSingleTrack;
-}
-
-std::vector<std::shared_ptr<Track>> SdpAnswer::getVideoSimulcastTrackList() const
-{
-    return mVideoSimulcastTrackList;
-}
-
-bool SdpAnswer::hasAudioMedia() const
-{
-    return mAudioTrack != nullptr;
-}
-
-std::shared_ptr<Track> SdpAnswer::getAudioTrack() const
-{
-    return mAudioTrack;
+    return mTrackList;
 }
 
 bool SdpAnswer::isSetupActive() const
 {
     return mIsSetupActive;
+}
+
+bool SdpAnswer::isVideoSimulcast() const
+{
+    return std::any_of(mTrackList.begin(), mTrackList.end(), [](const std::shared_ptr<Track>& track) {
+        return track->getMediaType() == MediaType::Video && track->isSimulcast();
+    });
 }
 
 const X509Hash& SdpAnswer::getCertificateHash() const

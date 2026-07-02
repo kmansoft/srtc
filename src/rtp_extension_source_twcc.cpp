@@ -1,6 +1,7 @@
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/extension_map.h"
 #include "srtc/logging.h"
+#include "srtc/media.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/rtp_std_extensions.h"
@@ -20,11 +21,6 @@
 namespace
 {
 
-uint8_t findTWCCExtension(const srtc::ExtensionMap& map)
-{
-    return map.findByName(srtc::RtpStandardExtensions::kExtGoogleTWCC);
-}
-
 bool isReceivedWithTime(uint8_t status)
 {
     return status == srtc::twcc::kSTATUS_RECEIVED_SMALL_DELTA || status == srtc::twcc::kSTATUS_RECEIVED_LARGE_DELTA;
@@ -39,12 +35,8 @@ constexpr std::chrono::milliseconds kProbeDuration = std::chrono::milliseconds(1
 namespace srtc
 {
 
-RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(uint8_t nVideoExtTWCC,
-                                               uint8_t nAudioExtTWCC,
-                                               const std::shared_ptr<RealScheduler>& scheduler)
-    : mVideoExtTWCC(nVideoExtTWCC)
-    , mAudioExtTWCC(nAudioExtTWCC)
-    , mNextPacketSEQ(1)
+RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(const std::shared_ptr<RealScheduler>& scheduler)
+    : mNextPacketSEQ(1)
     , mPacketHistory(std::make_unique<twcc::PublishPacketHistory>())
     , mIsConnected(false)
     , mIsProbing(false)
@@ -68,21 +60,7 @@ std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const st
         return {};
     }
 
-    uint8_t nVideoExtTWCC = 0;
-    if (answer->hasVideoMedia()) {
-        nVideoExtTWCC = findTWCCExtension(answer->getVideoExtensionMap());
-    }
-
-    uint8_t nAudioExtTWCC = 0;
-    if (answer->hasAudioMedia()) {
-        nAudioExtTWCC = findTWCCExtension(answer->getAudioExtensionMap());
-    }
-
-    if (nVideoExtTWCC == 0 && nAudioExtTWCC == 0) {
-        return {};
-    }
-
-    return std::make_shared<RtpExtensionSourceTWCC>(nVideoExtTWCC, nAudioExtTWCC, scheduler);
+    return std::make_shared<RtpExtensionSourceTWCC>(scheduler);
 }
 
 void RtpExtensionSourceTWCC::onPeerConnected()
@@ -100,12 +78,12 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
             return 50;
         }
 
-        const auto mediaType = track->getMediaType();
-        if (mediaType == MediaType::Video) {
+        const auto type = track->getMediaType();
+        if (type == MediaType::Video) {
             // Video gets packetized, we can always add 10% to outgoing packets
             mProbingPacketCount += 1;
             return 120;
-        } else if (mediaType == MediaType::Audio) {
+        } else if (type == MediaType::Audio) {
             // Audio doesn't create split packets, we have to stay within the MTU
             if (remainingDataSize < 1060) {
                 mProbingPacketCount += 1;
@@ -372,13 +350,9 @@ void RtpExtensionSourceTWCC::updatePublishConnectionStats(PublishConnectionStats
 
 uint8_t RtpExtensionSourceTWCC::getExtensionId(const std::shared_ptr<Track>& track) const
 {
-    const auto media = track->getMediaType();
-    if (media == MediaType::Video) {
-        return mVideoExtTWCC;
-    } else if (media == MediaType::Audio) {
-        return mAudioExtTWCC;
-    }
-    return 0;
+    const auto media = track->getMedia();
+    const auto& extensionMap = media->getExtensionMap();
+    return extensionMap.findByName(RtpStandardExtensions::kExtGoogleTWCC);
 }
 
 void RtpExtensionSourceTWCC::onStartProbing()

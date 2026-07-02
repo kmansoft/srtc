@@ -53,22 +53,12 @@ constexpr uint32_t kSctpMaxMessageSize = 262144;
 namespace srtc
 {
 
-SdpOffer::SdpOffer(Direction direction,
-                   const Config& config,
-                   const std::optional<VideoConfig>& videoConfig,
-                   const std::optional<AudioConfig>& audioConfig)
+SdpOffer::SdpOffer(Direction direction, const Config& config, const std::vector<MediaLine>& media)
     : mRandomGenerator(0, 0x7ffffffe)
     , mDirection(direction)
     , mConfig(config)
-    , mVideoConfig(videoConfig)
-    , mAudioConfig(audioConfig)
+    , mMediaLineList(media)
     , mOriginId((static_cast<uint64_t>(mRandomGenerator.next()) << 32) | mRandomGenerator.next())
-    , mVideoSSRC(1 + mRandomGenerator.next())
-    , mRtxVideoSSRC(1 + mRandomGenerator.next())
-    , mAudioSSRC(1 + mRandomGenerator.next())
-    , mRtxAudioSSRC(1 + mRandomGenerator.next())
-    , mVideoMSID(generateRandomUUID())
-    , mAudioMSID(generateRandomUUID())
     , mIceUfrag(generateRandomString(8))
     , mIcePassword(generateRandomString(24))
     , mCert(std::make_shared<X509Certificate>())
@@ -87,9 +77,10 @@ const SdpOffer::Config& SdpOffer::getConfig() const
 
 std::pair<std::string, Error> SdpOffer::generate()
 {
+    const bool hasMedia = !mMediaLineList.empty();
     const bool hasData = !mConfig.data_channels.empty();
 
-    if (!mVideoConfig.has_value() && !mAudioConfig.has_value() && !hasData) {
+    if (!hasMedia && !hasData) {
         return { "", { Error::Code::InvalidData, "No video, audio, or data channels configured" } };
     }
 
@@ -102,33 +93,63 @@ std::pair<std::string, Error> SdpOffer::generate()
     ss << "a=extmap-allow-mixed" << std::endl;
     ss << "a=msid-semantic: WMS" << std::endl;
 
+    // Bundle
     {
-        const int sectionCount = (mVideoConfig.has_value() ? 1 : 0) +
-                                 (mAudioConfig.has_value() ? 1 : 0) +
-                                 (hasData ? 1 : 0);
+        const auto sectionCount = mMediaLineList.size() + (hasData ? 1 : 0);
         if (sectionCount > 1) {
             ss << "a=group:BUNDLE";
-            for (int i = 0; i < sectionCount; i += 1) {
-                ss << " " << i;
+            for (size_t i = 0; i < sectionCount; i += 1) {
+                if (i < mMediaLineList.size()) {
+                    ss << " " << mMediaLineList[i].id;
+                } else {
+                    ss << " datachannel";
+                }
             }
             ss << std::endl;
         }
     }
 
-    uint32_t mid = 0;
     uint32_t payloadId = 96;
 
-    // Video
-    if (mVideoConfig.has_value()) {
-        const auto& list = mVideoConfig->codec_list;
-        if (list.empty()) {
-            return { "", { Error::Code::InvalidData, "The video config list is present but empty" } };
+    // Media lines
+    for (const auto& mediaLine : mMediaLineList) {
+        const auto& codecList = mediaLine.codec_list;
+        if (codecList.empty()) {
+            return { "", { Error::Code::InvalidData, "A media line is present but has no codecs" } };
         }
 
-        if (mConfig.enable_rtx) {
-            ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
+        for (const auto& codec : codecList) {
+            if (mediaLine.mediaType == MediaType::Audio) {
+                if (!isAudioCodec(codec.codec)) {
+                    return {
+                        "", { Error::Code::InvalidData, "A media line with type audio has a codec that's not audio" }
+                    };
+                }
+            } else if (mediaLine.mediaType == MediaType::Video) {
+                if (!isVideoCodec(codec.codec)) {
+                    return {
+                        "", { Error::Code::InvalidData, "A media line with type video has a codec that's not video" }
+                    };
+                }
+            }
+        }
+
+        mMediaLineGeneratedList.emplace_back(mediaLine.id);
+        auto& mediaLineGenerated = mMediaLineGeneratedList.back();
+        mediaLineGenerated.mediaType = mediaLine.mediaType;
+
+        ss << "m=";
+        if (mediaLine.mediaType == MediaType::Video) {
+            ss << "video";
         } else {
-            ss << "m=video 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
+            ss << "audio";
+        }
+        ss << " 9 UDP/TLS/RTP/SAVPF ";
+
+        if (mConfig.enable_rtx) {
+            ss << list_to_string(payloadId, payloadId + codecList.size() * 2) << std::endl;
+        } else {
+            ss << list_to_string(payloadId, payloadId + codecList.size()) << std::endl;
         }
 
         ss << "c=IN IP4 0.0.0.0" << std::endl;
@@ -137,8 +158,7 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
         ss << "a=ice-pwd:" << mIcePassword << std::endl;
         ss << "a=setup:actpass" << std::endl;
-        ss << "a=mid:" << mid << std::endl;
-        mid += 1;
+        ss << "a=mid:" << mediaLine.id << std::endl;
 
         if (mDirection == Direction::Publish) {
             ss << "a=sendonly" << std::endl;
@@ -151,17 +171,24 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
-        for (const auto& item : list) {
+        for (const auto& item : codecList) {
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::H264) {
-                char buf[128];
+                char buf[64];
                 std::snprintf(buf, sizeof(buf), "%06x", item.profile_level_id);
 
                 ss << "a=fmtp:" << payloadId
                    << " level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" << buf << std::endl;
+            } else if (item.codec == Codec::Opus) {
+                ss << "a=fmtp:" << payloadId << " minptime=" << item.minptime << ";stereo=" << (item.stereo ? 1 : 0)
+                   << ";useinbandfec=1" << std::endl;
             }
+
             ss << "a=rtcp-fb:" << payloadId << " nack" << std::endl;
-            ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
+
+            if (mediaLineGenerated.mediaType == MediaType::Video) {
+                ss << "a=rtcp-fb:" << payloadId << " nack pli" << std::endl;
+            }
 
             if (mConfig.enable_rtx) {
                 const auto payloadIdRtx = payloadId + 1;
@@ -174,22 +201,28 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
         }
 
-        const auto& layerList = mVideoConfig->simulcast_layer_list;
+        const auto msid = generateRandomUUID();
+
+        const auto& layerList = mediaLine.layer_list;
         if (layerList.empty() || mDirection == Direction::Subscribe) {
             // No simulcast or subscribe
             if (mConfig.enable_bwe || mDirection == Direction::Subscribe) {
                 ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
             }
 
-            ss << "a=ssrc:" << mVideoSSRC << " cname:" << mConfig.cname << std::endl;
-            ss << "a=ssrc:" << mVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+            mediaLineGenerated.ssrc = 1 + mRandomGenerator.next();
+
+            ss << "a=ssrc:" << mediaLineGenerated.ssrc << " cname:" << mConfig.cname << std::endl;
+            ss << "a=ssrc:" << mediaLineGenerated.ssrc << " msid:" << mConfig.cname << " " << msid << std::endl;
 
             if (mConfig.enable_rtx) {
-                ss << "a=ssrc:" << mRtxVideoSSRC << " cname:" << mConfig.cname << std::endl;
-                ss << "a=ssrc:" << mRtxVideoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+                mediaLineGenerated.rtx = 1 + mRandomGenerator.next();
+
+                ss << "a=ssrc:" << mediaLineGenerated.rtx << " cname:" << mConfig.cname << std::endl;
+                ss << "a=ssrc:" << mediaLineGenerated.rtx << " msid:" << mConfig.cname << " " << msid << std::endl;
 
                 // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-                ss << "a=ssrc-group:FID " << mVideoSSRC << " " << mRtxVideoSSRC << std::endl;
+                ss << "a=ssrc-group:FID " << mediaLineGenerated.ssrc << " " << mediaLineGenerated.rtx << std::endl;
             }
         } else {
             // Simulcast
@@ -227,88 +260,22 @@ std::pair<std::string, Error> SdpOffer::generate()
             ss << std::endl;
 
             for (const auto& layer : layerList) {
-                const auto videoSSRC = 1 + mRandomGenerator.next();
-                const auto videoRtxSSRC = 1 + mRandomGenerator.next();
+                mediaLineGenerated.layer.emplace_back(layer.name);
+                auto& layerGenerated = mediaLineGenerated.layer.back();
+                layerGenerated.ssrc = 1 + mRandomGenerator.next();
 
-                mLayerSSRC.push_back({ layer.name, videoSSRC, videoRtxSSRC });
-
-                ss << "a=ssrc:" << videoSSRC << " cname:" << mConfig.cname << std::endl;
-                ss << "a=ssrc:" << videoSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+                ss << "a=ssrc:" << layerGenerated.ssrc << " cname:" << mConfig.cname << std::endl;
+                ss << "a=ssrc:" << layerGenerated.ssrc << " msid:" << mConfig.cname << " " << msid << std::endl;
 
                 if (mConfig.enable_rtx) {
-                    ss << "a=ssrc:" << videoRtxSSRC << " cname:" << mConfig.cname << std::endl;
-                    ss << "a=ssrc:" << videoRtxSSRC << " msid:" << mConfig.cname << " " << mVideoMSID << std::endl;
+                    layerGenerated.rtx = 1 + mRandomGenerator.next();
 
-                    ss << "a=ssrc-group:FID " << videoSSRC << " " << videoRtxSSRC << std::endl;
+                    ss << "a=ssrc:" << layerGenerated.rtx << " cname:" << mConfig.cname << std::endl;
+                    ss << "a=ssrc:" << layerGenerated.rtx << " msid:" << mConfig.cname << " " << msid << std::endl;
+
+                    ss << "a=ssrc-group:FID " << layerGenerated.ssrc << " " << layerGenerated.rtx << std::endl;
                 }
             }
-        }
-    }
-
-    // Audio
-    if (mAudioConfig.has_value()) {
-        const auto& list = mAudioConfig->codec_list;
-        if (list.empty()) {
-            return { "", { Error::Code::InvalidData, "The audio config list is present but empty" } };
-        }
-
-        if (mConfig.enable_rtx) {
-            ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size() * 2) << std::endl;
-        } else {
-            ss << "m=audio 9 UDP/TLS/RTP/SAVPF " << list_to_string(payloadId, payloadId + list.size()) << std::endl;
-        }
-
-        ss << "c=IN IP4 0.0.0.0" << std::endl;
-        ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
-        ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
-        ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
-        ss << "a=ice-pwd:" << mIcePassword << std::endl;
-        ss << "a=setup:actpass" << std::endl;
-        ss << "a=mid:" << mid << std::endl;
-        mid += 1;
-
-        if (mDirection == Direction::Publish) {
-            ss << "a=sendonly" << std::endl;
-        } else if (mDirection == Direction::Subscribe) {
-            ss << "a=recvonly" << std::endl;
-        } else {
-            assert(false);
-        }
-
-        ss << "a=rtcp-mux" << std::endl;
-        ss << "a=rtcp-rsize" << std::endl;
-
-        for (const auto& item : list) {
-            ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
-            if (item.codec == Codec::Opus) {
-                ss << "a=fmtp:" << payloadId << " minptime=" << item.minptime << ";stereo=" << (item.stereo ? 1 : 0)
-                   << ";useinbandfec=1" << std::endl;
-            }
-
-            if (mConfig.enable_rtx) {
-                const auto payloadIdRtx = payloadId + 1;
-                ss << "a=rtpmap:" << payloadIdRtx << " rtx/48000" << std::endl;
-                ss << "a=fmtp:" << payloadIdRtx << " apt=" << payloadId << std::endl;
-
-                payloadId += 2;
-            } else {
-                payloadId += 1;
-            }
-        }
-
-        if (mConfig.enable_bwe || mDirection == Direction::Subscribe) {
-            ss << "a=extmap:14 " << RtpStandardExtensions::kExtGoogleTWCC << std::endl;
-        }
-
-        ss << "a=ssrc:" << mAudioSSRC << " cname:" << mConfig.cname << std::endl;
-        ss << "a=ssrc:" << mAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
-
-        if (mConfig.enable_rtx) {
-            ss << "a=ssrc:" << mRtxAudioSSRC << " cname:" << mConfig.cname << std::endl;
-            ss << "a=ssrc:" << mRtxAudioSSRC << " msid:" << mConfig.cname << " " << mAudioMSID << std::endl;
-
-            // https://groups.google.com/g/discuss-webrtc/c/0OVDV6I3SRo
-            ss << "a=ssrc-group:FID " << mAudioSSRC << " " << mRtxAudioSSRC << std::endl;
         }
     }
 
@@ -320,21 +287,12 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
         ss << "a=ice-pwd:" << mIcePassword << std::endl;
         ss << "a=setup:actpass" << std::endl;
-        ss << "a=mid:" << mid << std::endl;
+        ss << "a=mid:datachannel" << std::endl;
         ss << "a=sctp-port:" << kSctpPort << std::endl;
         ss << "a=max-message-size:" << kSctpMaxMessageSize << std::endl;
     }
 
     return { ss.str(), Error::OK };
-}
-
-std::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList() const
-{
-    if (mVideoConfig.has_value()) {
-        return mVideoConfig->simulcast_layer_list;
-    }
-
-    return std::nullopt;
 }
 
 std::string SdpOffer::getIceUFrag() const
@@ -352,31 +310,40 @@ std::shared_ptr<X509Certificate> SdpOffer::getCertificate() const
     return mCert;
 }
 
-uint32_t SdpOffer::getVideoSSRC() const
+std::optional<std::vector<SimulcastLayer>> SdpOffer::getVideoSimulcastLayerList(const std::string& mediaId) const
 {
-    return mVideoSSRC;
+    for (const auto& mediaLine : mMediaLineList) {
+        if (mediaLine.id == mediaId) {
+            if (mediaLine.layer_list.empty()) {
+                return std::nullopt;
+            }
+            return mediaLine.layer_list;
+        }
+    }
+
+    return std::nullopt;
 }
 
-uint32_t SdpOffer::getRtxVideoSSRC() const
+std::pair<uint32_t, uint32_t> SdpOffer::getMediaSSRC(const std::string& mediaId) const
 {
-    return mRtxVideoSSRC;
+    for (const auto& mediaItem : mMediaLineGeneratedList) {
+        if (mediaItem.mediaId == mediaId) {
+            return { mediaItem.ssrc, mediaItem.rtx };
+        }
+    }
+
+    return {};
 }
 
-uint32_t SdpOffer::getAudioSSRC() const
+std::pair<uint32_t, uint32_t> SdpOffer::getVideoSimulastSSRC(const std::string& mediaId, const std::string& name) const
 {
-    return mAudioSSRC;
-}
-
-uint32_t SdpOffer::getRtxAudioSSRC() const
-{
-    return mRtxAudioSSRC;
-}
-
-std::pair<uint32_t, uint32_t> SdpOffer::getVideoSimulastSSRC(const std::string& name) const
-{
-    for (const auto& item : mLayerSSRC) {
-        if (item.name == name) {
-            return std::make_pair(item.ssrc, item.rtx);
+    for (const auto& mediaItem : mMediaLineGeneratedList) {
+        if (mediaItem.mediaId == mediaId) {
+            for (const auto& layerItem : mediaItem.layer) {
+                if (layerItem.name == name) {
+                    return std::make_pair(layerItem.ssrc, layerItem.rtx);
+                }
+            }
         }
     }
 

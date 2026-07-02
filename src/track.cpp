@@ -1,4 +1,6 @@
 #include "srtc/track.h"
+
+#include "srtc/media.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_packet_source.h"
 #include "srtc/rtp_time_source.h"
@@ -9,10 +11,8 @@ namespace srtc
 
 // Track
 
-Track::Track(uint32_t trackId,
+Track::Track(const std::shared_ptr<Media>& media,
              Direction direction,
-             MediaType mediaType,
-             const std::string& mediaId,
              uint32_t ssrtc,
              uint8_t payloadId,
              uint32_t rtxSsrc,
@@ -23,10 +23,8 @@ Track::Track(uint32_t trackId,
              uint32_t clockRate,
              bool hasNack,
              bool hasPli)
-    : mTrackId(trackId)
+    : mMedia(media)
     , mDirection(direction)
-    , mMediaType(mediaType)
-    , mMediaId(mediaId)
     , mSSRC(ssrtc)
     , mPayloadId(payloadId)
     , mRtxSSRC(rtxSsrc)
@@ -45,24 +43,19 @@ Track::Track(uint32_t trackId,
 {
 }
 
-uint32_t Track::getTrackId() const
+std::shared_ptr<Media> Track::getMedia() const
 {
-    return mTrackId;
+    return mMedia;
+}
+
+MediaType Track::getMediaType() const
+{
+    return mMedia->getType();
 }
 
 Direction Track::getDirection() const
 {
     return mDirection;
-}
-
-MediaType Track::getMediaType() const
-{
-    return mMediaType;
-}
-
-std::string Track::getMediaId() const
-{
-    return mMediaId;
 }
 
 uint8_t Track::getPayloadId() const
@@ -147,17 +140,10 @@ std::shared_ptr<TrackStats> Track::getStats() const
 
 // TrackBuilder
 
-TrackBuilder::TrackBuilder(uint32_t trackId,
-                           Direction direction,
-                           MediaType mediaType,
-                           const std::string& mediaId,
-                           uint32_t ssrc,
-                           uint8_t payloadId,
-                           uint32_t clockRate)
-    : mTrackId(trackId)
+TrackBuilder::TrackBuilder(
+    const std::shared_ptr<Media>& media, Direction direction, uint32_t ssrc, uint8_t payloadId, uint32_t clockRate)
+    : mMedia(media)
     , mDirection(direction)
-    , mMediaType(mediaType)
-    , mMediaId(mediaId)
     , mSSRC(ssrc)
     , mPayloadId(payloadId)
     , mClockRate(clockRate)
@@ -204,10 +190,8 @@ TrackBuilder& TrackBuilder::pli(bool pli)
 
 std::shared_ptr<Track> TrackBuilder::build() const
 {
-    return std::make_shared<Track>(mTrackId,
+    return std::make_shared<Track>(mMedia,
                                    mDirection,
-                                   mMediaType,
-                                   mMediaId,
                                    mSSRC,
                                    mPayloadId,
                                    mRtxSSRC,

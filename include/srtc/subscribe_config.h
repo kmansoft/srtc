@@ -8,23 +8,22 @@
 namespace srtc
 {
 
-struct SubVideoCodec {
-	Codec codec;
-	uint32_t profile_level_id; // for h264
+struct SubCodec {
+	Codec codec = Codec::H264;
+	uint32_t profile_level_id = 0;  // for h264
+    uint32_t minptime = 10;         // for audio
+    bool stereo = false;
 };
 
-struct SubVideoConfig {
-	std::vector<SubVideoCodec> codec_list;
+struct SubMediaItem {
+    std::string media_id;
+    MediaType media_type;
+    std::vector<SubCodec> codec_list;
 };
 
-struct SubAudioCodec {
-	Codec codec;
-	uint32_t minptime;
-	bool stereo;
+struct SubMediaConfig {
+    std::vector<SubMediaItem> media_list;
 };
 
-struct SubAudioConfig {
-	std::vector<SubAudioCodec> codec_list;
-};
 
 }

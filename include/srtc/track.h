@@ -3,7 +3,6 @@
 #include "srtc/simulcast_layer.h"
 #include "srtc/srtc.h"
 
-#include <atomic>
 #include <memory>
 #include <string>
 
@@ -13,6 +12,7 @@ namespace srtc
 class RtcpPacketSource;
 class RtpTimeSource;
 class RtpPacketSource;
+class Media;
 class TrackStats;
 
 class Track
@@ -37,10 +37,8 @@ public:
         }
     };
 
-    Track(uint32_t trackId,
+    Track(const std::shared_ptr<Media>& media,
           Direction direction,
-          MediaType mediaType,
-          const std::string& mediaId,
           uint32_t ssrc,
           uint8_t payloadId,
           uint32_t rtxSsrc,
@@ -52,10 +50,9 @@ public:
           bool hasNack,
           bool hasPli);
 
-    [[nodiscard]] uint32_t getTrackId() const;
-    [[nodiscard]] Direction getDirection() const;
+    [[nodiscard]] std::shared_ptr<Media> getMedia() const;
     [[nodiscard]] MediaType getMediaType() const;
-    [[nodiscard]] std::string getMediaId() const;
+    [[nodiscard]] Direction getDirection() const;
     [[nodiscard]] uint8_t getPayloadId() const;
     [[nodiscard]] uint8_t getRtxPayloadId() const;
     [[nodiscard]] Codec getCodec() const;
@@ -77,10 +74,8 @@ public:
     [[nodiscard]] std::shared_ptr<TrackStats> getStats() const;
 
 private:
-    const uint32_t mTrackId;
+    const std::shared_ptr<Media> mMedia;
     const Direction mDirection;
-    const MediaType mMediaType;
-    const std::string mMediaId;
     const uint32_t mSSRC;
     const uint8_t mPayloadId;
     const uint32_t mRtxSSRC;
@@ -101,13 +96,8 @@ private:
 class TrackBuilder
 {
 public:
-    TrackBuilder(uint32_t trackId,
-                 Direction direction,
-                 MediaType mediaType,
-                 const std::string& mediaId,
-                 uint32_t ssrc,
-                 uint8_t payloadId,
-                 uint32_t clockRate);
+    TrackBuilder(
+        const std::shared_ptr<Media>& media, Direction direction, uint32_t ssrc, uint8_t payloadId, uint32_t clockRate);
 
     TrackBuilder& rtx(uint32_t rtxSsrc, uint8_t rtxPayloadId);
     TrackBuilder& codec(Codec codec, const std::shared_ptr<Track::CodecOptions>& codecOptions);
@@ -118,10 +108,8 @@ public:
     [[nodiscard]] std::shared_ptr<Track> build() const;
 
 private:
-    const uint32_t mTrackId;
+    const std::shared_ptr<Media> mMedia;
     const Direction mDirection;
-    const MediaType mMediaType;
-    const std::string mMediaId;
     const uint32_t mSSRC;
     const uint8_t mPayloadId;
     const uint32_t mClockRate;

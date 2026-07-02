@@ -30,7 +30,6 @@ struct PubOfferConfig {
     bool enable_rtx = true;
     bool enable_bwe = false;
     bool enable_rfc8851 = false;
-    bool debug_drop_packets = false;
     DataChannelConfig data_channel_config;
 };
 
@@ -39,7 +38,6 @@ struct SubOfferConfig {
     uint16_t pli_interval_millis = 2000;
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
-    bool debug_drop_packets = false;
     DataChannelConfig data_channel_config;
 };
 
@@ -53,7 +51,6 @@ private:
     struct Config {
         // Common
         std::string cname;
-        bool debug_drop_packets = false;
         // Data channels
         std::vector<std::string> data_channels;
         // Publish
@@ -66,43 +63,29 @@ private:
         uint16_t jitter_buffer_nack_delay_millis = 0;
     };
 
-    struct VideoCodec {
+    struct MediaCodec {
         Codec codec;
         uint32_t profile_level_id; // for h264
-
-        VideoCodec(Codec codec, uint32_t profile_level_id)
-            : codec(codec)
-            , profile_level_id(profile_level_id)
-        {
-        }
-    };
-
-    struct VideoConfig {
-        std::vector<VideoCodec> codec_list;
-        std::vector<SimulcastLayer> simulcast_layer_list;
-    };
-
-    struct AudioCodec {
-        Codec codec;
-        uint32_t minptime;
+        uint32_t minptime;         // for audio
         bool stereo;
 
-        AudioCodec(Codec codec, uint32_t minptime, bool stereo)
+        MediaCodec(Codec codec, uint32_t profile_level_id, uint32_t minptime, bool stereo)
             : codec(codec)
+            , profile_level_id(profile_level_id)
             , minptime(minptime)
             , stereo(stereo)
         {
         }
     };
 
-    struct AudioConfig {
-        std::vector<AudioCodec> codec_list;
+    struct MediaLine {
+        std::string id;
+        MediaType mediaType;
+        std::vector<MediaCodec> codec_list;
+        std::vector<SimulcastLayer> layer_list;
     };
 
-    SdpOffer(Direction direction,
-             const Config& config,
-             const std::optional<VideoConfig>& videoConfig,
-             const std::optional<AudioConfig>& audioConfig);
+    SdpOffer(Direction direction, const Config& config, const std::vector<MediaLine>& media);
 
 public:
     ~SdpOffer() = default;
@@ -113,17 +96,16 @@ public:
 
     [[nodiscard]] std::pair<std::string, Error> generate();
 
-    [[nodiscard]] std::optional<std::vector<SimulcastLayer>> getVideoSimulcastLayerList() const;
     [[nodiscard]] std::string getIceUFrag() const;
     [[nodiscard]] std::string getIcePassword() const;
     [[nodiscard]] std::shared_ptr<X509Certificate> getCertificate() const;
 
-    [[nodiscard]] uint32_t getVideoSSRC() const;
-    [[nodiscard]] uint32_t getRtxVideoSSRC() const;
-    [[nodiscard]] uint32_t getAudioSSRC() const;
-    [[nodiscard]] uint32_t getRtxAudioSSRC() const;
+    [[nodiscard]] std::optional<std::vector<SimulcastLayer>> getVideoSimulcastLayerList(
+        const std::string& mediaId) const;
 
-    [[nodiscard]] std::pair<uint32_t, uint32_t> getVideoSimulastSSRC(const std::string& name) const;
+    [[nodiscard]] std::pair<uint32_t, uint32_t> getMediaSSRC(const std::string& mediaId) const;
+    [[nodiscard]] std::pair<uint32_t, uint32_t> getVideoSimulastSSRC(const std::string& mediaId,
+                                                                     const std::string& rid) const;
 
     [[nodiscard]] bool hasDataChannel() const;
     [[nodiscard]] uint16_t getSctpPort() const;
@@ -137,30 +119,40 @@ private:
 
     const Direction mDirection;
     const Config mConfig;
-    const std::optional<VideoConfig> mVideoConfig;
-    const std::optional<AudioConfig> mAudioConfig;
+    const std::vector<MediaLine> mMediaLineList;
 
     const uint64_t mOriginId;
-
-    const uint32_t mVideoSSRC;
-    const uint32_t mRtxVideoSSRC;
-    const uint32_t mAudioSSRC;
-    const uint32_t mRtxAudioSSRC;
-
-    const std::string mVideoMSID;
-    const std::string mAudioMSID;
 
     const std::string mIceUfrag;
     const std::string mIcePassword;
 
     const std::shared_ptr<X509Certificate> mCert;
 
-    struct LayerSSRC {
+    struct LayerGenerated {
         std::string name;
-        uint32_t ssrc;
-        uint32_t rtx;
+        uint32_t ssrc = 0;
+        uint32_t rtx = 0;
+
+        LayerGenerated(const std::string& name)
+            : name(name)
+        {
+        }
     };
-    std::vector<LayerSSRC> mLayerSSRC;
+
+    struct MediaLineGenerated {
+        std::string mediaId;
+        MediaType mediaType;
+        uint32_t ssrc = 0;
+        uint32_t rtx = 0;
+        std::vector<LayerGenerated> layer;
+
+        MediaLineGenerated(const std::string& mediaId)
+            : mediaId(mediaId)
+        {
+        }
+    };
+
+    std::vector<MediaLineGenerated> mMediaLineGeneratedList;
 };
 
 } // namespace srtc

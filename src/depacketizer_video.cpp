@@ -1,4 +1,6 @@
 #include "srtc/depacketizer_video.h"
+
+#include "srtc/media.h"
 #include "srtc/track.h"
 
 #include <cassert>
