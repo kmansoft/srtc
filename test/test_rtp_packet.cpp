@@ -120,7 +120,7 @@ TEST(RtpPacket, Serialize)
 
         // This is our packet's unencrypted data
         const auto packet = std::make_shared<srtc::RtpPacket>(
-            track, marker, 0, static_cast<uint16_t>(i), i, padding, extension.copy(), std::move(payload));
+            track, marker, 0, static_cast<uint16_t>(i), static_cast<uint32_t>(i), padding, extension.copy(), std::move(payload));
 
         // Generate
         const auto data = packet->generate();
