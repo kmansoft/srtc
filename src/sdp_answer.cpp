@@ -544,7 +544,7 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         }
     } else if (key == "extmap") {
         const auto id = parse_u32(value);
-        if (id.has_value() && id > 0 && id <= 255) {
+        if (id.has_value() && id > 0u && id <= 255u) {
             if (props.size() == 1 && isInMediaSection) {
                 mediaState.extensionMap.add(static_cast<uint8_t>(id.value()), props[0]);
             }
