@@ -18,7 +18,7 @@ struct DataChannelMessage {
     ByteBuffer binary;
 
     static DataChannelMessage makeText(const std::string& label, std::string&& text);
-    static DataChannelMessage makeBinary(const std::string& label, srtc::ByteBuffer&& binary);
+    static DataChannelMessage makeBinary(const std::string& label, ByteBuffer&& binary);
 };
 
 } // namespace srtc
