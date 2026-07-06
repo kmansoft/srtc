@@ -77,7 +77,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::share
         ByteWriter writer(payload);
 
         // |X|R|N|S|R| PID |
-        writer.writeU8((tagFrameType << 5) | ((packetNumber == 0 ? 1 : 0) << 4));
+        writer.writeU8(static_cast<uint8_t>((tagFrameType << 5) | ((packetNumber == 0 ? 1 : 0) << 4)));
 
         // Payload
         const auto writeNow = std::min(currSize, packetSize);

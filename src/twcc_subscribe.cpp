@@ -157,7 +157,7 @@ void Builder::addLargeDeltaRun(srtc::twcc::SubscribePacket* first_packet,
             assert(delta >= kMinLargeDeltaMicros);
             assert(delta <= kMaxLargeDeltaMicros);
 
-            const auto delta_encoded = static_cast<int32_t>(delta / 250);
+            const auto delta_encoded = static_cast<int16_t>(delta / 250);
             mWriterTimestamps.writeU16(delta_encoded);
         }
     }

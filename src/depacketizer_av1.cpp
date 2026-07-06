@@ -62,7 +62,7 @@ void BufferedObu::flushTo(srtc::ByteWriter& out)
             out.writeU8(mExtension);
         }
 
-        out.writeLEB128(mBuf.size());
+        out.writeLEB128(static_cast<uint32_t>(mBuf.size()));
         out.write(mBuf);
 
         mBuf.clear();
@@ -195,7 +195,7 @@ bool DepacketizerAV1::isFrameStart(const ByteBuffer& payload) const
             if (reader.remaining() >= 1 && obuSize >= 1) {
                 // https://aomediacodec.github.io/av1-spec/#obu-header-syntax
                 const auto obuHeader = reader.readU8();
-                const auto obuType = (obuHeader >> 3) & 0x0Fu;
+                const auto obuType = static_cast<uint8_t>((obuHeader >> 3) & 0x0Fu);
 
                 if (obuType == av1::ObuType::SequenceHeader) {
                     return true;

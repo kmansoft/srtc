@@ -42,7 +42,7 @@ public:
 	bool unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output);
 
 	// Implementation
-	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);
+	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId);
 
 private:
 	const std::shared_ptr<SrtpCrypto> mCrypto;

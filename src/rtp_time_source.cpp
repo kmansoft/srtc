@@ -26,7 +26,7 @@ uint32_t RtpTimeSource::getFrameTimestamp(int64_t pts)
         return mCurrRtp;
     }
 
-    mCurrRtp += elapsed_usec * mClockRate / 1000000;
+    mCurrRtp += static_cast<uint32_t>(elapsed_usec * mClockRate / 1000000);
     mCurrPts = pts;
     mCurrTime = std::chrono::steady_clock::now();
 
@@ -37,7 +37,7 @@ uint32_t RtpTimeSource::getCurrentTimestamp() const
 {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed_usec = std::chrono::duration_cast<std::chrono::microseconds>(now - mCurrTime).count();
-    return mCurrRtp + elapsed_usec * mClockRate / 1000000;
+    return static_cast<uint32_t>(mCurrRtp + elapsed_usec * mClockRate / 1000000);
 }
 
 } // namespace srtc

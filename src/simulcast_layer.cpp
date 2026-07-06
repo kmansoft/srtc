@@ -22,7 +22,7 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<SimulcastL
     // https://webrtc.googlesource.com/src/+/refs/heads/main/docs/native-code/rtp-hdrext/video-layers-allocation00
 
     // |RID| NS| sl_bm |
-    w.writeU8((ridId << 6) | ((listSize - 1) << 4) | 0x01);
+    w.writeU8(static_cast<uint8_t>(static_cast<uint16_t>(ridId << 6) | (static_cast<uint16_t>(listSize - 1) << 4) | 0x01));
     // |sl0_bm |sl1_bm |
     // |sl2_bm |sl3_bm | - none needed because sl_bm is not zero
     // |#tl|#tl|#tl|#tl| - all zeros meaning one temporal layer per spatial layer
@@ -40,7 +40,7 @@ void buildGoogleVLA(ByteBuffer& buf, uint8_t ridId, const std::vector<SimulcastL
         // max framerate
         w.writeU16(layer.width - 1);
         w.writeU16(layer.height - 1);
-        w.writeU8(layer.frames_per_second);
+        w.writeU8(static_cast<uint8_t>(std::min<uint16_t>(layer.frames_per_second, 255)));
     }
 }
 

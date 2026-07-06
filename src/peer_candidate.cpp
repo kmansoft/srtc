@@ -47,7 +47,7 @@ namespace
 
 std::atomic<uint32_t> gNextUniqueId = 0;
 
-int verify_callback(int ok, X509_STORE_CTX* store_ctx)
+int verify_callback([[maybe_unused]] int ok, [[maybe_unused]] X509_STORE_CTX* store_ctx)
 {
     // We verify cert has ourselves after the handshake has completed
     return 1;
@@ -87,7 +87,6 @@ stun::StunMessage make_stun_message_binding_request(const std::shared_ptr<srtc::
                                                     size_t len,
                                                     const std::shared_ptr<srtc::SdpOffer>& offer,
                                                     const std::shared_ptr<srtc::SdpAnswer>& answer,
-                                                    const char* label,
                                                     bool useCandidate)
 {
     stun::StunMessage msg = {};
@@ -115,7 +114,6 @@ stun::StunMessage make_stun_message_binding_response(const std::shared_ptr<srtc:
                                                      uint8_t* buf,
                                                      size_t len,
                                                      const std::shared_ptr<srtc::SdpOffer>& offer,
-                                                     const std::shared_ptr<srtc::SdpAnswer>& answer,
                                                      const stun::StunMessage& request,
                                                      const srtc::anyaddr& address,
                                                      socklen_t addressLen)
@@ -230,7 +228,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mSendRtpHistory(std::make_shared<SendRtpHistory>())
     , mUniqueId(++gNextUniqueId)
     , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
-    , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, answer, scheduler))
+    , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, scheduler))
     , mResponderTWCC(RtpResponderTWCC::factory(offer, answer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mIceRttFilter(0.2f)
@@ -323,8 +321,8 @@ void PeerCandidate::sendSenderReports()
             w.writeU32(rtpTime);
 
             const auto stats = track->getStats();
-            w.writeU32(stats->getSentPackets());
-            w.writeU32(stats->getSentBytes());
+            w.writeU32(static_cast<uint32_t>(stats->getSentPackets()));
+            w.writeU32(static_cast<uint32_t>(stats->getSentBytes()));
 
             const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
             sendRtcpPacket(track, packet);
@@ -362,7 +360,7 @@ void PeerCandidate::sendReceiverReports()
                 const auto lastSRDelayValue = lastSRDelayDelta.count() * static_cast<int64_t>(65536) / 1000;
 
                 w.writeU32(lastSRMiddle32);
-                w.writeU32(lastSRDelayValue);
+                w.writeU32(static_cast<uint32_t>(lastSRDelayValue));
             } else {
                 w.writeU32(0);
                 w.writeU32(0);
@@ -751,7 +749,6 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                                                                      mIceMessageBuffer.get(),
                                                                      kIceMessageBufferSize,
                                                                      mOffer,
-                                                                     mAnswer,
                                                                      incomingMessage,
                                                                      data.addr,
                                                                      data.addr_len);
@@ -1110,7 +1107,7 @@ void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rt
             for (auto index = 0; index < 16; index += 1) {
                 if (blp & (1 << index)) {
                     LOG(SRTC_LOG_V, "RTCP RTPFB lost SEQ = %u from blp", pid + index + 1);
-                    missingSeqList.push_back(pid + index + 1);
+                    missingSeqList.push_back(static_cast<uint16_t>(pid + index + 1));
                 }
             }
         }
@@ -1278,7 +1275,7 @@ int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
     return inl;
 }
 
-long PeerCandidate::dgram_ctrl(BIO* b, int cmd, long num, void* ptr)
+long PeerCandidate::dgram_ctrl([[maybe_unused]] BIO* b, int cmd, [[maybe_unused]] long num, [[maybe_unused]] void* ptr)
 {
     switch (cmd) {
     case BIO_CTRL_DGRAM_QUERY_MTU:
@@ -1420,7 +1417,7 @@ void PeerCandidate::sendStunBindingRequest(unsigned int iteration)
     LOG(SRTC_LOG_V, "Sending STUN binding request, iteration = %u, #%u", iteration, mUniqueId);
 
     const auto iceMessage = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "start to connect", false);
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
     addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
     mTaskSendStunConnectRequest = mScheduler.submit(kConnectRepeatPeriod + (iteration + 1) * kConnectRepeatIncrement,
@@ -1434,7 +1431,7 @@ void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
     LOG(SRTC_LOG_V, "Sending STUN binding response #%u", mUniqueId);
 
     const auto iceMessage = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "use candidate", true);
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, true);
 
     addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
 
@@ -1480,7 +1477,7 @@ void PeerCandidate::sendConnectionRestoreRequest()
     LOG(SRTC_LOG_V, "Sending a STUN request to restore the connection #%u", mUniqueId);
 
     const auto request = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "connection restore", false);
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
     addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 
     Task::cancelHelper(mTaskConnectionRestoreTimeout);
@@ -1510,7 +1507,7 @@ void PeerCandidate::onKeepAliveTimeout()
     LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
 
     const auto request = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, "keep-alive", false);
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
     addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 }
 

@@ -71,7 +71,7 @@ public:
 
     struct Output {
         ByteBuffer buf;
-        uint32_t rollover;
+        uint32_t rollover = {};
     };
 
     [[nodiscard]] Output generate() const;

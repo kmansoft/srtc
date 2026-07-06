@@ -181,7 +181,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(
         return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
     }
 
-    return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
+    return SdpAnswer::parse(offer, answer, selector);
 }
 
 std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(
@@ -191,7 +191,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswe
         return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
     }
 
-    return SdpAnswer::parse(Direction::Subscribe, offer, answer, selector);
+    return SdpAnswer::parse(offer, answer, selector);
 }
 
 Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
@@ -779,13 +779,13 @@ std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
     return list;
 }
 
-void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
+void PeerConnection::onCandidateHasDataToSend([[maybe_unused]] PeerCandidate* candidate)
 {
     std::lock_guard lock(mMutex);
     mEventLoop->interrupt();
 }
 
-void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
+void PeerConnection::onCandidateConnecting([[maybe_unused]] PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connecting);
 
@@ -906,7 +906,8 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
     }
 }
 
-void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet)
+void PeerConnection::onCandidateReceivedMediaPacket([[maybe_unused]] PeerCandidate* candiate,
+                                                    const std::shared_ptr<RtpPacket>& packet)
 {
     if (mDirection == Direction::Subscribe) {
         const auto track = packet->getTrack();
@@ -922,7 +923,7 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
     }
 }
 
-void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
+void PeerConnection::onCandidateReceivedSenderReport([[maybe_unused]] PeerCandidate* candidate,
                                                      const std::shared_ptr<Track>& track,
                                                      const SenderReport& sr)
 {
@@ -934,7 +935,7 @@ void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
     }
 }
 
-void PeerConnection::onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate)
+void PeerConnection::onCandidateReceivedKeyFrameRequest([[maybe_unused]] PeerCandidate* candiate)
 {
     std::lock_guard lock(mListenerMutex);
     if (mPublishKeyFrameRequestedListener) {

@@ -19,15 +19,15 @@ void RtpExtensionBuilder::addStringValue(uint8_t id, const std::string& value)
     const auto len = std::min(static_cast<size_t>(255), value.length());
 
     mWriter.writeU8(id);
-    mWriter.writeU8(len);
+    mWriter.writeU8(static_cast<uint8_t>(len));
     mWriter.write(reinterpret_cast<const uint8_t*>(value.data()), len);
 }
 
 void RtpExtensionBuilder::addBinaryValue(uint8_t id, const ByteBuffer& buf)
 {
-    const auto len = buf.size();
+    const auto len = std::min(static_cast<size_t>(255), buf.size());
     mWriter.writeU8(id);
-    mWriter.writeU8(len);
+    mWriter.writeU8(static_cast<uint8_t>(len));
     mWriter.write(buf);
 }
 

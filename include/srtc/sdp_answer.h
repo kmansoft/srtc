@@ -26,8 +26,7 @@ private:
     friend PeerConnection;
 	friend SdpAnswerParser;
 
-    static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(Direction direction,
-															  const std::shared_ptr<SdpOffer>& offer,
+    static std::pair<std::shared_ptr<SdpAnswer>, Error> parse(const std::shared_ptr<SdpOffer>& offer,
                                                               const std::string& answer,
                                                               const std::shared_ptr<TrackSelector>& selector);
 

@@ -21,7 +21,7 @@ void Packetizer::setCodecSpecificData([[maybe_unused]] const std::vector<ByteBuf
 {
 }
 
-bool Packetizer::isKeyFrame(const ByteBuffer& frame) const
+bool Packetizer::isKeyFrame([[maybe_unused]] const ByteBuffer& frame) const
 {
     return false;
 }

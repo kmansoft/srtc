@@ -96,7 +96,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
             // Send codec-specific data first as a STAP-A
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
             if (!addedParameters && !mSPS.empty() && !mPPS.empty()) {
-                const uint8_t nri = std::max(mSPS.front() & 0x60, mPPS.front() & 0x60);
+                const uint8_t nri = std::max(static_cast<uint8_t>(mSPS.front() & 0x60), static_cast<uint8_t>(mPPS.front() & 0x60));
 
                 ByteBuffer payload;
                 ByteWriter writer(payload);
@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
             const auto naluData = parser.currData();
             const auto naluSize = parser.currDataSize();
 
-            uint8_t padding = getPadding(track, simulcast, twcc, naluSize);
+            auto padding = getPadding(track, simulcast, twcc, naluSize);
             RtpExtension extension = buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);

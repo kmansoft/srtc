@@ -98,7 +98,7 @@ void DepacketizerH265::extract(std::vector<ByteBuffer>& out, const std::vector<c
                         fu_buf = std::make_unique<ByteBuffer>(fuHeader);
                         fu_wrt = std::make_unique<ByteWriter>(*fu_buf);
 
-                        fu_wrt->writeU16((fuType << 9) | (layerId << 3) | temporalId);
+                        fu_wrt->writeU16(static_cast<uint16_t>((fuType << 9) | (layerId << 3) | temporalId));
                     }
 
                     if (reader.remaining() > 0) {
@@ -122,7 +122,7 @@ bool DepacketizerH265::isFrameStart(const ByteBuffer& payload) const
     ByteReader reader(payload);
     if (reader.remaining() >= 2) {
         const auto nalUnitHeader = reader.readU16();
-        const auto type = (nalUnitHeader >> 9) & 0x3Fu;
+        const auto type = static_cast<uint8_t>((nalUnitHeader >> 9) & 0x3Fu);
 
         if (type == h265::kPacket_AP) {
             // https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
@@ -133,7 +133,7 @@ bool DepacketizerH265::isFrameStart(const ByteBuffer& payload) const
                     const auto apHeader = (apData[0] << 8) | apData[1];
                     const auto apNaluType = (apHeader >> 9) & 0x3Fu;
 
-                    if (size > 2 && isFrameStartImpl(apNaluType, apData + 2, size - 2)) {
+                    if (size > 2 && isFrameStartImpl(static_cast<uint8_t>(apNaluType), apData + 2, size - 2)) {
                         return true;
                     }
                 } else {
@@ -151,7 +151,7 @@ bool DepacketizerH265::isFrameStart(const ByteBuffer& payload) const
                 const auto fuSize = reader.remaining();
 
                 if (fuIsStart) {
-                    if (fuSize > 0 && isFrameStartImpl(fuNaluType, fuData, fuSize)) {
+                    if (fuSize > 0 && isFrameStartImpl(static_cast<uint8_t>(fuNaluType), fuData, fuSize)) {
                         return true;
                     }
                 }
@@ -178,7 +178,7 @@ void DepacketizerH265::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
 
     if ((mHaveBits & kHaveAll) != kHaveAll) {
         // Wait to emit until we have a key frame
-        const auto nalu_type = (nalu.front() >> 1) & 0x3F;
+        const auto nalu_type = static_cast<uint8_t>((nalu.front() >> 1) & 0x3F);
         switch (nalu_type) {
         case h265::NaluType::VPS:
             mHaveBits |= kHaveVPS;

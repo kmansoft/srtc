@@ -149,7 +149,7 @@ std::weak_ptr<Task> ThreadScheduler::updateImpl(const std::shared_ptr<TaskImpl>&
     return newTask;
 }
 
-void ThreadScheduler::threadFunc(const std::string name)
+void ThreadScheduler::threadFunc([[maybe_unused]] const std::string name)
 {
 #ifdef _POSIX_VERSION
     pthread_setname_np(pthread_self(), name.c_str());

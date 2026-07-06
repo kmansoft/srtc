@@ -201,6 +201,12 @@ add_library(srtc
         src/sctp/sctp_session.cpp
 )
 
+if (MSVC)
+    target_compile_options(srtc PRIVATE "/W4")
+else ()
+    target_compile_options(srtc PRIVATE "-Wall")
+endif ()
+
 if (APPLE)
     target_sources(srtc
             PRIVATE

@@ -47,8 +47,7 @@ bool HmacSha1::reset(const uint8_t* key, size_t keySize)
     }
 
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
-    char sha1[12];
-    std::strncpy(sha1, "SHA1", sizeof(sha1));
+    char sha1[12] = { 'S', 'H', 'A', '1' };
 
     OSSL_PARAM params[2];
     params[0] = OSSL_PARAM_construct_utf8_string("digest", sha1, 0);

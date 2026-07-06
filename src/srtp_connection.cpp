@@ -105,7 +105,7 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
         return { nullptr, error };
     }
 
-    const auto conn = std::make_shared<SrtpConnection>(crypto, isSetupActive, srtpProfileName->id);
+    const auto conn = std::make_shared<SrtpConnection>(crypto, srtpProfileName->id);
     return { conn, Error::OK };
 }
 
@@ -256,7 +256,7 @@ bool SrtpConnection::unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuf
     return true;
 }
 
-SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId)
+SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId)
     : mCrypto(crypto)
     , mProfileId(profileId)
 {

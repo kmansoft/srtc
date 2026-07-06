@@ -147,10 +147,11 @@ ssize_t Socket::send(const void* ptr, size_t len)
     const auto r = sendto(mHandle,
 #ifdef _WIN32
                           reinterpret_cast<const char*>(ptr),
+                          static_cast<int>(len),
 #else
                           ptr,
+                          static_cast<int>(len),
 #endif
-                          len,
                           0,
                           (struct sockaddr*)&mAddr,
                           mAddr.ss.ss_family == AF_INET ? sizeof(mAddr.sin_ipv4) : sizeof(mAddr.sin_ipv6));
