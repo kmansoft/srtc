@@ -181,7 +181,12 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket([[maybe_unused]] uint32_t ssrc
     const auto reference_time_micros = 64 * 1000 * static_cast<int64_t>(reference_time);
 
     const auto tempList = mTempPacketBuffer.ensure(packet_status_count);
-    std::memset(tempList, 0, sizeof(TempPacket) * packet_status_count);
+
+    // MSVC wants initializers, and GCC doesn't allow memset if they are present
+    for (size_t i = 0; i < packet_status_count; i++) {
+        tempList[i].delta_micros = 0;
+        tempList[i].status = 0;
+    }
 
     // Be careful, this can wrap (and that's OK)
     const auto past_end_seq_number = static_cast<uint16_t>(base_seq_number + packet_status_count);
