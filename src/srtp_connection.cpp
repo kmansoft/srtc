@@ -272,7 +272,7 @@ SrtpConnection::ChannelValue& SrtpConnection::ensureSrtpChannel(ChannelMap& map,
     }
 
     auto replayProtection = std::make_unique<ReplayProtection>(maxPossibleValueForReplayProtection, 2048);
-    const auto result = map.insert({ key, ChannelValue{ std::move(replayProtection) } });
+    const auto result = map.insert({ key, ChannelValue{ std::move(replayProtection), 0, {} } });
     return result.first->second;
 }
 

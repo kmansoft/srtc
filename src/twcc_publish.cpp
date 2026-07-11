@@ -359,7 +359,7 @@ bool PublishPacketHistory::calculateBandwidthActual([[maybe_unused]] int64_t now
     return true;
 }
 
-bool PublishPacketHistory::calcualteBandwidthProbe(int64_t now, PublishPacket* max)
+bool PublishPacketHistory::calcualteBandwidthProbe([[maybe_unused]] int64_t now, [[maybe_unused]] PublishPacket* max)
 {
     if (!mPacketList) {
         return false;

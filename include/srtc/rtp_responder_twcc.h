@@ -24,8 +24,7 @@ public:
     RtpResponderTWCC();
     ~RtpResponderTWCC();
 
-    static std::shared_ptr<RtpResponderTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
-                                                     const std::shared_ptr<SdpAnswer>& answer);
+    static std::shared_ptr<RtpResponderTWCC> factory(const std::shared_ptr<SdpOffer>& offer);
 
     void onMediaPacket(const std::shared_ptr<RtpPacket>& packet);
 

@@ -69,7 +69,7 @@ private:
 
 	struct ChannelValue {
 		std::unique_ptr<ReplayProtection> replayProtection;
-		uint32_t rolloverCount = { 0 };
+		uint32_t rolloverCount;
 		std::optional<uint16_t> lastSequence16;
 	};
 

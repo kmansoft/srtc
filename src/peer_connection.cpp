@@ -337,7 +337,12 @@ Error PeerConnection::setVideoCodecSpecificData(const std::shared_ptr<Track>& tr
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ 0, track, entry.packetizer, {}, std::move(list) });
+            FrameToSend fr = {};
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.csd = std::move(list);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -361,7 +366,13 @@ Error PeerConnection::publishVideoFrame(const std::shared_ptr<Track>& track, int
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ pts_usec, track, entry.packetizer, std::move(buf) });
+            FrameToSend fr = {};
+            fr.pts_usec = pts_usec;
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.buf = std::move(buf);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -399,12 +410,12 @@ Error PeerConnection::updateVideoSimulcastLayer(const std::shared_ptr<Track>& tr
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            FrameToSend frameToSend = {};
-            frameToSend.track = track;
-            frameToSend.packetizer = entry.packetizer;
-            frameToSend.layer = updated;
+            FrameToSend fr = {};
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.layer = updated;
 
-            mFrameSendQueue.push_back(std::move(frameToSend));
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -428,7 +439,13 @@ Error PeerConnection::publishAudioFrame(const std::shared_ptr<Track>& track, int
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ pts_usec, track, entry.packetizer, std::move(buf) });
+            FrameToSend fr = {};
+            fr.pts_usec = pts_usec;
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.buf = std::move(buf);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;

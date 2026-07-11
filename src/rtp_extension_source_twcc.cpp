@@ -206,7 +206,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket([[maybe_unused]] uint32_t ssrc
             const auto symbol = (chunkHeader >> 13) & 0x03u;
             const auto runLength = chunkHeader & 0x1FFFu;
             const uint16_t remaining = past_end_seq_number - seq_number;
-            if (remaining < runLength || remaining > 0xFFFF) {
+            if (remaining < runLength) {
                 LOG(SRTC_LOG_E, "RTCP TWCC packet: run_length %u is too large, remaining %u", runLength, remaining);
                 break;
             }

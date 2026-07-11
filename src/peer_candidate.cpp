@@ -229,7 +229,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mUniqueId(++gNextUniqueId)
     , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, scheduler))
-    , mResponderTWCC(RtpResponderTWCC::factory(offer, answer))
+    , mResponderTWCC(RtpResponderTWCC::factory(offer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mIceRttFilter(0.2f)
     , mControlRttFilter(0.2f)

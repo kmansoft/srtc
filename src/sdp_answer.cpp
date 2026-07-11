@@ -466,7 +466,7 @@ Error SdpAnswerParser::parseLine(const std::string& line)
 }
 
 Error SdpAnswerParser::parseLine_m(const std::string& key,
-                                   const std::string& value,
+                                   [[maybe_unused]] const std::string& value,
                                    const std::vector<std::string>& props)
 {
     if (const auto error = flush_m(); error.isError()) {

@@ -204,7 +204,7 @@ add_library(srtc
 if (MSVC)
     target_compile_options(srtc PRIVATE "/W4")
 else ()
-    target_compile_options(srtc PRIVATE "-Wall")
+    target_compile_options(srtc PRIVATE "-Wall" "-Wextra" "-Werror")
 endif ()
 
 if (APPLE)

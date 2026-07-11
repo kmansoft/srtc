@@ -5,7 +5,7 @@ namespace srtc
 
 DataChannelMessage DataChannelMessage::makeText(const std::string& label, std::string&& text)
 {
-    return DataChannelMessage{ Kind::kText, label, std::move(text)};
+    return DataChannelMessage{ Kind::kText, label, std::move(text), {}};
 }
 
 DataChannelMessage DataChannelMessage::makeBinary(const std::string& label, srtc::ByteBuffer&& binary)
