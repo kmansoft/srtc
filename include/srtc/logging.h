@@ -5,10 +5,10 @@
 namespace srtc
 {
 
-#define SRTC_LOG_V 0
-#define SRTC_LOG_I 1
-#define SRTC_LOG_W 8
-#define SRTC_LOG_E 9
+#define SRTC_LOG_V 100
+#define SRTC_LOG_I 101
+#define SRTC_LOG_W 102
+#define SRTC_LOG_E 103
 
 #define SRTC_LOG_Z 1000
 

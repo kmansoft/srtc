@@ -34,7 +34,7 @@ void setLogLevel(int level)
 
 void log(int level, const char* tag, const char* format...)
 {
-    if (level >= gLogLevel) {
+    if (gLogLevel >= level) {
         va_list ap;
         va_start(ap, format);
 
@@ -46,7 +46,7 @@ void log(int level, const char* tag, const char* format...)
 
 void log_v(int level, const char* tag, const char* format, va_list ap)
 {
-    if (level >= gLogLevel) {
+    if (gLogLevel >= level) {
 #ifdef ANDROID
         int androidLogLevel;
         switch (level) {
