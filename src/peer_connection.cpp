@@ -59,6 +59,7 @@ namespace srtc
 
 PeerConnection::PeerConnection(Direction direction)
     : mDirection(direction)
+    , mCustomLogger(nullptr)
     , mEventLoop(EventLoop::factory())
     , mConnectionState(ConnectionState::Inactive)
 {
@@ -70,6 +71,11 @@ PeerConnection::PeerConnection(Direction direction)
 PeerConnection::~PeerConnection()
 {
     close();
+}
+
+void PeerConnection::setCustomLogger(CustomLogger* custom)
+{
+    mCustomLogger = custom;
 }
 
 std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(const PubOfferConfig& pubConfig,
@@ -541,6 +547,9 @@ void PeerConnection::close()
 
 void PeerConnection::networkThreadWorkerFunc()
 {
+    // Logging
+    setThreadSpecificCustomLogger(mCustomLogger);
+
     // Loop scheduler
     mLoopScheduler = std::make_shared<LoopScheduler>();
 

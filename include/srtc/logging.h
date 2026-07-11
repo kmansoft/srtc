@@ -22,4 +22,19 @@ __attribute__((format(printf, 3, 4)))
 
 void log_v(int level, const char* tag, const char* format, va_list ap);
 
+
+// Custom logger
+
+class CustomLogger
+{
+public:
+    virtual ~CustomLogger() = default;
+
+    virtual void log_v(int level, const char* tag, const char* format, va_list ap) = 0;
+};
+
+// Internal API, to set your custom logger see PeerConnection
+
+void setThreadSpecificCustomLogger(CustomLogger* custom);
+
 } // namespace srtc

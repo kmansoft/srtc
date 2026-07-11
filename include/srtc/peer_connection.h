@@ -21,6 +21,7 @@
 namespace srtc
 {
 
+class CustomLogger;
 class SdpAnswer;
 class SdpOffer;
 class Track;
@@ -35,6 +36,9 @@ class PeerConnection final : PeerCandidateListener
 public:
     explicit PeerConnection(Direction direction);
     ~PeerConnection() override;
+
+    // Custom logger for the network thread, call before setting the SDP answer
+    void setCustomLogger(CustomLogger* customLogger);
 
     // SDP offer
     using OfferAndError = std::pair<std::shared_ptr<SdpOffer>, Error>;
@@ -116,6 +120,8 @@ public:
 
 private:
     const Direction mDirection;
+
+    CustomLogger* mCustomLogger;
 
     mutable std::mutex mMutex;
 

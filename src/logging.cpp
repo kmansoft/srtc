@@ -22,6 +22,7 @@ int gLogLevel =
 #endif
     ;
 
+thread_local srtc::CustomLogger* gCustomLogger;
 } // namespace
 
 namespace srtc
@@ -34,7 +35,7 @@ void setLogLevel(int level)
 
 void log(int level, const char* tag, const char* format...)
 {
-    if (gLogLevel >= level) {
+    if (gLogLevel <= level) {
         va_list ap;
         va_start(ap, format);
 
@@ -46,7 +47,13 @@ void log(int level, const char* tag, const char* format...)
 
 void log_v(int level, const char* tag, const char* format, va_list ap)
 {
-    if (gLogLevel >= level) {
+    if (gLogLevel <= level) {
+        const auto custom = gCustomLogger;
+        if (custom) {
+            custom->log_v(level, tag, format, ap);
+            return;
+        }
+
 #ifdef ANDROID
         int androidLogLevel;
         switch (level) {
@@ -74,7 +81,7 @@ void log_v(int level, const char* tag, const char* format, va_list ap)
 #endif
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
 
-        char indicator = ' ';
+        char indicator = '?';
         switch (level) {
         case SRTC_LOG_V:
             indicator = 'V';
@@ -101,6 +108,11 @@ void log_v(int level, const char* tag, const char* format, va_list ap)
                   << std::setfill(' ') << " [" << indicator << "] " << tag << ": " << buf << std::endl;
 #endif
     }
+}
+
+void setThreadSpecificCustomLogger(CustomLogger* custom)
+{
+    gCustomLogger = custom;
 }
 
 } // namespace srtc
