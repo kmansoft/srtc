@@ -19,7 +19,7 @@ class Track
 {
 public:
     struct SimulcastLayer : srtc::SimulcastLayer {
-        uint16_t index = { 0 }; // [0..3]
+        uint8_t index = { 0 }; // [0..3]
     };
 
     struct CodecOptions {

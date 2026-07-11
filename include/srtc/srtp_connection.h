@@ -42,7 +42,7 @@ public:
 	bool unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output);
 
 	// Implementation
-	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, bool isSetupActive, unsigned long profileId);
+	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId);
 
 private:
 	const std::shared_ptr<SrtpCrypto> mCrypto;
@@ -69,7 +69,7 @@ private:
 
 	struct ChannelValue {
 		std::unique_ptr<ReplayProtection> replayProtection;
-		uint32_t rolloverCount = { 0 };
+		uint32_t rolloverCount;
 		std::optional<uint16_t> lastSequence16;
 	};
 

@@ -14,7 +14,8 @@ DepacketizerOpus::DepacketizerOpus(const std::shared_ptr<Track>& track)
 
 DepacketizerOpus::~DepacketizerOpus() = default;
 
-PacketKind DepacketizerOpus::getPacketKind(const ByteBuffer& payload, bool marker) const
+PacketKind DepacketizerOpus::getPacketKind([[maybe_unused]] const ByteBuffer& payload,
+                                           [[maybe_unused]] bool marker) const
 {
     return PacketKind::Standalone;
 }

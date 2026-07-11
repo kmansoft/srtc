@@ -28,7 +28,7 @@ namespace
 
 bool is_valid_payload_id(unsigned int payloadId)
 {
-    return payloadId > 0u && payloadId <= 127u;
+    return payloadId >= 96u && payloadId <= 127u;
 }
 
 bool parse_line(const std::string& input,
@@ -226,7 +226,7 @@ void ParseMediaState::addSimulcastLayer(const std::vector<srtc::SimulcastLayer>&
                     layer.frames_per_second,
                     layer.kilobits_per_second,
                 },
-                static_cast<uint16_t>(i),
+                static_cast<uint8_t>(i),
             });
             break;
         }
@@ -351,12 +351,10 @@ public:
 private:
     Error parseLine(const std::string& line);
 
-    Error parseLine_m(const std::string& tag,
-                      const std::string& key,
+    Error parseLine_m(const std::string& key,
                       const std::string& value,
                       const std::vector<std::string>& props);
-    Error parseLine_a(const std::string& tag,
-                      const std::string& key,
+    Error parseLine_a(const std::string& key,
                       const std::string& value,
                       const std::vector<std::string>& props);
 
@@ -455,11 +453,11 @@ Error SdpAnswerParser::parseLine(const std::string& line)
     }
 
     if (tag == "a") {
-        if (const auto error = parseLine_a(tag, key, value, props); error.isError()) {
+        if (const auto error = parseLine_a(key, value, props); error.isError()) {
             return error;
         }
     } else if (tag == "m") {
-        if (const auto error = parseLine_m(tag, key, value, props); error.isError()) {
+        if (const auto error = parseLine_m(key, value, props); error.isError()) {
             return error;
         }
     }
@@ -467,9 +465,8 @@ Error SdpAnswerParser::parseLine(const std::string& line)
     return Error::OK;
 }
 
-Error SdpAnswerParser::parseLine_m(const std::string& tag,
-                                   const std::string& key,
-                                   const std::string& value,
+Error SdpAnswerParser::parseLine_m(const std::string& key,
+                                   [[maybe_unused]] const std::string& value,
                                    const std::vector<std::string>& props)
 {
     if (const auto error = flush_m(); error.isError()) {
@@ -502,7 +499,7 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
         for (size_t i = 2u; i < props.size(); i += 1) {
             if (const auto payloadId = parse_u32(props[i]);
                 payloadId.has_value() && is_valid_payload_id(payloadId.value())) {
-                payloadIdList.push_back(payloadId.value());
+                payloadIdList.push_back(static_cast<uint8_t>(payloadId.value()));
             }
         }
 
@@ -518,8 +515,7 @@ Error SdpAnswerParser::parseLine_m(const std::string& tag,
     return Error::OK;
 }
 
-Error SdpAnswerParser::parseLine_a(const std::string& tag,
-                                   const std::string& key,
+Error SdpAnswerParser::parseLine_a(const std::string& key,
                                    const std::string& value,
                                    const std::vector<std::string>& props)
 {
@@ -570,11 +566,12 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                         }
                         if (const auto clockRate = parse_u32(clockRateString);
                             clockRate.has_value() && clockRate >= 10000u) {
-                            const auto payloadState = mediaState.getPayloadState(payloadId.value());
+                            const auto payloadIdValue = static_cast<uint8_t>(payloadId.value());
+                            const auto payloadState = mediaState.getPayloadState(payloadIdValue);
                             if (payloadState) {
                                 payloadState->codec = codec;
                                 payloadState->clockRate = clockRate.value();
-                                payloadState->payloadId = payloadId.value();
+                                payloadState->payloadId = payloadIdValue;
                             }
                         }
                     }
@@ -586,23 +583,26 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         if (const auto payloadId = parse_u32(value);
             payloadId.has_value() && is_valid_payload_id(payloadId.value()) && isInMediaSection) {
             if (props.size() == 1) {
+                const auto payloadIdValue = static_cast<uint8_t>(payloadId.value());
+
                 std::unordered_map<std::string, std::string> map;
                 parse_map(props[0], map);
 
                 if (const auto iter1 = map.find("apt"); iter1 != map.end()) {
-                    const auto payloadState = mediaState.getPayloadState(payloadId.value());
+                    const auto payloadState = mediaState.getPayloadState(payloadIdValue);
                     if (payloadState && payloadState->codec == Codec::Rtx) {
                         if (const auto referencedPayloadId = parse_u32(iter1->second);
                             referencedPayloadId.has_value() && is_valid_payload_id(referencedPayloadId.value())) {
-                            const auto referencedPayloadState = mediaState.getPayloadState(referencedPayloadId.value());
+                            const auto referencedPayloadIdValue = static_cast<uint8_t>(referencedPayloadId.value());
+                            const auto referencedPayloadState = mediaState.getPayloadState(referencedPayloadIdValue);
                             if (referencedPayloadState) {
-                                referencedPayloadState->rtxPayloadId = payloadId.value();
+                                referencedPayloadState->rtxPayloadId = payloadIdValue;
                             }
                         }
                     }
                 }
 
-                const auto payloadState = mediaState.getPayloadState(payloadId.value());
+                const auto payloadState = mediaState.getPayloadState(payloadIdValue);
                 if (payloadState) {
                     uint32_t profileLevelId = 0;
                     uint32_t minptime = 0;
@@ -638,7 +638,8 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
         // a=rtcp-fb:98 nack pli
         if (const auto payloadId = parse_u32(value);
             payloadId.has_value() && is_valid_payload_id(payloadId.value()) && isInMediaSection) {
-            const auto payloadState = mediaState.getPayloadState(payloadId.value());
+            const auto payloadIdValue = static_cast<uint8_t>(payloadId.value());
+            const auto payloadState = mediaState.getPayloadState(payloadIdValue);
             if (payloadState) {
                 for (size_t i = 0u; i < props.size(); i += 1) {
                     const auto& token = props[i];
@@ -683,7 +684,7 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                         if (inet_pton(AF_INET, addrStr.c_str(), &host.addr.sin_ipv4.sin_addr) > 0) {
 
                             host.addr.ss.ss_family = AF_INET;
-                            host.addr.sin_ipv4.sin_port = htons(port.value());
+                            host.addr.sin_ipv4.sin_port = htons(static_cast<uint16_t>(port.value()));
 
                             if (std::find_if(hostList.begin(), hostList.end(), [host](const Host& it) {
                                     return host.addr == it.addr;
@@ -695,7 +696,7 @@ Error SdpAnswerParser::parseLine_a(const std::string& tag,
                         if (inet_pton(AF_INET6, addrStr.c_str(), &host.addr.sin_ipv6.sin6_addr) > 0) {
 
                             host.addr.ss.ss_family = AF_INET6;
-                            host.addr.sin_ipv6.sin6_port = htons(port.value());
+                            host.addr.sin_ipv6.sin6_port = htons(static_cast<uint16_t>(port.value()));
 
                             if (std::find_if(hostList.begin(), hostList.end(), [host](const Host& it) {
                                     return host.addr == it.addr;
@@ -790,8 +791,7 @@ Error SdpAnswerParser::flush_m()
     return Error::OK;
 }
 
-std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(Direction direction,
-                                                              const std::shared_ptr<SdpOffer>& offer,
+std::pair<std::shared_ptr<SdpAnswer>, Error> SdpAnswer::parse(const std::shared_ptr<SdpOffer>& offer,
                                                               const std::string& answer,
                                                               const std::shared_ptr<TrackSelector>& selector)
 {

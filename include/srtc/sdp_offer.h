@@ -146,8 +146,9 @@ private:
         uint32_t rtx = 0;
         std::vector<LayerGenerated> layer;
 
-        MediaLineGenerated(const std::string& mediaId)
+        MediaLineGenerated(const std::string& mediaId, MediaType mediaType)
             : mediaId(mediaId)
+            , mediaType(mediaType)
         {
         }
     };

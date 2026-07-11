@@ -136,7 +136,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shar
             const auto naluData = parser.currData();
             const auto naluSize = parser.currDataSize();
 
-            uint8_t padding = getPadding(track, simulcast, twcc, naluSize);
+            auto padding = getPadding(track, simulcast, twcc, naluSize);
             RtpExtension extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);

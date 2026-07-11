@@ -22,8 +22,7 @@ RtpResponderTWCC::RtpResponderTWCC()
 
 RtpResponderTWCC::~RtpResponderTWCC() = default;
 
-std::shared_ptr<RtpResponderTWCC> RtpResponderTWCC::factory(const std::shared_ptr<SdpOffer>& offer,
-                                                            const std::shared_ptr<SdpAnswer>& answer)
+std::shared_ptr<RtpResponderTWCC> RtpResponderTWCC::factory(const std::shared_ptr<SdpOffer>& offer)
 {
     if (offer->getDirection() != Direction::Subscribe) {
         return {};

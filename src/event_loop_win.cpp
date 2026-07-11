@@ -69,7 +69,7 @@ void EventLoop_Win::wait(std::vector<void*>& udataList, int timeoutMillis)
 
     const auto timeoutArg = std::clamp(timeoutMillis, 0, 100);
 
-    const auto res = WaitForMultipleObjects(count, handleListPtr, FALSE, timeoutArg);
+    const auto res = WaitForMultipleObjects(static_cast<DWORD>(count), handleListPtr, FALSE, timeoutArg);
     if (res != WAIT_TIMEOUT) {
         const auto index = res - WAIT_OBJECT_0;
         if (index >= 1 && index < count) {

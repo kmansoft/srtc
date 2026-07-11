@@ -201,6 +201,12 @@ add_library(srtc
         src/sctp/sctp_session.cpp
 )
 
+if (MSVC)
+    target_compile_options(srtc PRIVATE "/W4")
+else ()
+    target_compile_options(srtc PRIVATE "-Wall" "-Wextra" "-Werror")
+endif ()
+
 if (APPLE)
     target_sources(srtc
             PRIVATE
@@ -348,7 +354,11 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             SOURCE_DIR "external/libsrtp"
             INSTALL_COMMAND ""
             UPDATE_DISCONNECTED ON
-            CMAKE_ARGS ${LIBSRTP_CMAKE_ARGS}
+            CMAKE_ARGS
+                ${LIBSRTP_CMAKE_ARGS}
+                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     )
 
     set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")

@@ -93,12 +93,12 @@ void DepacketizerH264::extract(std::vector<ByteBuffer>& out, const std::vector<c
                     const auto fuHeader = reader.readU8();
                     const auto fuIsStart = (fuHeader & (1 << 7)) != 0;
                     const auto fuIsEnd = (fuHeader & (1 << 6)) != 0;
-                    const auto fuNaluType = fuHeader & 0x1Fu;
+                    const auto fuNaluType = static_cast<uint8_t>(fuHeader & 0x1Fu);
 
                     if (fuIsStart) {
                         fu_buf = std::make_unique<ByteBuffer>(fuHeader);
                         fu_wrt = std::make_unique<ByteWriter>(*fu_buf);
-                        fu_wrt->writeU8(nri | fuNaluType);
+                        fu_wrt->writeU8(static_cast<uint8_t>(nri | fuNaluType));
                     }
 
                     if (reader.remaining() > 0) {
@@ -126,7 +126,7 @@ bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
 
         // https://datatracker.ietf.org/doc/html/rfc6184#section-5.4
         // const auto nri = indicator & 0x60u;
-        const auto type = indicator & 0x1Fu;
+        const auto type = static_cast<uint8_t>(indicator & 0x1Fu);
 
         if (type == h264::kPacket_STAP_A) {
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
@@ -135,7 +135,7 @@ bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
                 if (reader.remaining() >= size && size > 0) {
                     const auto naluData = payload.data() + reader.position();
                     const auto naluSize = size;
-                    const auto naluType = naluData[0] & 0x1F;
+                    const auto naluType = static_cast<uint8_t>(naluData[0] & 0x1F);
 
                     if (naluSize > 1 && isFrameStartImpl(naluType, naluData + 1, naluSize - 1)) {
                         return true;
@@ -151,7 +151,7 @@ bool DepacketizerH264::isFrameStart(const ByteBuffer& payload) const
             if (reader.remaining() >= 1) {
                 const auto fuHeader = reader.readU8();
                 const auto fuIsStart = (fuHeader & (1 << 7)) != 0;
-                const auto fuNaluType = fuHeader & 0x1Fu;
+                const auto fuNaluType = static_cast<uint8_t>(fuHeader & 0x1Fu);
 
                 if (fuIsStart) {
                     const auto naluData = payload.data() + reader.position();
@@ -183,7 +183,7 @@ void DepacketizerH264::extractImpl(std::vector<ByteBuffer>& out, const JitterBuf
 
     if ((mHaveBits & kHaveAll) != kHaveAll) {
         // Wait to emit until we have a key frame
-        const auto nalu_type = nalu.front() & 0x1F;
+        const auto nalu_type = static_cast<uint8_t>(nalu.front() & 0x1F);
         switch (nalu_type) {
         case h264::NaluType::SPS:
             mHaveBits |= kHaveSPS;

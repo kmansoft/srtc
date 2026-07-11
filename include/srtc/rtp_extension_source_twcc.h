@@ -35,7 +35,6 @@ public:
     ~RtpExtensionSourceTWCC() override;
 
     static std::shared_ptr<RtpExtensionSourceTWCC> factory(const std::shared_ptr<SdpOffer>& offer,
-                                                           const std::shared_ptr<SdpAnswer>& answer,
                                                            const std::shared_ptr<RealScheduler>& scheduler);
 
     void onPeerConnected();
@@ -69,8 +68,8 @@ private:
     std::unique_ptr<twcc::PublishPacketHistory> mPacketHistory;
 
     struct TempPacket {
-        int32_t delta_micros;
-        uint8_t status;
+        int32_t delta_micros = {};
+        uint8_t status = {};
     };
     FixedTempBuffer<TempPacket> mTempPacketBuffer;
 

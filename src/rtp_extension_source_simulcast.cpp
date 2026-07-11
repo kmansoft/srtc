@@ -73,17 +73,17 @@ uint8_t RtpExtensionSourceSimulcast::getPadding([[maybe_unused]] const std::shar
     return 0;
 }
 
-bool RtpExtensionSourceSimulcast::wantsExtension(const std::shared_ptr<Track>& track,
-                                                 bool isKeyFrame,
-                                                 unsigned int packetNumber) const
+bool RtpExtensionSourceSimulcast::wantsExtension([[maybe_unused]] const std::shared_ptr<Track>& track,
+                                                 [[maybe_unused]] bool isKeyFrame,
+                                                 [[maybe_unused]] unsigned int packetNumber) const
 {
     return !mCurGoogleVLA.empty();
 }
 
 void RtpExtensionSourceSimulcast::addExtension(RtpExtensionBuilder& builder,
-                                               const std::shared_ptr<Track>& track,
-                                               bool isKeyFrame,
-                                               unsigned int packetNumber)
+                                               [[maybe_unused]] const std::shared_ptr<Track>& track,
+                                               [[maybe_unused]] bool isKeyFrame,
+                                               [[maybe_unused]] unsigned int packetNumber)
 {
     builder.addStringValue(mCurExtMediaId, mCurMediaId);
     builder.addStringValue(mCurExtStreamId, mCurLayerName);

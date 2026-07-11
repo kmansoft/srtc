@@ -288,10 +288,10 @@ void ByteWriter::writeLEB128(uint32_t value)
         remaining >>= 7;
 
         if (remaining == 0) {
-            writeU8(sevenBits);
+            writeU8(static_cast<uint8_t>(sevenBits));
             break;
         } else {
-            writeU8(0x80 | sevenBits);
+            writeU8(static_cast<uint8_t>(0x80 | sevenBits));
         }
     }
 }

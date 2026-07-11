@@ -48,7 +48,6 @@ RtpExtensionSourceTWCC::RtpExtensionSourceTWCC(const std::shared_ptr<RealSchedul
 RtpExtensionSourceTWCC::~RtpExtensionSourceTWCC() = default;
 
 std::shared_ptr<RtpExtensionSourceTWCC> RtpExtensionSourceTWCC::factory(const std::shared_ptr<SdpOffer>& offer,
-                                                                        const std::shared_ptr<SdpAnswer>& answer,
                                                                         const std::shared_ptr<RealScheduler>& scheduler)
 {
     if (offer->getDirection() != Direction::Publish) {
@@ -87,7 +86,7 @@ uint8_t RtpExtensionSourceTWCC::getPadding(const std::shared_ptr<Track>& track, 
             // Audio doesn't create split packets, we have to stay within the MTU
             if (remainingDataSize < 1060) {
                 mProbingPacketCount += 1;
-                return remainingDataSize / 10;
+                return static_cast<uint8_t>(remainingDataSize / 10);
             }
         }
     }
@@ -159,7 +158,7 @@ void RtpExtensionSourceTWCC::onPacketWasNacked(const std::shared_ptr<RtpPacket>&
 
 //	https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
 
-void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& reader)
+void RtpExtensionSourceTWCC::onReceivedRtcpPacket([[maybe_unused]] uint32_t ssrc, ByteReader& reader)
 {
     if (reader.remaining() < 8) {
         LOG(SRTC_LOG_E, "RTCP TWCC packet too small");
@@ -182,7 +181,12 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
     const auto reference_time_micros = 64 * 1000 * static_cast<int64_t>(reference_time);
 
     const auto tempList = mTempPacketBuffer.ensure(packet_status_count);
-    std::memset(tempList, 0, sizeof(TempPacket) * packet_status_count);
+
+    // MSVC wants initializers, and GCC doesn't allow memset if they are present
+    for (size_t i = 0; i < packet_status_count; i++) {
+        tempList[i].delta_micros = 0;
+        tempList[i].status = 0;
+    }
 
     // Be careful, this can wrap (and that's OK)
     const auto past_end_seq_number = static_cast<uint16_t>(base_seq_number + packet_status_count);
@@ -202,7 +206,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
             const auto symbol = (chunkHeader >> 13) & 0x03u;
             const auto runLength = chunkHeader & 0x1FFFu;
             const uint16_t remaining = past_end_seq_number - seq_number;
-            if (remaining < runLength || remaining > 0xFFFF) {
+            if (remaining < runLength) {
                 LOG(SRTC_LOG_E, "RTCP TWCC packet: run_length %u is too large, remaining %u", runLength, remaining);
                 break;
             }
@@ -211,7 +215,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                 const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
                 assert(index < packet_status_count);
-                tempList[index].status = symbol;
+                tempList[index].status = static_cast<uint8_t>(symbol);
 
                 seq_number += 1;
                 if (seq_number == past_end_seq_number) {
@@ -227,7 +231,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                 const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
                 assert(index < packet_status_count);
-                tempList[index].status = symbol;
+                tempList[index].status = static_cast<uint8_t>(symbol);
 
                 seq_number += 1;
                 if (seq_number == past_end_seq_number) {
@@ -242,7 +246,7 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
                 const auto index = (seq_number + 0x10000 - base_seq_number) & 0xffff;
                 assert(index >= 0);
                 assert(index < packet_status_count);
-                tempList[index].status = symbol;
+                tempList[index].status = static_cast<uint8_t>(symbol);
 
                 seq_number += 1;
                 if (seq_number == past_end_seq_number) {
@@ -298,13 +302,16 @@ void RtpExtensionSourceTWCC::onReceivedRtcpPacket(uint32_t ssrc, ByteReader& rea
         const auto curr_ptr = mPacketHistory->get(curr_seq);
 
         if (isReceivedWithTime(tempList[i].status)) {
-            if (!prev_ptr) {
-                curr_ptr->received_time_micros = reference_time_micros + tempList[i].delta_micros;
-            } else {
-                curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
+            if (curr_ptr) { // Needed only for MSVC compiler
+                if (!prev_ptr) {
+                    curr_ptr->received_time_micros = reference_time_micros + tempList[i].delta_micros;
+                } else {
+                    curr_ptr->received_time_micros = prev_ptr->received_time_micros + tempList[i].delta_micros;
+                }
+
+                curr_ptr->received_time_present = true;
             }
 
-            curr_ptr->received_time_present = true;
             prev_ptr = curr_ptr;
         }
     }

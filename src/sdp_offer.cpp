@@ -134,7 +134,7 @@ std::pair<std::string, Error> SdpOffer::generate()
             }
         }
 
-        mMediaLineGeneratedList.emplace_back(mediaLine.id);
+        mMediaLineGeneratedList.emplace_back(mediaLine.id, mediaLine.mediaType);
         auto& mediaLineGenerated = mMediaLineGeneratedList.back();
         mediaLineGenerated.mediaType = mediaLine.mediaType;
 

@@ -43,7 +43,7 @@ ByteBuffer hex_to_bin(const std::string& hex)
 
         if (accumNibble >= 0) {
             accumCount += 4;
-            accumBuf = (accumBuf << 4) | accumNibble;
+            accumBuf = static_cast<uint8_t>((accumBuf << 4) | accumNibble);
 
             if (accumCount == 8) {
                 writer.writeU8(accumBuf);

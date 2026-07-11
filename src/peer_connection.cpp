@@ -181,7 +181,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parsePublishAnswer(
         return { {}, { Error::Code::InvalidData, "The peer connection's direction is not publish" } };
     }
 
-    return SdpAnswer::parse(Direction::Publish, offer, answer, selector);
+    return SdpAnswer::parse(offer, answer, selector);
 }
 
 std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswer(
@@ -191,7 +191,7 @@ std::pair<std::shared_ptr<SdpAnswer>, Error> PeerConnection::parseSubscribeAnswe
         return { {}, { Error::Code::InvalidData, "The peer connection's direction is not subscribe" } };
     }
 
-    return SdpAnswer::parse(Direction::Subscribe, offer, answer, selector);
+    return SdpAnswer::parse(offer, answer, selector);
 }
 
 Error PeerConnection::setAnswer(const std::shared_ptr<SdpAnswer>& answer)
@@ -337,7 +337,12 @@ Error PeerConnection::setVideoCodecSpecificData(const std::shared_ptr<Track>& tr
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ 0, track, entry.packetizer, {}, std::move(list) });
+            FrameToSend fr = {};
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.csd = std::move(list);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -361,7 +366,13 @@ Error PeerConnection::publishVideoFrame(const std::shared_ptr<Track>& track, int
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ pts_usec, track, entry.packetizer, std::move(buf) });
+            FrameToSend fr = {};
+            fr.pts_usec = pts_usec;
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.buf = std::move(buf);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -399,12 +410,12 @@ Error PeerConnection::updateVideoSimulcastLayer(const std::shared_ptr<Track>& tr
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            FrameToSend frameToSend = {};
-            frameToSend.track = track;
-            frameToSend.packetizer = entry.packetizer;
-            frameToSend.layer = updated;
+            FrameToSend fr = {};
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.layer = updated;
 
-            mFrameSendQueue.push_back(std::move(frameToSend));
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -428,7 +439,13 @@ Error PeerConnection::publishAudioFrame(const std::shared_ptr<Track>& track, int
 
     for (const auto& entry : mTrackEntryList) {
         if (entry.track == track) {
-            mFrameSendQueue.push_back({ pts_usec, track, entry.packetizer, std::move(buf) });
+            FrameToSend fr = {};
+            fr.pts_usec = pts_usec;
+            fr.track = track;
+            fr.packetizer = entry.packetizer;
+            fr.buf = std::move(buf);
+
+            mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
 
             return Error::OK;
@@ -779,13 +796,13 @@ std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
     return list;
 }
 
-void PeerConnection::onCandidateHasDataToSend(PeerCandidate* candidate)
+void PeerConnection::onCandidateHasDataToSend([[maybe_unused]] PeerCandidate* candidate)
 {
     std::lock_guard lock(mMutex);
     mEventLoop->interrupt();
 }
 
-void PeerConnection::onCandidateConnecting(PeerCandidate* candidate)
+void PeerConnection::onCandidateConnecting([[maybe_unused]] PeerCandidate* candidate)
 {
     setConnectionState(ConnectionState::Connecting);
 
@@ -906,7 +923,8 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
     }
 }
 
-void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet)
+void PeerConnection::onCandidateReceivedMediaPacket([[maybe_unused]] PeerCandidate* candiate,
+                                                    const std::shared_ptr<RtpPacket>& packet)
 {
     if (mDirection == Direction::Subscribe) {
         const auto track = packet->getTrack();
@@ -922,7 +940,7 @@ void PeerConnection::onCandidateReceivedMediaPacket(PeerCandidate* candiate, con
     }
 }
 
-void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
+void PeerConnection::onCandidateReceivedSenderReport([[maybe_unused]] PeerCandidate* candidate,
                                                      const std::shared_ptr<Track>& track,
                                                      const SenderReport& sr)
 {
@@ -934,7 +952,7 @@ void PeerConnection::onCandidateReceivedSenderReport(PeerCandidate* candidate,
     }
 }
 
-void PeerConnection::onCandidateReceivedKeyFrameRequest(PeerCandidate* candiate)
+void PeerConnection::onCandidateReceivedKeyFrameRequest([[maybe_unused]] PeerCandidate* candiate)
 {
     std::lock_guard lock(mListenerMutex);
     if (mPublishKeyFrameRequestedListener) {

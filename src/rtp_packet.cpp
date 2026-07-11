@@ -19,7 +19,7 @@ void writeExtension(srtc::ByteWriter& writer, const srtc::RtpExtension& extensio
 
 	const auto& extensionData = extension.getData();
 	const auto extensionSize = extensionData.size();
-	writer.writeU16((extensionSize + 3) / 4);
+	writer.writeU16(static_cast<uint16_t>((extensionSize + 3) / 4));
 
 	writer.write(extensionData);
 
@@ -53,7 +53,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 					 uint32_t rollover,
 					 uint16_t sequence,
 					 uint32_t timestamp,
-					 uint8_t padding,
+                     uint8_t padding,
 					 ByteBuffer&& payload)
 	: mTrack(track)
 	, mSSRC(track->getSSRC())
@@ -72,7 +72,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 					 uint32_t rollover,
 					 uint16_t sequence,
 					 uint32_t timestamp,
-					 uint8_t padding,
+                     uint8_t padding,
 					 RtpExtension&& extension,
 					 ByteBuffer&& payload)
 	: mTrack(track)
@@ -95,7 +95,7 @@ RtpPacket::RtpPacket(const std::shared_ptr<Track>& track,
 					 uint32_t rollover,
 					 uint16_t sequence,
 					 uint32_t timestamp,
-					 uint8_t padding,
+                     uint8_t padding,
 					 RtpExtension&& extension,
 					 ByteBuffer&& payload)
 	: mTrack(track)

@@ -167,7 +167,7 @@ void SctpSession::sendMessageNow(DataChannel& channel, DataChannelMessage&& mess
         mListener->onSctpSendPacket(builder.build());
 
         mSentChunks.push_back(SentChunk{ tsn, flags, fragSize, std::move(chunkBody) });
-        mFlightSize += fragSize;
+        mFlightSize += static_cast<uint32_t>(fragSize);
     };
 
     if (payloadSize <= kMaxFragmentPayload) {
@@ -491,7 +491,7 @@ void SctpSession::sendDataChannelOpen(DataChannel& channel)
     channel.state = DataChannelState::kOpening;
 
     mSentChunks.push_back(SentChunk{ tsn, kDataFlagComplete, payloadSize, std::move(chunkBody) });
-    mFlightSize += payloadSize;
+    mFlightSize += static_cast<uint32_t>(payloadSize);
 
     if (wasEmpty) {
         startT3Rtx();
@@ -505,21 +505,21 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
         return;
 
     ByteReader r(chunk.data, chunk.size);
-    const auto tsn = r.readU32();
+    const auto peerTSN = r.readU32();
     const auto streamId = r.readU16();
     const auto ssn = r.readU16();
     (void)ssn; // needed for ordered delivery
     const auto ppid = r.readU32();
 
     // Duplicate detection: TSN already covered by cumulative or seen out-of-order
-    const bool isDuplicate = static_cast<int32_t>(tsn - mPeerCumulativeTsn) <= 0 || mPeerOutOfOrderTsns.count(tsn) > 0;
+    const bool isDuplicate = static_cast<int32_t>(peerTSN - mPeerCumulativeTsn) <= 0 || mPeerOutOfOrderTsns.count(peerTSN) > 0;
     if (isDuplicate) {
         sendSack();
         return;
     }
 
-    if (tsn == mPeerCumulativeTsn + 1) {
-        mPeerCumulativeTsn = tsn;
+    if (peerTSN == mPeerCumulativeTsn + 1) {
+        mPeerCumulativeTsn = peerTSN;
         // Drain any now-consecutive TSNs from the out-of-order set
         while (true) {
             auto it = mPeerOutOfOrderTsns.find(mPeerCumulativeTsn + 1);
@@ -529,7 +529,7 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
             mPeerOutOfOrderTsns.erase(it);
         }
     } else {
-        mPeerOutOfOrderTsns.insert(tsn);
+        mPeerOutOfOrderTsns.insert(peerTSN);
         if (mPeerOutOfOrderTsns.size() > 1024) {
             mPeerOutOfOrderTsns.erase(mPeerOutOfOrderTsns.begin());
         }
@@ -690,7 +690,7 @@ void SctpSession::onReceiveSack(const SctpPacket::Chunk& chunk)
     auto it = mSentChunks.begin();
     while (it != mSentChunks.end()) {
         if (static_cast<int32_t>(it->tsn - cumTsn) <= 0) {
-            mFlightSize = mFlightSize >= it->payloadSize ? mFlightSize - it->payloadSize : 0;
+            mFlightSize = static_cast<uint32_t>(mFlightSize >= it->payloadSize ? mFlightSize - it->payloadSize : 0);
             it = mSentChunks.erase(it);
             anyNewlyAcked = true;
         } else {
@@ -704,7 +704,7 @@ void SctpSession::onReceiveSack(const SctpPacket::Chunk& chunk)
         while (git != mSentChunks.end()) {
             const auto offset = static_cast<uint16_t>(git->tsn - cumTsn);
             if (offset >= gapStart && offset <= gapEnd) {
-                mFlightSize = mFlightSize >= git->payloadSize ? mFlightSize - git->payloadSize : 0;
+                mFlightSize = static_cast<uint32_t>(mFlightSize >= git->payloadSize ? mFlightSize - git->payloadSize : 0);
                 git = mSentChunks.erase(git);
                 anyNewlyAcked = true;
             } else {

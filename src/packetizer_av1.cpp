@@ -166,7 +166,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::share
 
             // Calculate and write size = obu_header() + obu_extension_header() + payload size
             const auto writeSize = (isFirstPacketFromOBU ? 1 : 0) + (isNeedHeaderExtension ? 1 : 0) + writeNow;
-            writer.writeLEB128(writeSize);
+            writer.writeLEB128(static_cast<uint32_t>(writeSize));
 
             if (isFirstPacketFromOBU) {
                 // https://aomediacodec.github.io/av1-spec/#obu-header-syntax
@@ -192,8 +192,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::share
                                                              rollover,
                                                              sequence,
                                                              frameTimestamp,
-                                                             padding,
-                                                             std::move(extension),
+                                                             padding, extension.copy(),
                                                              std::move(payload)));
 
                 payload.clear();

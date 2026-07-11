@@ -269,7 +269,7 @@ bool PublishPacketHistory::shouldStopProbing() const
     return mInstantPacketLossPercent >= 10.0f || mInstantTrendlineEstimate == TrendlineEstimate::kOveruse;
 }
 
-bool PublishPacketHistory::calculateBandwidthActual(int64_t now, PublishPacket* max)
+bool PublishPacketHistory::calculateBandwidthActual([[maybe_unused]] int64_t now, [[maybe_unused]] PublishPacket* max)
 {
     if (!mPacketList) {
         return false;
@@ -359,7 +359,7 @@ bool PublishPacketHistory::calculateBandwidthActual(int64_t now, PublishPacket* 
     return true;
 }
 
-bool PublishPacketHistory::calcualteBandwidthProbe(int64_t now, PublishPacket* max)
+bool PublishPacketHistory::calcualteBandwidthProbe([[maybe_unused]] int64_t now, [[maybe_unused]] PublishPacket* max)
 {
     if (!mPacketList) {
         return false;

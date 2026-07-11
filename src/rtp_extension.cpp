@@ -120,7 +120,7 @@ ByteBuffer RtpExtension::convertOneToTwoByte(const ByteBuffer& src)
 		reader.read(extbuf, len);;
 
 		writer.writeU8(id);
-		writer.writeU8(len);
+		writer.writeU8(static_cast<uint8_t>(len));
 		writer.write(extbuf, len);
 	}
 
