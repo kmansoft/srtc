@@ -80,7 +80,8 @@ public:
 
     void sendSenderReports();
     void sendReceiverReports();
-    void sendPictureLossIndicators();
+    void sendPeriodicPictureLossIndicators();
+    void sendPictureLossIndicator(const std::shared_ptr<Track>& track);
     void sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList);
 
     void updatePublishConnectionStats(PublishConnectionStats& stats) const;

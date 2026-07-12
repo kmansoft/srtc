@@ -479,6 +479,28 @@ void PeerConnection::setSubscribeSenderReportsListener(const SubscribeSenderRepo
     mSubscribeSenderReportsListener = listener;
 }
 
+Error PeerConnection::requestPictureLossIndicator(const std::shared_ptr<Track>& track)
+{
+    if (mDirection != Direction::Subscribe) {
+        return { Error::Code::InvalidData, "Can only request a PLI when subscribing" };
+    }
+
+    std::lock_guard lock(mMutex);
+
+    if (mConnectionState != ConnectionState::Connected) {
+        return Error::OK;
+    }
+
+    FrameToSend fr = {};
+    fr.track = track;
+    fr.request_pli = true;
+
+    mFrameSendQueue.push_back(std::move(fr));
+    mEventLoop->interrupt();
+
+    return Error::OK;
+}
+
 uint32_t PeerConnection::getDataChannelMaxMessageSize() const
 {
     return mDataChannelMaxMessageSize;
@@ -631,6 +653,11 @@ void PeerConnection::networkThreadWorkerFunc()
                         }
                     }
                 }
+            }
+
+            // Request key frame
+            if (mSelectedCandidate && item.request_pli) {
+                mSelectedCandidate->sendPictureLossIndicator(item.track);
             }
 
             // Frames to send
@@ -882,7 +909,7 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
         }
 #endif
 
-        const auto config = mSdpOffer->getConfig();
+        const auto& config = mSdpOffer->getConfig();
         if (config.jitter_buffer_length_millis > length.count()) {
             length = std::chrono::milliseconds(config.jitter_buffer_length_millis);
 
@@ -896,9 +923,11 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
             trackEntry.jitterBuffer = std::make_shared<JitterBuffer>(
                 trackEntry.track, trackEntry.depacketizer, kJitterBufferSize, length, nackDelay);
         }
-    }
 
-    sendPictureLossIndicator();
+        if (config.pli_interval_millis > 0) {
+            sendPeriodicPictureLossIndicators();
+        }
+    }
 }
 
 void PeerConnection::onCandidateDtlsDisconnected(PeerCandidate* candidate, const Error& error)
@@ -1085,7 +1114,7 @@ void PeerConnection::sendConnectionStats()
     }
 }
 
-void PeerConnection::sendPictureLossIndicator()
+void PeerConnection::sendPeriodicPictureLossIndicators()
 {
     if (mDirection == Direction::Subscribe) {
         {
@@ -1095,7 +1124,7 @@ void PeerConnection::sendPictureLossIndicator()
 
             Task::cancelHelper(mTaskPictureLossIndicator);
             mTaskPictureLossIndicator = mLoopScheduler->submit(
-                std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] { sendPictureLossIndicator(); });
+                std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] { sendPeriodicPictureLossIndicators(); });
 
             if (mConnectionState != ConnectionState::Connected) {
                 return;
@@ -1103,7 +1132,7 @@ void PeerConnection::sendPictureLossIndicator()
         }
 
         if (mSelectedCandidate) {
-            mSelectedCandidate->sendPictureLossIndicators();
+            mSelectedCandidate->sendPeriodicPictureLossIndicators();
         }
     }
 }

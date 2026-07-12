@@ -99,6 +99,8 @@ public:
     using SubscribeSenderReportListener = std::function<void(const std::shared_ptr<Track>&, const SenderReport&)>;
     void setSubscribeSenderReportsListener(const SubscribeSenderReportListener& listener);
 
+    [[nodiscard]] Error requestPictureLossIndicator(const std::shared_ptr<Track>& track);
+
     // Data channels
     [[nodiscard]] uint32_t getDataChannelMaxMessageSize() const;
     [[nodiscard]] Error sendDataChannelText(const std::string& label, std::string&& data);
@@ -152,6 +154,7 @@ private:
         ByteBuffer buf;                      // possibly empty
         std::vector<ByteBuffer> csd;         // possibly empty
         std::optional<SimulcastLayer> layer; // possibly empty
+        bool request_pli;
     };
 
     std::list<FrameToSend> mFrameSendQueue SRTC_GUARDED_BY(mMutex);
@@ -231,7 +234,7 @@ private:
     std::weak_ptr<Task> mTaskConnectionStats;
 
     // Subscribe PLI
-    void sendPictureLossIndicator();
+    void sendPeriodicPictureLossIndicators();
     std::weak_ptr<Task> mTaskPictureLossIndicator;
 
     // These are only used on the worker thread so don't need mutexes

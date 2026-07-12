@@ -18,7 +18,6 @@
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_responder_twcc.h"
-#include "srtc/rtp_std_extensions.h"
 #include "srtc/rtp_time_source.h"
 #include "srtc/sdp_answer.h"
 #include "srtc/sdp_offer.h"
@@ -372,27 +371,46 @@ void PeerCandidate::sendReceiverReports()
     }
 }
 
-void PeerCandidate::sendPictureLossIndicators()
+void PeerCandidate::sendPeriodicPictureLossIndicators()
 {
     for (const auto& track : mTrackList) {
-        if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
-            const auto ssrc = track->getSSRC();
+        sendPictureLossIndicator(track);
+    }
+}
 
-            LOG(SRTC_LOG_V, "Sending PLI for ssrc = %u", ssrc);
+void PeerCandidate::sendPictureLossIndicator(const std::shared_ptr<Track>& track)
+{
+    if (!mIsConnected) {
+        return;
+    }
+    if (!track->hasPli()) {
+        return;
+    }
 
-            ByteBuffer payload;
-            ByteWriter w(payload);
+    if (track->getMediaType() == MediaType::Video && track->getDirection() == Direction::Subscribe) {
+        const auto ssrc = track->getSSRC();
 
-            w.writeU32(ssrc);
+        LOG(SRTC_LOG_V, "Sending PLI for ssrc = %u", ssrc);
 
-            const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
-            sendRtcpPacket(track, packet);
-        }
+        ByteBuffer payload;
+        ByteWriter w(payload);
+
+        w.writeU32(ssrc);
+
+        const auto packet = std::make_shared<RtcpPacket>(0, 1, RtcpPacket::kPayloadSpecific, std::move(payload));
+        sendRtcpPacket(track, packet);
     }
 }
 
 void PeerCandidate::sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList)
 {
+    if (!mIsConnected) {
+        return;
+    }
+    if (!track->hasNack()) {
+        return;
+    }
+
     if (nackList.empty()) {
         return;
     }
