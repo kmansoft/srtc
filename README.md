@@ -26,13 +26,13 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 
 #### State of subscribe
 
-- Sends nacks, understands RTX.
+- Sends nacks, supports RTX if negotiated.
 - Sends PLI (key frame requests).
 - Sends receiver reports.
 - Sends TWCC reports if negotiated in the SDP.
 - The jitter buffer is fixed size (for now), based on RTT estimates from the ICE exchange while connecting.
-- No explicit media synchronization based on NTP timestamps in sender reports (yet), so your audio and video may be a millisecond or a few out of sync. Both are reported to the application though, so it could be handled there.
-- No speed up / slow down for audio samples (yet).
+- RTP timestamps and NTP timestamps from sender reports are reported to the application, so media synchronization 
+should be handled there.
 
 ### API design 
 
@@ -346,4 +346,6 @@ This library is my side project.
 
 - Subscribing. This is done, although some improvements are still possible.
   
-- Support for more codecs. Done: VP8, H264, H265, AV1.
+- Support for more codecs. Done: VP8, VP9, H264, H265, AV1.
+
+- Support for multiple media lines. This is done.
