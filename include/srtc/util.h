@@ -27,6 +27,7 @@ struct NtpTime {
 void getNtpTime(NtpTime& ntp);
 
 int64_t getNtpUnixMicroseconds(const NtpTime& ntp);
+uint32_t getNtpTimeMiddleMarker(const NtpTime& ntp);
 
 int64_t getStableTimeMicros();
 uint32_t getSystemTimeSecs();

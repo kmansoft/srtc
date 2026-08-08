@@ -303,31 +303,67 @@ void PeerCandidate::sendPublishReports()
     for (const auto& track : mTrackList) {
         if (track->getDirection() == Direction::Publish) {
             const auto ssrc = track->getSSRC();
-
-            ByteBuffer payload;
-            ByteWriter w(payload);
-
-            // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+            const auto stats = track->getStats();
 
             NtpTime ntp = {};
             getNtpTime(ntp);
 
-            const auto timeSource = track->getRtpTimeSource();
-            const auto rtpTime = timeSource->getCurrentTimestamp();
+            // Sender Report
+            // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+            {
+                const auto timeSource = track->getRtpTimeSource();
+                const auto rtpTime = timeSource->getCurrentTimestamp();
 
-            w.writeU32(ntp.seconds);
-            w.writeU32(ntp.fraction);
-            w.writeU32(rtpTime);
+                ByteBuffer payload;
+                ByteWriter w(payload);
 
-            const auto stats = track->getStats();
-            w.writeU32(static_cast<uint32_t>(stats->getSentPackets()));
-            w.writeU32(static_cast<uint32_t>(stats->getSentBytes()));
+                w.writeU32(ntp.seconds);
+                w.writeU32(ntp.fraction);
+                w.writeU32(rtpTime);
 
-            const auto packet = std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
-            sendRtcpPacket(track, packet);
+                w.writeU32(static_cast<uint32_t>(stats->getSentPackets()));
+                w.writeU32(static_cast<uint32_t>(stats->getSentBytes()));
 
-            mSenderReportsHistory->save(ssrc, ntp);
+                const auto packet =
+                    std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+                sendRtcpPacket(track, packet);
+
+                mSenderReportsHistory->save(ssrc, ntp);
+            }
         }
+    }
+
+    if (!mOutstandingReceiverReferenceTimeReportList.empty()) {
+        // XR - DLRR if we have received RTRR
+        // https://datatracker.ietf.org/doc/html/rfc3611#section-4.5
+
+        for (const auto& rtrr : mOutstandingReceiverReferenceTimeReportList) {
+            const auto diff_us =
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rtrr.when)
+                    .count();
+
+            ByteBuffer payload;
+            ByteWriter w(payload);
+
+            w.writeU8(5);
+            w.writeU8(0);
+            w.writeU16(3);
+
+            w.writeU32(rtrr.ssrc);
+            w.writeU32(getNtpTimeMiddleMarker(rtrr.ntp));
+            w.writeU32(static_cast<uint32_t>(diff_us * 65536 / 1000000));
+
+            auto track = findReceiveTrack(rtrr.ssrc);
+            if (!track) {
+                track = mTrackList.front();
+            }
+
+            const auto packet =
+                std::make_shared<RtcpPacket>(track->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
+            sendRtcpPacket(track, packet);
+        }
+
+        mOutstandingReceiverReferenceTimeReportList.clear();
     }
 }
 
@@ -351,8 +387,7 @@ void PeerCandidate::sendSubscribeReports()
 
             if (sr.has_value()) {
                 const auto sr_value = sr.value();
-                const auto lastSRMiddle32 = static_cast<uint32_t>(sr_value.ntp.seconds & 0xFFFFu) << 16 ||
-                                            static_cast<uint32_t>(sr_value.ntp.fraction >> 16) % 0xFFFFu;
+                const auto lastSRMiddle32 = getNtpTimeMiddleMarker(sr_value.ntp);
                 const auto lastSRDelayDelta = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - sr_value.when);
                 const auto lastSRDelayValue = lastSRDelayDelta.count() * static_cast<int64_t>(65536) / 1000;
@@ -620,7 +655,8 @@ void PeerCandidate::run()
                         auto bandwidthScale = 1.0f;
                         if (item.track->getMediaType() == MediaType::Video && item.track->isSimulcast()) {
                             // Each layer gets a portion of the total bandwidth
-                            bandwidthScale = calculateLayerBandwidthScale(mSimulcastLayerList, item.track->getSimulcastLayer());
+                            bandwidthScale =
+                                calculateLayerBandwidthScale(mSimulcastLayerList, item.track->getSimulcastLayer());
                         }
                         spread = mExtensionSourceTWCC->getPacingSpreadMillis(packetList, bandwidthScale, spread);
                     }
@@ -1028,6 +1064,24 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
         } else {
             LOG(SRTC_LOG_V, "RTCP unknown message 206 with fmt = %u", rtcpFmt);
         }
+    } else if (rtcpPT == 207) {
+        // https://datatracker.ietf.org/doc/html/rfc3611
+        // eXtended Report
+        while (rtcpReader.remaining() >= 4) {
+            const auto bt = rtcpReader.readU8();
+            const auto reserved = rtcpReader.readU8();
+            const auto blockLen = rtcpReader.readU16();
+
+            (void)reserved;
+
+            if (bt == 4) {
+                // RTRR
+                // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
+                onReceivedControlMessage_RRTR(packet->getSSRC(), rtcpReader);
+            } else {
+                rtcpReader.skip(4 * blockLen);
+            }
+        }
     } else {
         LOG(SRTC_LOG_V, "RTCP unknown message = %" PRIu8, rtcpPT);
     }
@@ -1203,6 +1257,29 @@ void PeerCandidate::onReceivedControlMessage_FIR()
     mListener->onCandidateReceivedKeyFrameRequest(this);
 }
 
+void PeerCandidate::onReceivedControlMessage_RRTR(uint32_t ssrc, ByteReader& rtcpReader)
+{
+    if (rtcpReader.remaining() >= 8) {
+        const auto ntpSeconds = rtcpReader.readU32();
+        const auto ntpFraction = rtcpReader.readU32();
+
+        ReceiverReferenceTimeReport rrtr;
+        rrtr.ssrc = ssrc;
+        rrtr.when = std::chrono::steady_clock::now();
+        rrtr.ntp.seconds = ntpSeconds;
+        rrtr.ntp.fraction = ntpFraction;
+
+        for (auto& iter : mOutstandingReceiverReferenceTimeReportList) {
+            if (iter.ssrc == ssrc) {
+                iter = rrtr;
+                return;
+            }
+        }
+
+        mOutstandingReceiverReferenceTimeReportList.push_back(rrtr);
+    }
+}
+
 void PeerCandidate::forgetExpiredStunRequests()
 {
     mIceAgent->forgetExpiredTransactions(kExpireStunTimeout);
@@ -1214,11 +1291,10 @@ void PeerCandidate::forgetExpiredStunRequests()
 void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet)
 {
     if (mSrtpConnection) {
-        const auto rtcpSource = track->getRtcpPacketSource();
-
+        const auto source = track->getRtcpPacketSource();
         const auto packetData = packet->generate();
 
-        if (mSrtpConnection->protectSendControl(packetData, rtcpSource->getNextSequence(), mProtectedBuf)) {
+        if (mSrtpConnection->protectSendControl(packetData, source->getNextSequence(), mProtectedBuf)) {
             const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
             LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
         }

@@ -20,6 +20,7 @@ public:
 	static constexpr uint8_t kReceiverReport = 201;
 	static constexpr uint8_t kFeedback = 205;
 	static constexpr uint8_t kPayloadSpecific = 206;
+    static constexpr uint8_t kExtendedReport = 207;
 
 	RtcpPacket(uint32_t ssrc, uint8_t rc, uint8_t payloadId, ByteBuffer&& payload);
 

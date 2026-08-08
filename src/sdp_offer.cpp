@@ -154,6 +154,7 @@ std::pair<std::string, Error> SdpOffer::generate()
 
         ss << "c=IN IP4 0.0.0.0" << std::endl;
         ss << "a=rtcp:9 IN IP4 0.0.0.0" << std::endl;
+        ss << "a=rtcp-xr:rcvr-rtt=all" << std::endl;
         ss << "a=fingerprint:sha-256 " << mCert->getSha256FingerprintHex() << std::endl;
         ss << "a=ice-ufrag:" << mIceUfrag << std::endl;
         ss << "a=ice-pwd:" << mIcePassword << std::endl;

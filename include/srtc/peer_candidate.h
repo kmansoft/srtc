@@ -1,9 +1,11 @@
 #pragma once
 
-#include "data_channel_message.h"
+#include "rtcp_packet_source.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/data_channel_message.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/random_generator.h"
+#include "srtc/receiver_reference_time_report.h"
 #include "srtc/scheduler.h"
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
@@ -118,6 +120,7 @@ private:
     void onReceivedControlMessage_TWCC(uint32_t ssrc, ByteReader& rtcpReader);
     void onReceivedControlMessage_PLI();
     void onReceivedControlMessage_FIR();
+    void onReceivedControlMessage_RRTR(uint32_t ssrc, ByteReader& rtcpReader);
 
     void forgetExpiredStunRequests();
 
@@ -162,6 +165,8 @@ private:
     std::list<DataChannelMessage> mDataSendQueue;
 
     std::vector<SimulcastLayer> mSimulcastLayerList;
+
+    std::vector<ReceiverReferenceTimeReport> mOutstandingReceiverReferenceTimeReportList;
 
     bool mSentUseCandidate;
     bool mIsConnected;

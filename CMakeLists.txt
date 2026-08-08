@@ -76,6 +76,7 @@ add_library(srtc
         include/srtc/peer_connection.h
         include/srtc/pool_allocator.h
         include/srtc/random_generator.h
+        include/srtc/receiver_reference_time_report.h
         include/srtc/replay_protection.h
         include/srtc/rtcp_packet.h
         include/srtc/rtcp_packet_source.h

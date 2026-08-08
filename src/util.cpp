@@ -145,6 +145,11 @@ int64_t getNtpUnixMicroseconds(const NtpTime& ntp)
     return unix_seconds * 1000000L + static_cast<int64_t>(microseconds);
 }
 
+uint32_t getNtpTimeMiddleMarker(const NtpTime& ntp)
+{
+    return (ntp.seconds << 16) | (ntp.fraction >> 16);
+}
+
 int64_t getStableTimeMicros()
 {
     // Get current time
