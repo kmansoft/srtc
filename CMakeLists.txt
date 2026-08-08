@@ -193,7 +193,7 @@ add_library(srtc
         src/sctp/sctp_packet.h
         src/sctp/data_channel_receive_buffer.h
         src/sctp/sctp_session.h
-        src/sctp/sctp_session_listener.h
+        include/srtc/sctp_session_listener.h
         src/sctp/sctp_crc32.cpp
         src/sctp/sctp_defs.cpp
         src/sctp/sctp_packet_builder.cpp
