@@ -78,8 +78,8 @@ public:
     [[nodiscard]] int getTimeoutMillis(int defaultValue) const;
     void run();
 
-    void sendSenderReports();
-    void sendReceiverReports();
+    void sendPublishReports();
+    void sendSubscribeReports();
     void sendPeriodicPictureLossIndicators();
     void sendPictureLossIndicator(const std::shared_ptr<Track>& track);
     void sendNacks(const std::shared_ptr<Track>& track, const std::vector<uint16_t>& nackList);
@@ -112,11 +112,12 @@ private:
     void onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet);
     void onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet);
 
-    void onReceivedControlMessage_200(uint32_t ssrc, ByteReader& rtcpReader);
-    void onReceivedControlMessage_201(ByteReader& rtcpReader);
-    void onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader);
-    void onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader);
-    void onReceivedControlMessage_206_1();
+    void onReceivedControlMessage_SR(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_RR(ByteReader& rtcpReader);
+    void onReceivedControlMessage_NACK(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_TWCC(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_PLI();
+    void onReceivedControlMessage_FIR();
 
     void forgetExpiredStunRequests();
 

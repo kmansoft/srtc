@@ -298,7 +298,7 @@ void PeerCandidate::addSendFrame(FrameToSend&& frame)
     mFrameSendQueue.push_back(std::move(frame));
 }
 
-void PeerCandidate::sendSenderReports()
+void PeerCandidate::sendPublishReports()
 {
     for (const auto& track : mTrackList) {
         if (track->getDirection() == Direction::Publish) {
@@ -331,11 +331,10 @@ void PeerCandidate::sendSenderReports()
     }
 }
 
-void PeerCandidate::sendReceiverReports()
+void PeerCandidate::sendSubscribeReports()
 {
     for (const auto& track : mTrackList) {
-        const auto direction = track->getDirection();
-        if (direction == Direction::Subscribe) {
+        if (track->getDirection() == Direction::Subscribe) {
             const auto ssrc = track->getSSRC();
             const auto stats = track->getStats();
 
@@ -988,11 +987,11 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
     if (rtcpPT == 200) {
         // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.1
         // Sender Report
-        onReceivedControlMessage_200(packet->getSSRC(), rtcpReader);
+        onReceivedControlMessage_SR(packet->getSSRC(), rtcpReader);
     } else if (rtcpPT == 201) {
         // https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.2
         // Receiver Report
-        onReceivedControlMessage_201(rtcpReader);
+        onReceivedControlMessage_RR(rtcpReader);
     } else if (rtcpPT == 205) {
         // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2
         // RTPFB: Transport layer FB message
@@ -1006,12 +1005,12 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
             case 1:
                 // https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
                 // NACKs
-                onReceivedControlMessage_205_1(rtcpSSRC_1, rtcpReader);
+                onReceivedControlMessage_NACK(rtcpSSRC_1, rtcpReader);
                 break;
             case 15:
                 // https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
                 // Google's Transport-Wide Congension Control
-                onReceivedControlMessage_205_15(rtcpSSRC_1, rtcpReader);
+                onReceivedControlMessage_TWCC(rtcpSSRC_1, rtcpReader);
                 break;
             default:
                 LOG(SRTC_LOG_V, "RTCP RTPFB Unknown fmt = %u", rtcpFmt);
@@ -1023,8 +1022,14 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
         // Picture Loss Indicator
         const auto rtcpFmt = rtcpRC;
         if (rtcpFmt == 1) {
-            onReceivedControlMessage_206_1();
+            onReceivedControlMessage_PLI();
+        } else if (rtcpFmt == 4) {
+            onReceivedControlMessage_FIR();
+        } else {
+            LOG(SRTC_LOG_V, "RTCP unknown message 206 with fmt = %u", rtcpFmt);
         }
+    } else {
+        LOG(SRTC_LOG_V, "RTCP unknown message = %" PRIu8, rtcpPT);
     }
 }
 
@@ -1049,7 +1054,7 @@ void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& pack
     mListener->onCandidateReceivedMediaPacket(this, packet);
 }
 
-void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_SR(uint32_t ssrc, ByteReader& rtcpReader)
 {
     const auto track = findReceiveTrack(ssrc);
 
@@ -1088,7 +1093,7 @@ void PeerCandidate::onReceivedControlMessage_200(uint32_t ssrc, srtc::ByteReader
     }
 }
 
-void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_RR(ByteReader& rtcpReader)
 {
     while (rtcpReader.remaining() >= 24) {
         const auto ssrc = rtcpReader.readU32();
@@ -1110,7 +1115,7 @@ void PeerCandidate::onReceivedControlMessage_201(srtc::ByteReader& rtcpReader)
     }
 }
 
-void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_NACK(uint32_t ssrc, ByteReader& rtcpReader)
 {
     while (rtcpReader.remaining() >= 4) {
         const auto pid = rtcpReader.readU16();
@@ -1181,14 +1186,19 @@ void PeerCandidate::onReceivedControlMessage_205_1(uint32_t ssrc, ByteReader& rt
     }
 }
 
-void PeerCandidate::onReceivedControlMessage_205_15(uint32_t ssrc, ByteReader& rtcpReader)
+void PeerCandidate::onReceivedControlMessage_TWCC(uint32_t ssrc, ByteReader& rtcpReader)
 {
     if (mExtensionSourceTWCC) {
         mExtensionSourceTWCC->onReceivedRtcpPacket(ssrc, rtcpReader);
     }
 }
 
-void PeerCandidate::onReceivedControlMessage_206_1()
+void PeerCandidate::onReceivedControlMessage_PLI()
+{
+    mListener->onCandidateReceivedKeyFrameRequest(this);
+}
+
+void PeerCandidate::onReceivedControlMessage_FIR()
 {
     mListener->onCandidateReceivedKeyFrameRequest(this);
 }

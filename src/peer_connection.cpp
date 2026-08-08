@@ -26,7 +26,7 @@ namespace
 
 std::once_flag gInitFlag;
 
-constexpr auto kReportsInterval = std::chrono::seconds(1);
+constexpr auto kReportsInterval = std::chrono::seconds(5);
 constexpr auto kConnectionStatsInterval = std::chrono::seconds(5);
 constexpr auto kJitterBufferSize = 4096;
 
@@ -1052,8 +1052,8 @@ void PeerConnection::sendReports()
         std::lock_guard lock(mMutex);
 
         if (mConnectionState == ConnectionState::Connected) {
-            mSelectedCandidate->sendSenderReports();
-            mSelectedCandidate->sendReceiverReports();
+            mSelectedCandidate->sendPublishReports();
+            mSelectedCandidate->sendSubscribeReports();
         }
     }
 }
