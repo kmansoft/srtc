@@ -12,11 +12,11 @@
 namespace srtc
 {
 
-class SenderReportsHistory
+class ReceiverReferenceTimeReportsHistory
 {
 public:
-	SenderReportsHistory();
-	~SenderReportsHistory();
+	ReceiverReferenceTimeReportsHistory();
+	~ReceiverReferenceTimeReportsHistory();
 
 	void save(uint32_t ssrc, const NtpTime& ntp);
 	std::optional<float> calculateRtt(uint32_t ssrc, uint32_t ntpMarker, uint32_t delay);

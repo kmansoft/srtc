@@ -923,6 +923,10 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
             trackEntry.jitterBuffer = std::make_shared<JitterBuffer>(
                 trackEntry.track, trackEntry.depacketizer, kJitterBufferSize, length, nackDelay);
         }
+    }
+
+    if (mDirection == Direction::Subscribe) {
+        const auto& config = mSdpOffer->getConfig();
 
         if (config.pli_interval_millis > 0) {
             sendPeriodicPictureLossIndicators();

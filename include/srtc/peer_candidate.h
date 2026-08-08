@@ -1,15 +1,16 @@
 #pragma once
 
+#include "receiver_reference_time_reports_history.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/data_channel_message.h"
 #include "srtc/peer_candidate_listener.h"
 #include "srtc/random_generator.h"
 #include "srtc/receiver_reference_time_report.h"
 #include "srtc/scheduler.h"
+#include "srtc/sctp_session_listener.h"
 #include "srtc/socket.h"
 #include "srtc/srtc.h"
 #include "srtc/util.h"
-#include "srtc/sctp_session_listener.h"
 
 #include <list>
 #include <memory>
@@ -42,6 +43,8 @@ class RtpExtensionSourceTWCC;
 class RtpResponderTWCC;
 class SendPacer;
 class SenderReportsHistory;
+class ReceiverReferenceTimeReportsHistory;
+class RtcpPacketSource;
 
 struct PublishConnectionStats;
 
@@ -119,10 +122,12 @@ private:
     void onReceivedControlMessage_PLI();
     void onReceivedControlMessage_FIR();
     void onReceivedControlMessage_RRTR(uint32_t ssrc, ByteReader& rtcpReader);
+    void onReceivedControlMessage_DLRR(uint32_t ssrc, ByteReader& rtcpReader);
 
     void forgetExpiredStunRequests();
 
     void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& track, const std::shared_ptr<RtcpPacket>& packet);
 
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(uint32_t ssrc) const;
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(ByteBuffer& packet) const;
@@ -143,6 +148,10 @@ private:
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
     const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;
     const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
+    const std::shared_ptr<ReceiverReferenceTimeReportsHistory> mReceiverReferenceTimeReportsHistory;
+
+    RandomGenerator<uint32_t> mControlRandomGenerator;
+    const std::shared_ptr<RtcpPacketSource> mControlPacketSource;
 
     Filter<float> mIceRttFilter;
     Filter<float> mControlRttFilter;

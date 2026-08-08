@@ -1,4 +1,4 @@
-#include "srtc/sender_reports_history.h"
+#include "srtc/receiver_reference_time_reports_history.h"
 
 namespace
 {
@@ -10,13 +10,13 @@ constexpr auto kMaxHistory = 16;
 namespace srtc
 {
 
-SenderReportsHistory::SenderReportsHistory()
+ReceiverReferenceTimeReportsHistory::ReceiverReferenceTimeReportsHistory()
 {
 }
 
-SenderReportsHistory::~SenderReportsHistory() = default;
+ReceiverReferenceTimeReportsHistory::~ReceiverReferenceTimeReportsHistory() = default;
 
-void SenderReportsHistory::save(uint32_t ssrc, const NtpTime& ntp)
+void ReceiverReferenceTimeReportsHistory::save(uint32_t ssrc, const NtpTime& ntp)
 {
 	auto& item = mTrackMap[ssrc];
 	while (item.reportList.size() >= kMaxHistory) {
@@ -26,7 +26,7 @@ void SenderReportsHistory::save(uint32_t ssrc, const NtpTime& ntp)
 	item.reportList.emplace_back(ntp, std::chrono::steady_clock::now());
 }
 
-std::optional<float> SenderReportsHistory::calculateRtt(uint32_t ssrc, uint32_t ntpMarker, uint32_t delay)
+std::optional<float> ReceiverReferenceTimeReportsHistory::calculateRtt(uint32_t ssrc, uint32_t ntpMarker, uint32_t delay)
 {
 	const auto trackIter = mTrackMap.find(ssrc);
 	if (trackIter != mTrackMap.end()) {

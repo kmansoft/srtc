@@ -77,6 +77,7 @@ add_library(srtc
         include/srtc/pool_allocator.h
         include/srtc/random_generator.h
         include/srtc/receiver_reference_time_report.h
+        include/srtc/receiver_reference_time_reports_history.h
         include/srtc/replay_protection.h
         include/srtc/rtcp_packet.h
         include/srtc/rtcp_packet_source.h
@@ -150,7 +151,7 @@ add_library(srtc
         src/peer_connection.cpp
         src/pool_allocator.cpp
         src/random_generator.cpp
-        src/replay_protection.cpp
+        src/receiver_reference_time_reports_history.cpp
         src/replay_protection.cpp
         src/rtcp_packet.cpp
         src/rtcp_packet_source.cpp
