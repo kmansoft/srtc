@@ -342,13 +342,13 @@ void PeerCandidate::sendPublishReports()
         // XR - DLRR if we have received RTRR
         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.5
 
+        ByteBuffer payload;
+        ByteWriter w(payload);
+
         for (const auto& rtrr : mOutstandingReceiverReferenceTimeReportList) {
             const auto diff_us =
                 std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rtrr.when)
                     .count();
-
-            ByteBuffer payload;
-            ByteWriter w(payload);
 
             w.writeU8(5);
             w.writeU8(0);
@@ -357,16 +357,12 @@ void PeerCandidate::sendPublishReports()
             w.writeU32(rtrr.ssrc);
             w.writeU32(getNtpTimeMiddleMarker(rtrr.ntp));
             w.writeU32(static_cast<uint32_t>(diff_us * 65536 / 1000000));
-
-            auto track = findReceiveTrack(rtrr.ssrc);
-            if (!track) {
-                track = mTrackList.front();
-            }
-
-            const auto packet =
-                std::make_shared<RtcpPacket>(track->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
-            sendRtcpPacket(track, packet);
         }
+
+        const auto source = mControlPacketSource;
+        const auto packet =
+            std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
+        sendRtcpPacket(source, packet);
 
         mOutstandingReceiverReferenceTimeReportList.clear();
     }
@@ -447,7 +443,8 @@ void PeerCandidate::sendSubscribeReports()
 
                 mReceiverReferenceTimeReportsHistory->save(source->getSSRC(), ntp);
 
-                // LOG(SRTC_LOG_Z, "*** Sending RRTR: ssrc = %u ntp = %8x:%8x", source->getSSRC(), ntp.seconds, ntp.fraction);
+                // LOG(SRTC_LOG_Z, "*** Sending RRTR: ssrc = %u ntp = %8x:%8x", source->getSSRC(), ntp.seconds,
+                // ntp.fraction);
 
                 // Just one is all we need
                 break;
