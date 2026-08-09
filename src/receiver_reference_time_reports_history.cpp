@@ -30,21 +30,24 @@ std::optional<float> ReceiverReferenceTimeReportsHistory::calculateRtt(uint32_t 
 {
 	const auto trackIter = mTrackMap.find(ssrc);
 	if (trackIter != mTrackMap.end()) {
-		const auto& trackItem = trackIter->second;
-		for (const auto& item : trackItem.reportList) {
-			const auto middle = getNtpTimeMiddleMarker(item.ntp);
+		auto& trackItem = trackIter->second;
+		for (auto iter = trackItem.reportList.begin(); iter != trackItem.reportList.end(); ++iter) {
+			const auto middle = getNtpTimeMiddleMarker(iter->ntp);
 			if (middle == ntpMarker) {
 				const auto delayMicros = static_cast<int64_t>(delay) * 1000000 / 65536;
 				const auto now = std::chrono::steady_clock::now();
-				const auto received = item.sent + std::chrono::microseconds(delayMicros);
+				const auto received = iter->sent + std::chrono::microseconds(delayMicros);
 
+				std::optional<float> result;
 				if (now >= received) {
 					// The 2 is so we get the actual back-and-forth (roundtrip) value
-					return 2 * 1 / 1000.0f *
-						   static_cast<float>(
-							   std::chrono::duration_cast<std::chrono::microseconds>(now - received).count());
+					result = 2 * 1 / 1000.0f *
+							 static_cast<float>(
+								 std::chrono::duration_cast<std::chrono::microseconds>(now - received).count());
 				}
-				break;
+
+				trackItem.reportList.erase(iter);
+				return result;
 			}
 		}
 	}
