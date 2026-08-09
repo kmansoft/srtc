@@ -208,8 +208,16 @@ float calculateLayerBandwidthScale(const std::vector<srtc::SimulcastLayer>& laye
 namespace srtc
 {
 
+PeerCandidate::~PeerCandidate()
+{
+    LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
+
+    mEventLoop->unregisterSocket(mSocket);
+
+    freeDTLS();
+}
+
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
-                             const std::vector<std::shared_ptr<Track>>& trackList,
                              const std::shared_ptr<SdpOffer>& offer,
                              const std::shared_ptr<SdpAnswer>& answer,
                              const uint32_t dataChannelMaxMessageSize,
@@ -218,7 +226,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::shared_ptr<EventLoop>& eventLoop,
                              const Scheduler::Delay& startDelay)
     : mListener(listener)
-    , mTrackList(trackList)
+    , mTrackList(answer->getTrackList())
     , mOffer(offer)
     , mAnswer(answer)
     , mHost(host)
@@ -233,8 +241,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mResponderTWCC(RtpResponderTWCC::factory(offer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mReceiverReferenceTimeReportsHistory(std::make_shared<ReceiverReferenceTimeReportsHistory>())
-    , mControlRandomGenerator(1, 0xFFFFFFFFu)
-    , mControlPacketSource(std::make_shared<RtcpPacketSource>(mControlRandomGenerator.next()))
+    , mControlPacketSource(offer->getControlPacketSource())
     , mIceRttFilter(0.2f)
     , mControlRttFilter(0.2f)
     , mSentUseCandidate(false)
@@ -278,15 +285,6 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
     mTaskExpireStunRequests =
         mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
-}
-
-PeerCandidate::~PeerCandidate()
-{
-    LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
-
-    mEventLoop->unregisterSocket(mSocket);
-
-    freeDTLS();
 }
 
 void PeerCandidate::receiveFromSocket()
@@ -441,10 +439,13 @@ void PeerCandidate::sendSubscribeReports()
                     std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
                 sendRtcpPacket(source, packet);
 
-                mReceiverReferenceTimeReportsHistory->save(source->getSSRC(), ntp);
+                mReceiverReferenceTimeReportsHistory->save(packet->getSSRC(), ntp);
 
-                // LOG(SRTC_LOG_Z, "*** Sending RRTR: ssrc = %u ntp = %8x:%8x", source->getSSRC(), ntp.seconds,
-                // ntp.fraction);
+                LOG(SRTC_LOG_Z,
+                    "*** Sending RRTR: ssrc = %u ntp = %8x:%8x",
+                    packet->getSSRC(),
+                    ntp.seconds,
+                    ntp.fraction);
 
                 // Just one is all we need
                 break;
@@ -1344,7 +1345,7 @@ void PeerCandidate::onReceivedControlMessage_DLRR([[maybe_unused]] uint32_t ssrc
         const auto ntpMiddle = rtcpReader.readU32();
         const auto delay = rtcpReader.readU32();
 
-        // LOG(SRTC_LOG_Z, "*** Received DLRR: ssrc = %u, ntp = %8x", ssrc1, ntpMiddle);
+        LOG(SRTC_LOG_Z, "*** Received DLRR: ssrc = %u, ntp = %8x", ssrc1, ntpMiddle);
 
         if (ntpMiddle != 0u) {
             const auto rtt = mReceiverReferenceTimeReportsHistory->calculateRtt(ssrc1, ntpMiddle, delay);

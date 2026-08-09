@@ -57,7 +57,6 @@ class PeerCandidate final : sctp::SctpSessionListener
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
-                  const std::vector<std::shared_ptr<Track>>& trackList,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
                   uint32_t dataChannelMaxMessageSize,
@@ -149,8 +148,6 @@ private:
     const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;
     const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
     const std::shared_ptr<ReceiverReferenceTimeReportsHistory> mReceiverReferenceTimeReportsHistory;
-
-    RandomGenerator<uint32_t> mControlRandomGenerator;
     const std::shared_ptr<RtcpPacketSource> mControlPacketSource;
 
     Filter<float> mIceRttFilter;

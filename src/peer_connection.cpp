@@ -746,9 +746,6 @@ void PeerConnection::startConnecting()
 
     mFrameSendQueue.clear();
 
-    // We will need the track list
-    const auto trackList = collectTracks();
-
     // Interleave IPv4 and IPv6 candidates
     std::vector<Host> hostList4;
     std::vector<Host> hostList6;
@@ -767,7 +764,6 @@ void PeerConnection::startConnecting()
         if (i < hostList4.size()) {
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
-                                                                   trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
@@ -780,7 +776,6 @@ void PeerConnection::startConnecting()
         if (i < hostList6.size()) {
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
-                                                                   trackList,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
