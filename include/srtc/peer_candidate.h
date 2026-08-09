@@ -57,6 +57,7 @@ class PeerCandidate final : sctp::SctpSessionListener
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
+                  Direction direction,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
                   uint32_t dataChannelMaxMessageSize,
@@ -72,8 +73,8 @@ public:
         int64_t pts_usec;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;                      // possibly empty
-        std::vector<ByteBuffer> csd;         // possibly empty
+        ByteBuffer buf;              // possibly empty
+        std::vector<ByteBuffer> csd; // possibly empty
     };
     void addSendFrame(FrameToSend&& frame);
 
@@ -106,7 +107,6 @@ private:
     void addSendRaw(ByteBuffer&& buf);
     void flushSendRaw();
 
-
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
     void onReceivedRtcMessage(ByteBuffer&& buf);
@@ -133,6 +133,7 @@ private:
 
     PeerCandidateListener* const mListener;
 
+    const Direction mDirection;
     const std::vector<std::shared_ptr<Track>> mTrackList;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;

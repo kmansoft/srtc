@@ -218,6 +218,7 @@ PeerCandidate::~PeerCandidate()
 }
 
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
+                             Direction direction,
                              const std::shared_ptr<SdpOffer>& offer,
                              const std::shared_ptr<SdpAnswer>& answer,
                              const uint32_t dataChannelMaxMessageSize,
@@ -226,6 +227,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              const std::shared_ptr<EventLoop>& eventLoop,
                              const Scheduler::Delay& startDelay)
     : mListener(listener)
+    , mDirection(direction)
     , mTrackList(answer->getTrackList())
     , mOffer(offer)
     , mAnswer(answer)
@@ -303,41 +305,43 @@ void PeerCandidate::addSendFrame(FrameToSend&& frame)
 
 void PeerCandidate::sendPublishReports()
 {
-    for (const auto& track : mTrackList) {
-        if (track->getDirection() == Direction::Publish) {
-            const auto ssrc = track->getSSRC();
-            const auto stats = track->getStats();
+    if (mDirection == Direction::Publish) {
+        for (const auto& track : mTrackList) {
+            if (track->getDirection() == Direction::Publish) {
+                const auto ssrc = track->getSSRC();
+                const auto stats = track->getStats();
 
-            NtpTime ntp = {};
-            getNtpTime(ntp);
+                NtpTime ntp = {};
+                getNtpTime(ntp);
 
-            // Sender Report
-            // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
-            {
-                const auto timeSource = track->getRtpTimeSource();
-                const auto rtpTime = timeSource->getCurrentTimestamp();
+                // Sender Report
+                // https://www4.cs.fau.de/Projects/JRTP/pmt/node83.html
+                {
+                    const auto timeSource = track->getRtpTimeSource();
+                    const auto rtpTime = timeSource->getCurrentTimestamp();
 
-                ByteBuffer payload;
-                ByteWriter w(payload);
+                    ByteBuffer payload;
+                    ByteWriter w(payload);
 
-                w.writeU32(ntp.seconds);
-                w.writeU32(ntp.fraction);
-                w.writeU32(rtpTime);
+                    w.writeU32(ntp.seconds);
+                    w.writeU32(ntp.fraction);
+                    w.writeU32(rtpTime);
 
-                w.writeU32(static_cast<uint32_t>(stats->getSentPackets()));
-                w.writeU32(static_cast<uint32_t>(stats->getSentBytes()));
+                    w.writeU32(static_cast<uint32_t>(stats->getSentPackets()));
+                    w.writeU32(static_cast<uint32_t>(stats->getSentBytes()));
 
-                const auto packet =
-                    std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
-                sendRtcpPacket(track, packet);
+                    const auto packet =
+                        std::make_shared<RtcpPacket>(ssrc, 0, RtcpPacket::kSenderReport, std::move(payload));
+                    sendRtcpPacket(track, packet);
 
-                mSenderReportsHistory->save(ssrc, ntp);
+                    mSenderReportsHistory->save(ssrc, ntp);
+                }
             }
         }
     }
 
-    if (!mOutstandingReceiverReferenceTimeReportList.empty()) {
-        // XR - DLRR if we have received RTRR
+    if (mDirection == Direction::Publish && !mOutstandingReceiverReferenceTimeReportList.empty()) {
+        // XR - DLRR if we have received RTRR's
         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.5
 
         ByteBuffer payload;
@@ -368,9 +372,8 @@ void PeerCandidate::sendPublishReports()
 
 void PeerCandidate::sendSubscribeReports()
 {
-    // Receiver Reports
-
-    {
+    if (mDirection == Direction::Subscribe) {
+        // Receiver Reports
         ByteBuffer payload;
         ByteWriter w(payload);
 
@@ -416,41 +419,29 @@ void PeerCandidate::sendSubscribeReports()
         }
     }
 
-    // RRTR
-    // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
+    if (mDirection == Direction::Subscribe) {
+        // RRTR
+        // https://datatracker.ietf.org/doc/html/rfc3611#section-4.4
+        NtpTime ntp = {};
+        getNtpTime(ntp);
 
-    {
-        for (const auto& track : mTrackList) {
-            if (track->getDirection() == Direction::Subscribe) {
-                NtpTime ntp = {};
-                getNtpTime(ntp);
+        ByteBuffer payload;
+        ByteWriter w(payload);
 
-                ByteBuffer payload;
-                ByteWriter w(payload);
+        w.writeU8(4);
+        w.writeU8(0);
+        w.writeU16(2);
+        w.writeU32(ntp.seconds);
+        w.writeU32(ntp.fraction);
 
-                w.writeU8(4);
-                w.writeU8(0);
-                w.writeU16(2);
-                w.writeU32(ntp.seconds);
-                w.writeU32(ntp.fraction);
+        const auto source = mControlPacketSource;
+        const auto packet =
+            std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
+        sendRtcpPacket(source, packet);
 
-                const auto source = mControlPacketSource;
-                const auto packet =
-                    std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
-                sendRtcpPacket(source, packet);
+        mReceiverReferenceTimeReportsHistory->save(packet->getSSRC(), ntp);
 
-                mReceiverReferenceTimeReportsHistory->save(packet->getSSRC(), ntp);
-
-                LOG(SRTC_LOG_Z,
-                    "*** Sending RRTR: ssrc = %u ntp = %8x:%8x",
-                    packet->getSSRC(),
-                    ntp.seconds,
-                    ntp.fraction);
-
-                // Just one is all we need
-                break;
-            }
-        }
+        LOG(SRTC_LOG_Z, "*** Sending RRTR: ssrc = %u ntp = %8x:%8x", packet->getSSRC(), ntp.seconds, ntp.fraction);
     }
 }
 

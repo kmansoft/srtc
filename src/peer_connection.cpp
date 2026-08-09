@@ -764,6 +764,7 @@ void PeerConnection::startConnecting()
         if (i < hostList4.size()) {
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
+                                                                   mDirection,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
@@ -776,6 +777,7 @@ void PeerConnection::startConnecting()
         if (i < hostList6.size()) {
             const auto listener = static_cast<PeerCandidateListener*>(this);
             const auto candidate = std::make_shared<PeerCandidate>(listener,
+                                                                   mDirection,
                                                                    mSdpOffer,
                                                                    mSdpAnswer,
                                                                    mDataChannelMaxMessageSize,
@@ -1122,8 +1124,10 @@ void PeerConnection::sendPeriodicPictureLossIndicators()
             const auto interval = std::clamp<uint16_t>(config.pli_interval_millis, 500u, 4000u);
 
             Task::cancelHelper(mTaskPictureLossIndicator);
-            mTaskPictureLossIndicator = mLoopScheduler->submit(
-                std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] { sendPeriodicPictureLossIndicators(); });
+            mTaskPictureLossIndicator =
+                mLoopScheduler->submit(std::chrono::milliseconds(interval), __FILE__, __LINE__, [this] {
+                    sendPeriodicPictureLossIndicators();
+                });
 
             if (mConnectionState != ConnectionState::Connected) {
                 return;
