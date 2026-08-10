@@ -11,6 +11,8 @@
 namespace
 {
 
+constexpr auto kNoPacketsResetDelayMicros = 2000 * 1000;
+
 constexpr auto kMaxPacketCount = 2048u;
 constexpr auto kMaxPacketMask = kMaxPacketCount - 1;
 
@@ -211,6 +213,7 @@ namespace srtc::twcc
 
 SubscribePacketHistory::SubscribePacketHistory(int64_t base_time_micros)
     : mBaseTimeMicros(base_time_micros)
+    , mLastPacketMicros(0)
     , mLastGeneratedMicros(0)
     , mPacketList(nullptr)
     , mMinSeq(0)
@@ -221,16 +224,7 @@ SubscribePacketHistory::SubscribePacketHistory(int64_t base_time_micros)
 
 SubscribePacketHistory::~SubscribePacketHistory()
 {
-    for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
-        const auto index = static_cast<size_t>(seq & kMaxPacketMask);
-        const auto packet = mPacketList[index];
-        assert(packet);
-        deletePacket(packet);
-        mPacketList[index] = nullptr;
-    }
-
-    delete[] mPacketList;
-    mPacketList = nullptr;
+    freeEverything();
 }
 
 void SubscribePacketHistory::saveIncomingPacket(uint16_t seq, int64_t now)
@@ -240,6 +234,19 @@ void SubscribePacketHistory::saveIncomingPacket(uint16_t seq, int64_t now)
 
     const auto seq_ext = mExtendedValueSeq.extend(seq);
     const auto now_ext = now - mBaseTimeMicros;
+
+    if (mPacketList) {
+        if (mLastPacketMicros != 0 && now - mLastPacketMicros >= kNoPacketsResetDelayMicros) {
+            if (seq_ext > mMaxSeq + kMaxPacketCount / 8) {
+                LOG(SRTC_LOG_W,
+                    "Subscribe history: no packets for %" PRIi64 " ms, resetting",
+                    (now - mLastPacketMicros) / 1000);
+                freeEverything();
+            }
+        }
+    }
+
+    mLastPacketMicros = now;
 
     if (!mPacketList || mMinSeq == mMaxSeq) {
         if (!mPacketList) {
@@ -485,6 +492,20 @@ SubscribePacket* SubscribePacketHistory::newPacket()
 void SubscribePacketHistory::deletePacket(SubscribePacket* packet)
 {
     mPacketAllocator.destroy(packet);
+}
+
+void SubscribePacketHistory::freeEverything()
+{
+    for (auto seq = mMinSeq; seq < mMaxSeq; seq += 1) {
+        const auto index = static_cast<size_t>(seq & kMaxPacketMask);
+        const auto packet = mPacketList[index];
+        assert(packet);
+        deletePacket(packet);
+        mPacketList[index] = nullptr;
+    }
+
+    delete[] mPacketList;
+    mPacketList = nullptr;
 }
 
 uint16_t SubscribePacketHistory::peekNotReceivedRun() const

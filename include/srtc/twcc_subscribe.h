@@ -37,12 +37,14 @@ private:
 
     SubscribePacket* newPacket();
     void deletePacket(SubscribePacket* packet);
+    void freeEverything();
 
     [[nodiscard]] uint16_t peekNotReceivedRun() const;
     [[nodiscard]] uint16_t peekSmallDeltaRun(int64_t& curr_time, bool* received, int32_t* delta_micros_list) const;
     [[nodiscard]] uint16_t peekLargeDeltaRun(int64_t& curr_time, bool* received, int32_t* delta_micros_list) const;
 
     const int64_t mBaseTimeMicros;
+    int64_t mLastPacketMicros;
     int64_t mLastGeneratedMicros;
 
     ExtendedValue<uint16_t> mExtendedValueSeq;

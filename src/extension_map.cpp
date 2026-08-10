@@ -3,13 +3,12 @@
 namespace srtc
 {
 
-ExtensionMap::ExtensionMap() : mLastId(0)
+ExtensionMap::ExtensionMap()
+    : mLastId(0)
 {
 }
 
-ExtensionMap::~ExtensionMap()
-{
-}
+ExtensionMap::~ExtensionMap() = default;
 
 void ExtensionMap::add(uint8_t id, const std::string& name)
 {
@@ -18,7 +17,7 @@ void ExtensionMap::add(uint8_t id, const std::string& name)
 
 uint8_t ExtensionMap::findByName(const std::string& name) const
 {
-    if (mLastName == name) {
+    if (mLastName == name && mLastId != 0) {
         return mLastId;
     }
 
@@ -36,7 +35,7 @@ uint8_t ExtensionMap::findByName(const std::string& name) const
 
 std::string ExtensionMap::findById(uint8_t id) const
 {
-    if (mLastId == id) {
+    if (mLastId == id && !mLastName.empty()) {
         return mLastName;
     }
 
