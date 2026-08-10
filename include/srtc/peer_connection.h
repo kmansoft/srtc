@@ -138,8 +138,6 @@ private:
 
     void startConnecting();
 
-    std::vector<std::shared_ptr<Track>> collectTracks() const;
-
     bool mIsStarted SRTC_GUARDED_BY(mMutex) = { false };
     bool mIsQuit SRTC_GUARDED_BY(mMutex) = { false };
     std::thread mThread SRTC_GUARDED_BY(mMutex);

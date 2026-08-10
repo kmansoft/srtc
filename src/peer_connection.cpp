@@ -818,17 +818,6 @@ void PeerConnection::processJitterBuffer(const std::shared_ptr<JitterBuffer>& bu
     }
 }
 
-std::vector<std::shared_ptr<Track>> PeerConnection::collectTracks() const
-{
-    std::vector<std::shared_ptr<Track>> list;
-
-    for (const auto& trackEntry : mTrackEntryList) {
-        list.push_back(trackEntry.track);
-    }
-
-    return list;
-}
-
 void PeerConnection::onCandidateHasDataToSend([[maybe_unused]] PeerCandidate* candidate)
 {
     std::lock_guard lock(mMutex);
