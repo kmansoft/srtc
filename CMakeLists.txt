@@ -84,6 +84,7 @@ add_library(srtc
         include/srtc/rtcp_packet_multi.h
         include/srtc/rtcp_packet_source.h
         include/srtc/rtp_extension.h
+        include/srtc/rtp_extension_source_abs_capture_time.h
         include/srtc/rtp_extension_builder.h
         include/srtc/rtp_extension_source_simulcast.h
         include/srtc/rtp_extension_source_twcc.h
@@ -160,6 +161,7 @@ add_library(srtc
         src/rtcp_packet_multi.cpp
         src/rtcp_packet_source.cpp
         src/rtp_extension.cpp
+        src/rtp_extension_source_abs_capture_time.cpp
         src/rtp_extension_builder.cpp
         src/rtp_extension_source_simulcast.cpp
         src/rtp_extension_source_twcc.cpp

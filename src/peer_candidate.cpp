@@ -18,6 +18,7 @@
 #include "srtc/rtcp_packet_multi.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source_abs_capture_time.h"
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_responder_twcc.h"
@@ -232,6 +233,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mUniqueId(++gNextUniqueId)
     , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, scheduler))
+    , mExtensionSourceAbsCaptureTime(RtpExtensionSourceAbsCaptureTime::factory(answer))
     , mResponderTWCC(RtpResponderTWCC::factory(offer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mReceiverReferenceTimeReportsHistory(std::make_shared<ReceiverReferenceTimeReportsHistory>())
@@ -648,6 +650,19 @@ void PeerCandidate::run()
     // Raw data
     flushSendRaw();
 
+    // Prepare extensions
+    mExtensionSourceList.clear();
+
+    if (mExtensionSourceSimulcast) {
+        mExtensionSourceList.push_back(mExtensionSourceSimulcast);
+    }
+    if (mExtensionSourceTWCC) {
+        mExtensionSourceList.push_back(mExtensionSourceTWCC);
+    }
+    if (mExtensionSourceAbsCaptureTime) {
+        mExtensionSourceList.push_back(mExtensionSourceAbsCaptureTime);
+    }
+
     // Frames
     while (!mFrameSendQueue.empty()) {
         const auto item = std::move(mFrameSendQueue.front());
@@ -679,15 +694,12 @@ void PeerCandidate::run()
                 }
             }
 
-            // Packetize
-            mExtensionSourceList.clear();
-            if (mExtensionSourceSimulcast) {
-                mExtensionSourceList.push_back(mExtensionSourceSimulcast);
-            }
-            if (mExtensionSourceTWCC) {
-                mExtensionSourceList.push_back(mExtensionSourceTWCC);
+            // Abs capture time
+            if (mExtensionSourceAbsCaptureTime) {
+                mExtensionSourceAbsCaptureTime->prepare(item.track, item.abs_capture_time_ntp);
             }
 
+            // Packetize
             const auto packetList = item.packetizer->generate(
                 mExtensionSourceList, mSrtpConnection->getMediaProtectionOverhead(), item.pts_usec, item.buf);
 

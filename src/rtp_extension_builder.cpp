@@ -39,6 +39,22 @@ void RtpExtensionBuilder::addU16Value(uint8_t id, uint16_t value)
     mWriter.writeU16(value);
 }
 
+void RtpExtensionBuilder::addU32Value(uint8_t id, uint32_t value)
+{
+    const auto len = sizeof(value);
+    mWriter.writeU8(id);
+    mWriter.writeU8(len);
+    mWriter.writeU32(value);
+}
+
+void RtpExtensionBuilder::addU64Value(uint8_t id, uint64_t value)
+{
+    const auto len = sizeof(value);
+    mWriter.writeU8(id);
+    mWriter.writeU8(len);
+    mWriter.writeU64(value);
+}
+
 void RtpExtensionBuilder::addOrReplaceU16Value(uint8_t id, uint16_t value)
 {
     ByteReader reader(mBuf);

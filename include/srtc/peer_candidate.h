@@ -1,6 +1,5 @@
 #pragma once
 
-#include "receiver_reference_time_reports_history.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/data_channel_message.h"
 #include "srtc/peer_candidate_listener.h"
@@ -41,6 +40,7 @@ class RtcpPacketMulti;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
+class RtpExtensionSourceAbsCaptureTime;
 class RtpResponderTWCC;
 class SendPacer;
 class SenderReportsHistory;
@@ -129,7 +129,8 @@ private:
 
     void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
     void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacket>& packet);
-    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacketMulti>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source,
+                        const std::shared_ptr<RtcpPacketMulti>& packet);
 
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(uint32_t ssrc) const;
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(ByteBuffer& packet) const;
@@ -149,6 +150,7 @@ private:
     const uint32_t mUniqueId;
     const std::shared_ptr<RtpExtensionSourceSimulcast> mExtensionSourceSimulcast;
     const std::shared_ptr<RtpExtensionSourceTWCC> mExtensionSourceTWCC;
+    const std::shared_ptr<RtpExtensionSourceAbsCaptureTime> mExtensionSourceAbsCaptureTime;
     const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;
     const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
     const std::shared_ptr<ReceiverReferenceTimeReportsHistory> mReceiverReferenceTimeReportsHistory;
