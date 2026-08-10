@@ -11,7 +11,7 @@ namespace srtc
 {
 
 PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
-    : Packetizer(track)
+    : PacketizerAudio(track)
 {
     assert(track->getCodec() == Codec::Opus);
 }
@@ -19,11 +19,10 @@ PacketizerOpus::PacketizerOpus(const std::shared_ptr<Track>& track)
 PacketizerOpus::~PacketizerOpus() = default;
 
 std::vector<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
-    [[maybe_unused]] const std::shared_ptr<RtpExtensionSource>& simulcast,
-    const std::shared_ptr<RtpExtensionSource>& twcc,
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
     [[maybe_unused]] size_t mediaProtectionOverhead,
     int64_t pts_usec,
-    const srtc::ByteBuffer& frame)
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -41,12 +40,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerOpus::generate(
         payload.resize(RtpPacket::kMaxPayloadSize);
     }
 
-    RtpExtension extension;
-    if (twcc && twcc->wantsExtension(track, false, 0)) {
-        RtpExtensionBuilder builder;
-        twcc->addExtension(builder, track, false, 0);
-        extension = builder.build();
-    }
+    auto extension = buildExtension(track, extensionSourceList, false, 0);
 
     const auto [rollover, sequence] = packetSource->getNextSequence();
     result.push_back(

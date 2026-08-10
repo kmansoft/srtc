@@ -64,6 +64,7 @@ add_library(srtc
         include/srtc/logging.h
         include/srtc/media.h
         include/srtc/packetizer.h
+        include/srtc/packetizer_audio.h
         include/srtc/packetizer_av1.h
         include/srtc/packetizer_h264.h
         include/srtc/packetizer_h265.h
@@ -140,6 +141,7 @@ add_library(srtc
         src/logging.cpp
         src/media.cpp
         src/packetizer.cpp
+        src/packetizer_audio.cpp
         src/packetizer_av1.cpp
         src/packetizer_h264.cpp
         src/packetizer_h265.cpp

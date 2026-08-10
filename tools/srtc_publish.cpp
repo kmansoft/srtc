@@ -8,11 +8,11 @@
 #include "http_whip_whep.h"
 #include "media_reader.h"
 
+#include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <cassert>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -53,6 +53,7 @@ static bool gPrintInfo = false;
 static bool gEnableBWE = false;
 static bool gLoopVideo = false;
 static bool gDataChannels = false;
+static bool gAbsCaptureTime = false;
 
 // State
 
@@ -119,7 +120,15 @@ void playVideoFile(const std::shared_ptr<srtc::PeerConnection>& peerConnection, 
                 peerConnection->setVideoCodecSpecificData(track, std::move(csd_copy));
             }
 
-            peerConnection->publishVideoFrame(track, frame.pts_usec, frame.frame.copy());
+            uint64_t abs_capture_time_ntp = 0u;
+            if (gAbsCaptureTime) {
+                srtc::NtpTime ntp = {};
+                srtc::getNtpTime(ntp);
+
+                abs_capture_time_ntp = (static_cast<uint64_t>(ntp.seconds) << 32u) | ntp.fraction;
+            }
+
+            peerConnection->publishVideoFrame(track, frame.pts_usec, frame.frame.copy(), abs_capture_time_ntp);
 
             frame_count += 1;
 
@@ -165,16 +174,17 @@ void printUsage(const char* programName)
     std::cout << "Options:" << std::endl;
     std::cout << "  -f, --file <path>    Path to input file, H264/H265/WEBM (default: " << gInputFile << ")"
               << std::endl;
-    std::cout << "  -u, --url <url>      WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
-    std::cout << "  -t, --token <token>  WHIP authorization token" << std::endl;
-    std::cout << "  -l, --loop           Loop the file" << std::endl;
-    std::cout << "  -v, --verbose        Verbose logging from the srtc library" << std::endl;
-    std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
-    std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
-    std::cout << "  -i, --info           Print input file info" << std::endl;
-    std::cout << "  -b, --bwe            Enable TWCC congestion control for bandwidth estimation" << std::endl;
-    std::cout << "  -c, --datachannels   Enable data channels" << std::endl;
-    std::cout << "  -h, --help           Show this help message" << std::endl;
+    std::cout << "  -u, --url <url>        WHIP server URL (default: " << gWhipUrl << ")" << std::endl;
+    std::cout << "  -t, --token <token>    WHIP authorization token" << std::endl;
+    std::cout << "  -l, --loop             Loop the file" << std::endl;
+    std::cout << "  -v, --verbose          Verbose logging from the srtc library" << std::endl;
+    std::cout << "  -q, --quiet            Suppress progress reporting" << std::endl;
+    std::cout << "  -s, --sdp              Print SDP offer and answer" << std::endl;
+    std::cout << "  -i, --info             Print input file info" << std::endl;
+    std::cout << "  -b, --bwe              Enable TWCC congestion control for bandwidth estimation" << std::endl;
+    std::cout << "  -c, --datachannels     Enable data channels" << std::endl;
+    std::cout << "  -a, --abs-capture-time Enable abs-capture-time" << std::endl;
+    std::cout << "  -h, --help             Show this help message" << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -226,6 +236,8 @@ int main(int argc, char* argv[])
             gEnableBWE = true;
         } else if (arg == "-c" || arg == "--datachannels") {
             gDataChannels = true;
+        } else if (arg == "-a" || arg == "--abs-capture-time") {
+            gAbsCaptureTime = true;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -310,6 +322,7 @@ int main(int argc, char* argv[])
     offer_config.cname = "foo";
     offer_config.enable_rtx = true;
     offer_config.enable_bwe = gEnableBWE;
+    offer_config.enable_abs_capture_time = gAbsCaptureTime;
     if (gDataChannels) {
         offer_config.data_channel_config.data_channels.emplace_back("foo");
     }

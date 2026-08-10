@@ -72,6 +72,7 @@ public:
 
     struct FrameToSend {
         int64_t pts_usec;
+        uint64_t abs_capture_time_ntp;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
         ByteBuffer buf;              // possibly empty
@@ -152,6 +153,8 @@ private:
     const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
     const std::shared_ptr<ReceiverReferenceTimeReportsHistory> mReceiverReferenceTimeReportsHistory;
     const std::shared_ptr<RtcpPacketSource> mControlPacketSource;
+
+    std::vector<std::shared_ptr<RtpExtensionSource>> mExtensionSourceList;
 
     Filter<float> mIceRttFilter;
     Filter<float> mControlRttFilter;

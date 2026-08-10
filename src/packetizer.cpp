@@ -5,6 +5,8 @@
 #include "srtc/packetizer_opus.h"
 #include "srtc/packetizer_vp8.h"
 #include "srtc/packetizer_vp9.h"
+#include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source.h"
 #include "srtc/track.h"
 
 namespace srtc
@@ -50,6 +52,40 @@ std::pair<std::shared_ptr<Packetizer>, Error> Packetizer::make(const std::shared
 std::shared_ptr<Track> Packetizer::getTrack() const
 {
     return mTrack;
+}
+
+size_t Packetizer::getBasicPacketSize(size_t mediaProtectionOverhead)
+{
+    return RtpPacket::kMaxPayloadSize - RtpPacket::kHeaderSize - mediaProtectionOverhead;
+}
+
+RtpExtension Packetizer::buildExtension(const std::shared_ptr<Track>& track,
+                                        const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+                                        bool isKeyFrame,
+                                        unsigned int packetNumber)
+{
+    RtpExtension extension;
+
+    uint32_t mask = 0u;
+    for (size_t i = 0u; i < extensionSourceList.size(); i++) {
+        if (extensionSourceList[i]->wantsExtension(track, isKeyFrame, packetNumber)) {
+            mask |= static_cast<uint32_t>(1u << i);
+        }
+    }
+
+    if (mask != 0u) {
+        RtpExtensionBuilder builder;
+
+        for (size_t i = 0u; i < extensionSourceList.size(); i++) {
+            if ((mask & (1u << i)) != 0) {
+                extensionSourceList[i]->addExtension(builder, track, isKeyFrame, packetNumber);
+            }
+        }
+
+        extension = builder.build();
+    }
+
+    return extension;
 }
 
 } // namespace srtc

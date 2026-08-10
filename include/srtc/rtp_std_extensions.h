@@ -13,6 +13,7 @@ public:
     static const std::string kExtSdesRtpRepairedStreamId;
     static const std::string kExtGoogleVLA;
     static const std::string kExtGoogleTWCC;
+    static const std::string kExtAbsCaptureTime;
 };
 
 } // namespace srtc

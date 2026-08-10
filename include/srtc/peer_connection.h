@@ -84,9 +84,15 @@ public:
 
     // Publishing media
     Error setVideoCodecSpecificData(const std::shared_ptr<Track>& track, std::vector<ByteBuffer>&& list);
-    Error publishVideoFrame(const std::shared_ptr<Track>& track, int64_t pts_usec, ByteBuffer&& buf);
+    Error publishVideoFrame(const std::shared_ptr<Track>& track,
+                            int64_t pts_usec,
+                            ByteBuffer&& buf,
+                            uint64_t abs_capture_time_ntp = 0u);
     Error updateVideoSimulcastLayer(const std::shared_ptr<Track>& track, const SimulcastLayer& layer);
-    Error publishAudioFrame(const std::shared_ptr<Track>& track, int64_t pts_usec, ByteBuffer&& buf);
+    Error publishAudioFrame(const std::shared_ptr<Track>& track,
+                            int64_t pts_usec,
+                            ByteBuffer&& buf,
+                            uint64_t abs_capture_time_ntp = 0u);
 
     // Subscribe listeners
     using SubscribeConnectionStatsListener = std::function<void(const SubscribeConnectionStats&)>;
@@ -149,6 +155,7 @@ private:
         int64_t pts_usec;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
+        uint64_t abs_capture_time_ntp;
         ByteBuffer buf;                      // possibly empty
         std::vector<ByteBuffer> csd;         // possibly empty
         std::optional<SimulcastLayer> layer; // possibly empty

@@ -4,9 +4,9 @@
 #include "srtc/rtp_packet.h"
 #include "srtc/srtc.h"
 
-#include <vector>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace srtc
 {
@@ -24,18 +24,24 @@ public:
     explicit Packetizer(const std::shared_ptr<Track>& track);
     virtual ~Packetizer();
 
+    static std::pair<std::shared_ptr<Packetizer>, Error> make(const std::shared_ptr<Track>& track);
+    static size_t getBasicPacketSize(size_t mediaProtectionOverhead);
+
     virtual void setCodecSpecificData(const std::vector<ByteBuffer>& csd);
+
     [[nodiscard]] virtual bool isKeyFrame(const ByteBuffer& frame) const;
     [[nodiscard]] virtual std::vector<std::shared_ptr<RtpPacket>> generate(
-        const std::shared_ptr<RtpExtensionSource>& simulcast,
-        const std::shared_ptr<RtpExtensionSource>& twcc,
+        const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
         size_t mediaProtectionOverhead,
         int64_t pts_usec,
         const ByteBuffer& frame) = 0;
 
-    static std::pair<std::shared_ptr<Packetizer>, Error> make(const std::shared_ptr<Track>& track);
-
     [[nodiscard]] std::shared_ptr<Track> getTrack() const;
+
+    static RtpExtension buildExtension(const std::shared_ptr<Track>& track,
+                                       const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+                                       bool isKeyFrame,
+                                       unsigned int packetNumber);
 
 private:
     const std::shared_ptr<Track> mTrack;

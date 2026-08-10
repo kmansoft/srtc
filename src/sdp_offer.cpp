@@ -174,6 +174,10 @@ std::pair<std::string, Error> SdpOffer::generate()
         ss << "a=rtcp-mux" << std::endl;
         ss << "a=rtcp-rsize" << std::endl;
 
+        if (mConfig.enable_abs_capture_time) {
+            ss << "a=extmap:12 " << RtpStandardExtensions::kExtAbsCaptureTime << std::endl;
+        }
+
         for (const auto& item : codecList) {
             ss << "a=rtpmap:" << payloadId << " " << codec_to_string(item.codec) << std::endl;
             if (item.codec == Codec::H264) {

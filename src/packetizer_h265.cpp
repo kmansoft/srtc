@@ -67,11 +67,11 @@ bool PacketizerH265::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                                 const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                                 size_t mediaProtectionOverhead,
-                                                                 int64_t pts_usec,
-                                                                 const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+    size_t mediaProtectionOverhead,
+    int64_t pts_usec,
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -121,7 +121,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shar
                 writer.writeU16(static_cast<uint16_t>(mPPS.size()));
                 writer.write(mPPS);
 
-                RtpExtension extension = buildExtension(track, simulcast, twcc, true, 0);
+                RtpExtension extension = buildExtension(track, extensionSourceList, true, 0);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(std::make_shared<RtpPacket>(
@@ -136,8 +136,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shar
             const auto naluData = parser.currData();
             const auto naluSize = parser.currDataSize();
 
-            auto padding = getPadding(track, simulcast, twcc, naluSize);
-            RtpExtension extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), 0);
+            auto padding = getPadding(track, extensionSourceList, naluSize);
+            auto extension = buildExtension(track, extensionSourceList, isKeyFrameNalu(naluType), 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
@@ -168,8 +168,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH265::generate(const std::shar
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
                     if (packetNumber > 0) {
-                        padding = getPadding(track, simulcast, twcc, naluSize);
-                        extension = buildExtension(track, simulcast, twcc, isKeyFrameNalu(naluType), packetNumber);
+                        padding = getPadding(track, extensionSourceList, naluSize);
+                        extension = buildExtension(track, extensionSourceList, isKeyFrameNalu(naluType), packetNumber);
                     }
 
                     // The "-3" is for FU headers

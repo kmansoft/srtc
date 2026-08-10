@@ -680,11 +680,16 @@ void PeerCandidate::run()
             }
 
             // Packetize
-            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
-                                                              mExtensionSourceTWCC,
-                                                              mSrtpConnection->getMediaProtectionOverhead(),
-                                                              item.pts_usec,
-                                                              item.buf);
+            mExtensionSourceList.clear();
+            if (mExtensionSourceSimulcast) {
+                mExtensionSourceList.push_back(mExtensionSourceSimulcast);
+            }
+            if (mExtensionSourceTWCC) {
+                mExtensionSourceList.push_back(mExtensionSourceTWCC);
+            }
+
+            const auto packetList = item.packetizer->generate(
+                mExtensionSourceList, mSrtpConnection->getMediaProtectionOverhead(), item.pts_usec, item.buf);
 
             // Flush any packets from the same track which we haven't sent yet
             mSendPacer->flush(item.track);

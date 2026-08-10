@@ -66,11 +66,11 @@ bool PacketizerAV1::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                                const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                                size_t mediaProtectionOverhead,
-                                                                int64_t pts_usec,
-                                                                const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+    size_t mediaProtectionOverhead,
+    int64_t pts_usec,
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -126,8 +126,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::share
 
         while (obuCurrSize > 0) {
             if (payload.empty()) {
-                extension = buildExtension(track, simulcast, twcc, isNewCodedVideoSequence, packetNumber);
-                padding = getPadding(track, simulcast, twcc, basicPacketSize);
+                extension = buildExtension(track, extensionSourceList, isNewCodedVideoSequence, packetNumber);
+                padding = getPadding(track, extensionSourceList, basicPacketSize);
                 usablePayloadSize = adjustPacketSize(basicPacketSize, padding, extension);
             }
 
@@ -187,13 +187,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerAV1::generate(const std::share
                 payload.data()[0] |= (1 << 6);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
-                result.push_back(std::make_shared<RtpPacket>(track,
-                                                             false,
-                                                             rollover,
-                                                             sequence,
-                                                             frameTimestamp,
-                                                             padding, extension.copy(),
-                                                             std::move(payload)));
+                result.push_back(std::make_shared<RtpPacket>(
+                    track, false, rollover, sequence, frameTimestamp, padding, extension.copy(), std::move(payload)));
 
                 payload.clear();
                 packetNumber += 1;

@@ -31,11 +31,13 @@ struct PubOfferConfig {
     bool enable_rtx = true;
     bool enable_bwe = false;
     bool enable_rfc8851 = false;
+    bool enable_abs_capture_time = false;
     DataChannelConfig data_channel_config;
 };
 
 struct SubOfferConfig {
     std::string cname;
+    bool enable_abs_capture_time = false;
     uint16_t pli_interval_millis = 2000;
     uint16_t jitter_buffer_length_millis = 0;
     uint16_t jitter_buffer_nack_delay_millis = 0;
@@ -62,6 +64,8 @@ private:
         uint16_t pli_interval_millis = 0;
         uint16_t jitter_buffer_length_millis = 0;
         uint16_t jitter_buffer_nack_delay_millis = 0;
+        // Publish and subscribe
+        bool enable_abs_capture_time = false;
     };
 
     struct MediaCodec {

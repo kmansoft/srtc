@@ -30,11 +30,11 @@ bool PacketizerVP8::isKeyFrame(const srtc::ByteBuffer& frame) const
     return tagFrameType == 0;
 }
 
-std::vector<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                                const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                                size_t mediaProtectionOverhead,
-                                                                int64_t pts_usec,
-                                                                const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+    size_t mediaProtectionOverhead,
+    int64_t pts_usec,
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -67,8 +67,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerVP8::generate(const std::share
     while (currSize > 0) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
 
-        const auto padding = getPadding(track, simulcast, twcc, currSize);
-        RtpExtension extension = buildExtension(track, simulcast, twcc, tagFrameType == 0, packetNumber);
+        const auto padding = getPadding(track, extensionSourceList, currSize);
+        auto extension = buildExtension(track, extensionSourceList, tagFrameType == 0, packetNumber);
 
         // The "-1" is for VP8 payload descriptor
         const auto packetSize = adjustPacketSize(basicPacketSize - 1, padding, extension);
