@@ -32,6 +32,14 @@ public:
     [[nodiscard]] std::optional<uint32_t> findU32(uint8_t id) const;
     [[nodiscard]] std::optional<uint64_t> findU64(uint8_t id) const;
 
+    struct Value
+    {
+        const uint8_t* ptr;
+        size_t size;
+    };
+
+    [[nodiscard]] std::optional<Value> findAny(uint8_t id) const;
+
     [[nodiscard]] RtpExtension copy() const;
 
 	static ByteBuffer convertOneToTwoByte(const ByteBuffer& src);

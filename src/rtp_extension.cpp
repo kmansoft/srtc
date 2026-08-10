@@ -141,6 +141,28 @@ std::optional<uint64_t> RtpExtension::findU64(uint8_t nExtId) const
     return {};
 }
 
+std::optional<RtpExtension::Value> RtpExtension::findAny(uint8_t nExtId) const
+{
+    if (!empty()) {
+        assert(mId == kTwoByte);
+
+        ByteReader reader(mData);
+        while (reader.remaining() >= 2) {
+            const auto id = reader.readU8();
+            const auto len = reader.readU8();
+            if (reader.remaining() < len) {
+                break;
+            }
+            if (id == nExtId) {
+                return Value{ reader.current(), len };
+            }
+            reader.skip(len);
+        }
+    }
+
+    return {};
+}
+
 RtpExtension RtpExtension::copy() const
 {
     return { mId, mData.copy() };
