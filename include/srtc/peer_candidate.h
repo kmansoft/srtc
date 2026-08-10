@@ -37,6 +37,7 @@ class IceAgent;
 class SendRtpHistory;
 class SrtpConnection;
 class RtcpPacket;
+class RtcpPacketMulti;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
@@ -57,7 +58,7 @@ class PeerCandidate final : sctp::SctpSessionListener
 {
 public:
     PeerCandidate(PeerCandidateListener* listener,
-                  const std::vector<std::shared_ptr<Track>>& trackList,
+                  Direction direction,
                   const std::shared_ptr<SdpOffer>& offer,
                   const std::shared_ptr<SdpAnswer>& answer,
                   uint32_t dataChannelMaxMessageSize,
@@ -73,8 +74,8 @@ public:
         int64_t pts_usec;
         std::shared_ptr<Track> track;
         std::shared_ptr<Packetizer> packetizer;
-        ByteBuffer buf;                      // possibly empty
-        std::vector<ByteBuffer> csd;         // possibly empty
+        ByteBuffer buf;              // possibly empty
+        std::vector<ByteBuffer> csd; // possibly empty
     };
     void addSendFrame(FrameToSend&& frame);
 
@@ -107,7 +108,6 @@ private:
     void addSendRaw(ByteBuffer&& buf);
     void flushSendRaw();
 
-
     void onReceivedStunMessage(const Socket::ReceivedData& data);
     void onReceivedDtlsMessage(ByteBuffer&& buf);
     void onReceivedRtcMessage(ByteBuffer&& buf);
@@ -127,13 +127,15 @@ private:
     void forgetExpiredStunRequests();
 
     void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
-    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& track, const std::shared_ptr<RtcpPacket>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacket>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacketMulti>& packet);
 
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(uint32_t ssrc) const;
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(ByteBuffer& packet) const;
 
     PeerCandidateListener* const mListener;
 
+    const Direction mDirection;
     const std::vector<std::shared_ptr<Track>> mTrackList;
     const std::shared_ptr<SdpOffer> mOffer;
     const std::shared_ptr<SdpAnswer> mAnswer;
@@ -149,8 +151,6 @@ private:
     const std::shared_ptr<RtpResponderTWCC> mResponderTWCC;
     const std::shared_ptr<SenderReportsHistory> mSenderReportsHistory;
     const std::shared_ptr<ReceiverReferenceTimeReportsHistory> mReceiverReferenceTimeReportsHistory;
-
-    RandomGenerator<uint32_t> mControlRandomGenerator;
     const std::shared_ptr<RtcpPacketSource> mControlPacketSource;
 
     Filter<float> mIceRttFilter;

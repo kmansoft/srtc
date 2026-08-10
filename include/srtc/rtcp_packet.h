@@ -33,7 +33,7 @@ public:
 
     [[nodiscard]] ByteBuffer generate() const;
 
-    static std::list<std::shared_ptr<RtcpPacket>> fromUdpPacket(const srtc::ByteBuffer& data);
+    static std::list<std::shared_ptr<RtcpPacket>> fromUdpPacket(const ByteBuffer& data);
 
 private:
     const uint32_t mSSRC;

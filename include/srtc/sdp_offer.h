@@ -20,6 +20,7 @@ class PeerConnection;
 class PeerCandidate;
 class SendPacer;
 class X509Certificate;
+class RtcpPacketSource;
 
 struct DataChannelConfig {
     std::vector<std::string> data_channels;
@@ -111,6 +112,8 @@ public:
     [[nodiscard]] uint16_t getSctpPort() const;
     [[nodiscard]] uint32_t getSctpMaxMessageSize() const;
 
+    [[nodiscard]] std::shared_ptr<RtcpPacketSource> getControlPacketSource() const;
+
 private:
     std::string generateRandomUUID();
     std::string generateRandomString(size_t len);
@@ -154,6 +157,7 @@ private:
     };
 
     std::vector<MediaLineGenerated> mMediaLineGeneratedList;
+    std::shared_ptr<RtcpPacketSource> mControlPacketSource;
 };
 
 } // namespace srtc

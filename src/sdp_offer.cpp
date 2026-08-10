@@ -5,6 +5,8 @@
 
 #include "srtc/rtp_std_extensions.h"
 #include "srtc/sdp_offer.h"
+
+#include "srtc/rtcp_packet_source.h"
 #include "srtc/x509_certificate.h"
 
 namespace
@@ -213,6 +215,10 @@ std::pair<std::string, Error> SdpOffer::generate()
 
             mediaLineGenerated.ssrc = 1 + mRandomGenerator.next();
 
+            if (!mControlPacketSource) {
+                mControlPacketSource = std::make_shared<RtcpPacketSource>(mediaLineGenerated.ssrc);
+            }
+
             ss << "a=ssrc:" << mediaLineGenerated.ssrc << " cname:" << mConfig.cname << std::endl;
             ss << "a=ssrc:" << mediaLineGenerated.ssrc << " msid:" << mConfig.cname << " " << msid << std::endl;
 
@@ -267,6 +273,10 @@ std::pair<std::string, Error> SdpOffer::generate()
 
                 ss << "a=ssrc:" << layerGenerated.ssrc << " cname:" << mConfig.cname << std::endl;
                 ss << "a=ssrc:" << layerGenerated.ssrc << " msid:" << mConfig.cname << " " << msid << std::endl;
+
+                if (!mControlPacketSource) {
+                    mControlPacketSource = std::make_shared<RtcpPacketSource>(layerGenerated.ssrc);
+                }
 
                 if (mConfig.enable_rtx) {
                     layerGenerated.rtx = 1 + mRandomGenerator.next();
@@ -368,6 +378,11 @@ uint16_t SdpOffer::getSctpPort() const
 uint32_t SdpOffer::getSctpMaxMessageSize() const
 {
     return kSctpMaxMessageSize;
+}
+
+std::shared_ptr<RtcpPacketSource> SdpOffer::getControlPacketSource() const
+{
+    return mControlPacketSource;
 }
 
 std::string SdpOffer::generateRandomUUID()
