@@ -209,15 +209,6 @@ float calculateLayerBandwidthScale(const std::vector<srtc::SimulcastLayer>& laye
 namespace srtc
 {
 
-PeerCandidate::~PeerCandidate()
-{
-    LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
-
-    mEventLoop->unregisterSocket(mSocket);
-
-    freeDTLS();
-}
-
 PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
                              Direction direction,
                              const std::shared_ptr<SdpOffer>& offer,
@@ -288,6 +279,15 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
 
     mTaskExpireStunRequests =
         mScheduler.submit(kExpireStunPeriod, __FILE__, __LINE__, [this] { forgetExpiredStunRequests(); });
+}
+
+PeerCandidate::~PeerCandidate()
+{
+    LOG(SRTC_LOG_V, "Destructor for %p #%d", static_cast<void*>(this), mUniqueId);
+
+    mEventLoop->unregisterSocket(mSocket);
+
+    freeDTLS();
 }
 
 void PeerCandidate::receiveFromSocket()
