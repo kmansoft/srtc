@@ -80,6 +80,7 @@ add_library(srtc
         include/srtc/receiver_reference_time_reports_history.h
         include/srtc/replay_protection.h
         include/srtc/rtcp_packet.h
+        include/srtc/rtcp_packet_multi.h
         include/srtc/rtcp_packet_source.h
         include/srtc/rtp_extension.h
         include/srtc/rtp_extension_builder.h
@@ -154,6 +155,7 @@ add_library(srtc
         src/receiver_reference_time_reports_history.cpp
         src/replay_protection.cpp
         src/rtcp_packet.cpp
+        src/rtcp_packet_multi.cpp
         src/rtcp_packet_source.cpp
         src/rtp_extension.cpp
         src/rtp_extension_builder.cpp

@@ -36,7 +36,6 @@ std::optional<float> ReceiverReferenceTimeReportsHistory::calculateRtt(uint32_t 
         for (auto iter = trackItem.reportList.begin(); iter != trackItem.reportList.end(); ++iter) {
             const auto middle = getNtpTimeMiddleMarker(iter->ntp);
             if (middle == ntpMarker) {
-                std::printf("*** Found a matching RRTR\n");
                 const auto delayMicros = static_cast<int64_t>(delay) * 1000000 / 65536;
                 const auto now = std::chrono::steady_clock::now();
                 const auto received = iter->sent + std::chrono::microseconds(delayMicros);
@@ -55,8 +54,6 @@ std::optional<float> ReceiverReferenceTimeReportsHistory::calculateRtt(uint32_t 
         }
     }
 
-    std::printf("*** Could not find a matching RRTR\n");
-F
     return std::nullopt;
 }
 

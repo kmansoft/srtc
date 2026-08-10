@@ -15,6 +15,7 @@
 #include "srtc/receiver_reference_time_report.h"
 #include "srtc/receiver_reference_time_reports_history.h"
 #include "srtc/rtcp_packet.h"
+#include "srtc/rtcp_packet_multi.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_extension_builder.h"
 #include "srtc/rtp_extension_source_simulcast.h"
@@ -372,6 +373,9 @@ void PeerCandidate::sendPublishReports()
 
 void PeerCandidate::sendSubscribeReports()
 {
+    const auto source = mControlPacketSource;
+    std::vector<std::shared_ptr<RtcpPacket>> packetList;
+
     if (mDirection == Direction::Subscribe) {
         // Receiver Reports
         ByteBuffer payload;
@@ -412,10 +416,9 @@ void PeerCandidate::sendSubscribeReports()
         }
 
         if (!payload.empty()) {
-            const auto source = mControlPacketSource;
             const auto packet = std::make_shared<RtcpPacket>(
                 source->getSSRC(), reportCount, RtcpPacket::kReceiverReport, std::move(payload));
-            sendRtcpPacket(source, packet);
+            packetList.push_back(packet);
         }
     }
 
@@ -434,14 +437,16 @@ void PeerCandidate::sendSubscribeReports()
         w.writeU32(ntp.seconds);
         w.writeU32(ntp.fraction);
 
-        const auto source = mControlPacketSource;
         const auto packet =
             std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
-        sendRtcpPacket(source, packet);
+        packetList.push_back(packet);
 
         mReceiverReferenceTimeReportsHistory->save(packet->getSSRC(), ntp);
+    }
 
-        LOG(SRTC_LOG_Z, "*** Sending RRTR: ssrc = %u ntp = %8x:%8x", packet->getSSRC(), ntp.seconds, ntp.fraction);
+    if (!packetList.empty()) {
+        const auto multi = std::make_shared<RtcpPacketMulti>(packetList);
+        sendRtcpPacket(source, multi);
     }
 }
 
@@ -1336,8 +1341,6 @@ void PeerCandidate::onReceivedControlMessage_DLRR([[maybe_unused]] uint32_t ssrc
         const auto ntpMiddle = rtcpReader.readU32();
         const auto delay = rtcpReader.readU32();
 
-        LOG(SRTC_LOG_Z, "*** Received DLRR: ssrc = %u, ntp = %8x", ssrc1, ntpMiddle);
-
         if (ntpMiddle != 0u) {
             const auto rtt = mReceiverReferenceTimeReportsHistory->calculateRtt(ssrc1, ntpMiddle, delay);
             if (rtt.has_value()) {
@@ -1363,6 +1366,19 @@ void PeerCandidate::sendRtcpPacket(const std::shared_ptr<Track>& track, const st
 
 void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source,
                                    const std::shared_ptr<RtcpPacket>& packet)
+{
+    if (mSrtpConnection) {
+        const auto packetData = packet->generate();
+
+        if (mSrtpConnection->protectSendControl(packetData, source->getNextSequence(), mProtectedBuf)) {
+            const auto w = mSocket->send(mProtectedBuf.data(), mProtectedBuf.size());
+            LOG(SRTC_LOG_V, "Sent %zu bytes of RTCP", w);
+        }
+    }
+}
+
+void PeerCandidate::sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source,
+                                   const std::shared_ptr<RtcpPacketMulti>& packet)
 {
     if (mSrtpConnection) {
         const auto packetData = packet->generate();

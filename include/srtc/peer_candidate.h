@@ -37,6 +37,7 @@ class IceAgent;
 class SendRtpHistory;
 class SrtpConnection;
 class RtcpPacket;
+class RtcpPacketMulti;
 class EventLoop;
 class RtpExtensionSourceSimulcast;
 class RtpExtensionSourceTWCC;
@@ -126,7 +127,8 @@ private:
     void forgetExpiredStunRequests();
 
     void sendRtcpPacket(const std::shared_ptr<Track>& track, const std::shared_ptr<RtcpPacket>& packet);
-    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& track, const std::shared_ptr<RtcpPacket>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacket>& packet);
+    void sendRtcpPacket(const std::shared_ptr<RtcpPacketSource>& source, const std::shared_ptr<RtcpPacketMulti>& packet);
 
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(uint32_t ssrc) const;
     [[nodiscard]] std::shared_ptr<Track> findReceiveTrack(ByteBuffer& packet) const;
