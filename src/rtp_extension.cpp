@@ -1,7 +1,7 @@
 #include "srtc/rtp_extension.h"
 
-#include <memory>
 #include <cassert>
+#include <memory>
 
 namespace srtc
 {
@@ -26,12 +26,12 @@ RtpExtension::RtpExtension(RtpExtension&& source) noexcept
 
 RtpExtension& RtpExtension::operator=(RtpExtension&& source) noexcept
 {
-	if (this != &source) {
-		mId = source.mId;
-		mData = std::move(source.mData);
+    if (this != &source) {
+        mId = source.mId;
+        mData = std::move(source.mData);
 
-		source.mId = 0;
-	}
+        source.mId = 0;
+    }
 
     return *this;
 }
@@ -75,11 +75,64 @@ std::optional<uint16_t> RtpExtension::findU16(uint8_t nExtId) const
         while (reader.remaining() >= 2) {
             const auto id = reader.readU8();
             const auto len = reader.readU8();
-            if (id == nExtId) {
-                return reader.readU16();
-            }
             if (reader.remaining() < len) {
                 break;
+            }
+            if (id == nExtId) {
+                if (len < 2) {
+                    break;
+                }
+                return reader.readU16();
+            }
+            reader.skip(len);
+        }
+    }
+
+    return {};
+}
+
+std::optional<uint32_t> RtpExtension::findU32(uint8_t nExtId) const
+{
+    if (!empty()) {
+        assert(mId == kTwoByte);
+
+        ByteReader reader(mData);
+        while (reader.remaining() >= 2) {
+            const auto id = reader.readU8();
+            const auto len = reader.readU8();
+            if (reader.remaining() < len) {
+                break;
+            }
+            if (id == nExtId) {
+                if (len < 4) {
+                    break;
+                }
+                return reader.readU32();
+            }
+            reader.skip(len);
+        }
+    }
+
+    return {};
+}
+
+std::optional<uint64_t> RtpExtension::findU64(uint8_t nExtId) const
+{
+    if (!empty()) {
+        assert(mId == kTwoByte);
+
+        ByteReader reader(mData);
+        while (reader.remaining() >= 2) {
+            const auto id = reader.readU8();
+            const auto len = reader.readU8();
+            if (reader.remaining() < len) {
+                break;
+            }
+            if (id == nExtId) {
+                if (len < 8) {
+                    break;
+                }
+                return reader.readU64();
             }
             reader.skip(len);
         }
@@ -95,36 +148,36 @@ RtpExtension RtpExtension::copy() const
 
 ByteBuffer RtpExtension::convertOneToTwoByte(const ByteBuffer& src)
 {
-	ByteBuffer buf;
-	ByteWriter writer(buf);
+    ByteBuffer buf;
+    ByteWriter writer(buf);
 
-	ByteReader reader(src);
+    ByteReader reader(src);
 
-	while (reader.remaining() > 1) {
-		const auto value = reader.readU8();
-		if (value == 0) {
-			break;
-		}
+    while (reader.remaining() > 1) {
+        const auto value = reader.readU8();
+        if (value == 0) {
+            break;
+        }
 
-		const auto id = static_cast<uint8_t>(value >> 4);
-		if (id == 0x0F) {
-			break;
-		}
+        const auto id = static_cast<uint8_t>(value >> 4);
+        if (id == 0x0F) {
+            break;
+        }
 
-		const auto len = static_cast<uint8_t>(value & 0x0Fu) + 1u;
-		if (reader.remaining() < len) {
-			break;
-		}
+        const auto len = static_cast<uint8_t>(value & 0x0Fu) + 1u;
+        if (reader.remaining() < len) {
+            break;
+        }
 
-		uint8_t extbuf[16];
-		reader.read(extbuf, len);;
+        uint8_t extbuf[16];
+        reader.read(extbuf, len);
 
-		writer.writeU8(id);
-		writer.writeU8(static_cast<uint8_t>(len));
-		writer.write(extbuf, len);
-	}
+        writer.writeU8(id);
+        writer.writeU8(static_cast<uint8_t>(len));
+        writer.write(extbuf, len);
+    }
 
-	return buf;
+    return buf;
 }
 
 } // namespace srtc

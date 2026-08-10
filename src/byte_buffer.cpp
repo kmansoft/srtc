@@ -374,6 +374,19 @@ uint32_t ByteReader::readU32()
     return res;
 }
 
+uint64_t ByteReader::readU64()
+{
+    assert(mPos + 8 <= mLen);
+    check_read(__FILE__, __LINE__, "readU64", 8, mPos, mLen);
+
+    const uint64_t res = (static_cast<uint64_t>(mBuf[mPos]) << 56) | (static_cast<uint64_t>(mBuf[mPos + 1]) << 48) |
+                         (static_cast<uint64_t>(mBuf[mPos + 2]) << 40) | (static_cast<uint64_t>(mBuf[mPos + 3]) << 32) |
+                         (static_cast<uint64_t>(mBuf[mPos + 4]) << 24) | (static_cast<uint64_t>(mBuf[mPos + 5]) << 16) |
+                         (static_cast<uint64_t>(mBuf[mPos + 6]) << 8) | static_cast<uint64_t>(mBuf[mPos + 7]);
+    mPos += 8;
+    return res;
+}
+
 uint32_t ByteReader::readLEB128()
 {
     uint32_t result = 0;

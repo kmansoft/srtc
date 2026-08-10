@@ -29,6 +29,8 @@ public:
     [[nodiscard]] const ByteBuffer& getData() const;
 
     [[nodiscard]] std::optional<uint16_t> findU16(uint8_t id) const;
+    [[nodiscard]] std::optional<uint32_t> findU32(uint8_t id) const;
+    [[nodiscard]] std::optional<uint64_t> findU64(uint8_t id) const;
 
     [[nodiscard]] RtpExtension copy() const;
 
