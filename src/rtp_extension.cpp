@@ -138,6 +138,10 @@ void RtpExtension::trimPadding()
 
 RtpExtension RtpExtension::copy() const
 {
+    if (empty()) {
+        return {};
+    }
+
     return { mId, mData.copy() };
 }
 

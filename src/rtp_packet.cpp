@@ -123,6 +123,11 @@ const RtpExtension& RtpPacket::getExtension() const
     return mExtension;
 }
 
+RtpExtension&& RtpPacket::moveExtension()
+{
+    return std::move(mExtension);
+}
+
 bool RtpPacket::getMarker() const
 {
     return mMarker;
