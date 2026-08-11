@@ -7,6 +7,7 @@
 #include "srtc/track.h"
 #include "srtc/util.h"
 
+#include <cstring>
 #include <iostream>
 
 #include <openssl/rand.h>
@@ -23,50 +24,94 @@ uint32_t randomU32()
 
 } // namespace
 
-// Extension conversion from one byte to two byte format
+// Parsing a one-byte format extension
 
-TEST(Extension, Convert)
+TEST(Extension, OneByteFormat)
 {
     srtc::ByteBuffer one;
     srtc::ByteWriter one_w(one);
 
     // U16
     one_w.writeU8((1 << 4) | 1);
-    one_w.writeU16(0x1111);
+    one_w.writeU16(0x1234);
 
     // U32
     one_w.writeU8((2 << 4) | 3);
-    one_w.writeU32(0x2222);
+    one_w.writeU32(0x12345678);
 
     // String
     const std::string s("testing");
     one_w.writeU8((3 << 4) | (s.length() - 1));
     one_w.write(reinterpret_cast<const uint8_t*>(s.data()), s.size());
 
-    // Convert
-    const auto two = srtc::RtpExtension::convertOneToTwoByte(one);
-    srtc::ByteReader two_r(two);
+    const srtc::RtpExtension extension(srtc::RtpExtension::kOneByte, std::move(one));
 
-    // Validate length
-    ASSERT_EQ(one.size() + 3, two.size());
+    const auto u16 = extension.findU16(1);
+    ASSERT_TRUE(u16.has_value());
+    ASSERT_EQ(0x1234, u16.value());
+
+    const auto u32 = extension.findU32(2);
+    ASSERT_TRUE(u32.has_value());
+    ASSERT_EQ(0x12345678u, u32.value());
+
+    const auto str = extension.findAny(3);
+    ASSERT_TRUE(str.has_value());
+    ASSERT_EQ(s.size(), str->size);
+    ASSERT_EQ(0, std::memcmp(s.data(), str->ptr, s.size()));
+
+    // Not present
+    ASSERT_FALSE(extension.findU16(4).has_value());
+}
+
+// Parsing a two-byte format extension
+
+TEST(Extension, TwoByteFormat)
+{
+    srtc::ByteBuffer two;
+    srtc::ByteWriter two_w(two);
 
     // U16
-    ASSERT_EQ(1, two_r.readU8());
-    ASSERT_EQ(2, two_r.readU8());
-    ASSERT_EQ(0x1111, two_r.readU16());
+    two_w.writeU8(1);
+    two_w.writeU8(2);
+    two_w.writeU16(0x1234);
 
     // U32
-    ASSERT_EQ(2, two_r.readU8());
-    ASSERT_EQ(4, two_r.readU8());
-    ASSERT_EQ(0x2222, two_r.readU32());
+    two_w.writeU8(2);
+    two_w.writeU8(4);
+    two_w.writeU32(0x12345678);
+
+    // U64
+    two_w.writeU8(3);
+    two_w.writeU8(8);
+    two_w.writeU64(0x123456789ABCDEF0ull);
 
     // String
-    ASSERT_EQ(3, two_r.readU8());
-    ASSERT_EQ(s.size(), two_r.readU8());
+    const std::string s("testing");
+    two_w.writeU8(4);
+    two_w.writeU8(static_cast<uint8_t>(s.size()));
+    two_w.write(reinterpret_cast<const uint8_t*>(s.data()), s.size());
 
-    uint8_t q[16];
-    two_r.read(q, s.size());
-    ASSERT_EQ(reinterpret_cast<const char*>(q), s);
+    const srtc::RtpExtension extension(srtc::RtpExtension::kTwoByte, std::move(two));
+
+    const auto u16 = extension.findU16(1);
+    ASSERT_TRUE(u16.has_value());
+    ASSERT_EQ(0x1234, u16.value());
+
+    const auto u32 = extension.findU32(2);
+    ASSERT_TRUE(u32.has_value());
+    ASSERT_EQ(0x12345678u, u32.value());
+
+    const auto u64 = extension.findU64(3);
+    ASSERT_TRUE(u64.has_value());
+    ASSERT_EQ(0x123456789ABCDEF0ull, u64.value());
+
+    const auto str = extension.findAny(4);
+    ASSERT_TRUE(str.has_value());
+    ASSERT_EQ(s.size(), str->size);
+    ASSERT_EQ(0, std::memcmp(s.data(), str->ptr, s.size()));
+
+    // Not present
+    ASSERT_FALSE(extension.findU16(5).has_value());
 }
 
 // RTP packet to and from UDP

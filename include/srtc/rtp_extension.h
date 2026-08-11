@@ -14,6 +14,10 @@ public:
 	static constexpr auto kOneByte = 0xBEDE;
 	static constexpr auto kTwoByte = 0x1000;
 
+    // A recognized "defined by profile" id, per RFC 5285: the one-byte format's fixed
+    // id, or the two-byte format's id with any of the low 4 "app bits" set.
+    [[nodiscard]] static bool isValidExtensionId(uint16_t id);
+
     RtpExtension();
     RtpExtension(uint16_t id, ByteBuffer&& data);
 
@@ -40,11 +44,24 @@ public:
 
     [[nodiscard]] std::optional<Value> findAny(uint8_t id) const;
 
+    // Strips the trailing zero padding that was added to align the wire data to 4 bytes
+    void trimPadding();
+
     [[nodiscard]] RtpExtension copy() const;
 
-	static ByteBuffer convertOneToTwoByte(const ByteBuffer& src);
-
 private:
+    struct Element
+    {
+        uint8_t id;
+        const uint8_t* ptr;
+        size_t len;
+    };
+
+    // Walks to the next element, one-byte or two-byte format depending on mId.
+    // Returns false once padding, a reserved id, or truncated data is reached, or if
+    // mId is neither the one-byte indicator nor a recognized two-byte indicator.
+    [[nodiscard]] bool nextElement(ByteReader& reader, Element& out) const;
+
     uint16_t mId;
     ByteBuffer mData;
 };

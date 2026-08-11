@@ -296,7 +296,7 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
             return {};
         }
 
-        auto extId = reader.readU16();
+        const auto extId = reader.readU16();
         const auto extSize = reader.readU16() * 4u;
 
         if (reader.remaining() < extSize) {
@@ -304,34 +304,9 @@ std::shared_ptr<RtpPacket> RtpPacket::fromUdpPacket(const std::shared_ptr<Track>
         }
 
         auto extData = reader.readByteBuffer(extSize);
-
-        // Convert one byte to two byte extension
-        if (extId == RtpExtension::kOneByte && !extData.empty()) {
-            extId = RtpExtension::kTwoByte;
-            extData = RtpExtension::convertOneToTwoByte(extData);
-        }
-
-        // Remove padding from extension
-        ByteReader extReader(extData);
-        while (extReader.remaining() > 0) {
-            const auto extId2 = extReader.readU8();
-            if (extId2 == 0) {
-                extData.resize(extReader.position() - 1);
-                break;
-            }
-
-            if (extReader.remaining() < 1) {
-                break;
-            }
-            const auto extLen2 = extReader.readU8();
-            if (extReader.remaining() < extLen2) {
-                break;
-            }
-            extReader.skip(extLen2);
-        }
-
-        if (extId == RtpExtension::kTwoByte) {
-            extension = RtpExtension(RtpExtension::kTwoByte, std::move(extData));
+        if (RtpExtension::isValidExtensionId(extId)) {
+            extension = RtpExtension(extId, std::move(extData));
+            extension.trimPadding();
         }
     }
 
