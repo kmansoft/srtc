@@ -67,6 +67,9 @@ std::string get_openssl_error()
     return ret;
 }
 
+constexpr auto kMaxRtrrQueueSize = 100;
+constexpr auto kMaxDlrrResponseSize = 25;
+
 constexpr auto kIceMessageBufferSize = 2048;
 
 constexpr auto kConnectTimeout = std::chrono::milliseconds(5000);
@@ -343,14 +346,21 @@ void PeerCandidate::sendPublishReports()
         }
     }
 
-    if (mDirection == Direction::Publish && !mOutstandingReceiverReferenceTimeReportList.empty()) {
+    if (mDirection == Direction::Publish && !mOutstandingReceiverReferenceTimeReportQueue.empty()) {
         // XR - DLRR if we have received RTRR's
         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.5
+
+        auto responseCount = 0u;
 
         ByteBuffer payload;
         ByteWriter w(payload);
 
-        for (const auto& rtrr : mOutstandingReceiverReferenceTimeReportList) {
+        auto iter = mOutstandingReceiverReferenceTimeReportQueue.begin();
+
+        while (iter != mOutstandingReceiverReferenceTimeReportQueue.end()) {
+            const auto& rtrr = *iter;
+            ++iter;
+
             const auto diff_us =
                 std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rtrr.when)
                     .count();
@@ -362,6 +372,11 @@ void PeerCandidate::sendPublishReports()
             w.writeU32(rtrr.ssrc);
             w.writeU32(getNtpTimeMiddleMarker(rtrr.ntp));
             w.writeU32(static_cast<uint32_t>(diff_us * 65536 / 1000000));
+
+            responseCount += 1;
+            if (responseCount == kMaxDlrrResponseSize) {
+                break;
+            }
         }
 
         const auto source = mControlPacketSource;
@@ -369,7 +384,7 @@ void PeerCandidate::sendPublishReports()
             std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
         sendRtcpPacket(source, packet);
 
-        mOutstandingReceiverReferenceTimeReportList.clear();
+        mOutstandingReceiverReferenceTimeReportQueue.erase(mOutstandingReceiverReferenceTimeReportQueue.begin(), iter);
     }
 }
 
@@ -1340,14 +1355,18 @@ void PeerCandidate::onReceivedControlMessage_RRTR(uint32_t ssrc, ByteReader& rtc
         rrtr.ntp.seconds = ntpSeconds;
         rrtr.ntp.fraction = ntpFraction;
 
-        for (auto& iter : mOutstandingReceiverReferenceTimeReportList) {
+        for (auto& iter : mOutstandingReceiverReferenceTimeReportQueue) {
             if (iter.ssrc == ssrc) {
                 iter = rrtr;
                 return;
             }
         }
 
-        mOutstandingReceiverReferenceTimeReportList.push_back(rrtr);
+        while (mOutstandingReceiverReferenceTimeReportQueue.size() >= kMaxRtrrQueueSize) {
+            mOutstandingReceiverReferenceTimeReportQueue.erase(mOutstandingReceiverReferenceTimeReportQueue.begin());
+        }
+
+        mOutstandingReceiverReferenceTimeReportQueue.push_back(rrtr);
     }
 }
 

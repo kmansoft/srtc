@@ -178,7 +178,7 @@ private:
 
     std::vector<SimulcastLayer> mSimulcastLayerList;
 
-    std::vector<ReceiverReferenceTimeReport> mOutstandingReceiverReferenceTimeReportList;
+    std::vector<ReceiverReferenceTimeReport> mOutstandingReceiverReferenceTimeReportQueue;
 
     bool mSentUseCandidate;
     bool mIsConnected;
