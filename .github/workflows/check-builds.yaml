@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04, ubuntu-24.04 ]
+        os: [ ubuntu-22.04, ubuntu-24.04, ubuntu-26.04 ]
 
     runs-on: ${{ matrix.os }}
 
@@ -146,4 +146,3 @@ jobs:
     - name: Test
       run: |
         ${{github.workspace}}/build/srtc_test.exe
-
