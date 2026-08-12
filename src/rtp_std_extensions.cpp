@@ -11,4 +11,6 @@ const std::string RtpStandardExtensions::kExtGoogleVLA =
     "http://www.webrtc.org/experiments/rtp-hdrext/video-layers-allocation00";
 const std::string RtpStandardExtensions::kExtGoogleTWCC =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+const std::string RtpStandardExtensions::kExtAbsCaptureTime =
+    "http://www.webrtc.org/experiments/rtp-hdrext/abs-capture-time";
 } // namespace srtc

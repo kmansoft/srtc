@@ -113,9 +113,7 @@ void SctpSession::send(DataChannelMessage&& message)
         message.kind == DataChannelMessage::Kind::kText ? message.text.size() : message.binary.size();
 
     if (mMaxMessageSize > 0 && payloadSize > mMaxMessageSize) {
-        LOG(SRTC_LOG_W, "send: message size %zu exceeds peer max %" PRIu32 ", dropping",
-                    payloadSize,
-                    mMaxMessageSize);
+        LOG(SRTC_LOG_W, "send: message size %zu exceeds peer max %" PRIu32 ", dropping", payloadSize, mMaxMessageSize);
         return;
     }
 
@@ -384,7 +382,7 @@ void SctpSession::onReceiveData(const ByteBuffer& buf)
 {
     const auto packet = SctpPacket::parse(buf.data(), buf.size());
     if (!packet) {
-        LOG(SRTC_LOG_W, "recv: parse failed (%zu bytes)", buf.size());
+        LOG(SRTC_LOG_W, "recv: parse failed (%zu bytes) %s", buf.size(), bin_to_hex(buf.data(), buf.size()).c_str());
         return;
     }
 
@@ -512,7 +510,8 @@ void SctpSession::onReceiveDataChunk(const SctpPacket::Chunk& chunk)
     const auto ppid = r.readU32();
 
     // Duplicate detection: TSN already covered by cumulative or seen out-of-order
-    const bool isDuplicate = static_cast<int32_t>(peerTSN - mPeerCumulativeTsn) <= 0 || mPeerOutOfOrderTsns.count(peerTSN) > 0;
+    const bool isDuplicate =
+        static_cast<int32_t>(peerTSN - mPeerCumulativeTsn) <= 0 || mPeerOutOfOrderTsns.count(peerTSN) > 0;
     if (isDuplicate) {
         sendSack();
         return;
@@ -704,7 +703,8 @@ void SctpSession::onReceiveSack(const SctpPacket::Chunk& chunk)
         while (git != mSentChunks.end()) {
             const auto offset = static_cast<uint16_t>(git->tsn - cumTsn);
             if (offset >= gapStart && offset <= gapEnd) {
-                mFlightSize = static_cast<uint32_t>(mFlightSize >= git->payloadSize ? mFlightSize - git->payloadSize : 0);
+                mFlightSize =
+                    static_cast<uint32_t>(mFlightSize >= git->payloadSize ? mFlightSize - git->payloadSize : 0);
                 git = mSentChunks.erase(git);
                 anyNewlyAcked = true;
             } else {

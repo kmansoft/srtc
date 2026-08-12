@@ -20,14 +20,8 @@ PacketizerVideo::PacketizerVideo(const std::shared_ptr<Track>& track)
 
 PacketizerVideo::~PacketizerVideo() = default;
 
-size_t PacketizerVideo::getBasicPacketSize(size_t mediaProtectionOverhead)
-{
-    return RtpPacket::kMaxPayloadSize - RtpPacket::kHeaderSize - mediaProtectionOverhead;
-}
-
-uint8_t PacketizerVideo::getPadding(const std::shared_ptr<srtc::Track>& track,
-                                    const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
-                                    const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
+uint8_t PacketizerVideo::getPadding(const std::shared_ptr<Track>& track,
+                                    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
                                     size_t remainingDataSize)
 {
     if (remainingDataSize < 300) {
@@ -36,47 +30,15 @@ uint8_t PacketizerVideo::getPadding(const std::shared_ptr<srtc::Track>& track,
 
     uint8_t padding = 0;
 
-    if (simulcast) {
-        const auto p = simulcast->getPadding(track, remainingDataSize);
-        padding = std::max(padding, p);
-    }
-
-    if (twcc) {
-        const auto p = twcc->getPadding(track, remainingDataSize);
+    for (const auto& extensionSource : extensionSourceList) {
+        const auto p = extensionSource->getPadding(track, remainingDataSize);
         padding = std::max(padding, p);
     }
 
     return padding;
 }
 
-srtc::RtpExtension PacketizerVideo::buildExtension(const std::shared_ptr<srtc::Track>& track,
-                                                   const std::shared_ptr<srtc::RtpExtensionSource>& simulcast,
-                                                   const std::shared_ptr<srtc::RtpExtensionSource>& twcc,
-                                                   bool isKeyFrame,
-                                                   unsigned int packetNumber)
-{
-    srtc::RtpExtension extension;
-
-    const auto wantsSimulcast = simulcast && simulcast->wantsExtension(track, isKeyFrame, packetNumber);
-    const auto wantsTWCC = twcc && twcc->wantsExtension(track, isKeyFrame, packetNumber);
-
-    if (wantsSimulcast || wantsTWCC) {
-        srtc::RtpExtensionBuilder builder;
-
-        if (wantsSimulcast) {
-            simulcast->addExtension(builder, track, isKeyFrame, packetNumber);
-        }
-        if (wantsTWCC) {
-            twcc->addExtension(builder, track, isKeyFrame, packetNumber);
-        }
-
-        extension = builder.build();
-    }
-
-    return extension;
-}
-
-size_t PacketizerVideo::adjustPacketSize(size_t basicPacketSize, size_t padding, const srtc::RtpExtension& extension)
+size_t PacketizerVideo::adjustPacketSize(size_t basicPacketSize, size_t padding, const RtpExtension& extension)
 {
     auto sizeLessPadding = basicPacketSize;
     if (padding > 0 && padding <= basicPacketSize / 2) {

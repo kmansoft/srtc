@@ -71,6 +71,7 @@ private:
     const size_t mCapacityMask;
     const std::chrono::milliseconds mLength;
     const std::chrono::milliseconds mNackDelay;
+    const uint8_t mAbsCaptureTimeExtensionId;
 
     PoolAllocator<JitterBufferItem> mItemAllocator;
 

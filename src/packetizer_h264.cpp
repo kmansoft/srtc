@@ -64,11 +64,11 @@ bool PacketizerH264::isKeyFrame(const ByteBuffer& frame) const
     return false;
 }
 
-std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                               const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                               size_t mediaProtectionOverhead,
-                                                               int64_t pts_usec,
-                                                               const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+    size_t mediaProtectionOverhead,
+    int64_t pts_usec,
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -96,7 +96,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
             // Send codec-specific data first as a STAP-A
             // https://datatracker.ietf.org/doc/html/rfc6184#section-5.7.1
             if (!addedParameters && !mSPS.empty() && !mPPS.empty()) {
-                const uint8_t nri = std::max(static_cast<uint8_t>(mSPS.front() & 0x60), static_cast<uint8_t>(mPPS.front() & 0x60));
+                const uint8_t nri =
+                    std::max(static_cast<uint8_t>(mSPS.front() & 0x60), static_cast<uint8_t>(mPPS.front() & 0x60));
 
                 ByteBuffer payload;
                 ByteWriter writer(payload);
@@ -112,7 +113,7 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
                 writer.writeU16(static_cast<uint16_t>(mPPS.size()));
                 writer.write(mPPS);
 
-                RtpExtension extension = buildExtension(track, simulcast, twcc, true, 0);
+                RtpExtension extension = buildExtension(track, extensionSourceList, true, 0);
 
                 const auto [rollover, sequence] = packetSource->getNextSequence();
                 result.push_back(std::make_shared<RtpPacket>(
@@ -127,8 +128,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
             const auto naluData = parser.currData();
             const auto naluSize = parser.currDataSize();
 
-            auto padding = getPadding(track, simulcast, twcc, naluSize);
-            RtpExtension extension = buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, 0);
+            auto padding = getPadding(track, extensionSourceList, naluSize);
+            auto extension = buildExtension(track, extensionSourceList, naluType == NaluType::KeyFrame, 0);
 
             const auto basicPacketSize = getBasicPacketSize(mediaProtectionOverhead);
             auto packetSize = adjustPacketSize(basicPacketSize, padding, extension);
@@ -159,9 +160,9 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerH264::generate(const std::shar
                     const auto [rollover, sequence] = packetSource->getNextSequence();
 
                     if (packetNumber > 0) {
-                        padding = getPadding(track, simulcast, twcc, naluSize);
+                        padding = getPadding(track, extensionSourceList, naluSize);
                         extension =
-                            buildExtension(track, simulcast, twcc, naluType == NaluType::KeyFrame, packetNumber);
+                            buildExtension(track, extensionSourceList, naluType == NaluType::KeyFrame, packetNumber);
                     }
 
                     // The "-2" is for FU_A headers

@@ -38,6 +38,7 @@ static std::string gAuthToken = "none";
 static bool gQuiet = false;
 static bool gPrintSDP = false;
 static bool gPrintSenderReports = false;
+static bool gAbsCaptureTime = false;
 static std::string gOutputAudioFilename;
 static std::string gOutputVideoFilename;
 
@@ -64,15 +65,16 @@ void printUsage(const char* programName)
 {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  -u, --url <url>      WHEP server URL (default: " << gWhepUrl << ")" << std::endl;
-    std::cout << "  -t, --token <token>  WHEP authorization token" << std::endl;
-    std::cout << "  -v, --verbose        Verbose logging from the srtc library" << std::endl;
-    std::cout << "  -q, --quiet          Suppress progress reporting" << std::endl;
-    std::cout << "  -r, --sr             Print sender report information" << std::endl;
-    std::cout << "  -s, --sdp            Print SDP offer and answer" << std::endl;
-    std::cout << "  --oa <filename>      Save audio to a file (ogg format for opus)" << std::endl;
-    std::cout << "  --ov <filename>      Save video to a file (h264 or webm format)" << std::endl;
-    std::cout << "  -h, --help           Show this help message" << std::endl;
+    std::cout << "  -u, --url <url>        WHEP server URL (default: " << gWhepUrl << ")" << std::endl;
+    std::cout << "  -t, --token <token>    WHEP authorization token" << std::endl;
+    std::cout << "  -v, --verbose          Verbose logging from the srtc library" << std::endl;
+    std::cout << "  -q, --quiet            Suppress progress reporting" << std::endl;
+    std::cout << "  -r, --sr               Print sender report information" << std::endl;
+    std::cout << "  -s, --sdp              Print SDP offer and answer" << std::endl;
+    std::cout << "  -a, --abs-capture-time Enable abs-capture-time" << std::endl;
+    std::cout << "  --oa <filename>        Save audio to a file (ogg format for opus)" << std::endl;
+    std::cout << "  --ov <filename>        Save video to a file (h264 or webm format)" << std::endl;
+    std::cout << "  -h, --help             Show this help message" << std::endl;
 }
 
 const char* connectionStateToString(const srtc::PeerConnection::ConnectionState& state)
@@ -204,6 +206,8 @@ int main(int argc, char* argv[])
             gPrintSenderReports = true;
         } else if (arg == "-s" || arg == "--sdp") {
             gPrintSDP = true;
+        } else if (arg == "-a" || arg == "--abs-capture-time") {
+            gAbsCaptureTime = true;
         } else if (arg == "--oa") {
             if (i + 1 < argc) {
                 gOutputAudioFilename = argv[++i];
@@ -280,8 +284,9 @@ int main(int argc, char* argv[])
 
     peerConnection->setSubscribeConnectionStatsListener([](const SubscribeConnectionStats& stats) {
         std::cout << "*** PeerConnection stats: received " << stats.frame_count << " frames, " << stats.packet_count
-                  << " packets, " << stats.byte_count << " bytes, " << std::setprecision(3) << stats.packets_lost_percent
-                  << "% packet loss, " << std::setprecision(3) << stats.rtt_ms << " ms rtt" << std::endl;
+                  << " packets, " << stats.byte_count << " bytes, " << std::setprecision(3)
+                  << stats.packets_lost_percent << "% packet loss, " << std::setprecision(3) << stats.rtt_ms
+                  << " ms rtt" << std::endl;
     });
 
     if (gPrintSenderReports) {
@@ -292,6 +297,7 @@ int main(int argc, char* argv[])
     // Offer
     SubOfferConfig offerConfig = {};
     offerConfig.cname = "foo";
+    offerConfig.enable_abs_capture_time = gAbsCaptureTime;
 
     SubCodec videoCodecVP8 = {};
     videoCodecVP8.codec = Codec::VP8;

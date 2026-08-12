@@ -91,6 +91,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createPublishOffer(c
     config.enable_rtx = pubConfig.enable_rtx;
     config.enable_bwe = pubConfig.enable_bwe;
     config.enable_rfc8851 = pubConfig.enable_rfc8851;
+    config.enable_abs_capture_time = pubConfig.enable_abs_capture_time;
 
     std::vector<SdpOffer::MediaLine> media;
 
@@ -132,6 +133,7 @@ std::pair<std::shared_ptr<SdpOffer>, Error> PeerConnection::createSubscribeOffer
 
     SdpOffer::Config config;
     config.cname = subConfig.cname;
+    config.enable_abs_capture_time = subConfig.enable_abs_capture_time;
     config.data_channels = subConfig.data_channel_config.data_channels;
     config.pli_interval_millis = subConfig.pli_interval_millis;
     config.jitter_buffer_length_millis = subConfig.jitter_buffer_length_millis;
@@ -358,7 +360,10 @@ Error PeerConnection::setVideoCodecSpecificData(const std::shared_ptr<Track>& tr
     return { Error::Code::InvalidData, "The track is not found" };
 }
 
-Error PeerConnection::publishVideoFrame(const std::shared_ptr<Track>& track, int64_t pts_usec, ByteBuffer&& buf)
+Error PeerConnection::publishVideoFrame(const std::shared_ptr<Track>& track,
+                                        int64_t pts_usec,
+                                        ByteBuffer&& buf,
+                                        uint64_t abs_capture_time_ntp)
 {
     if (mDirection != Direction::Publish) {
         return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
@@ -377,6 +382,7 @@ Error PeerConnection::publishVideoFrame(const std::shared_ptr<Track>& track, int
             fr.track = track;
             fr.packetizer = entry.packetizer;
             fr.buf = std::move(buf);
+            fr.abs_capture_time_ntp = abs_capture_time_ntp;
 
             mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
@@ -431,7 +437,10 @@ Error PeerConnection::updateVideoSimulcastLayer(const std::shared_ptr<Track>& tr
     return { Error::Code::InvalidData, "The track is not found" };
 }
 
-Error PeerConnection::publishAudioFrame(const std::shared_ptr<Track>& track, int64_t pts_usec, ByteBuffer&& buf)
+Error PeerConnection::publishAudioFrame(const std::shared_ptr<Track>& track,
+                                        int64_t pts_usec,
+                                        ByteBuffer&& buf,
+                                        uint64_t abs_capture_time_ntp)
 {
     if (mDirection != Direction::Publish) {
         return { Error::Code::InvalidData, "The peer connection's direction is not publish" };
@@ -450,6 +459,7 @@ Error PeerConnection::publishAudioFrame(const std::shared_ptr<Track>& track, int
             fr.track = track;
             fr.packetizer = entry.packetizer;
             fr.buf = std::move(buf);
+            fr.abs_capture_time_ntp = abs_capture_time_ntp;
 
             mFrameSendQueue.push_back(std::move(fr));
             mEventLoop->interrupt();
@@ -662,8 +672,12 @@ void PeerConnection::networkThreadWorkerFunc()
 
             // Frames to send
             if (mSelectedCandidate && (!item.buf.empty() || !item.csd.empty())) {
-                mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{
-                    item.pts_usec, item.track, item.packetizer, std::move(item.buf), std::move(item.csd) });
+                mSelectedCandidate->addSendFrame(PeerCandidate::FrameToSend{ item.pts_usec,
+                                                                             item.abs_capture_time_ntp,
+                                                                             item.track,
+                                                                             item.packetizer,
+                                                                             std::move(item.buf),
+                                                                             std::move(item.csd) });
             }
         }
 

@@ -3,6 +3,7 @@
 #include "srtc/logging.h"
 #include "srtc/media.h"
 #include "srtc/rtp_packet.h"
+#include "srtc/rtp_std_extensions.h"
 #include "srtc/track.h"
 
 #include <cassert>
@@ -48,6 +49,7 @@ JitterBuffer::JitterBuffer(const std::shared_ptr<Track>& track,
     , mCapacityMask(capacity - 1)
     , mLength(length)
     , mNackDelay(nackDelay)
+    , mAbsCaptureTimeExtensionId(track->getMedia()->getExtensionMap().findByName(RtpStandardExtensions::kExtAbsCaptureTime))
     , mLastPacketTime(std::chrono::steady_clock::time_point::min())
     , mItemList(nullptr)
     , mMinSeq(0)
@@ -81,6 +83,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     const auto media = mTrack->getMedia();
 
     auto seq = packet->getSequence();
+    auto extension = packet->moveExtension();
     auto payload = packet->movePayload();
 
     if (packet->getSSRC() == mTrack->getRtxSSRC() && packet->getPayloadId() == mTrack->getRtxPayloadId()) {
@@ -103,7 +106,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     // Is this packet too late?
     if (mLastFrameTimeStamp.has_value() && mLastFrameTimeStamp.value() > rtp_timestamp_ext) {
         LOG(SRTC_LOG_W,
-            "Jitter buffer for SSRC = %" PRIu32 ", media = %s: Will not enqueue frame with ts = %" PRIu64 ", because it's older than last frame time %" PRIu64,
+            "Jitter buffer for SSRC = %" PRIu32 ", media = %s: Will not enqueue frame with ts = %" PRIu64
+            ", because it's older than last frame time %" PRIu64,
             mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
             rtp_timestamp_ext,
@@ -144,7 +148,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     } else if (seq_ext + mCapacity / 4 <= mMinSeq) {
         // Out of range, much less than min
         LOG(SRTC_LOG_W,
-            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too late, min = %" PRIu16 ", max = %" PRIu16 ,
+            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too late, min = %" PRIu16
+            ", max = %" PRIu16,
             mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
             seq,
@@ -154,7 +159,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     } else if (seq_ext >= mMaxSeq + mCapacity / 4) {
         // Out of range, much greater than max
         LOG(SRTC_LOG_W,
-            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too early, s, min = %" PRIu16 ", max = %" PRIu16,
+            "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu16 " is too early, s, min = %" PRIu16
+            ", max = %" PRIu16,
             mTrack->getSSRC(),
             to_string(media->getType()).c_str(),
             seq,
@@ -176,7 +182,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // Before min
         if (seq_ext + mCapacity < mMaxSeq) {
             LOG(SRTC_LOG_W,
-                "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu32 "would exceed the capacity, min = %" PRIu32 ", max = %" PRIu32,
+                "Jitter buffer for SSRC = %u, media = %s: The new packet SEQ = %" PRIu32
+                "would exceed the capacity, min = %" PRIu32 ", max = %" PRIu32,
                 mTrack->getSSRC(),
                 to_string(media->getType()).c_str(),
                 seq,
@@ -216,7 +223,8 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
         // Above max
         if (seq_ext > mMinSeq + mCapacity) {
             LOG(SRTC_LOG_E,
-                "Jitter buffer for SSRC = %" PRIu32 ", media = %s: The new packet SEQ = %" PRIu16 " would exceed the capacity, min = %" PRIu16 ", max = %" PRIu16,
+                "Jitter buffer for SSRC = %" PRIu32 ", media = %s: The new packet SEQ = %" PRIu16
+                " would exceed the capacity, min = %" PRIu16 ", max = %" PRIu16,
                 mTrack->getSSRC(),
                 to_string(media->getType()).c_str(),
                 seq,
@@ -271,6 +279,7 @@ void JitterBuffer::consume(const std::shared_ptr<RtpPacket>& packet)
     item->rtp_timestamp_ext = rtp_timestamp_ext;
     item->marker = packet->getMarker();
 
+    item->extension = std::move(extension);
     item->payload = std::move(payload);
 
     item->kind = mDepacketizer->getPacketKind(item->payload, item->marker);
@@ -550,7 +559,8 @@ std::vector<uint16_t> JitterBuffer::processNack()
                 const auto diff_abandon = diff_millis(item->when_nack_abandon, now);
 
                 LOG(SRTC_LOG_V,
-                    "Processing NACK for item SEQ = %" PRIu16 ", diff_request = %d, diff_abandon = %d, min = %" PRIu16", max = %" PRIu16,
+                    "Processing NACK for item SEQ = %" PRIu16 ", diff_request = %d, diff_abandon = %d, min = %" PRIu16
+                    ", max = %" PRIu16,
                     static_cast<uint16_t>(item->seq_ext),
                     diff_request,
                     diff_abandon,
@@ -651,12 +661,28 @@ void JitterBuffer::appendToResult(std::vector<std::shared_ptr<EncodedFrame>>& re
 
         mLastFrameTimeStamp = item->rtp_timestamp_ext;
 
+        uint64_t absCaptureTimeNTP = 0u;
+        uint64_t absCaptureTimeOffset = 0u;
+
+        if (const auto extId = mAbsCaptureTimeExtensionId; extId != 0u) {
+            const auto extValue = item->extension.findAny(extId);
+            if (extValue.has_value() && extValue->size >= 8) {
+                ByteReader reader{ extValue->ptr, extValue->size };
+                absCaptureTimeNTP = reader.readU64();
+                if (reader.remaining() >= 8) {
+                    absCaptureTimeOffset = reader.readU64();
+                }
+            }
+        }
+
         for (size_t i = 0; i < list.size(); i++) {
             const auto frame = std::make_shared<EncodedFrame>();
 
             frame->track = mTrack;
             frame->seq_ext = item->seq_ext;
             frame->rtp_timestamp_ext = item->rtp_timestamp_ext;
+            frame->abs_capture_time_ntp = absCaptureTimeNTP;
+            frame->abs_capture_time_offset = static_cast<int64_t>(absCaptureTimeOffset);
             frame->marker = last->marker && i == list.size() - 1;
             frame->first_to_last_packet_millis = diff_millis(last->when_received, item->when_received);
             frame->wait_time_millis = diff_millis(now, last->when_received);

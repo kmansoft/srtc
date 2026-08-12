@@ -18,6 +18,7 @@
 #include "srtc/rtcp_packet_multi.h"
 #include "srtc/rtcp_packet_source.h"
 #include "srtc/rtp_extension_builder.h"
+#include "srtc/rtp_extension_source_abs_capture_time.h"
 #include "srtc/rtp_extension_source_simulcast.h"
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/rtp_responder_twcc.h"
@@ -65,6 +66,9 @@ std::string get_openssl_error()
     BIO_free(bio);
     return ret;
 }
+
+constexpr auto kMaxRtrrQueueSize = 100;
+constexpr auto kMaxDlrrResponseSize = 25;
 
 constexpr auto kIceMessageBufferSize = 2048;
 
@@ -232,6 +236,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mUniqueId(++gNextUniqueId)
     , mExtensionSourceSimulcast(RtpExtensionSourceSimulcast::factory(answer->isVideoSimulcast()))
     , mExtensionSourceTWCC(RtpExtensionSourceTWCC::factory(offer, scheduler))
+    , mExtensionSourceAbsCaptureTime(RtpExtensionSourceAbsCaptureTime::factory(answer))
     , mResponderTWCC(RtpResponderTWCC::factory(offer))
     , mSenderReportsHistory(std::make_shared<SenderReportsHistory>())
     , mReceiverReferenceTimeReportsHistory(std::make_shared<ReceiverReferenceTimeReportsHistory>())
@@ -341,14 +346,21 @@ void PeerCandidate::sendPublishReports()
         }
     }
 
-    if (mDirection == Direction::Publish && !mOutstandingReceiverReferenceTimeReportList.empty()) {
+    if (mDirection == Direction::Publish && !mOutstandingReceiverReferenceTimeReportQueue.empty()) {
         // XR - DLRR if we have received RTRR's
         // https://datatracker.ietf.org/doc/html/rfc3611#section-4.5
+
+        auto responseCount = 0u;
 
         ByteBuffer payload;
         ByteWriter w(payload);
 
-        for (const auto& rtrr : mOutstandingReceiverReferenceTimeReportList) {
+        auto iter = mOutstandingReceiverReferenceTimeReportQueue.begin();
+
+        while (iter != mOutstandingReceiverReferenceTimeReportQueue.end()) {
+            const auto& rtrr = *iter;
+            ++iter;
+
             const auto diff_us =
                 std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - rtrr.when)
                     .count();
@@ -360,6 +372,11 @@ void PeerCandidate::sendPublishReports()
             w.writeU32(rtrr.ssrc);
             w.writeU32(getNtpTimeMiddleMarker(rtrr.ntp));
             w.writeU32(static_cast<uint32_t>(diff_us * 65536 / 1000000));
+
+            responseCount += 1;
+            if (responseCount == kMaxDlrrResponseSize) {
+                break;
+            }
         }
 
         const auto source = mControlPacketSource;
@@ -367,7 +384,7 @@ void PeerCandidate::sendPublishReports()
             std::make_shared<RtcpPacket>(source->getSSRC(), 0, RtcpPacket::kExtendedReport, std::move(payload));
         sendRtcpPacket(source, packet);
 
-        mOutstandingReceiverReferenceTimeReportList.clear();
+        mOutstandingReceiverReferenceTimeReportQueue.erase(mOutstandingReceiverReferenceTimeReportQueue.begin(), iter);
     }
 }
 
@@ -648,6 +665,19 @@ void PeerCandidate::run()
     // Raw data
     flushSendRaw();
 
+    // Prepare extensions
+    mExtensionSourceList.clear();
+
+    if (mExtensionSourceSimulcast) {
+        mExtensionSourceList.push_back(mExtensionSourceSimulcast);
+    }
+    if (mExtensionSourceTWCC) {
+        mExtensionSourceList.push_back(mExtensionSourceTWCC);
+    }
+    if (mExtensionSourceAbsCaptureTime) {
+        mExtensionSourceList.push_back(mExtensionSourceAbsCaptureTime);
+    }
+
     // Frames
     while (!mFrameSendQueue.empty()) {
         const auto item = std::move(mFrameSendQueue.front());
@@ -679,12 +709,14 @@ void PeerCandidate::run()
                 }
             }
 
+            // Abs capture time
+            if (mExtensionSourceAbsCaptureTime) {
+                mExtensionSourceAbsCaptureTime->prepare(item.track, item.abs_capture_time_ntp);
+            }
+
             // Packetize
-            const auto packetList = item.packetizer->generate(mExtensionSourceSimulcast,
-                                                              mExtensionSourceTWCC,
-                                                              mSrtpConnection->getMediaProtectionOverhead(),
-                                                              item.pts_usec,
-                                                              item.buf);
+            const auto packetList = item.packetizer->generate(
+                mExtensionSourceList, mSrtpConnection->getMediaProtectionOverhead(), item.pts_usec, item.buf);
 
             // Flush any packets from the same track which we haven't sent yet
             mSendPacer->flush(item.track);
@@ -1323,14 +1355,18 @@ void PeerCandidate::onReceivedControlMessage_RRTR(uint32_t ssrc, ByteReader& rtc
         rrtr.ntp.seconds = ntpSeconds;
         rrtr.ntp.fraction = ntpFraction;
 
-        for (auto& iter : mOutstandingReceiverReferenceTimeReportList) {
+        for (auto& iter : mOutstandingReceiverReferenceTimeReportQueue) {
             if (iter.ssrc == ssrc) {
                 iter = rrtr;
                 return;
             }
         }
 
-        mOutstandingReceiverReferenceTimeReportList.push_back(rrtr);
+        while (mOutstandingReceiverReferenceTimeReportQueue.size() >= kMaxRtrrQueueSize) {
+            mOutstandingReceiverReferenceTimeReportQueue.erase(mOutstandingReceiverReferenceTimeReportQueue.begin());
+        }
+
+        mOutstandingReceiverReferenceTimeReportQueue.push_back(rrtr);
     }
 }
 

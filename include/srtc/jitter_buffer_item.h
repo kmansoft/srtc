@@ -5,6 +5,7 @@
 
 #include "srtc/srtc.h"
 #include "srtc/byte_buffer.h"
+#include "srtc/rtp_extension.h"
 
 namespace srtc
 {
@@ -31,6 +32,7 @@ struct JitterBufferItem {
     uint64_t rtp_timestamp_ext = 0; // only when received
     bool marker = false;            // same
 
+    RtpExtension extension;
     ByteBuffer payload;
 };
 

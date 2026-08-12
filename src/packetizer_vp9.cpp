@@ -23,11 +23,11 @@ bool PacketizerVP9::isKeyFrame(const ByteBuffer& frame) const
     return srtc::vp9::isKeyFrame(frame.data(), frame.size());
 }
 
-std::vector<std::shared_ptr<RtpPacket>> PacketizerVP9::generate(const std::shared_ptr<RtpExtensionSource>& simulcast,
-                                                                const std::shared_ptr<RtpExtensionSource>& twcc,
-                                                                size_t mediaProtectionOverhead,
-                                                                int64_t pts_usec,
-                                                                const ByteBuffer& frame)
+std::vector<std::shared_ptr<RtpPacket>> PacketizerVP9::generate(
+    const std::vector<std::shared_ptr<RtpExtensionSource>>& extensionSourceList,
+    size_t mediaProtectionOverhead,
+    int64_t pts_usec,
+    const ByteBuffer& frame)
 {
     std::vector<std::shared_ptr<RtpPacket>> result;
 
@@ -58,8 +58,8 @@ std::vector<std::shared_ptr<RtpPacket>> PacketizerVP9::generate(const std::share
     while (currSize > 0) {
         const auto [rollover, sequence] = packetSource->getNextSequence();
 
-        const auto padding = getPadding(track, simulcast, twcc, currSize);
-        RtpExtension extension = buildExtension(track, simulcast, twcc, frameIsKeyFrame, packetNumber);
+        const auto padding = getPadding(track, extensionSourceList, currSize);
+        auto extension = buildExtension(track, extensionSourceList, frameIsKeyFrame, packetNumber);
 
         // "-kDescriptorSize" reserves room for the payload descriptor
         const auto packetSize = adjustPacketSize(basicPacketSize - kDescriptorSize, padding, extension);

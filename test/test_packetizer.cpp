@@ -35,7 +35,7 @@ srtc::ByteBuffer generateNAL(uint8_t type, uint32_t size)
     RAND_bytes(nal_data, static_cast<int>(size));
 
     for (size_t i = 0u; i < size - 2; ++i) {
-        if (nal_data[i] == 0u && nal_data[i+1] == 0u && nal_data[i+2] == 1u) {
+        if (nal_data[i] == 0u && nal_data[i + 1] == 0u && nal_data[i + 2] == 1u) {
             nal_data[i] = 5u;
         }
     }
@@ -66,27 +66,28 @@ TEST(Packetizer, h264)
     const auto codecOptions = std::make_shared<srtc::Track::CodecOptions>(0x42e01fu, 0, false);
 
     const auto mediaPublish = std::make_shared<srtc::Media>("video_0", srtc::MediaType::Video);
-    const auto trackPublish =
-        srtc::TrackBuilder(mediaPublish, srtc::Direction::Publish, 1234u, 96u, 90000u)
-            .codec(srtc::Codec::H264, codecOptions)
-            .simulcastLayer(std::make_shared<srtc::Track::SimulcastLayer>(layer0))
-            .build();
+    const auto trackPublish = srtc::TrackBuilder(mediaPublish, srtc::Direction::Publish, 1234u, 96u, 90000u)
+                                  .codec(srtc::Codec::H264, codecOptions)
+                                  .simulcastLayer(std::make_shared<srtc::Track::SimulcastLayer>(layer0))
+                                  .build();
 
     const auto mediaSubscribe = std::make_shared<srtc::Media>("video_0", srtc::MediaType::Video);
-    const auto trackSubscribe =
-        srtc::TrackBuilder(mediaSubscribe, srtc::Direction::Subscribe, 5678u, 96u, 90000u)
-            .codec(srtc::Codec::H264, codecOptions)
-            .build();
+    const auto trackSubscribe = srtc::TrackBuilder(mediaSubscribe, srtc::Direction::Subscribe, 5678u, 96u, 90000u)
+                                    .codec(srtc::Codec::H264, codecOptions)
+                                    .build();
 
     const auto packetizer = std::make_shared<srtc::PacketizerH264>(trackPublish);
     const auto depacketizer = std::make_shared<srtc::DepacketizerH264>(trackSubscribe);
 
     int64_t pts_usec = 1000u;
 
-    const auto extensionSimulcast = std::make_shared<srtc::RtpExtensionSourceSimulcast>();
-
     const auto scheduler = std::make_shared<srtc::ThreadScheduler>("test");
+
+    const auto extensionSimulcast = std::make_shared<srtc::RtpExtensionSourceSimulcast>();
     const auto extensionTWCC = std::make_shared<srtc::RtpExtensionSourceTWCC>(scheduler);
+
+    const std::vector<std::shared_ptr<srtc::RtpExtensionSource>> extensionSourceList = { extensionSimulcast,
+                                                                                         extensionTWCC };
 
     srtc::ExtendedValue<uint16_t> extendedSeq;
     srtc::ExtendedValue<uint32_t> extendedRtpTime;
@@ -109,7 +110,7 @@ TEST(Packetizer, h264)
         }
 
         // Packetize
-        const auto packetList = packetizer->generate(extensionSimulcast, extensionTWCC, 12u, pts_usec, sourceFrame);
+        const auto packetList = packetizer->generate(extensionSourceList, 12u, pts_usec, sourceFrame);
 
         // Convert to jitter buffer entries
         std::vector<const srtc::JitterBufferItem*> jitterBufferItemList;
