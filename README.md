@@ -4,16 +4,20 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 
 #### Features:
 
-- Depends on OpenSSL (or BoringSSL) only, nothing else.
-- Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI.
-- Only one worker thread per PeerConnection.
-- Video codecs: VP8, VP9, H264 (any profile id), H265, AV1.
-- Audo codec: Opus.
-- SDP offer generation and SDP response parsing.
-- ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP.
-- IPv4 and IPv6.
-- Data channels (both sending and receiving).
+- Depends on OpenSSL (or BoringSSL) only, nothing else
+- Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI
+- Only one worker thread per PeerConnection
+- Video codecs: VP8, VP9, H264 (any profile id), H265, AV1
+- Audo codec: Opus
+- SDP offer generation and SDP response parsing
+- ICE / STUN negotiation, DTLS negotiation, SRTP and SRTCP
+- IPv4 and IPv6
+- Data channels (both sending and receiving)
 - Multiple data streams (SDP "media lines")
+- Sender Reports, Receiver Reports
+- RRTR and DLRR for RTT estimates (both publish and subscribe)
+- TWCC extension for bandwidth estimate (both publish and subscribe)
+- Abs-capture-time extension (both send and receive)
 - Tested with Pion and Amazon IVS (Interactive Video Service)
 - Works on Linux, Android, MacOS, Windows, and should work on iOS too.
 
