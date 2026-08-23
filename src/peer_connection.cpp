@@ -926,11 +926,7 @@ void PeerConnection::onCandidateDtlsConnected(PeerCandidate* candidate)
     }
 
     if (mDirection == Direction::Subscribe) {
-        const auto& config = mSdpOffer->getConfig();
-
-        if (config.pli_interval_millis > 0) {
-            sendPeriodicPictureLossIndicators();
-        }
+        sendPeriodicPictureLossIndicators();
     }
 }
 
@@ -1136,7 +1132,12 @@ void PeerConnection::sendPeriodicPictureLossIndicators()
     if (mDirection == Direction::Subscribe) {
         {
             std::lock_guard lock(mMutex);
+
             const auto& config = mSdpOffer->getConfig();
+            if (config.pli_interval_millis == 0) {
+                return;
+            }
+
             const auto interval = std::clamp<uint16_t>(config.pli_interval_millis, 500u, 4000u);
 
             Task::cancelHelper(mTaskPictureLossIndicator);
