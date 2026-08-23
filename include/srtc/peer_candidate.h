@@ -189,7 +189,8 @@ private:
         Inactive,
         Activating,
         Failed,
-        Completed
+        Completed,
+        ConnectionLost
     };
 
     ssl_ctx_st* mDtlsCtx = {};
@@ -219,6 +220,7 @@ private:
     void emitOnDtlsConnected();
     void emitOnFailedToConnect(const Error& error);
     void emitOnDtlsDisconnected(const Error& error);
+    void emitOnConnectionLost(const Error& error);
 
     void onConnectionEstablished();
 
@@ -230,13 +232,17 @@ private:
     std::chrono::steady_clock::time_point mLastSendTime;
     std::chrono::steady_clock::time_point mLastReceiveTime;
 
+    void sendIceKeepAlive();
+    void updateIceKeepAliveTimeout();
+    void onIceKeepAliveTimeout();
+
     // Scheduler and tasks
     std::weak_ptr<Task> mTaskConnectTimeout;
     std::weak_ptr<Task> mTaskSendStunConnectRequest;
     std::weak_ptr<Task> mTaskSendStunConnectResponse;
-    std::weak_ptr<Task> mTaskConnectionLostTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskIceKeepAlive;
+    std::weak_ptr<Task> mTaskIceConnectionLost;
 
     ScopedScheduler mScheduler;
 

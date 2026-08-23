@@ -965,6 +965,19 @@ void PeerConnection::onCandidateFailedToConnect(PeerCandidate* candidate, const 
     }
 }
 
+void PeerConnection::onCandidateConnectionLost(PeerCandidate* candidate, const Error& error)
+{
+    LOG(SRTC_LOG_E, "Candidate lost connection: %d %s", static_cast<int>(error.code), error.message.c_str());
+
+    if (mSelectedCandidate.get() == candidate) {
+        mSelectedCandidate.reset();
+    }
+
+    mConnectingCandidateList.clear();
+
+    setConnectionState(ConnectionState::Failed);
+}
+
 void PeerConnection::onCandidateReceivedMediaPacket([[maybe_unused]] PeerCandidate* candiate,
                                                     const std::shared_ptr<RtpPacket>& packet)
 {

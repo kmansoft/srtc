@@ -78,6 +78,8 @@ constexpr auto kExpireStunTimeout = std::chrono::milliseconds(5000);
 constexpr auto kConnectRepeatPeriod = std::chrono::milliseconds(100);
 constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
 constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
+constexpr auto kIceKeepAliveSendTimeout = std::chrono::milliseconds(3 * 1000);
+constexpr auto kIceKeepAliveConnectionLostTimeout = std::chrono::milliseconds(15 * 1000);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -298,7 +300,7 @@ void PeerCandidate::receiveFromSocket()
         mRawReceiveQueue.push_back(std::move(item));
     }
     list.clear();
-}
+}eyJhbGciOiJLTVMiLCJ0eXAiOiJKV1QifQ.eyJleHAiOjE3ODc1NTYwMDMsImlhdCI6MTc4NzUxMjgwMywianRpIjoidms1S2tRQU5mSjZ5IiwicmVzb3VyY2UiOiJhcm46YXdzOml2czp1cy13ZXN0LTI6NDIyNDM3MTE0MzUwOnN0YWdlL1IwdWFPaDI3UGFzVSIsInRvcGljIjoiUjB1YU9oMjdQYXNVIiwiZXZlbnRzX3VybCI6IndzczovL2dsb2JhbC5ldmVudHMubGl2ZS12aWRlby5uZXQiLCJ3aGlwX3VybCI6Imh0dHBzOi8vZjA3MzRhN2Y4NDdlLmdsb2JhbC1ibS53aGlwLmxpdmUtdmlkZW8ubmV0IiwiY2FwYWJpbGl0aWVzIjp7ImFsbG93X3B1Ymxpc2giOnRydWUsImFsbG93X3N1YnNjcmliZSI6dHJ1ZX0sInZlcnNpb24iOiIwLjAifQ.MGUCMQCAEzG_Qk0XRqvHzxZOkr_iEIJf-Mp536pW61StOd4h0VWG132ZPdBYtKfJhmsNFZ8CMHy-9MxwA_RBw4Ds5CUoY9jV_b2bTiybgUUYgZT6kXOPJqM5ZMCh2b-e7fkUQSM46A
 
 void PeerCandidate::addSendFrame(FrameToSend&& frame)
 {
@@ -813,15 +815,8 @@ void PeerCandidate::startConnecting()
     // Notify the listener
     emitOnConnecting();
 
-    // Clean up some things
-    Task::cancelHelper(mTaskConnectionLostTimeout);
-
-    mSrtpConnection.reset();
-    mSendPacer.reset();
-
     // Connecting should take a limited amount of time
     Task::cancelHelper(mTaskConnectTimeout);
-
     mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
         emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
     });
@@ -904,6 +899,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
                     sendStunBindingResponse(0);
 
                     mDtlsState = DtlsState::Activating;
+                } else {
+                    updateIceKeepAliveTimeout();
                 }
             } else {
                 LOG(SRTC_LOG_E, "STUN response verification failed, ignoring");
@@ -1608,6 +1605,14 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
     mListener->onCandidateFailedToConnect(this, error);
 }
 
+void PeerCandidate::emitOnConnectionLost(const Error& error)
+{
+    mIsConnected = false;
+    mDtlsState = DtlsState::ConnectionLost;
+
+    mListener->onCandidateConnectionLost(this, error);
+}
+
 void PeerCandidate::onConnectionEstablished()
 {
     mLastReceiveTime = std::chrono::steady_clock::now();
@@ -1616,8 +1621,41 @@ void PeerCandidate::onConnectionEstablished()
 
     if (!mIsConnected) {
         mIsConnected = true;
+
         emitOnDtlsConnected();
+
+        sendIceKeepAlive();
+
+        updateIceKeepAliveTimeout();
     }
+}
+
+void PeerCandidate::sendIceKeepAlive()
+{
+    LOG(SRTC_LOG_Z, "Sending STUN keep-alive request, #%u", mUniqueId);
+
+    const auto iceMessage = make_stun_message_binding_request(
+        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
+    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&iceMessage) });
+
+    Task::cancelHelper(mTaskIceKeepAlive);
+
+    mTaskIceKeepAlive = mScheduler.submit(kIceKeepAliveSendTimeout, __FILE__, __LINE__, [this] { sendIceKeepAlive(); });
+}
+
+void PeerCandidate::updateIceKeepAliveTimeout()
+{
+    Task::cancelHelper(mTaskIceConnectionLost);
+
+    mTaskIceConnectionLost =
+        mScheduler.submit(kIceKeepAliveConnectionLostTimeout, __FILE__, __LINE__, [this] { onIceKeepAliveTimeout(); });
+}
+
+void PeerCandidate::onIceKeepAliveTimeout()
+{
+    LOG(SRTC_LOG_Z, "STUN keep-alive timed out, #%u", mUniqueId);
+
+    emitOnConnectionLost({ Error::Code::InvalidData, "The ICE connection has been lost" });
 }
 
 void PeerCandidate::sendStunBindingRequest(unsigned int iteration)

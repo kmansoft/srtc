@@ -175,6 +175,7 @@ private:
     void onCandidateDtlsConnected(PeerCandidate* candidate) override;
     void onCandidateDtlsDisconnected(PeerCandidate* candidate, const Error& error) override;
     void onCandidateFailedToConnect(PeerCandidate* candidate, const Error& error) override;
+    void onCandidateConnectionLost(PeerCandidate* candidate, const Error& error) override;
     void onCandidateReceivedMediaPacket(PeerCandidate* candiate, const std::shared_ptr<RtpPacket>& packet) override;
     void onCandidateReceivedSenderReport(PeerCandidate* candidate,
                                          const std::shared_ptr<Track>& track,
