@@ -180,7 +180,6 @@ private:
 
     std::vector<ReceiverReferenceTimeReport> mOutstandingReceiverReferenceTimeReportQueue;
 
-    bool mSentUseCandidate;
     bool mIsConnected;
 
     ByteBuffer mProtectedBuf;
@@ -221,19 +220,13 @@ private:
     void emitOnFailedToConnect(const Error& error);
     void emitOnDtlsDisconnected(const Error& error);
 
-    void onReceivedFromRemote();
+    void onConnectionEstablished();
 
     // Sending STUN requests and responses
     void sendStunBindingRequest(unsigned int iteration);
     void sendStunBindingResponse(unsigned int iteration);
 
     // Timeouts
-    void updateConnectionLostTimeout();
-    void onConnectionLostTimeout();
-    void sendConnectionRestoreRequest();
-    void updateKeepAliveTimeout();
-    void onKeepAliveTimeout();
-
     std::chrono::steady_clock::time_point mLastSendTime;
     std::chrono::steady_clock::time_point mLastReceiveTime;
 
@@ -242,9 +235,8 @@ private:
     std::weak_ptr<Task> mTaskSendStunConnectRequest;
     std::weak_ptr<Task> mTaskSendStunConnectResponse;
     std::weak_ptr<Task> mTaskConnectionLostTimeout;
-    std::weak_ptr<Task> mTaskConnectionRestoreTimeout;
     std::weak_ptr<Task> mTaskExpireStunRequests;
-    std::weak_ptr<Task> mTaskKeepAliveTimeout;
+    std::weak_ptr<Task> mTaskIceKeepAlive;
 
     ScopedScheduler mScheduler;
 

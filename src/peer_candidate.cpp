@@ -73,11 +73,8 @@ constexpr auto kMaxDlrrResponseSize = 25;
 constexpr auto kIceMessageBufferSize = 2048;
 
 constexpr auto kConnectTimeout = std::chrono::milliseconds(5000);
-constexpr auto kConnectionLostTimeout = std::chrono::milliseconds(5000);
 constexpr auto kExpireStunPeriod = std::chrono::milliseconds(1000);
 constexpr auto kExpireStunTimeout = std::chrono::milliseconds(5000);
-constexpr auto kKeepAliveCheckTimeout = std::chrono::milliseconds(1000);
-constexpr auto kKeepAliveSendTimeout = std::chrono::milliseconds(3000);
 constexpr auto kConnectRepeatPeriod = std::chrono::milliseconds(100);
 constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
 constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
@@ -243,7 +240,6 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
     , mControlPacketSource(offer->getControlPacketSource())
     , mIceRttFilter(0.2f)
     , mControlRttFilter(0.2f)
-    , mSentUseCandidate(false)
     , mIsConnected(false)
     , mLastSendTime(std::chrono::steady_clock::time_point::min())
     , mLastReceiveTime(std::chrono::steady_clock::time_point::min())
@@ -819,7 +815,6 @@ void PeerCandidate::startConnecting()
 
     // Clean up some things
     Task::cancelHelper(mTaskConnectionLostTimeout);
-    Task::cancelHelper(mTaskKeepAliveTimeout);
 
     mSrtpConnection.reset();
     mSendPacer.reset();
@@ -902,19 +897,8 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
             mIceRttFilter.update(rtt);
 
             if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
-                if (mSentUseCandidate) {
-                    // Keep-alive
-                    LOG(SRTC_LOG_V, "STUN keep-alive response verification succeeded");
-
-                    if (mDtlsState == DtlsState::Completed) {
-                        // We are connected again
-                        onReceivedFromRemote();
-                    }
-                } else {
-                    // Initial connection
+                if (mDtlsState == DtlsState::Inactive) {
                     LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
-
-                    mSentUseCandidate = true;
 
                     emitOnIceConnected();
                     sendStunBindingResponse(0);
@@ -978,7 +962,6 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                                                         mSendRtpHistory,
                                                         mExtensionSourceTWCC,
                                                         [this]() { mLastSendTime = std::chrono::steady_clock::now(); });
-                        mDtlsState = DtlsState::Completed;
 
                         const auto addr = to_string(mHost.addr);
                         const auto cipher = SSL_get_cipher(mDtlsSsl);
@@ -990,7 +973,9 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
                             profile->name,
                             mIceRttFilter.value());
 
-                        onReceivedFromRemote();
+                        mDtlsState = DtlsState::Completed;
+
+                        onConnectionEstablished();
 
                         if (mSctpSession) {
                             mSctpSession->start();
@@ -1087,8 +1072,6 @@ void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
 
 void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& packet)
 {
-    onReceivedFromRemote();
-
     const auto rtcpRC = packet->getRC();
     const auto rtcpPT = packet->getPayloadId();
 
@@ -1175,8 +1158,6 @@ void PeerCandidate::onReceivedControlPacket(const std::shared_ptr<RtcpPacket>& p
 
 void PeerCandidate::onReceivedMediaPacket(const std::shared_ptr<RtpPacket>& packet)
 {
-    onReceivedFromRemote();
-
     const auto track = packet->getTrack();
 
     LOG(SRTC_LOG_V,
@@ -1627,13 +1608,11 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
     mListener->onCandidateFailedToConnect(this, error);
 }
 
-void PeerCandidate::onReceivedFromRemote()
+void PeerCandidate::onConnectionEstablished()
 {
     mLastReceiveTime = std::chrono::steady_clock::now();
-    updateConnectionLostTimeout();
 
     Task::cancelHelper(mTaskConnectTimeout);
-    Task::cancelHelper(mTaskConnectionRestoreTimeout);
 
     if (!mIsConnected) {
         mIsConnected = true;
@@ -1668,76 +1647,6 @@ void PeerCandidate::sendStunBindingResponse(unsigned int iteration)
                                                      __FILE__,
                                                      __LINE__,
                                                      [this, iteration] { sendStunBindingResponse(iteration + 1); });
-}
-
-void PeerCandidate::updateConnectionLostTimeout()
-{
-    if (const auto task = mTaskConnectionLostTimeout.lock()) {
-        mTaskConnectionLostTimeout = task->update(kConnectionLostTimeout);
-    } else {
-        mTaskConnectionLostTimeout =
-            mScheduler.submit(kConnectionLostTimeout, __FILE__, __LINE__, [this] { onConnectionLostTimeout(); });
-    }
-}
-
-void PeerCandidate::onConnectionLostTimeout()
-{
-    Task::cancelHelper(mTaskConnectionLostTimeout);
-
-    mIsConnected = false;
-
-    emitOnConnecting();
-
-    LOG(SRTC_LOG_V, "Starting STUN requests to restore the connection #%u", mUniqueId);
-
-    // Connecting should take a limited amount of time
-    Task::cancelHelper(mTaskConnectTimeout);
-
-    mTaskConnectTimeout = mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] {
-        emitOnFailedToConnect({ Error::Code::InvalidData, "Connect timeout" });
-    });
-
-    // Send ice requests
-    sendConnectionRestoreRequest();
-}
-
-void PeerCandidate::sendConnectionRestoreRequest()
-{
-    LOG(SRTC_LOG_V, "Sending a STUN request to restore the connection #%u", mUniqueId);
-
-    const auto request = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
-    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
-
-    Task::cancelHelper(mTaskConnectionRestoreTimeout);
-    mTaskConnectionRestoreTimeout =
-        mScheduler.submit(kConnectTimeout, __FILE__, __LINE__, [this] { sendConnectionRestoreRequest(); });
-}
-
-void PeerCandidate::updateKeepAliveTimeout()
-{
-    if (const auto task = mTaskKeepAliveTimeout.lock()) {
-        mTaskKeepAliveTimeout = task->update(kKeepAliveCheckTimeout);
-    } else {
-        mTaskKeepAliveTimeout =
-            mScheduler.submit(kKeepAliveCheckTimeout, __FILE__, __LINE__, [this] { onKeepAliveTimeout(); });
-    }
-}
-
-void PeerCandidate::onKeepAliveTimeout()
-{
-    updateKeepAliveTimeout();
-
-    const auto now = std::chrono::steady_clock::now();
-    if (now - mLastSendTime < kKeepAliveSendTimeout && now - mLastReceiveTime < kKeepAliveSendTimeout) {
-        return;
-    }
-
-    LOG(SRTC_LOG_V, "Sending a keep alive STUN request #%u", mUniqueId);
-
-    const auto request = make_stun_message_binding_request(
-        mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
-    addSendRaw({ mIceMessageBuffer.get(), stun_message_length(&request) });
 }
 
 } // namespace srtc
