@@ -1632,7 +1632,7 @@ void PeerCandidate::onConnectionEstablished()
 
 void PeerCandidate::sendIceKeepAlive()
 {
-    LOG(SRTC_LOG_Z, "Sending STUN keep-alive request, #%u", mUniqueId);
+    LOG(SRTC_LOG_V, "Sending STUN keep-alive request, #%u", mUniqueId);
 
     const auto iceMessage = make_stun_message_binding_request(
         mIceAgent, mIceMessageBuffer.get(), kIceMessageBufferSize, mOffer, mAnswer, false);
@@ -1653,7 +1653,7 @@ void PeerCandidate::updateIceKeepAliveTimeout()
 
 void PeerCandidate::onIceKeepAliveTimeout()
 {
-    LOG(SRTC_LOG_Z, "STUN keep-alive timed out, #%u", mUniqueId);
+    LOG(SRTC_LOG_E, "STUN keep-alive timed out, #%u", mUniqueId);
 
     emitOnConnectionLost({ Error::Code::InvalidData, "The ICE connection has been lost" });
 }
