@@ -450,7 +450,6 @@ if (NOT ANDROID AND SRTC_BUILD_TOOLS)
                 tools/media_reader_vp9.cpp
                 tools/media_reader_webm.h
                 tools/media_reader_webm.cpp
-                tools/media_reader_webm.cpp
         )
 
         add_dependencies(srtc_publish srtc)
@@ -569,8 +568,8 @@ install(FILES
         DESTINATION include/sctp
 )
 
-install(FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/libsrtc.a
-        ${CMAKE_CURRENT_BINARY_DIR}/stun/libsrtc_stun.a
-        DESTINATION lib
+install(TARGETS srtc srtc_stun
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
 )
