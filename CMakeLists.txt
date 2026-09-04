@@ -209,12 +209,6 @@ add_library(srtc
         src/sctp/sctp_session.cpp
 )
 
-if (MSVC)
-    target_compile_options(srtc PRIVATE "/W4")
-else ()
-    target_compile_options(srtc PRIVATE "-Wall" "-Wextra" "-Werror")
-endif ()
-
 if (APPLE)
     target_sources(srtc
             PRIVATE
@@ -242,13 +236,15 @@ if (UNIX)
             PRIVATE
             "-ffunction-sections"
             "-Wall"
+            "-Wextra"
             "-Werror"
     )
 endif ()
 if (WIN32)
     target_compile_options(srtc
             PRIVATE
-            "-DNOMINMAX"
+            "/DNOMINMAX"
+            "/W4"
     )
 endif ()
 
@@ -486,6 +482,10 @@ if (NOT ANDROID AND SRTC_BUILD_TOOLS)
                     CURL::libcurl
             )
         endif ()
+
+        install(TARGETS srtc_publish
+                RUNTIME DESTINATION bin
+        )
     endif ()
 
     # Subscribe tool
@@ -548,6 +548,10 @@ if (NOT ANDROID AND SRTC_BUILD_TOOLS)
                     CURL::libcurl
             )
         endif ()
+
+        install(TARGETS srtc_subscribe
+                RUNTIME DESTINATION bin
+        )
     endif ()
 
 endif ()
