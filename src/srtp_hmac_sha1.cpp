@@ -15,17 +15,29 @@ namespace srtc
 {
 
 HmacSha1::HmacSha1()
+#if defined(SRTC_USE_OPENSSL)
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     : mMac(EVP_MAC_fetch(NULL, "HMAC", NULL))
     , mCtx(EVP_MAC_CTX_new(mMac))
 #else
     : mCtx(HMAC_CTX_new())
 #endif
+#elif defined(SRTC_USE_MBEDTLS)
+    : mCtx()
+    , mIsSetup(false)
+#endif
 {
+#if defined(SRTC_USE_MBEDTLS)
+    mbedtls_md_init(&mCtx);
+
+    const auto info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
+    mIsSetup = info != nullptr && mbedtls_md_setup(&mCtx, info, 1 /* hmac */) == 0;
+#endif
 }
 
 HmacSha1::~HmacSha1()
 {
+#if defined(SRTC_USE_OPENSSL)
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     if (mCtx) {
         EVP_MAC_CTX_free(mCtx);
@@ -38,10 +50,14 @@ HmacSha1::~HmacSha1()
         HMAC_CTX_free(mCtx);
     }
 #endif
+#elif defined(SRTC_USE_MBEDTLS)
+    mbedtls_md_free(&mCtx);
+#endif
 }
 
 bool HmacSha1::reset(const uint8_t* key, size_t keySize)
 {
+#if defined(SRTC_USE_OPENSSL)
     if (!mCtx) {
         return false;
     }
@@ -57,19 +73,31 @@ bool HmacSha1::reset(const uint8_t* key, size_t keySize)
 #else
     return HMAC_Init_ex(mCtx, key, static_cast<int>(keySize), EVP_sha1(), nullptr) == 1;
 #endif
+#elif defined(SRTC_USE_MBEDTLS)
+    if (!mIsSetup) {
+        return false;
+    }
+
+    return mbedtls_md_hmac_starts(&mCtx, key, keySize) == 0;
+#endif
 }
 
 void HmacSha1::update(const uint8_t* data, size_t size)
 {
+#if defined(SRTC_USE_OPENSSL)
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     EVP_MAC_update(mCtx, data, size);
 #else
     HMAC_Update(mCtx, data, size);
 #endif
+#elif defined(SRTC_USE_MBEDTLS)
+    mbedtls_md_hmac_update(&mCtx, data, size);
+#endif
 }
 
 void HmacSha1::final(uint8_t* out)
 {
+#if defined(SRTC_USE_OPENSSL)
 #if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
     size_t out_len;
     EVP_MAC_final(mCtx, out, &out_len, 20);
@@ -79,6 +107,10 @@ void HmacSha1::final(uint8_t* out)
 #endif
 
     assert(out_len == 20);
+#elif defined(SRTC_USE_MBEDTLS)
+    [[maybe_unused]] const auto r = mbedtls_md_hmac_finish(&mCtx, out);
+    assert(r == 0);
+#endif
 }
 
 } // namespace srtc
