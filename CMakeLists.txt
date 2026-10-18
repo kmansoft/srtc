@@ -9,6 +9,9 @@ if (POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif ()
 
+set(SRTC_CRYPTO_LIB "OPENSSL" CACHE STRING "The crypto library to use: OPENSSL or MBEDTLS")
+set_property(CACHE SRTC_CRYPTO_LIB PROPERTY STRINGS OPENSSL MBEDTLS)
+
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
 option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
 option(SRTC_BUILD_TOOL_PUBLISH "Build the publish command line tool" ON)
@@ -266,38 +269,61 @@ target_link_libraries(
         srtc_stun
 )
 
-# OpenSSL
+if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
+    # OpenSSL
 
-if (WIN32)
-    # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
-    # so we build it ourselves somewhere else and upload to a server, then fetch from there.
-    set(OPENSSL_USE_STATIC_LIBS ON)
-    set(OPENSSL_VERSION "3.5.6")
-    set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
+    if (WIN32)
+        # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
+        # so we build it ourselves somewhere else and upload to a server, then fetch from there.
+        set(OPENSSL_USE_STATIC_LIBS ON)
+        set(OPENSSL_VERSION "3.5.6")
+        set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
 
-    if (NOT EXISTS "${OPENSSL_ROOT_DIR}")
-        message(STATUS "Downloading OpenSSL binaries...")
-        set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
-        file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
-        file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
+        if (NOT EXISTS "${OPENSSL_ROOT_DIR}")
+            message(STATUS "Downloading OpenSSL binaries...")
+            set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
+            file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
+            file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
+        endif ()
     endif ()
-endif ()
-if (APPLE)
-    # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
-    set(OPENSSL_USE_STATIC_LIBS ON)
-endif ()
+    if (APPLE)
+        # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
+        set(OPENSSL_USE_STATIC_LIBS ON)
+    endif ()
 
-find_package(OpenSSL REQUIRED)
+    find_package(OpenSSL REQUIRED)
 
-target_include_directories(srtc
-        PRIVATE
-        ${OPENSSL_INCLUDE_DIR}
-)
-target_link_libraries(srtc
-        PRIVATE
-        OpenSSL::Crypto
-        OpenSSL::SSL
-)
+    target_compile_definitions(srtc
+            PUBLIC
+            SRTC_USE_OPENSSL
+    )
+    target_include_directories(srtc
+            PRIVATE
+            ${OPENSSL_INCLUDE_DIR}
+    )
+    target_link_libraries(srtc
+            PRIVATE
+            OpenSSL::Crypto
+            OpenSSL::SSL
+    )
+elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
+    # MBED-TLS
+
+    find_package(MbedTLS REQUIRED)
+
+    target_compile_definitions(srtc
+            PUBLIC
+            SRTC_USE_MBEDTLS
+    )
+    target_link_libraries(srtc
+            PRIVATE
+            MbedTLS::mbedtls
+            MbedTLS::mbedx509
+            MbedTLS::mbedcrypto
+    )
+else ()
+    message(FATAL_ERROR "Unknown crypto library: ${SRTC_CRYPTO_LIB}")
+endif ()
 
 # STUN
 
@@ -329,15 +355,15 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
 
     FetchContent_MakeAvailable(googletest)
 
-    # LibSRTP - only for tests
+    # LibSRTP - only for tests, uses the same crypto library as we do (ENABLE_OPENSSL / ENABLE_MBEDTLS)
 
     list(APPEND LIBSRTP_CMAKE_ARGS
             "-DLIBSRTP_TEST_APPS=OFF"
-            "-DENABLE_OPENSSL=ON"
+            "-DENABLE_${SRTC_CRYPTO_LIB}=ON"
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
     )
 
-    if (WIN32)
+    if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
         )
@@ -407,14 +433,20 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             GTest::gtest_main
             srtc
             srtp3
-            OpenSSL::Crypto
-            OpenSSL::SSL
     )
 
     if (WIN32)
         target_link_libraries(
                 srtc_test
                 ws2_32
+        )
+    endif ()
+
+    if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
+        target_link_libraries(
+                srtc_test
+                OpenSSL::Crypto
+                OpenSSL::SSL
         )
     endif ()
 
