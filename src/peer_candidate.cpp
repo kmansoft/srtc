@@ -786,7 +786,6 @@ void PeerCandidate::run()
             SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
 
             SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
-            SSL_set_connect_state(mDtlsSsl);
 
             if (mAnswer->isSetupActive()) {
                 SSL_set_accept_state(mDtlsSsl);
@@ -795,6 +794,8 @@ void PeerCandidate::run()
                 SSL_set_connect_state(mDtlsSsl);
                 SSL_do_handshake(mDtlsSsl);
             }
+
+            scheduleDtlsRetransmit();
         }
     }
 
@@ -924,7 +925,10 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 
         if (err == SSL_ERROR_WANT_READ) {
             LOG(SRTC_LOG_V, "Still in progress");
+            scheduleDtlsRetransmit();
         } else if (r1 == 1 && err == 0) {
+            Task::cancelHelper(mTaskDtlsRetransmit);
+
             const auto cert = SSL_get_peer_certificate(mDtlsSsl);
             if (cert == nullptr) {
                 // Error, no certificate
@@ -1539,6 +1543,8 @@ BIO* PeerCandidate::BIO_new_dgram(PeerCandidate* pc)
 
 void PeerCandidate::freeDTLS()
 {
+    Task::cancelHelper(mTaskDtlsRetransmit);
+
     if (mDtlsSsl) {
         SSL_shutdown(mDtlsSsl);
         SSL_free(mDtlsSsl);
@@ -1555,6 +1561,50 @@ void PeerCandidate::freeDTLS()
 
     // Flush the send queue to send the DTLS_close message
     flushSendRaw();
+}
+
+void PeerCandidate::scheduleDtlsRetransmit()
+{
+    Task::cancelHelper(mTaskDtlsRetransmit);
+
+    if (mDtlsSsl == nullptr || mDtlsState != DtlsState::Activating) {
+        return;
+    }
+
+    timeval tv = {};
+    if (DTLSv1_get_timeout(mDtlsSsl, &tv) != 1) {
+        return;
+    }
+
+    const auto delay =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(tv.tv_sec) + std::chrono::microseconds(tv.tv_usec));
+    LOG(SRTC_LOG_V, "DTLS retransmit timer in %lld ms, #%u", static_cast<long long>(delay.count()), mUniqueId);
+
+    mTaskDtlsRetransmit = mScheduler.submit(delay, __FILE__, __LINE__, [this] { onDtlsRetransmitTimeout(); });
+}
+
+void PeerCandidate::onDtlsRetransmitTimeout()
+{
+    if (mDtlsSsl == nullptr || mDtlsState != DtlsState::Activating) {
+        return;
+    }
+
+    // Retransmits the last flight through our BIO (dgram_write -> addSendRaw)
+    const auto r = DTLSv1_handle_timeout(mDtlsSsl);
+    if (r < 0) {
+        const auto e = get_openssl_error();
+        LOG(SRTC_LOG_E, "DTLS handshake retransmit failed: %s", e.c_str());
+        mDtlsState = DtlsState::Failed;
+
+        Task::cancelHelper(mTaskConnectTimeout);
+        emitOnFailedToConnect({ Error::Code::InvalidData, "DTLS handshake retransmit failed: " + e });
+
+        freeDTLS();
+        return;
+    }
+
+    LOG(SRTC_LOG_V, "DTLS retransmit timeout handled: %d, #%u", static_cast<int>(r), mUniqueId);
+    scheduleDtlsRetransmit();
 }
 
 // RTT

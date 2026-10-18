@@ -210,6 +210,8 @@ private:
     static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
 
     void freeDTLS();
+    void scheduleDtlsRetransmit();
+    void onDtlsRetransmitTimeout();
 
     // RTT
     std::optional<float> calculateRtt(const std::chrono::steady_clock::time_point& now) const;
@@ -243,6 +245,7 @@ private:
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskIceKeepAlive;
     std::weak_ptr<Task> mTaskIceConnectionLost;
+    std::weak_ptr<Task> mTaskDtlsRetransmit;
 
     ScopedScheduler mScheduler;
 
