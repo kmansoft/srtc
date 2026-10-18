@@ -53,11 +53,10 @@ bool HmacSha1::reset(const uint8_t* key, size_t keySize)
     params[0] = OSSL_PARAM_construct_utf8_string("digest", sha1, 0);
     params[1] = OSSL_PARAM_construct_end();
 
-    EVP_MAC_init(mCtx, key, keySize, params);
+    return EVP_MAC_init(mCtx, key, keySize, params) == 1;
 #else
-    HMAC_Init_ex(mCtx, key, static_cast<int>(keySize), EVP_sha1(), nullptr);
+    return HMAC_Init_ex(mCtx, key, static_cast<int>(keySize), EVP_sha1(), nullptr) == 1;
 #endif
-    return true;
 }
 
 void HmacSha1::update(const uint8_t* data, size_t size)

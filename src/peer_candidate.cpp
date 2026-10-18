@@ -936,7 +936,11 @@ void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
         } else if (r1 == 1 && err == 0) {
             Task::cancelHelper(mTaskDtlsRetransmit);
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            const auto cert = SSL_get1_peer_certificate(mDtlsSsl);
+#else
             const auto cert = SSL_get_peer_certificate(mDtlsSsl);
+#endif
             if (cert == nullptr) {
                 // Error, no certificate
                 LOG(SRTC_LOG_E, "There is no DTLS server certificate");

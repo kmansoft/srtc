@@ -54,13 +54,17 @@ X509Certificate::X509Certificate()
 
 	X509_set_pubkey(mImpl->x509, mImpl->pkey);
 
-	const auto name = X509_get_subject_name(mImpl->x509);
+	// OpenSSL 4 returns a const name from X509_get_subject_name, so build our own (set_*_name make copies)
+	const auto name = X509_NAME_new();
 
 	X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (unsigned char*)"US", -1, -1, 0);
 	X509_NAME_add_entry_by_txt(name, "O", MBSTRING_ASC, (unsigned char*)"MyCompany Inc.", -1, -1, 0);
 	X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char*)"localhost", -1, -1, 0);
 
+	X509_set_subject_name(mImpl->x509, name);
 	X509_set_issuer_name(mImpl->x509, name);
+
+	X509_NAME_free(name);
 
 	X509_sign(mImpl->x509, mImpl->pkey, EVP_sha256());
 
