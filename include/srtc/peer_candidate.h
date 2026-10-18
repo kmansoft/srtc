@@ -209,6 +209,9 @@ private:
 
     static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
 
+    // OpenSSL DTLS retransmit timer
+    static unsigned int dtls_timer_cb(struct ssl_st* ssl, unsigned int timer_us);
+
     void freeDTLS();
     void scheduleDtlsRetransmit();
     void onDtlsRetransmitTimeout();

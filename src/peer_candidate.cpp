@@ -37,6 +37,7 @@
 
 #include "sctp/sctp_session.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 
@@ -80,6 +81,9 @@ constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
 constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 constexpr auto kIceKeepAliveSendTimeout = std::chrono::milliseconds(3 * 1000);
 constexpr auto kIceKeepAliveConnectionLostTimeout = std::chrono::milliseconds(15 * 1000);
+constexpr auto kDtlsMinRetransmitTimeout = std::chrono::milliseconds(50);
+constexpr auto kDtlsMaxInitialRetransmitTimeout = std::chrono::milliseconds(1000);
+constexpr auto kDtlsMaxRetransmitTimeout = std::chrono::milliseconds(2000);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -786,6 +790,9 @@ void PeerCandidate::run()
             SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
 
             SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
+
+            SSL_set_app_data(mDtlsSsl, this);
+            DTLS_set_timer_cb(mDtlsSsl, dtls_timer_cb);
 
             if (mAnswer->isSetupActive()) {
                 SSL_set_accept_state(mDtlsSsl);
@@ -1539,6 +1546,31 @@ BIO* PeerCandidate::BIO_new_dgram(PeerCandidate* pc)
     const auto ptr = new dgram_data{ pc };
     BIO_set_data(b, ptr);
     return b;
+}
+
+unsigned int PeerCandidate::dtls_timer_cb(SSL* ssl, unsigned int timer_us)
+{
+    std::chrono::microseconds timeout;
+
+    if (timer_us == 0) {
+        // Initial timeout for a new flight: twice the ICE round trip time
+        const auto pc = static_cast<PeerCandidate*>(SSL_get_app_data(ssl));
+        const auto iceRttMs = pc ? pc->mIceRttFilter.value() : 0.0f;
+        const auto iceRtt =
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float, std::milli>(iceRttMs));
+        timeout = std::clamp<std::chrono::microseconds>(
+            2 * iceRtt, kDtlsMinRetransmitTimeout, kDtlsMaxInitialRetransmitTimeout);
+    } else {
+        timeout =
+            std::min<std::chrono::microseconds>(2 * std::chrono::microseconds(timer_us), kDtlsMaxRetransmitTimeout);
+    }
+
+    LOG(SRTC_LOG_V,
+        "DTLS retransmit timeout: previous = %u us, next = %ld us",
+        timer_us,
+        static_cast<long>(timeout.count()));
+
+    return static_cast<unsigned int>(timeout.count());
 }
 
 void PeerCandidate::freeDTLS()
