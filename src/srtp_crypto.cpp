@@ -258,11 +258,6 @@ fail:
 
 bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
-    const auto ctx = mSendCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     size_t digestSize;
     switch (mProfileId) {
     case ProfileId::kAES_128_CM_SHA1_80:
@@ -318,33 +313,29 @@ bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverC
     const uint32_t trailer = htonl(rolloverCount);
 
     // Encryption
-    int len = 0, total_len = 0;
-    int final_ret = 0;
+    size_t len = 0, total_len = 0;
+    bool success = false;
     uint8_t digest[20] = {};
 
-    // Set key and iv
-    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mSendProvider->createEncryptContext(mSendRtp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx,
-                           encryptedData + headerSize,
-                           &len,
-                           packetData + headerSize,
-                           static_cast<int>(packetSize - headerSize))) {
+    if (!context.update_data(encryptedData + headerSize, packetData + headerSize, packetSize - headerSize, &len)) {
         goto fail;
     }
-    total_len = len;
+    total_len += len;
 
-    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
-    if (final_ret > 0) {
-        total_len += len;
+    if (!context.finalize(encryptedData + headerSize + len, &len)) {
+        goto fail;
     }
+    total_len += len;
 
     // Authentication tag, https://datatracker.ietf.org/doc/html/rfc3711#section-4.2
     if (!mHmacSha1->reset(mSendRtp.auth.data(), mSendRtp.auth.size())) {
-        final_ret = 0;
         goto fail;
     }
     mHmacSha1->update(encryptedData, packetSize);
@@ -353,9 +344,11 @@ bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverC
 
     std::memcpy(encryptedData + encryptedSize - digestSize, digest, digestSize);
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(static_cast<size_t>(total_len) + headerSize + digestSize == encryptedSize);
+    if (success) {
+        assert(total_len + headerSize + digestSize == encryptedSize);
         (void)total_len;
         encrypted.resize(encryptedSize);
         return true;
@@ -630,11 +623,6 @@ bool SrtpCrypto::protectSendControl(const ByteBuffer& packet, uint32_t seq, Byte
 
 bool SrtpCrypto::protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
-    const auto ctx = mSendCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     const auto packetData = packet.data();
     const auto packetSize = packet.size();
 
@@ -665,55 +653,49 @@ bool SrtpCrypto::protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, B
     std::memcpy(encryptedData, packetData, headerSize);
 
     // Encryption
-    int len = 0, total_len = 0;
-    int final_ret = 0;
+    size_t len = 0, total_len = 0;
+    bool success = false;
     uint8_t digest[20] = {};
 
-    // Set key and iv
-    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtcp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mSendProvider->createEncryptContext(mSendRtcp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
-    // AAD
-    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, headerSize)) {
+    // AAD is the header and the trailer
+    if (!context.update_aad(packetData, headerSize)) {
         goto fail;
     }
-
-    if (!EVP_EncryptUpdate(
-            ctx, nullptr, &len, reinterpret_cast<const uint8_t*>(&trailer), static_cast<int>(trailerSize))) {
+    if (!context.update_aad(reinterpret_cast<const uint8_t*>(&trailer), trailerSize)) {
         goto fail;
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx,
-                           encryptedData + headerSize,
-                           &len,
-                           packetData + headerSize,
-                           static_cast<int>(packetSize - headerSize))) {
+    if (!context.update_data(encryptedData + headerSize, packetData + headerSize, packetSize - headerSize, &len)) {
         goto fail;
     }
-    total_len = len;
+    total_len += len;
 
-    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
-    if (final_ret > 0) {
-        total_len += len;
-    }
-
-    // Get tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kAESGCM_TagSize, digest)) {
-        final_ret = 0;
+    if (!context.finalize(encryptedData + headerSize + len, &len)) {
         goto fail;
     }
+    total_len += len;
 
-    // Copy it to after the data
+    // Get tag and copy it after the data
+    if (!context.get_digest(digest, kAESGCM_TagSize)) {
+        goto fail;
+    }
     std::memcpy(encryptedData + encryptedSize - kAESGCM_TagSize - trailerSize, digest, kAESGCM_TagSize);
 
     // Trailer
     std::memcpy(encryptedData + encryptedSize - trailerSize, &trailer, trailerSize);
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(static_cast<size_t>(total_len) + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
+    if (success) {
+        assert(total_len + headerSize + kAESGCM_TagSize + trailerSize == encryptedSize);
         (void)total_len;
         encrypted.resize(encryptedSize);
         return true;
@@ -724,11 +706,6 @@ fail:
 bool SrtpCrypto::protectSendControlCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted)
 {
     const size_t digestSize = 10; // for both SHA1_80 and SHA1_32
-
-    const auto ctx = mSendCipherCtx;
-    if (!ctx) {
-        return false;
-    }
 
     const auto packetData = packet.data();
     const auto packetSize = packet.size();
@@ -761,36 +738,32 @@ bool SrtpCrypto::protectSendControlCM(const ByteBuffer& packet, uint32_t seq, By
     std::memcpy(encryptedData, packetData, headerSize);
 
     // Encryption
-    int len = 0, total_len = 0;
-    int final_ret = 0;
+    size_t len = 0, total_len = 0;
+    bool success = false;
     uint8_t digest[20] = {};
 
-    // Set key and iv
-    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtcp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mSendProvider->createEncryptContext(mSendRtcp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx,
-                           encryptedData + headerSize,
-                           &len,
-                           packetData + headerSize,
-                           static_cast<int>(packetSize - headerSize))) {
+    if (!context.update_data(encryptedData + headerSize, packetData + headerSize, packetSize - headerSize, &len)) {
         goto fail;
     }
-    total_len = len;
+    total_len += len;
 
-    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
-    if (final_ret > 0) {
-        total_len += len;
+    if (!context.finalize(encryptedData + headerSize + len, &len)) {
+        goto fail;
     }
+    total_len += len;
 
     // Trailer
     std::memcpy(encryptedData + encryptedSize - trailerSize - digestSize, &trailer, trailerSize);
 
     // Authentication tag, https://datatracker.ietf.org/doc/html/rfc3711#section-4.2
     if (!mHmacSha1->reset(mSendRtcp.auth.data(), mSendRtcp.auth.size())) {
-        final_ret = 0;
         goto fail;
     }
     mHmacSha1->update(encryptedData, packetSize + trailerSize);
@@ -798,9 +771,11 @@ bool SrtpCrypto::protectSendControlCM(const ByteBuffer& packet, uint32_t seq, By
 
     std::memcpy(encryptedData + encryptedSize - digestSize, digest, digestSize);
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(static_cast<size_t>(total_len) + headerSize + trailerSize + digestSize == encryptedSize);
+    if (success) {
+        assert(total_len + headerSize + trailerSize + digestSize == encryptedSize);
         (void)total_len;
         encrypted.resize(encryptedSize);
         return true;
@@ -1061,16 +1036,9 @@ SrtpCrypto::SrtpCrypto(ProfileId profileId,
     , mReceiveRtp(receiveRtp)
     , mSendRtcp(sendRtcp)
     , mReceiveRtcp(receiveRtcp)
-    , mSendCipherCtx(nullptr)
     , mReceiveCipherCtx(nullptr)
     , mHmacSha1(std::make_shared<HmacSha1>())
 {
-    const auto sendCipher = createCipher();
-    if (sendCipher) {
-        mSendCipherCtx = EVP_CIPHER_CTX_new();
-        EVP_EncryptInit_ex(mSendCipherCtx, sendCipher, nullptr, nullptr, nullptr);
-    }
-
     const auto receiveCipher = createCipher();
     if (receiveCipher) {
         mReceiveCipherCtx = EVP_CIPHER_CTX_new();
@@ -1083,9 +1051,6 @@ SrtpCrypto::SrtpCrypto(ProfileId profileId,
 
 SrtpCrypto::~SrtpCrypto()
 {
-    if (mSendCipherCtx) {
-        EVP_CIPHER_CTX_free(mSendCipherCtx);
-    }
     if (mReceiveCipherCtx) {
         EVP_CIPHER_CTX_free(mReceiveCipherCtx);
     }

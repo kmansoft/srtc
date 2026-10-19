@@ -75,7 +75,6 @@ private:
     const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
 
-    struct evp_cipher_ctx_st* mSendCipherCtx;
     struct evp_cipher_ctx_st* mReceiveCipherCtx;
 
     std::shared_ptr<providers::CryptoProvider> mSendProvider;
