@@ -7,10 +7,11 @@
 // from this software without specific prior written permission.
 
 #include "srtc/srtp_crypto.h"
+
+#include "crypto_provider_openssl.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/srtp_hmac_sha1.h"
 #include "srtc/srtp_keys.h"
-#include "srtc/srtp_openssl.h"
 #include "srtc/srtp_util.h"
 
 #include <cassert>
@@ -44,7 +45,7 @@ namespace srtc
 
 std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(const SrtpKeys& srtpKeys)
 {
-    initOpenSSL();
+    providers::initCryptoProvider();
 
     if (srtpKeys.sendMasterKey.empty() || srtpKeys.receiveMasterKey.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master key is empty" } };

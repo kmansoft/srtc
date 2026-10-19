@@ -1,11 +1,8 @@
 #include "srtc/srtp_util.h"
-#include "srtc/srtp_openssl.h"
 
 #include <cassert>
 #include <cstring>
-#include <mutex>
 
-#include <openssl/err.h>
 #include <openssl/evp.h>
 
 namespace srtc
@@ -124,8 +121,6 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
                              srtc::CryptoBytes& output,
                              size_t desiredOutputSize)
 {
-    initOpenSSL();
-
     assert(masterKey.size() == 16 || masterKey.size() == 32);
     assert(masterSalt.size() == 12 || masterSalt.size() == 14);
 
@@ -145,7 +140,7 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
     const auto blockCount = (desiredOutputSize + 15) / 16;
     bool res = false;
 
-    srtc::CryptoWriter outputWriter(output);
+    CryptoWriter outputWriter(output);
 
     const auto ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {

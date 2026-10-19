@@ -30,12 +30,12 @@
 #include "srtc/sender_report.h"
 #include "srtc/sender_reports_history.h"
 #include "srtc/srtp_connection.h"
-#include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
 #include "srtc/x509_certificate.h"
-
 #include "sctp/sctp_session.h"
+
+#include "crypto_provider.h"
 
 #include <algorithm>
 #include <cassert>
@@ -264,7 +264,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
         to_string(host.addr).c_str(),
         static_cast<long>(startDelay.count()));
 
-    initOpenSSL();
+    providers::initCryptoProvider();
 
     if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
         SctpSessionListener* l = this;

@@ -111,7 +111,6 @@ add_library(srtc
         include/srtc/srtp_crypto.h
         include/srtc/srtp_hmac_sha1.h
         include/srtc/srtp_keys.h
-        include/srtc/srtp_openssl.h
         include/srtc/srtp_util.h
         include/srtc/track.h
         include/srtc/track_selector.h
@@ -188,7 +187,6 @@ add_library(srtc
         src/srtp_crypto.cpp
         src/srtp_hmac_sha1.cpp
         src/srtp_keys.cpp
-        src/srtp_openssl.cpp
         src/srtp_util.cpp
         src/track.cpp
         src/track_selector.cpp
@@ -198,6 +196,8 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        # providers
+        src/providers/crypto_provider.h
         # sctp
         src/sctp/sctp_crc32.h
         src/sctp/sctp_defs.h
@@ -235,6 +235,8 @@ elseif (UNIX)
 endif ()
 
 target_include_directories(srtc PUBLIC "./include")
+
+target_include_directories(srtc PRIVATE "./src/providers")
 
 if (UNIX)
     target_compile_options(srtc
@@ -307,6 +309,11 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
             PRIVATE
             OpenSSL::Crypto
             OpenSSL::SSL
+    )
+    target_sources(srtc
+            PRIVATE
+            src/providers/crypto_provider_openssl.h
+            src/providers/crypto_provider_openssl.cpp
     )
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
