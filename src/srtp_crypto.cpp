@@ -17,10 +17,6 @@
 #include <cassert>
 #include <cstring>
 
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-#include <openssl/srtp.h>
-
 #ifdef _WIN32
 #include <WinSock2.h>
 #else
@@ -375,11 +371,6 @@ bool SrtpCrypto::unprotectReceiveMedia(const ByteBuffer& packet, uint32_t rollov
 
 bool SrtpCrypto::unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain)
 {
-    const auto ctx = mReceiveCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     const size_t digestSize = kAESGCM_TagSize;
 
     const auto encryptedSize = packet.size();
@@ -432,47 +423,43 @@ bool SrtpCrypto::unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rol
     std::memcpy(plainData, encryptedData, headerSize);
 
     // Decryption
-    int len = 0, plain_len = 0;
-    int final_ret = 0;
+    size_t len = 0, plain_len = 0;
+    bool success = false;
 
-    // Set key and iv
-    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mReceiveProvider->createDecryptContext(mReceiveRtp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx,
-                             EVP_CTRL_GCM_SET_TAG,
-                             kAESGCM_TagSize,
-                             const_cast<uint8_t*>(encryptedData + encryptedSize - digestSize))) {
+    if (!context.set_tag(encryptedData + encryptedSize - digestSize, kAESGCM_TagSize)) {
         goto fail;
     }
 
     // The header is AAD
-    if (!EVP_DecryptUpdate(ctx, nullptr, &len, encryptedData, static_cast<int>(headerSize))) {
+    if (!context.update_aad(encryptedData, headerSize)) {
         goto fail;
     }
-
-    std::memcpy(plainData, encryptedData, headerSize);
 
     // Decrypt the body
-    if (!EVP_DecryptUpdate(ctx,
-                           plainData + headerSize,
-                           &len,
-                           encryptedData + headerSize,
-                           static_cast<int>(encryptedSize - headerSize - digestSize))) {
+    if (!context.update_data(
+            plainData + headerSize, encryptedData + headerSize, encryptedSize - headerSize - digestSize, &len)) {
         goto fail;
     }
-    plain_len = len;
+    plain_len += len;
 
-    final_ret = EVP_DecryptFinal_ex(ctx, plainData + headerSize + len, &len);
-    if (final_ret > 0) {
-        plain_len += len;
+    // Finalize, this validates the GCM auth tag
+    if (!context.finalize(plainData + headerSize + len, &len)) {
+        goto fail;
     }
+    plain_len += len;
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(plain_len + static_cast<int>(headerSize) == static_cast<int>(plainSize));
+    if (success) {
+        assert(plain_len + headerSize == plainSize);
         (void)plain_len;
         plain.resize(plainSize);
         return true;
@@ -482,11 +469,6 @@ fail:
 
 bool SrtpCrypto::unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain)
 {
-    const auto ctx = mReceiveCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     size_t digestSize;
     switch (mProfileId) {
     case ProfileId::kAES_128_CM_SHA1_80:
@@ -558,45 +540,45 @@ bool SrtpCrypto::unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t roll
     const uint32_t trailer = htonl(rolloverCount);
 
     // Decryption
-    int len = 0, plain_len = 0;
-    int final_ret = 0;
+    size_t len = 0, plain_len = 0;
+    bool success = false;
 
-    // Set key and iv
-    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mReceiveProvider->createDecryptContext(mReceiveRtp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // Decrypt the body
-    if (!EVP_DecryptUpdate(ctx,
-                           plainData + headerSize,
-                           &len,
-                           encryptedData + headerSize,
-                           static_cast<int>(encryptedSize - headerSize - digestSize))) {
+    if (!context.update_data(
+            plainData + headerSize, encryptedData + headerSize, encryptedSize - headerSize - digestSize, &len)) {
         goto fail;
     }
-    plain_len = len;
+    plain_len += len;
 
-    final_ret = EVP_DecryptFinal_ex(ctx, plainData + headerSize + len, &len);
-    if (final_ret > 0) {
-        plain_len += len;
+    if (!context.finalize(plainData + headerSize + len, &len)) {
+        goto fail;
     }
+    plain_len += len;
 
     // Verify the digest
     if (!mHmacSha1->reset(mReceiveRtp.auth.data(), mReceiveRtp.auth.size())) {
-        return false;
+        goto fail;
     }
     mHmacSha1->update(encryptedData, digestPtr - encryptedData);
     mHmacSha1->update(reinterpret_cast<const uint8_t*>(&trailer), sizeof(trailer));
     mHmacSha1->final(digest);
 
-    if (CRYPTO_memcmp(digest, digestPtr, digestSize) != 0) {
+    if (!providers::secureEquals(digest, digestPtr, digestSize)) {
         // Digest validation failed
-        return false;
+        goto fail;
     }
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(plain_len + static_cast<int>(headerSize) == static_cast<int>(plainSize));
+    if (success) {
+        assert(plain_len + headerSize == plainSize);
         (void)plain_len;
         plain.resize(plainSize);
         return true;
@@ -812,11 +794,6 @@ bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer
         return false;
     }
 
-    const auto ctx = mReceiveCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     const auto encryptedData = packet.data();
 
     // Extract ssrc and seq
@@ -843,39 +820,32 @@ bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer
 
     const auto plainData = plain.data();
 
-    int len = 0, plain_len = 0;
-    int final_ret = 0;
+    size_t len = 0, plain_len = 0;
+    bool success = false;
 
-    // Set key and iv
-    if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mReceiveProvider->createDecryptContext(mReceiveRtcp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // Set tag
-    if (!EVP_CIPHER_CTX_ctrl(
-            ctx,
-            EVP_CTRL_GCM_SET_TAG,
-            kAESGCM_TagSize,
-            const_cast<uint8_t*>(encryptedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize))) {
+    if (!context.set_tag(encryptedData + encryptedSize - kRTCP_TrailerSize - kAESGCM_TagSize, kAESGCM_TagSize)) {
         goto fail;
     }
 
     // AAD
     if (isEncrypted) {
-        if (!EVP_DecryptUpdate(ctx, nullptr, &len, encryptedData, kRTCP_HeaderSize)) {
+        if (!context.update_aad(encryptedData, kRTCP_HeaderSize)) {
             goto fail;
         }
     } else {
-        if (!EVP_DecryptUpdate(ctx,
-                               nullptr,
-                               &len,
-                               encryptedData,
-                               static_cast<int>(encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
+        if (!context.update_aad(encryptedData, encryptedSize - kAESGCM_TagSize - kRTCP_TrailerSize)) {
             goto fail;
         }
     }
 
-    if (!EVP_DecryptUpdate(ctx, nullptr, &len, encryptedData + encryptedSize - kRTCP_TrailerSize, kRTCP_TrailerSize)) {
+    if (!context.update_aad(encryptedData + encryptedSize - kRTCP_TrailerSize, kRTCP_TrailerSize)) {
         goto fail;
     }
 
@@ -885,12 +855,10 @@ bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer
 
     // Encrypted portion
     if (isEncrypted) {
-        if (!EVP_DecryptUpdate(
-                ctx,
-                plainData + kRTCP_HeaderSize,
-                &len,
-                encryptedData + kRTCP_HeaderSize,
-                static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize))) {
+        if (!context.update_data(plainData + kRTCP_HeaderSize,
+                                 encryptedData + kRTCP_HeaderSize,
+                                 encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize,
+                                 &len)) {
             goto fail;
         }
         plain_len += len;
@@ -898,18 +866,20 @@ bool SrtpCrypto::unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer
         std::memcpy(plainData + kRTCP_HeaderSize,
                     encryptedData + kRTCP_HeaderSize,
                     encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
-        plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize);
+        plain_len += encryptedSize - kRTCP_HeaderSize - kAESGCM_TagSize - kRTCP_TrailerSize;
     }
 
     // Finalize, this validates the GCM auth tag
-    final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
-    if (final_ret > 0) {
-        plain_len += len;
+    if (!context.finalize(plainData + plain_len, &len)) {
+        goto fail;
     }
+    plain_len += len;
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(plain_len == static_cast<int>(plainSize));
+    if (success) {
+        assert(plain_len == plainSize);
         plain.resize(plainSize);
         return true;
     }
@@ -927,11 +897,6 @@ bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer&
         // ... ciphertext
         // 4 byte SRTCP index
         // 10 byte HMAC-SHA1 digest
-        return false;
-    }
-
-    const auto ctx = mReceiveCipherCtx;
-    if (!ctx) {
         return false;
     }
 
@@ -963,8 +928,8 @@ bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer&
 
     const auto plainData = plain.data();
 
-    int len = 0, plain_len = 0;
-    int final_ret = 0;
+    size_t len = 0, plain_len = 0;
+    bool success = false;
 
     // The header is not encrypted
     std::memcpy(plainData, encryptedData, kRTCP_HeaderSize);
@@ -972,49 +937,50 @@ bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer&
 
     // The main body
     if (isEncrypted) {
-        // Set key and iv
-        if (!EVP_DecryptInit_ex(ctx, nullptr, nullptr, mReceiveRtcp.key.data(), iv.data())) {
+        // Create context with key and iv
+        auto context = mReceiveProvider->createDecryptContext(mReceiveRtcp.key.data(), iv.data());
+        if (!context) {
             goto fail;
         }
 
         // Decrypt
-        if (!EVP_DecryptUpdate(ctx,
-                               plainData + kRTCP_HeaderSize,
-                               &len,
-                               encryptedData + kRTCP_HeaderSize,
-                               static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize))) {
+        if (!context.update_data(plainData + kRTCP_HeaderSize,
+                                 encryptedData + kRTCP_HeaderSize,
+                                 encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize,
+                                 &len)) {
             goto fail;
         }
         plain_len += len;
 
         // Finalize
-        final_ret = EVP_DecryptFinal_ex(ctx, plainData + plain_len, &len);
-        if (final_ret > 0) {
-            plain_len += len;
+        if (!context.finalize(plainData + plain_len, &len)) {
+            goto fail;
         }
+        plain_len += len;
     } else {
         std::memcpy(plainData + kRTCP_HeaderSize,
                     encryptedData + kRTCP_HeaderSize,
                     encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
-        plain_len += static_cast<int>(encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize);
-        final_ret = 1;
+        plain_len += encryptedSize - kRTCP_HeaderSize - kRTCP_TrailerSize - digestSize;
     }
 
     // Verify the digest
     if (!mHmacSha1->reset(mReceiveRtcp.auth.data(), mReceiveRtcp.auth.size())) {
-        return false;
+        goto fail;
     }
     mHmacSha1->update(encryptedData, digestPtr - encryptedData);
     mHmacSha1->final(digest);
 
-    if (CRYPTO_memcmp(digest, digestPtr, digestSize) != 0) {
+    if (!providers::secureEquals(digest, digestPtr, digestSize)) {
         // Digest validation failed
-        return false;
+        goto fail;
     }
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(plain_len == static_cast<int>(plainSize));
+    if (success) {
+        assert(plain_len == plainSize);
         plain.resize(plainSize);
         return true;
     }
@@ -1023,7 +989,7 @@ fail:
 
 bool SrtpCrypto::secureEquals(const void* a, const void* b, size_t size)
 {
-    return CRYPTO_memcmp(a, b, size) == 0;
+    return providers::secureEquals(a, b, size);
 }
 
 SrtpCrypto::SrtpCrypto(ProfileId profileId,
@@ -1036,39 +1002,12 @@ SrtpCrypto::SrtpCrypto(ProfileId profileId,
     , mReceiveRtp(receiveRtp)
     , mSendRtcp(sendRtcp)
     , mReceiveRtcp(receiveRtcp)
-    , mReceiveCipherCtx(nullptr)
+    , mSendProvider(std::make_shared<providers::CryptoProvider>(profileId))
+    , mReceiveProvider(std::make_shared<providers::CryptoProvider>(profileId))
     , mHmacSha1(std::make_shared<HmacSha1>())
 {
-    const auto receiveCipher = createCipher();
-    if (receiveCipher) {
-        mReceiveCipherCtx = EVP_CIPHER_CTX_new();
-        EVP_DecryptInit_ex(mReceiveCipherCtx, receiveCipher, nullptr, nullptr, nullptr);
-    }
-
-    mSendProvider = std::make_shared<providers::CryptoProvider>(mProfileId);
-    mReceiveProvider = std::make_shared<providers::CryptoProvider>(mProfileId);
 }
 
-SrtpCrypto::~SrtpCrypto()
-{
-    if (mReceiveCipherCtx) {
-        EVP_CIPHER_CTX_free(mReceiveCipherCtx);
-    }
-}
-
-const EVP_CIPHER* SrtpCrypto::createCipher() const
-{
-    switch (mProfileId) {
-    case ProfileId::kAES_256_GCM:
-        return EVP_aes_256_gcm();
-    case ProfileId::kAES_128_GCM:
-        return EVP_aes_128_gcm();
-    case ProfileId::kAES_128_CM_SHA1_80:
-    case ProfileId::kAES_128_CM_SHA1_32:
-        return EVP_aes_128_ctr();
-    default:
-        return nullptr;
-    }
-}
+SrtpCrypto::~SrtpCrypto() = default;
 
 } // namespace srtc

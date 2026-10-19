@@ -5,9 +5,6 @@
 #include "srtc/error.h"
 #include "srtc/srtp_util.h"
 
-struct evp_cipher_ctx_st;
-struct evp_cipher_st;
-
 namespace srtc::providers
 {
 class CryptoProvider;
@@ -67,15 +64,11 @@ private:
     [[nodiscard]] bool unprotectReceiveControlGCM(const ByteBuffer& packet, ByteBuffer& plain);
     [[nodiscard]] bool unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer& plain);
 
-    [[nodiscard]] const struct evp_cipher_st* createCipher() const;
-
     const ProfileId mProfileId;
     const CryptoVectors mSendRtp;
     const CryptoVectors mReceiveRtp;
     const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
-
-    struct evp_cipher_ctx_st* mReceiveCipherCtx;
 
     std::shared_ptr<providers::CryptoProvider> mSendProvider;
     std::shared_ptr<providers::CryptoProvider> mReceiveProvider;

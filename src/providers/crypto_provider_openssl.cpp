@@ -2,6 +2,7 @@
 
 #include <mutex>
 
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
@@ -105,6 +106,46 @@ CryptoProvider::DecryptContext CryptoProvider::createDecryptContext(const uint8_
 
 fail:
     return {};
+}
+
+bool CryptoProvider::DecryptContext::set_tag(const uint8_t* tag, size_t size) const
+{
+    return EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_TAG, static_cast<int>(size), const_cast<uint8_t*>(tag)) !=
+           0;
+}
+
+bool CryptoProvider::DecryptContext::update_aad(const uint8_t* data, size_t size) const
+{
+    int len = 0;
+    return EVP_DecryptUpdate(cipher_ctx, nullptr, &len, data, static_cast<int>(size)) != 0;
+}
+
+bool CryptoProvider::DecryptContext::update_data(uint8_t* out, const uint8_t* data, size_t size, size_t* out_size) const
+{
+    int len = 0;
+
+    if (EVP_DecryptUpdate(cipher_ctx, out, &len, data, static_cast<int>(size)) != 0) {
+        *out_size = static_cast<size_t>(len);
+        return true;
+    }
+
+    return false;
+}
+
+bool CryptoProvider::DecryptContext::finalize(uint8_t* out, size_t* out_size) const
+{
+    int len = 0;
+    if (EVP_DecryptFinal_ex(cipher_ctx, out, &len) > 0) {
+        *out_size = static_cast<size_t>(len);
+        return true;
+    }
+
+    return false;
+}
+
+bool secureEquals(const void* a, const void* b, size_t size)
+{
+    return CRYPTO_memcmp(a, b, size) == 0;
 }
 
 const struct evp_cipher_st* CryptoProvider::createCipher() const

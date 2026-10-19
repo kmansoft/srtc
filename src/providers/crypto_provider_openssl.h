@@ -41,6 +41,15 @@ public:
         struct evp_cipher_ctx_st* cipher_ctx;
 
         [[nodiscard]] explicit operator bool() const { return cipher_ctx != nullptr; }
+
+        // GCM only, the expected tag must be set before finalize
+        bool set_tag(const uint8_t* tag, size_t size) const;
+
+        bool update_aad(const uint8_t* data, size_t size) const;
+        bool update_data(uint8_t* out, const uint8_t* data, size_t size, size_t* out_size) const;
+
+        // For GCM, this validates the tag
+        bool finalize(uint8_t* out, size_t* out_size) const;
     };
 
     DecryptContext createDecryptContext(const uint8_t* key, const uint8_t* iv);
@@ -53,5 +62,8 @@ private:
 };
 
 void initCryptoProvider();
+
+// Constant time comparison
+bool secureEquals(const void* a, const void* b, size_t size);
 
 }
