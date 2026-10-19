@@ -9,6 +9,7 @@
 #include "srtc/srtp_crypto.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/srtp_hmac_sha1.h"
+#include "srtc/srtp_keys.h"
 #include "srtc/srtp_openssl.h"
 #include "srtc/srtp_util.h"
 
@@ -41,26 +42,22 @@ constexpr size_t kRTCP_TrailerSize = 4u;
 namespace srtc
 {
 
-std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(uint64_t profileId,
-                                                                 const CryptoBytes& sendMasterKey,
-                                                                 const CryptoBytes& sendMasterSalt,
-                                                                 const CryptoBytes& receiveMasterKey,
-                                                                 const CryptoBytes& receiveMasterSalt)
+std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(const SrtpKeys& srtpKeys)
 {
     initOpenSSL();
 
-    if (sendMasterKey.empty() || receiveMasterKey.empty()) {
+    if (srtpKeys.sendMasterKey.empty() || srtpKeys.receiveMasterKey.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master key is empty" } };
     }
-    if (sendMasterSalt.empty() || receiveMasterSalt.empty()) {
+    if (srtpKeys.sendMasterSalt.empty() || srtpKeys.receiveMasterSalt.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master salt is empty" } };
     }
 
-    switch (profileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    switch (srtpKeys.profileId) {
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         break;
     default:
         return { nullptr, { Error::Code::InvalidData, "Invalid SRTP profile id" } };
@@ -68,70 +65,87 @@ std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(uint64_t profil
 
     // Send RTP
     CryptoVectors sendRtp;
-    if (!KeyDerivation::generate(
-            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpKey, sendRtp.key, sendMasterKey.size()) ||
-        !KeyDerivation::generate(sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpAuth, sendRtp.auth, 20) ||
+    if (!KeyDerivation::generate(srtpKeys.sendMasterKey,
+                                 srtpKeys.sendMasterSalt,
+                                 KeyDerivation::kLabelRtpKey,
+                                 sendRtp.key,
+                                 srtpKeys.sendMasterKey.size()) ||
         !KeyDerivation::generate(
-            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtpSalt, sendRtp.salt, sendMasterSalt.size())) {
+            srtpKeys.sendMasterKey, srtpKeys.sendMasterSalt, KeyDerivation::kLabelRtpAuth, sendRtp.auth, 20) ||
+        !KeyDerivation::generate(srtpKeys.sendMasterKey,
+                                 srtpKeys.sendMasterSalt,
+                                 KeyDerivation::kLabelRtpSalt,
+                                 sendRtp.salt,
+                                 srtpKeys.sendMasterSalt.size())) {
         return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
     // Receive RTP
     CryptoVectors receiveRtp;
-    if (!KeyDerivation::generate(receiveMasterKey,
-                                 receiveMasterSalt,
+    if (!KeyDerivation::generate(srtpKeys.receiveMasterKey,
+                                 srtpKeys.receiveMasterSalt,
                                  KeyDerivation::kLabelRtpKey,
                                  receiveRtp.key,
-                                 receiveMasterKey.size()) ||
+                                 srtpKeys.receiveMasterKey.size()) ||
         !KeyDerivation::generate(
-            receiveMasterKey, receiveMasterSalt, KeyDerivation::kLabelRtpAuth, receiveRtp.auth, 20) ||
-        !KeyDerivation::generate(receiveMasterKey,
-                                 receiveMasterSalt,
+            srtpKeys.receiveMasterKey, srtpKeys.receiveMasterSalt, KeyDerivation::kLabelRtpAuth, receiveRtp.auth, 20) ||
+        !KeyDerivation::generate(srtpKeys.receiveMasterKey,
+                                 srtpKeys.receiveMasterSalt,
                                  KeyDerivation::kLabelRtpSalt,
                                  receiveRtp.salt,
-                                 receiveMasterSalt.size())) {
+                                 srtpKeys.receiveMasterSalt.size())) {
         return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
     // Send RTCP
     CryptoVectors sendRtcp;
-    if (!KeyDerivation::generate(
-            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpKey, sendRtcp.key, sendMasterKey.size()) ||
-        !KeyDerivation::generate(sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpAuth, sendRtcp.auth, 20) ||
+    if (!KeyDerivation::generate(srtpKeys.sendMasterKey,
+                                 srtpKeys.sendMasterSalt,
+                                 KeyDerivation::kLabelRtcpKey,
+                                 sendRtcp.key,
+                                 srtpKeys.sendMasterKey.size()) ||
         !KeyDerivation::generate(
-            sendMasterKey, sendMasterSalt, KeyDerivation::kLabelRtcpSalt, sendRtcp.salt, sendMasterSalt.size())) {
+            srtpKeys.sendMasterKey, srtpKeys.sendMasterSalt, KeyDerivation::kLabelRtcpAuth, sendRtcp.auth, 20) ||
+        !KeyDerivation::generate(srtpKeys.sendMasterKey,
+                                 srtpKeys.sendMasterSalt,
+                                 KeyDerivation::kLabelRtcpSalt,
+                                 sendRtcp.salt,
+                                 srtpKeys.sendMasterSalt.size())) {
         return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
     // Receive RTCP
     CryptoVectors receiveRtcp;
-    if (!KeyDerivation::generate(receiveMasterKey,
-                                 receiveMasterSalt,
+    if (!KeyDerivation::generate(srtpKeys.receiveMasterKey,
+                                 srtpKeys.receiveMasterSalt,
                                  KeyDerivation::kLabelRtcpKey,
                                  receiveRtcp.key,
-                                 receiveMasterKey.size()) ||
-        !KeyDerivation::generate(
-            receiveMasterKey, receiveMasterSalt, KeyDerivation::kLabelRtcpAuth, receiveRtcp.auth, 20) ||
-        !KeyDerivation::generate(receiveMasterKey,
-                                 receiveMasterSalt,
+                                 srtpKeys.receiveMasterKey.size()) ||
+        !KeyDerivation::generate(srtpKeys.receiveMasterKey,
+                                 srtpKeys.receiveMasterSalt,
+                                 KeyDerivation::kLabelRtcpAuth,
+                                 receiveRtcp.auth,
+                                 20) ||
+        !KeyDerivation::generate(srtpKeys.receiveMasterKey,
+                                 srtpKeys.receiveMasterSalt,
                                  KeyDerivation::kLabelRtcpSalt,
                                  receiveRtcp.salt,
-                                 receiveMasterSalt.size())) {
+                                 srtpKeys.receiveMasterSalt.size())) {
         return { nullptr, { Error::Code::InvalidData, "Error generating derived keys or salts" } };
     }
 
-    return { std::make_shared<SrtpCrypto>(profileId, sendRtp, receiveRtp, sendRtcp, receiveRtcp), Error::OK };
+    return { std::make_shared<SrtpCrypto>(srtpKeys.profileId, sendRtp, receiveRtp, sendRtcp, receiveRtcp), Error::OK };
 }
 
 size_t SrtpCrypto::getMediaProtectionOverhead() const
 {
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         return kAESGCM_TagSize;
-    case SRTP_AES128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_80:
         return 10;
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return 4;
     default:
         assert(false);
@@ -144,11 +158,11 @@ bool SrtpCrypto::protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCou
     encrypted.resize(0);
 
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         return protectSendMediaGCM(packet, rolloverCount, encrypted);
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return protectSendMediaCM(packet, rolloverCount, encrypted);
     default:
         assert(false);
@@ -259,10 +273,10 @@ bool SrtpCrypto::protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverC
 
     size_t digestSize;
     switch (mProfileId) {
-    case SRTP_AES128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_80:
         digestSize = 10;
         break;
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_32:
         digestSize = 4;
         break;
     default:
@@ -362,11 +376,11 @@ bool SrtpCrypto::unprotectReceiveMedia(const ByteBuffer& packet, uint32_t rollov
     plain.resize(0);
 
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         return unprotectReceiveMediaGCM(packet, rolloverCount, plain);
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return unprotectReceiveMediaCM(packet, rolloverCount, plain);
     default:
         assert(false);
@@ -490,10 +504,10 @@ bool SrtpCrypto::unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t roll
 
     size_t digestSize;
     switch (mProfileId) {
-    case SRTP_AES128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_80:
         digestSize = 10;
         break;
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_32:
         digestSize = 4;
         break;
     default:
@@ -610,11 +624,11 @@ bool SrtpCrypto::protectSendControl(const ByteBuffer& packet, uint32_t seq, Byte
     encrypted.resize(0);
 
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         return protectSendControlGCM(packet, seq, encrypted);
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return protectSendControlCM(packet, seq, encrypted);
     default:
         assert(false);
@@ -807,11 +821,11 @@ bool SrtpCrypto::unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& p
     plain.resize(0);
 
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         return unprotectReceiveControlGCM(packet, plain);
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return unprotectReceiveControlCM(packet, plain);
     default:
         assert(false);
@@ -1045,7 +1059,7 @@ bool SrtpCrypto::secureEquals(const void* a, const void* b, size_t size)
     return CRYPTO_memcmp(a, b, size) == 0;
 }
 
-SrtpCrypto::SrtpCrypto(uint64_t profileId,
+SrtpCrypto::SrtpCrypto(ProfileId profileId,
                        const CryptoVectors& sendRtp,
                        const CryptoVectors& receiveRtp,
                        const CryptoVectors& sendRtcp,
@@ -1085,12 +1099,12 @@ SrtpCrypto::~SrtpCrypto()
 const EVP_CIPHER* SrtpCrypto::createCipher() const
 {
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
+    case ProfileId::kAES_256_GCM:
         return EVP_aes_256_gcm();
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_128_GCM:
         return EVP_aes_128_gcm();
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         return EVP_aes_128_ctr();
     default:
         return nullptr;

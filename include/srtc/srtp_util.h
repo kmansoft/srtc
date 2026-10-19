@@ -68,8 +68,18 @@ public:
     [[nodiscard]] static bool generate(const CryptoBytes& masterKey,
                                        const CryptoBytes& masterSalt,
                                        uint8_t label,
-                                       srtc::CryptoBytes& output,
+                                       CryptoBytes& output,
                                        size_t desiredOutputSize);
+};
+
+// ----- ProfileId
+
+enum class ProfileId
+{
+    kAES_256_GCM,
+    kAES_128_GCM,
+    kAES_128_CM_SHA1_80,
+    kAES_128_CM_SHA1_32
 };
 
 } // namespace srtc

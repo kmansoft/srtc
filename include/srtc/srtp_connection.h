@@ -3,7 +3,6 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
 #include "srtc/replay_protection.h"
-#include "srtc/rtp_packet_source.h"
 #include "srtc/srtp_util.h"
 
 #include <memory>
@@ -42,11 +41,11 @@ public:
 	bool unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output);
 
 	// Implementation
-	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId);
+	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, ProfileId profileId);
 
 private:
 	const std::shared_ptr<SrtpCrypto> mCrypto;
-	const unsigned long mProfileId;
+	const ProfileId mProfileId;
 
 	struct ChannelKey {
 		uint32_t ssrc;

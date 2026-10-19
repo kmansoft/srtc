@@ -13,15 +13,12 @@ namespace srtc
 
 class ByteBuffer;
 class HmacSha1;
+class SrtpKeys;
 
 class SrtpCrypto
 {
 public:
-    [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(uint64_t profileId,
-                                                                              const CryptoBytes& sendMasterKey,
-                                                                              const CryptoBytes& sendMasterSalt,
-                                                                              const CryptoBytes& receiveMasterKey,
-                                                                              const CryptoBytes& receiveMasterSalt);
+    [[nodiscard]] static std::pair<std::shared_ptr<SrtpCrypto>, Error> create(const SrtpKeys& srtpKeys);
 
     ~SrtpCrypto();
 
@@ -42,7 +39,7 @@ public:
         CryptoBytes salt;
     };
 
-    SrtpCrypto(uint64_t profileId,
+    SrtpCrypto(ProfileId profileId,
 			   // Send RTP
 			   const CryptoVectors& sendRtp,
 			   // Receive RTP
@@ -67,7 +64,7 @@ private:
 
     [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 
-    const uint64_t mProfileId;
+    const ProfileId mProfileId;
 	const CryptoVectors mSendRtp;
 	const CryptoVectors mReceiveRtp;
     const CryptoVectors mSendRtcp;

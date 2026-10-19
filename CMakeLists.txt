@@ -110,6 +110,7 @@ add_library(srtc
         include/srtc/srtp_connection.h
         include/srtc/srtp_crypto.h
         include/srtc/srtp_hmac_sha1.h
+        include/srtc/srtp_keys.h
         include/srtc/srtp_openssl.h
         include/srtc/srtp_util.h
         include/srtc/track.h
@@ -186,6 +187,7 @@ add_library(srtc
         src/srtp_connection.cpp
         src/srtp_crypto.cpp
         src/srtp_hmac_sha1.cpp
+        src/srtp_keys.cpp
         src/srtp_openssl.cpp
         src/srtp_util.cpp
         src/track.cpp

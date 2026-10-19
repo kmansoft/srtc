@@ -116,7 +116,6 @@ TEST(KeyDerivation, TestSimpleInbound)
     const uint8_t kMasterKey[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
     const uint8_t kMasterSalt[] = { 31, 32, 33, 34, 35, 36, 41, 42, 43, 44, 45, 46 };
 
-    const auto profileSSL = SRTP_AEAD_AES_128_GCM;
     const auto profileSRTP = srtp_profile_aead_aes_128_gcm;
 
     srtc::CryptoBytes masterKey;

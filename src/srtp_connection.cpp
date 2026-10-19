@@ -17,6 +17,7 @@
 #include "srtc/logging.h"
 #include "srtc/srtp_connection.h"
 #include "srtc/srtp_crypto.h"
+#include "srtc/srtp_keys.h"
 #include "srtc/util.h"
 
 #include <mutex>
@@ -25,7 +26,6 @@
 #include <openssl/ssl.h>
 
 #include <cassert>
-#include <cstring>
 #include <iostream>
 
 #define LOG(level, ...) srtc::log(level, "SrtpConnection", __VA_ARGS__)
@@ -47,22 +47,32 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
 
     LOG(SRTC_LOG_V, "Connected with %s cipher", srtpProfileName->name);
 
+    ProfileId srtpProfileId;
+    std::string srtpProfileIdName;
     size_t srtpKeySize, srtpSaltSize;
 
     switch (srtpProfileName->id) {
     case SRTP_AEAD_AES_256_GCM:
+        srtpProfileId = ProfileId::kAES_256_GCM;
+        srtpProfileIdName = "AES_256_GCM";
         srtpKeySize = 32;
         srtpSaltSize = 12;
         break;
     case SRTP_AEAD_AES_128_GCM:
+        srtpProfileId = ProfileId::kAES_128_GCM;
+        srtpProfileIdName = "AES_128_GCM";
         srtpKeySize = 16;
         srtpSaltSize = 12;
         break;
     case SRTP_AES128_CM_SHA1_80:
+        srtpProfileId = ProfileId::kAES_128_CM_SHA1_80;
+        srtpProfileIdName = "AES_128_CM_SHA1_80";
         srtpKeySize = 16;
         srtpSaltSize = 14;
         break;
     case SRTP_AES128_CM_SHA1_32:
+        srtpProfileId = ProfileId::kAES_128_CM_SHA1_32;
+        srtpProfileIdName = "AES_128_CM_SHA1_32";
         srtpKeySize = 16;
         srtpSaltSize = 14;
         break;
@@ -82,30 +92,15 @@ std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dt
     const auto srtpClientSalt = srtpServerKey + srtpKeySize;
     const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
 
-    CryptoBytes sendMasterKey, sendMasterSalt;
-    CryptoBytes receiveMasterKey, receiveMasterSalt;
+    const SrtpKeys srtpKeys(srtpProfileId, srtpProfileIdName, isSetupActive,
+        srtpClientKey, srtpServerKey, srtpClientSalt, srtpServerSalt, srtpKeySize, srtpSaltSize);
 
-    if (isSetupActive) {
-        sendMasterKey.assign(srtpServerKey, srtpKeySize);
-        sendMasterSalt.assign(srtpServerSalt, srtpSaltSize);
-
-        receiveMasterKey.assign(srtpClientKey, srtpKeySize);
-        receiveMasterSalt.assign(srtpClientSalt, srtpSaltSize);
-    } else {
-        sendMasterKey.assign(srtpClientKey, srtpKeySize);
-        sendMasterSalt.assign(srtpClientSalt, srtpSaltSize);
-
-        receiveMasterKey.assign(srtpServerKey, srtpKeySize);
-        receiveMasterSalt.assign(srtpServerSalt, srtpSaltSize);
-    }
-
-    const auto [crypto, error] =
-        SrtpCrypto::create(srtpProfileName->id, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+    const auto [crypto, error] = SrtpCrypto::create(srtpKeys);
     if (error.isError()) {
         return { nullptr, error };
     }
 
-    const auto conn = std::make_shared<SrtpConnection>(crypto, srtpProfileName->id);
+    const auto conn = std::make_shared<SrtpConnection>(crypto, srtpProfileId);
     return { conn, Error::OK };
 }
 
@@ -256,7 +251,7 @@ bool SrtpConnection::unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuf
     return true;
 }
 
-SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId)
+SrtpConnection::SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, ProfileId profileId)
     : mCrypto(crypto)
     , mProfileId(profileId)
 {
@@ -280,8 +275,8 @@ bool SrtpConnection::getControlSequenceNumber(const ByteBuffer& packet, uint32_t
 {
     size_t offetFromEnd;
     switch (mProfileId) {
-    case SRTP_AEAD_AES_256_GCM:
-    case SRTP_AEAD_AES_128_GCM:
+    case ProfileId::kAES_256_GCM:
+    case ProfileId::kAES_128_GCM:
         // 4 byte RTCP header
         // 4 byte SSRC
         // ... ciphertext
@@ -289,8 +284,8 @@ bool SrtpConnection::getControlSequenceNumber(const ByteBuffer& packet, uint32_t
         // 4 byte SRTCP index
         offetFromEnd = 4;
         break;
-    case SRTP_AES128_CM_SHA1_80:
-    case SRTP_AES128_CM_SHA1_32:
+    case ProfileId::kAES_128_CM_SHA1_80:
+    case ProfileId::kAES_128_CM_SHA1_32:
         // 4 byte RTCP header
         // 4 byte SSRC
         // ... ciphertext
