@@ -425,6 +425,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
     target_include_directories(
             srtc_test
             PRIVATE
+            src/providers
             "${SRTP_INCLUDE_DIR}"
             "${OPENSSL_INCLUDE_DIR}"
     )

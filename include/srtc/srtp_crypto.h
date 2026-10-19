@@ -8,6 +8,11 @@
 struct evp_cipher_ctx_st;
 struct evp_cipher_st;
 
+namespace srtc::providers
+{
+class CryptoProvider;
+}
+
 namespace srtc
 {
 
@@ -25,12 +30,12 @@ public:
     [[nodiscard]] size_t getMediaProtectionOverhead() const;
 
     [[nodiscard]] bool protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
-	[[nodiscard]] bool unprotectReceiveMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveMedia(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
 
     [[nodiscard]] bool protectSendControl(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
     [[nodiscard]] bool unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& plain);
 
-	static bool secureEquals(const void* a, const void* b, size_t size);
+    static bool secureEquals(const void* a, const void* b, size_t size);
 
     // Implementation
     struct CryptoVectors {
@@ -40,10 +45,10 @@ public:
     };
 
     SrtpCrypto(ProfileId profileId,
-			   // Send RTP
-			   const CryptoVectors& sendRtp,
-			   // Receive RTP
-			   const CryptoVectors& receiveRtp,
+               // Send RTP
+               const CryptoVectors& sendRtp,
+               // Receive RTP
+               const CryptoVectors& receiveRtp,
                // Send RTCP
                const CryptoVectors& sendRtcp,
                // Receive RTCP
@@ -53,8 +58,8 @@ private:
     [[nodiscard]] bool protectSendMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
     [[nodiscard]] bool protectSendMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted);
 
-	[[nodiscard]] bool unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
-	[[nodiscard]] bool unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
+    [[nodiscard]] bool unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& plain);
 
     [[nodiscard]] bool protectSendControlGCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
     [[nodiscard]] bool protectSendControlCM(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
@@ -65,13 +70,16 @@ private:
     [[nodiscard]] const struct evp_cipher_st* createCipher() const;
 
     const ProfileId mProfileId;
-	const CryptoVectors mSendRtp;
-	const CryptoVectors mReceiveRtp;
+    const CryptoVectors mSendRtp;
+    const CryptoVectors mReceiveRtp;
     const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
 
     struct evp_cipher_ctx_st* mSendCipherCtx;
     struct evp_cipher_ctx_st* mReceiveCipherCtx;
+
+    std::shared_ptr<providers::CryptoProvider> mSendProvider;
+    std::shared_ptr<providers::CryptoProvider> mReceiveProvider;
 
     std::shared_ptr<HmacSha1> mHmacSha1;
 };

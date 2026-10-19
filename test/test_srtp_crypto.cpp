@@ -7,9 +7,10 @@
 #include "srtc/rtp_packet.h"
 #include "srtc/srtp_crypto.h"
 #include "srtc/srtp_keys.h"
-#include "srtc/srtp_openssl.h"
 #include "srtc/srtp_util.h"
 #include "srtc/track.h"
+
+#include "crypto_provider.h"
 
 #include <cstring>
 #include <ctime>
@@ -46,7 +47,7 @@ TEST(SrtpCrypto, SendMedia)
     std::cout << "SrtpCrypto SendMedia" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -248,7 +249,7 @@ TEST(SrtpCrypto, ReceiveMedia)
     std::cout << "SrtpCrypto ReceiveMedia" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -427,7 +428,7 @@ TEST(SrtpCrypto, SendControl)
     std::cout << "SrtpCrypto SendControl" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -562,7 +563,7 @@ TEST(SrtpCrypto, SendControlMulti)
     std::cout << "SrtpCrypto SendControlMulti" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -713,7 +714,7 @@ TEST(SrtpCrypto, ReceiveControl)
     std::cout << "SrtpCrypto ReceiveControl" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -858,7 +859,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
     std::cout << "SrtpCrypto RtcpReceiveMulti" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::providers::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,

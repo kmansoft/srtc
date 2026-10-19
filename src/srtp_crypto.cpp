@@ -7,12 +7,12 @@
 // from this software without specific prior written permission.
 
 #include "srtc/srtp_crypto.h"
-
-#include "crypto_provider_openssl.h"
 #include "srtc/byte_buffer.h"
 #include "srtc/srtp_hmac_sha1.h"
 #include "srtc/srtp_keys.h"
 #include "srtc/srtp_util.h"
+
+#include "crypto_provider.h"
 
 #include <cassert>
 #include <cstring>
@@ -173,11 +173,6 @@ bool SrtpCrypto::protectSendMedia(const ByteBuffer& packet, uint32_t rolloverCou
 
 bool SrtpCrypto::protectSendMediaGCM(const ByteBuffer& packet, uint32_t rolloverCount, ByteBuffer& encrypted)
 {
-    const auto ctx = mSendCipherCtx;
-    if (!ctx) {
-        return false;
-    }
-
     const size_t digestSize = kAESGCM_TagSize;
 
     const auto packetData = packet.data();
@@ -217,47 +212,43 @@ bool SrtpCrypto::protectSendMediaGCM(const ByteBuffer& packet, uint32_t rollover
     std::memcpy(encryptedData, packetData, headerSize);
 
     // Encryption
-    int len = 0, total_len = 0;
-    int final_ret = 0;
+    size_t len = 0, total_len = 0;
+    bool success = false;
     uint8_t digest[kAESGCM_TagSize] = {};
 
-    // Set key and iv
-    if (!EVP_EncryptInit_ex(ctx, nullptr, nullptr, mSendRtp.key.data(), iv.data())) {
+    // Create context with key and iv
+    auto context = mSendProvider->createEncryptContext(mSendRtp.key.data(), iv.data());
+    if (!context) {
         goto fail;
     }
 
     // The header is AAD
-    if (!EVP_EncryptUpdate(ctx, nullptr, &len, packetData, static_cast<int>(headerSize))) {
+    if (!context.update_aad(packetData, headerSize)) {
         goto fail;
     }
 
     // Encrypt the body
-    if (!EVP_EncryptUpdate(ctx,
-                           encryptedData + headerSize,
-                           &len,
-                           packetData + headerSize,
-                           static_cast<int>(packetSize - headerSize))) {
+    if (!context.update_data(encryptedData + headerSize, packetData + headerSize, packetSize - headerSize, &len)) {
         goto fail;
     }
-    total_len = len;
+    total_len += len;
 
-    final_ret = EVP_EncryptFinal_ex(ctx, encryptedData + headerSize + len, &len);
-    if (final_ret > 0) {
-        total_len += len;
-    }
-
-    // Get tag
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kAESGCM_TagSize, digest)) {
-        final_ret = 0;
+    if (!context.finalize(encryptedData + headerSize + len, &len)) {
         goto fail;
     }
+    total_len += len;
 
-    // Copy it to after the data
+    // Get tag and copy it after the data
+    if (!context.get_digest(digest, kAESGCM_TagSize)) {
+        goto fail;
+    }
     std::memcpy(encryptedData + encryptedSize - digestSize, digest, kAESGCM_TagSize);
 
+    // It all worked
+    success = true;
 fail:
-    if (final_ret > 0) {
-        assert(static_cast<size_t>(total_len) + headerSize + digestSize == encryptedSize);
+    if (success) {
+        assert(total_len + headerSize + digestSize == encryptedSize);
         (void)total_len;
         encrypted.resize(encryptedSize);
         return true;
@@ -1085,6 +1076,9 @@ SrtpCrypto::SrtpCrypto(ProfileId profileId,
         mReceiveCipherCtx = EVP_CIPHER_CTX_new();
         EVP_DecryptInit_ex(mReceiveCipherCtx, receiveCipher, nullptr, nullptr, nullptr);
     }
+
+    mSendProvider = std::make_shared<providers::CryptoProvider>(mProfileId);
+    mReceiveProvider = std::make_shared<providers::CryptoProvider>(mProfileId);
 }
 
 SrtpCrypto::~SrtpCrypto()
