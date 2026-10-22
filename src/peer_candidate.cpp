@@ -264,7 +264,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
         to_string(host.addr).c_str(),
         static_cast<long>(startDelay.count()));
 
-    providers::initCryptoProvider();
+    compat::initCryptoProvider();
 
     if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
         SctpSessionListener* l = this;

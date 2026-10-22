@@ -5,7 +5,7 @@
 #include "srtc/error.h"
 #include "srtc/srtp_util.h"
 
-namespace srtc::providers
+namespace srtc::compat
 {
 class CryptoProvider;
 }
@@ -31,8 +31,6 @@ public:
 
     [[nodiscard]] bool protectSendControl(const ByteBuffer& packet, uint32_t seq, ByteBuffer& encrypted);
     [[nodiscard]] bool unprotectReceiveControl(const ByteBuffer& packet, ByteBuffer& plain);
-
-    static bool secureEquals(const void* a, const void* b, size_t size);
 
     // Implementation
     struct CryptoVectors {
@@ -70,8 +68,8 @@ private:
     const CryptoVectors mSendRtcp;
     const CryptoVectors mReceiveRtcp;
 
-    std::shared_ptr<providers::CryptoProvider> mSendProvider;
-    std::shared_ptr<providers::CryptoProvider> mReceiveProvider;
+    std::shared_ptr<compat::CryptoProvider> mSendProvider;
+    std::shared_ptr<compat::CryptoProvider> mReceiveProvider;
 
     std::shared_ptr<HmacSha1> mHmacSha1;
 };

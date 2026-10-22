@@ -6,7 +6,6 @@
 #include <cstring>
 #include <mutex>
 
-#include <openssl/srtp.h>
 #include <srtp.h>
 
 // Init Cisco's libSRTP

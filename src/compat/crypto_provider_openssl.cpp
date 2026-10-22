@@ -2,7 +2,6 @@
 
 #include <mutex>
 
-#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
@@ -13,7 +12,7 @@ std::once_flag gInitFlag;
 
 }
 
-namespace srtc::providers
+namespace srtc::compat
 {
 
 void initCryptoProvider()
@@ -143,11 +142,6 @@ bool CryptoProvider::DecryptContext::finalize(uint8_t* out, size_t* out_size) co
     return false;
 }
 
-bool secureEquals(const void* a, const void* b, size_t size)
-{
-    return CRYPTO_memcmp(a, b, size) == 0;
-}
-
 const struct evp_cipher_st* CryptoProvider::createCipher() const
 {
     switch (mProfileId) {
@@ -163,4 +157,4 @@ const struct evp_cipher_st* CryptoProvider::createCipher() const
     }
 }
 
-} // namespace srtc::providers
+} // namespace srtc::compat

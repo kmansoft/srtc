@@ -5,12 +5,10 @@
 #include "srtc/rtp_packet.h"
 #include "srtc/media.h"
 #include "srtc/track.h"
-#include "srtc/util.h"
+
+#include "crypto_util.h"
 
 #include <cstring>
-#include <iostream>
-
-#include <openssl/rand.h>
 
 namespace
 {
@@ -18,7 +16,7 @@ namespace
 uint32_t randomU32()
 {
     uint32_t value;
-    RAND_bytes((unsigned char*)&value, sizeof(value));
+    srtc::compat::randomBytes((unsigned char*)&value, sizeof(value));
     return value;
 }
 
@@ -161,7 +159,7 @@ TEST(RtpPacket, Serialize)
         size_t payloadSize = randomU32() % 0x3FF;
         srtc::ByteBuffer payload(payloadSize);
         payload.resize(payloadSize);
-        RAND_bytes(payload.data(), static_cast<int>(payloadSize));
+        srtc::compat::randomBytes(payload.data(), payloadSize);
 
         // This is our packet's unencrypted data
         const auto packet = std::make_shared<srtc::RtpPacket>(

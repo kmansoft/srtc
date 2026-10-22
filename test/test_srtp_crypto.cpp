@@ -11,12 +11,12 @@
 #include "srtc/track.h"
 
 #include "crypto_provider.h"
+#include "crypto_util.h"
 
 #include <cstring>
 #include <ctime>
 #include <mutex>
 
-#include <openssl/rand.h>
 #include <srtp.h>
 
 // Init Cisco's libSRTP
@@ -34,7 +34,7 @@ void initLibSRTP()
 uint32_t randomU32()
 {
     uint32_t value;
-    RAND_bytes((unsigned char*)&value, sizeof(value));
+    srtc::compat::randomBytes((unsigned char*)&value, sizeof(value));
     return value;
 }
 
@@ -47,7 +47,7 @@ TEST(SrtpCrypto, SendMedia)
     std::cout << "SrtpCrypto SendMedia" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -93,12 +93,12 @@ TEST(SrtpCrypto, SendMedia)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -149,7 +149,7 @@ TEST(SrtpCrypto, SendMedia)
         {
             // Edge case 1: empty payload with an extension, not valid in our library
             uint8_t extensionData[15];
-            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::compat::randomBytes(extensionData, sizeof(extensionData));
             srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData) } };
 
             srtc::ByteBuffer payload; // empty
@@ -165,11 +165,11 @@ TEST(SrtpCrypto, SendMedia)
         {
             // Edge case 2: 1 byte payload with an extension, valid in our library
             uint8_t extensionData[15];
-            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::compat::randomBytes(extensionData, sizeof(extensionData));
             srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData) } };
 
             uint8_t payloadData[1];
-            RAND_bytes(payloadData, sizeof(payloadData));
+            srtc::compat::randomBytes(payloadData, sizeof(payloadData));
 
             srtc::ByteBuffer payload = { payloadData, sizeof(payloadData) };
 
@@ -184,7 +184,7 @@ TEST(SrtpCrypto, SendMedia)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             // Rollover counter
@@ -201,7 +201,7 @@ TEST(SrtpCrypto, SendMedia)
                 const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
                 srtc::ByteBuffer extensionData(extensionLen);
                 extensionData.resize(extensionLen);
-                RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+                srtc::compat::randomBytes(extensionData.data(), static_cast<int>(extensionLen));
 
                 extension = { extensionId, std::move(extensionData) };
             }
@@ -249,7 +249,7 @@ TEST(SrtpCrypto, ReceiveMedia)
     std::cout << "SrtpCrypto ReceiveMedia" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -295,12 +295,12 @@ TEST(SrtpCrypto, ReceiveMedia)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -362,7 +362,7 @@ TEST(SrtpCrypto, ReceiveMedia)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             // Rollover counter
@@ -379,7 +379,7 @@ TEST(SrtpCrypto, ReceiveMedia)
                 const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
                 srtc::ByteBuffer extensionData(extensionLen);
                 extensionData.resize(extensionLen);
-                RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+                srtc::compat::randomBytes(extensionData.data(), static_cast<int>(extensionLen));
 
                 extension = { extensionId, std::move(extensionData) };
             }
@@ -428,7 +428,7 @@ TEST(SrtpCrypto, SendControl)
     std::cout << "SrtpCrypto SendControl" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -474,12 +474,12 @@ TEST(SrtpCrypto, SendControl)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -523,7 +523,7 @@ TEST(SrtpCrypto, SendControl)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             const auto packet = std::make_shared<srtc::RtcpPacket>(ssrc, 0x11, 0x22, std::move(payload));
@@ -563,7 +563,7 @@ TEST(SrtpCrypto, SendControlMulti)
     std::cout << "SrtpCrypto SendControlMulti" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -609,12 +609,12 @@ TEST(SrtpCrypto, SendControlMulti)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -659,7 +659,7 @@ TEST(SrtpCrypto, SendControlMulti)
             // Packet 1
             const auto payloadSize1 = 5 + randomU32() % 200;
             srtc::ByteBuffer payload1(payloadSize1);
-            RAND_bytes(payload1.data(), static_cast<int>(payload1.capacity()));
+            srtc::compat::randomBytes(payload1.data(), static_cast<int>(payload1.capacity()));
             payload1.resize(payloadSize1);
 
             const auto packet1 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x01, 0x22, std::move(payload1));
@@ -667,7 +667,7 @@ TEST(SrtpCrypto, SendControlMulti)
             // Packet 2
             const auto payloadSize2 = 5 + randomU32() % 200;
             srtc::ByteBuffer payload2(payloadSize2);
-            RAND_bytes(payload2.data(), static_cast<int>(payload2.capacity()));
+            srtc::compat::randomBytes(payload2.data(), static_cast<int>(payload2.capacity()));
             payload2.resize(payloadSize2);
 
             const auto packet2 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x03, 0x44, std::move(payload2));
@@ -714,7 +714,7 @@ TEST(SrtpCrypto, ReceiveControl)
     std::cout << "SrtpCrypto ReceiveControl" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -760,12 +760,12 @@ TEST(SrtpCrypto, ReceiveControl)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -824,7 +824,7 @@ TEST(SrtpCrypto, ReceiveControl)
             const auto sourcePacketDataSize = 4 * sourcePacketDataSizeDiv4;
             ASSERT_LE(sourcePacketDataSize, 64);
             uint8_t randomBytes[64];
-            RAND_bytes(randomBytes, sizeof(randomBytes));
+            srtc::compat::randomBytes(randomBytes, sizeof(randomBytes));
             sourceWriter.write(randomBytes, sourcePacketDataSize);
 
             // Encrypt
@@ -859,7 +859,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
     std::cout << "SrtpCrypto RtcpReceiveMulti" << std::endl;
 
     initLibSRTP();
-    srtc::providers::initCryptoProvider();
+    srtc::compat::initCryptoProvider();
 
     static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
                                                         srtc::ProfileId::kAES_128_GCM,
@@ -905,12 +905,12 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
         // Convert to our objects, not setup active so client is send and server is receive
         const srtc::SrtpKeys srtpKeys(profileId,
@@ -970,7 +970,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
             const auto sourcePacket1DataSize = 4 * sourcePacket1DataSizeDiv4;
             ASSERT_LE(sourcePacket1DataSize, 64);
             uint8_t randomBytes1[64];
-            RAND_bytes(randomBytes1, sizeof(randomBytes1));
+            srtc::compat::randomBytes(randomBytes1, sizeof(randomBytes1));
             sourceWriter1.write(randomBytes1, sourcePacket1DataSize);
 
             // Packet 2
@@ -992,7 +992,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
             const auto sourcePacket2DataSize = 4 * sourcePacket2DataSizeDiv4;
             ASSERT_LE(sourcePacket2DataSize, 64);
             uint8_t randomBytes2[64];
-            RAND_bytes(randomBytes2, sizeof(randomBytes2));
+            srtc::compat::randomBytes(randomBytes2, sizeof(randomBytes2));
             sourceWriter1.write(randomBytes2, sourcePacket2DataSize);
 
             // Combine into one

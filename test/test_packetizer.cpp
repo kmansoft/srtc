@@ -10,8 +10,9 @@
 #include "srtc/rtp_extension_source_twcc.h"
 #include "srtc/track.h"
 
+#include "crypto_util.h"
+
 #include <cstring>
-#include <openssl/rand.h>
 
 namespace
 {
@@ -19,7 +20,7 @@ namespace
 uint32_t randomU32()
 {
     uint32_t value;
-    RAND_bytes((unsigned char*)&value, sizeof(value));
+    srtc::compat::randomBytes((unsigned char*)&value, sizeof(value));
     return value;
 }
 
@@ -32,7 +33,7 @@ srtc::ByteBuffer generateNAL(uint8_t type, uint32_t size)
     buffer.resize(size + 1);
 
     uint8_t* nal_data = buffer.data() + 1;
-    RAND_bytes(nal_data, static_cast<int>(size));
+    srtc::compat::randomBytes(nal_data, static_cast<int>(size));
 
     for (size_t i = 0u; i < size - 2; ++i) {
         if (nal_data[i] == 0u && nal_data[i + 1] == 0u && nal_data[i + 2] == 1u) {

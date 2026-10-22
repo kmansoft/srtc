@@ -196,8 +196,9 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
-        # providers
-        src/providers/crypto_provider.h
+        # compat
+        src/compat/crypto_provider.h
+        src/compat/crypto_util.h
         # sctp
         src/sctp/sctp_crc32.h
         src/sctp/sctp_defs.h
@@ -236,7 +237,7 @@ endif ()
 
 target_include_directories(srtc PUBLIC "./include")
 
-target_include_directories(srtc PRIVATE "./src/providers")
+target_include_directories(srtc PRIVATE "src/compat")
 
 if (UNIX)
     target_compile_options(srtc
@@ -312,8 +313,10 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
     )
     target_sources(srtc
             PRIVATE
-            src/providers/crypto_provider_openssl.h
-            src/providers/crypto_provider_openssl.cpp
+            src/compat/crypto_provider_openssl.h
+            src/compat/crypto_provider_openssl.cpp
+            src/compat/crypto_util_openssl.h
+            src/compat/crypto_util_openssl.cpp
     )
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
@@ -425,7 +428,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
     target_include_directories(
             srtc_test
             PRIVATE
-            src/providers
+            src/compat
             "${SRTP_INCLUDE_DIR}"
             "${OPENSSL_INCLUDE_DIR}"
     )

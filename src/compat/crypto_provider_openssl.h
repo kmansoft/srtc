@@ -5,7 +5,7 @@
 struct evp_cipher_ctx_st;
 struct evp_cipher_st;
 
-namespace srtc::providers
+namespace srtc::compat
 {
 
 class CryptoProvider
@@ -62,8 +62,5 @@ private:
 };
 
 void initCryptoProvider();
-
-// Constant time comparison
-bool secureEquals(const void* a, const void* b, size_t size);
 
 }

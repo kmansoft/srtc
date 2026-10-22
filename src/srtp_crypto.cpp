@@ -13,6 +13,7 @@
 #include "srtc/srtp_util.h"
 
 #include "crypto_provider.h"
+#include "crypto_util.h"
 
 #include <cassert>
 #include <cstring>
@@ -41,7 +42,7 @@ namespace srtc
 
 std::pair<std::shared_ptr<SrtpCrypto>, Error> SrtpCrypto::create(const SrtpKeys& srtpKeys)
 {
-    providers::initCryptoProvider();
+    compat::initCryptoProvider();
 
     if (srtpKeys.sendMasterKey.empty() || srtpKeys.receiveMasterKey.empty()) {
         return { nullptr, { Error::Code::InvalidData, "Master key is empty" } };
@@ -569,7 +570,7 @@ bool SrtpCrypto::unprotectReceiveMediaCM(const ByteBuffer& packet, uint32_t roll
     mHmacSha1->update(reinterpret_cast<const uint8_t*>(&trailer), sizeof(trailer));
     mHmacSha1->final(digest);
 
-    if (!providers::secureEquals(digest, digestPtr, digestSize)) {
+    if (!compat::secureEquals(digest, digestPtr, digestSize)) {
         // Digest validation failed
         goto fail;
     }
@@ -971,7 +972,7 @@ bool SrtpCrypto::unprotectReceiveControlCM(const ByteBuffer& packet, ByteBuffer&
     mHmacSha1->update(encryptedData, digestPtr - encryptedData);
     mHmacSha1->final(digest);
 
-    if (!providers::secureEquals(digest, digestPtr, digestSize)) {
+    if (!compat::secureEquals(digest, digestPtr, digestSize)) {
         // Digest validation failed
         goto fail;
     }
@@ -987,11 +988,6 @@ fail:
     return false;
 }
 
-bool SrtpCrypto::secureEquals(const void* a, const void* b, size_t size)
-{
-    return providers::secureEquals(a, b, size);
-}
-
 SrtpCrypto::SrtpCrypto(ProfileId profileId,
                        const CryptoVectors& sendRtp,
                        const CryptoVectors& receiveRtp,
@@ -1002,8 +998,8 @@ SrtpCrypto::SrtpCrypto(ProfileId profileId,
     , mReceiveRtp(receiveRtp)
     , mSendRtcp(sendRtcp)
     , mReceiveRtcp(receiveRtcp)
-    , mSendProvider(std::make_shared<providers::CryptoProvider>(profileId))
-    , mReceiveProvider(std::make_shared<providers::CryptoProvider>(profileId))
+    , mSendProvider(std::make_shared<compat::CryptoProvider>(profileId))
+    , mReceiveProvider(std::make_shared<compat::CryptoProvider>(profileId))
     , mHmacSha1(std::make_shared<HmacSha1>())
 {
 }
