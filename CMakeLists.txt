@@ -326,6 +326,15 @@ elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
 
     find_package(MbedTLS REQUIRED)
 
+    # DTLS-SRTP is off in mbedTLS's default config, and we can't do WebRTC without it
+    include(CheckSymbolExists)
+    set(CMAKE_REQUIRED_LIBRARIES MbedTLS::mbedtls)
+    check_symbol_exists(MBEDTLS_SSL_DTLS_SRTP "mbedtls/build_info.h" SRTC_MBEDTLS_HAS_DTLS_SRTP)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    if (NOT SRTC_MBEDTLS_HAS_DTLS_SRTP)
+        message(FATAL_ERROR "mbedTLS has to be built with MBEDTLS_SSL_DTLS_SRTP enabled")
+    endif ()
+
     target_compile_definitions(srtc
             PUBLIC
             SRTC_USE_MBEDTLS
@@ -335,6 +344,15 @@ elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
             MbedTLS::mbedtls
             MbedTLS::mbedx509
             MbedTLS::mbedcrypto
+    )
+    target_sources(srtc
+            PRIVATE
+            src/compat/crypto_dtls_session_mbedtls.h
+            src/compat/crypto_dtls_session_mbedtls.cpp
+            src/compat/crypto_provider_mbedtls.h
+            src/compat/crypto_provider_mbedtls.cpp
+            src/compat/crypto_util_mbedtls.h
+            src/compat/crypto_util_mbedtls.cpp
     )
 else ()
     message(FATAL_ERROR "Unknown crypto library: ${SRTC_CRYPTO_LIB}")
@@ -374,9 +392,30 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
 
     list(APPEND LIBSRTP_CMAKE_ARGS
             "-DLIBSRTP_TEST_APPS=OFF"
-            "-DENABLE_${SRTC_CRYPTO_LIB}=ON"
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
     )
+
+    # Set every libsrtp crypto option, not just ours, so that switching SRTC_CRYPTO_LIB
+    # in an existing build directory doesn't leave the old one enabled in libsrtp's cache.
+    # libsrtp copies ENABLE_<LIB> into its own cached <LIB> variable, but only ever sets it,
+    # never clears it, and without FORCE - so we set both.
+    foreach (LIBSRTP_CRYPTO_LIB OPENSSL MBEDTLS WOLFSSL NSS)
+        if (LIBSRTP_CRYPTO_LIB STREQUAL SRTC_CRYPTO_LIB)
+            set(LIBSRTP_CRYPTO_LIB_VALUE ON)
+        else ()
+            set(LIBSRTP_CRYPTO_LIB_VALUE OFF)
+        endif ()
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                "-DENABLE_${LIBSRTP_CRYPTO_LIB}=${LIBSRTP_CRYPTO_LIB_VALUE}"
+                "-D${LIBSRTP_CRYPTO_LIB}=${LIBSRTP_CRYPTO_LIB_VALUE}"
+        )
+        if (LIBSRTP_CRYPTO_LIB STREQUAL "WOLFSSL")
+            list(APPEND LIBSRTP_CMAKE_ARGS "-DWOLFSSL_KDF=${LIBSRTP_CRYPTO_LIB_VALUE}")
+        endif ()
+    endforeach ()
+
+    # All of the above provide AES-GCM, which our tests need
+    list(APPEND LIBSRTP_CMAKE_ARGS "-DGCM=ON")
 
     if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         list(APPEND LIBSRTP_CMAKE_ARGS
@@ -459,11 +498,19 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
         )
     endif ()
 
+    # Also for libsrtp, which is built with the same crypto library
     if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         target_link_libraries(
                 srtc_test
                 OpenSSL::Crypto
                 OpenSSL::SSL
+        )
+    elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
+        target_link_libraries(
+                srtc_test
+                MbedTLS::mbedtls
+                MbedTLS::mbedx509
+                MbedTLS::mbedcrypto
         )
     endif ()
 
