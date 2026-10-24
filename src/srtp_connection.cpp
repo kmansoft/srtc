@@ -22,9 +22,6 @@
 
 #include <mutex>
 
-#include <openssl/srtp.h>
-#include <openssl/ssl.h>
-
 #include <cassert>
 #include <iostream>
 
@@ -33,71 +30,16 @@
 namespace srtc
 {
 
-std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(SSL* dtls_ssl, bool isSetupActive)
+std::pair<std::shared_ptr<SrtpConnection>, Error> SrtpConnection::create(const SrtpKeys& srtpKeys)
 {
-    // https://stackoverflow.com/questions/22692109/webrtc-srtp-decryption
-
-    const auto srtpProfileName = SSL_get_selected_srtp_profile(dtls_ssl);
-    if (srtpProfileName == nullptr) {
-        return { nullptr, { Error::Code::InvalidData, "Cannot get SRTP profile from OpenSSL " } };
-    }
-
-    LOG(SRTC_LOG_V, "Connected with %s cipher", srtpProfileName->name);
-
-    ProfileId srtpProfileId;
-    std::string srtpProfileIdName;
-    size_t srtpKeySize, srtpSaltSize;
-
-    switch (srtpProfileName->id) {
-    case SRTP_AEAD_AES_256_GCM:
-        srtpProfileId = ProfileId::kAES_256_GCM;
-        srtpProfileIdName = "AES_256_GCM";
-        srtpKeySize = 32;
-        srtpSaltSize = 12;
-        break;
-    case SRTP_AEAD_AES_128_GCM:
-        srtpProfileId = ProfileId::kAES_128_GCM;
-        srtpProfileIdName = "AES_128_GCM";
-        srtpKeySize = 16;
-        srtpSaltSize = 12;
-        break;
-    case SRTP_AES128_CM_SHA1_80:
-        srtpProfileId = ProfileId::kAES_128_CM_SHA1_80;
-        srtpProfileIdName = "AES_128_CM_SHA1_80";
-        srtpKeySize = 16;
-        srtpSaltSize = 14;
-        break;
-    case SRTP_AES128_CM_SHA1_32:
-        srtpProfileId = ProfileId::kAES_128_CM_SHA1_32;
-        srtpProfileIdName = "AES_128_CM_SHA1_32";
-        srtpKeySize = 16;
-        srtpSaltSize = 14;
-        break;
-    default:
-        return { nullptr, { Error::Code::InvalidData, "Unsupported SRTP profile" } };
-    }
-
-    const auto srtpKeyPlusSaltSize = srtpKeySize + srtpSaltSize;
-    auto material = ByteBuffer{ srtpKeyPlusSaltSize * 2 };
-
-    std::string label = "EXTRACTOR-dtls_srtp";
-    SSL_export_keying_material(
-        dtls_ssl, material.data(), srtpKeyPlusSaltSize * 2, label.data(), label.size(), nullptr, 0, 0);
-
-    const auto srtpClientKey = material.data();
-    const auto srtpServerKey = srtpClientKey + srtpKeySize;
-    const auto srtpClientSalt = srtpServerKey + srtpKeySize;
-    const auto srtpServerSalt = srtpClientSalt + srtpSaltSize;
-
-    const SrtpKeys srtpKeys(srtpProfileId, srtpProfileIdName, isSetupActive,
-        srtpClientKey, srtpServerKey, srtpClientSalt, srtpServerSalt, srtpKeySize, srtpSaltSize);
+    LOG(SRTC_LOG_V, "Connected with %s cipher", srtpKeys.profileIdName.c_str());
 
     const auto [crypto, error] = SrtpCrypto::create(srtpKeys);
     if (error.isError()) {
         return { nullptr, error };
     }
 
-    const auto conn = std::make_shared<SrtpConnection>(crypto, srtpProfileId);
+    const auto conn = std::make_shared<SrtpConnection>(crypto, srtpKeys.profileId);
     return { conn, Error::OK };
 }
 

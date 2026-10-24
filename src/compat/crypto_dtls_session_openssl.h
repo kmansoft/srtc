@@ -7,6 +7,7 @@
 #include "srtc/scheduler.h"
 #include "srtc/srtp_keys.h"
 #include "srtc/srtp_util.h"
+#include "srtc/x509_hash.h"
 
 #include <functional>
 #include <list>
@@ -47,9 +48,11 @@ public:
     DtlsSession& operator=(DtlsSession&&) = delete;
 
     // isSetupActive: the remote's answer has a=setup:active, so we are the DTLS server
+    // expectedHash: the remote certificate fingerprint from the SDP answer, checked before reporting success
     // iceRttMillis: used for the initial retransmit timeout, can be 0 if unknown
     static std::pair<std::shared_ptr<DtlsSession>, Error> create(bool isSetupActive,
                                                                  const std::shared_ptr<X509Certificate>& certificate,
+                                                                 const X509Hash& expectedHash,
                                                                  const std::shared_ptr<RealScheduler>& scheduler,
                                                                  float iceRttMillis,
                                                                  const SendFn& sendFn,
@@ -58,7 +61,8 @@ public:
 
     ~DtlsSession();
 
-    // Starting the handshake, as a client this sends the ClientHello
+    // Sets up OpenSSL and starts the handshake, as a client this sends the ClientHello.
+    // On error, the state is Failed
     [[nodiscard]] Error start();
 
     // Shutting down, sends close_notify if connected
@@ -90,6 +94,7 @@ public:
     // Implementation
     DtlsSession(bool isSetupActive,
                 const std::shared_ptr<X509Certificate>& certificate,
+                const X509Hash& expectedHash,
                 const std::shared_ptr<RealScheduler>& scheduler,
                 float iceRttMillis,
                 const SendFn& sendFn,
@@ -99,6 +104,7 @@ public:
 private:
     const bool mIsSetupActive;
     const std::shared_ptr<X509Certificate> mCertificate;
+    const X509Hash mExpectedHash;
     const float mIceRttMillis;
     const SendFn mSendFn;
     const ConnectSuccessFn mConnectSuccessFn;

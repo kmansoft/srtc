@@ -9,6 +9,7 @@
 #include "crypto_dtls_session.h"
 
 #include "srtc/logging.h"
+#include "srtc/util.h"
 #include "srtc/x509_certificate.h"
 
 #include <algorithm>
@@ -114,6 +115,7 @@ BIO_METHOD* DtlsSession::gBioMethod = nullptr;
 
 std::pair<std::shared_ptr<DtlsSession>, Error> DtlsSession::create(bool isSetupActive,
                                                                    const std::shared_ptr<X509Certificate>& certificate,
+                                                                   const X509Hash& expectedHash,
                                                                    const std::shared_ptr<RealScheduler>& scheduler,
                                                                    float iceRttMillis,
                                                                    const SendFn& sendFn,
@@ -121,17 +123,15 @@ std::pair<std::shared_ptr<DtlsSession>, Error> DtlsSession::create(bool isSetupA
                                                                    const ConnectFailedFn& connectFailedFn)
 {
     const auto session = std::make_shared<DtlsSession>(
-        isSetupActive, certificate, scheduler, iceRttMillis, sendFn, connectSuccessFn, connectFailedFn);
+        isSetupActive, certificate, expectedHash, scheduler, iceRttMillis, sendFn, connectSuccessFn, connectFailedFn);
 
-    if (const auto error = session->init(); error.isError()) {
-        return { nullptr, error };
-    }
-
+    // Setup errors are reported from start(), so the caller always has a session and its state
     return { session, Error::OK };
 }
 
 DtlsSession::DtlsSession(bool isSetupActive,
                          const std::shared_ptr<X509Certificate>& certificate,
+                         const X509Hash& expectedHash,
                          const std::shared_ptr<RealScheduler>& scheduler,
                          float iceRttMillis,
                          const SendFn& sendFn,
@@ -139,6 +139,7 @@ DtlsSession::DtlsSession(bool isSetupActive,
                          const ConnectFailedFn& connectFailedFn)
     : mIsSetupActive(isSetupActive)
     , mCertificate(certificate)
+    , mExpectedHash(expectedHash)
     , mIceRttMillis(iceRttMillis)
     , mSendFn(sendFn)
     , mConnectSuccessFn(connectSuccessFn)
@@ -241,8 +242,14 @@ void DtlsSession::freeSsl()
 
 Error DtlsSession::start()
 {
-    if (mState != DtlsState::Inactive || mSsl == nullptr) {
+    if (mState != DtlsState::Inactive) {
         return { Error::Code::InvalidData, "The DTLS session cannot be started" };
+    }
+
+    if (const auto error = init(); error.isError()) {
+        mState = DtlsState::Failed;
+        freeSsl();
+        return error;
     }
 
     LOG(SRTC_LOG_V, "Starting the DTLS handshake as %s", mIsSetupActive ? "server" : "client");
@@ -475,6 +482,18 @@ void DtlsSession::onHandshakeCompleted()
         return;
     }
 
+    // Which has to match the fingerprint from the SDP
+    const auto actualHash = getRemoteCertificateHash(mExpectedHash.getAlg());
+    LOG(SRTC_LOG_V,
+        "Remote certificate %s: %s",
+        mExpectedHash.getAlg().c_str(),
+        bin_to_hex(actualHash.data(), actualHash.size()).c_str());
+
+    if (actualHash.empty() || !(actualHash == mExpectedHash.getBin())) {
+        onHandshakeFailed({ Error::Code::InvalidData, "Certificate hash doesn't match" });
+        return;
+    }
+
     // And we need SRTP
     const auto profile = SSL_get_selected_srtp_profile(mSsl);
     if (profile == nullptr || !get_srtp_profile_info(profile->id)) {
@@ -491,8 +510,10 @@ void DtlsSession::onHandshakeCompleted()
         profile->name,
         mIceRttMillis);
 
-    // This may destroy us, so it has to be the last thing we do
-    mConnectSuccessFn();
+    // This may destroy us, so it has to be the last thing we do. Copy the callback first,
+    // so it's not destroyed while it's running
+    const auto fn = mConnectSuccessFn;
+    fn();
 }
 
 void DtlsSession::onHandshakeFailed(const Error& error)
@@ -502,8 +523,10 @@ void DtlsSession::onHandshakeFailed(const Error& error)
     mState = DtlsState::Failed;
     freeSsl();
 
-    // This may destroy us, so it has to be the last thing we do
-    mConnectFailedFn(error);
+    // This may destroy us, so it has to be the last thing we do. Copy the callback first,
+    // so it's not destroyed while it's running
+    const auto fn = mConnectFailedFn;
+    fn(error);
 }
 
 // Retransmits

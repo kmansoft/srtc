@@ -426,6 +426,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             test/test_packetizer.cpp
             test/test_sctp_crc32.cpp
             test/test_data_channel_receive_buffer.cpp
+            test/test_dtls_session.cpp
     )
 
     target_include_directories(

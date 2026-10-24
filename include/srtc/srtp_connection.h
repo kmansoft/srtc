@@ -9,17 +9,16 @@
 #include <unordered_map>
 #include <optional>
 
-struct ssl_st;
-
 namespace srtc
 {
 
 class SrtpCrypto;
+class SrtpKeys;
 
 class SrtpConnection
 {
 public:
-	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
+	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(const SrtpKeys& srtpKeys);
 	~SrtpConnection();
 
 	void onPeerConnected();
