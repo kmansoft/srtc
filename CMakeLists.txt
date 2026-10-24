@@ -197,6 +197,7 @@ add_library(srtc
         src/x509_certificate.cpp
         src/x509_hash.cpp
         # compat
+        src/compat/crypto_dtls_session.h
         src/compat/crypto_provider.h
         src/compat/crypto_util.h
         # sctp
