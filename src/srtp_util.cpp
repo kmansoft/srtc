@@ -130,7 +130,7 @@ void CryptoWriter::append(const uint8_t* data, size_t size)
 bool KeyDerivation::generate(const CryptoBytes& masterKey,
                              const CryptoBytes& masterSalt,
                              uint8_t label,
-                             srtc::CryptoBytes& output,
+                             CryptoBytes& output,
                              size_t desiredOutputSize)
 {
     assert(masterKey.size() == 16 || masterKey.size() == 32);
