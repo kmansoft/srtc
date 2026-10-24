@@ -4,7 +4,7 @@ This is srtc, a "simple" WebRTC library (publish side is done and working quite 
 
 #### Features:
 
-- Depends on OpenSSL (or BoringSSL) only, nothing else
+- Depends on OpenSSL (or BoringSSL) or Mbed TLS only, nothing else (libsrtp is only used for tests)
 - Portable code in "conservative" C++: language level is C++ 17, and no exceptions or RTTI
 - Only one worker thread per PeerConnection
 - Video codecs: VP8, VP9, H264 (any profile id), H265, AV1
