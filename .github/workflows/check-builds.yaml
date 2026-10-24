@@ -135,6 +135,11 @@ jobs:
         ${{github.workspace}}/build/srtc_test
 
   build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        crypto: [ OPENSSL, MBEDTLS ]
+
     runs-on: windows-2022
 
     steps:
@@ -148,6 +153,7 @@ jobs:
         cmake `
           -B ${{github.workspace}}/build `
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+          -DSRTC_CRYPTO_LIB=${{ matrix.crypto }} `
           -GNinja
 
     - name: Build

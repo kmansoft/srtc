@@ -324,6 +324,22 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
 
+    if (WIN32)
+        # We build it ourselves somewhere else and upload to a server, then fetch from there.
+        set(MbedTLS_USE_STATIC_LIBS ON)
+        set(MbedTLS_VERSION "3.6.7")
+        set(MbedTLS_ROOT_DIR "${CMAKE_BINARY_DIR}/mbedtls-bin-${MbedTLS_VERSION}")
+
+        if (NOT EXISTS "${MbedTLS_ROOT_DIR}")
+            message(STATUS "Downloading MbedTLS binaries...")
+            set(MbedTLS_ZIP_FILE "${CMAKE_BINARY_DIR}/mbedtls-bin-${MbedTLS_VERSION}.zip")
+            file(DOWNLOAD "https://kman.mobi/download/mbedtls-bin-${MbedTLS_VERSION}.zip" "${MbedTLS_ZIP_FILE}")
+            file(ARCHIVE_EXTRACT INPUT "${MbedTLS_ZIP_FILE}" DESTINATION "${MbedTLS_ROOT_DIR}")
+        endif ()
+
+        set(MbedTLS_DIR "${MbedTLS_ROOT_DIR}/lib/cmake/MbedTLS")
+    endif ()
+
     # 3.4 for mbedtls_x509write_crt_set_serial_raw. 4.x moved the crypto into TF-PSA-Crypto and is not supported,
     # mbedTLS's version file only accepts the same major version
     find_package(MbedTLS 3.4 REQUIRED)
@@ -424,6 +440,17 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
                 -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
         )
     endif ()
+    if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                -DENABLE_WARNINGS_AS_ERRORS=OFF
+                -DMbedTLS_DIR=${MbedTLS_DIR}
+                -DMBEDTLS_INCLUDE_DIRS=${MbedTLS_ROOT_DIR}/include
+                -DMBEDTLS_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedtls.lib
+                -DMBEDX509_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedx509.lib
+                -DMBEDCRYPTO_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedcrypto.lib
+                -DCMAKE_PREFIX_PATH=${MbedTLS_ROOT_DIR}
+        )
+    endif ()
     if (ANDROID)
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
@@ -480,6 +507,7 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             src/compat
             "${SRTP_INCLUDE_DIR}"
             "${OPENSSL_INCLUDE_DIR}"
+            "${MBEDTLS_INCLUDE_DIRS}"
     )
 
     target_link_directories(
