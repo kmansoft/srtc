@@ -324,7 +324,9 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
 
-    find_package(MbedTLS REQUIRED)
+    # 3.4 for mbedtls_x509write_crt_set_serial_raw. 4.x moved the crypto into TF-PSA-Crypto and is not supported,
+    # mbedTLS's version file only accepts the same major version
+    find_package(MbedTLS 3.4 REQUIRED)
 
     # DTLS-SRTP is off in mbedTLS's default config, and we can't do WebRTC without it
     include(CheckSymbolExists)
@@ -443,6 +445,10 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
                 -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                 -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+            # So libsrtp finds the same crypto library as we do, e.g. from Homebrew.
+            # This is a list, and CMAKE_CACHE_ARGS passes lists through correctly
+            CMAKE_CACHE_ARGS
+                "-DCMAKE_PREFIX_PATH:STRING=${CMAKE_PREFIX_PATH}"
     )
 
     set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
