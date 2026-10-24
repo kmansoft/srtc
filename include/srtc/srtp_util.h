@@ -17,6 +17,11 @@ public:
     uint8_t v8[32] = {};
 
     CryptoBytes();
+    // Wipes the bytes, these are keys and salts
+    ~CryptoBytes();
+
+    CryptoBytes(const CryptoBytes& other) = default;
+    CryptoBytes& operator=(const CryptoBytes& other) = default;
 
     void clear();
     void assign(const uint8_t* ptr, size_t size);

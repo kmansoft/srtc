@@ -7,6 +7,7 @@
 #endif
 
 #include "crypto_dtls_session.h"
+#include "crypto_util.h"
 
 #include "srtc/logging.h"
 #include "srtc/util.h"
@@ -396,7 +397,7 @@ std::pair<std::optional<SrtpKeys>, Error> DtlsSession::getSrtpKeys() const
                  info->saltSize);
 
     // Don't leave the raw key material around
-    std::memset(material.data(), 0, materialSize);
+    secureZero(material.data(), materialSize);
 
     return { std::move(keys), Error::OK };
 }

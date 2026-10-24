@@ -6,6 +6,7 @@ extern "C" {
 }
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
+#include <mbedtls/platform_util.h>
 
 #include <algorithm>
 #include <cassert>
@@ -75,6 +76,11 @@ void randomBytes(unsigned char* dst, size_t len)
         dst += chunk;
         len -= chunk;
     }
+}
+
+void secureZero(void* dst, size_t len)
+{
+    mbedtls_platform_zeroize(dst, len);
 }
 
 }

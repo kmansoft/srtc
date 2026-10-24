@@ -1,5 +1,6 @@
 #include "crypto_dtls_session.h"
 #include "crypto_provider.h"
+#include "crypto_util.h"
 
 #include "srtc/logging.h"
 #include "srtc/util.h"
@@ -262,8 +263,8 @@ void DtlsSession::freeSsl()
     mReceiveQueue.clear();
     mPeerCertificateDer.clear();
 
-    std::memset(mMasterSecret, 0, sizeof(mMasterSecret));
-    std::memset(mClientServerRandom, 0, sizeof(mClientServerRandom));
+    secureZero(mMasterSecret, sizeof(mMasterSecret));
+    secureZero(mClientServerRandom, sizeof(mClientServerRandom));
     mHasMasterSecret = false;
 }
 
@@ -423,7 +424,7 @@ std::pair<std::optional<SrtpKeys>, Error> DtlsSession::getSrtpKeys() const
                  info->saltSize);
 
     // Don't leave the raw key material around
-    std::memset(material.data(), 0, materialSize);
+    secureZero(material.data(), materialSize);
 
     return { std::move(keys), Error::OK };
 }

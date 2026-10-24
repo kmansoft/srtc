@@ -1,4 +1,5 @@
 #include "crypto_provider_mbedtls.h"
+#include "crypto_util.h"
 
 #include <mbedtls/build_info.h>
 // Unlike the other mbedTLS headers, constant_time.h has no extern "C" guard (as of 3.6)
@@ -70,8 +71,9 @@ CryptoProvider::~CryptoProvider()
     mbedtls_gcm_free(&mGcm);
     mbedtls_aes_free(&mAes);
 
-    std::memset(mCtrNonceCounter, 0, sizeof(mCtrNonceCounter));
-    std::memset(mCtrStreamBlock, 0, sizeof(mCtrStreamBlock));
+    // The keystream block is derived from the key
+    secureZero(mCtrNonceCounter, sizeof(mCtrNonceCounter));
+    secureZero(mCtrStreamBlock, sizeof(mCtrStreamBlock));
 }
 
 bool CryptoProvider::start(const uint8_t* key, const uint8_t* iv, bool encrypt)

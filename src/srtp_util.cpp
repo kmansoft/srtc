@@ -1,5 +1,7 @@
 #include "srtc/srtp_util.h"
 
+#include "crypto_util.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -20,9 +22,14 @@ CryptoBytes::CryptoBytes()
 {
 }
 
+CryptoBytes::~CryptoBytes()
+{
+    compat::secureZero(v8, sizeof(v8));
+}
+
 void CryptoBytes::clear()
 {
-    std::memset(v8, 0, sizeof(v8));
+    compat::secureZero(v8, sizeof(v8));
     mSize = 0;
 }
 

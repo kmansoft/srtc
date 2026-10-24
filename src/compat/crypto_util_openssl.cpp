@@ -20,4 +20,9 @@ void randomBytes(unsigned char* dst, size_t len)
     (void) r;
 }
 
+void secureZero(void* dst, size_t len)
+{
+    OPENSSL_cleanse(dst, len);
+}
+
 }
