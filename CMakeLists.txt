@@ -110,7 +110,7 @@ add_library(srtc
         include/srtc/srtp_connection.h
         include/srtc/srtp_crypto.h
         include/srtc/srtp_hmac_sha1.h
-        include/srtc/srtp_openssl.h
+        include/srtc/srtp_keys.h
         include/srtc/srtp_util.h
         include/srtc/track.h
         include/srtc/track_selector.h
@@ -186,7 +186,7 @@ add_library(srtc
         src/srtp_connection.cpp
         src/srtp_crypto.cpp
         src/srtp_hmac_sha1.cpp
-        src/srtp_openssl.cpp
+        src/srtp_keys.cpp
         src/srtp_util.cpp
         src/track.cpp
         src/track_selector.cpp
@@ -196,6 +196,10 @@ add_library(srtc
         src/util.cpp
         src/x509_certificate.cpp
         src/x509_hash.cpp
+        # compat
+        src/compat/crypto_dtls_session.h
+        src/compat/crypto_provider.h
+        src/compat/crypto_util.h
         # sctp
         src/sctp/sctp_crc32.h
         src/sctp/sctp_defs.h
@@ -233,6 +237,8 @@ elseif (UNIX)
 endif ()
 
 target_include_directories(srtc PUBLIC "./include")
+
+target_include_directories(srtc PRIVATE "src/compat")
 
 if (UNIX)
     target_compile_options(srtc
@@ -306,10 +312,30 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
             OpenSSL::Crypto
             OpenSSL::SSL
     )
+    target_sources(srtc
+            PRIVATE
+            src/compat/crypto_dtls_session_openssl.h
+            src/compat/crypto_dtls_session_openssl.cpp
+            src/compat/crypto_provider_openssl.h
+            src/compat/crypto_provider_openssl.cpp
+            src/compat/crypto_util_openssl.h
+            src/compat/crypto_util_openssl.cpp
+    )
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
 
-    find_package(MbedTLS REQUIRED)
+    # 3.4 for mbedtls_x509write_crt_set_serial_raw. 4.x moved the crypto into TF-PSA-Crypto and is not supported,
+    # mbedTLS's version file only accepts the same major version
+    find_package(MbedTLS 3.4 REQUIRED)
+
+    # DTLS-SRTP is off in mbedTLS's default config, and we can't do WebRTC without it
+    include(CheckSymbolExists)
+    set(CMAKE_REQUIRED_LIBRARIES MbedTLS::mbedtls)
+    check_symbol_exists(MBEDTLS_SSL_DTLS_SRTP "mbedtls/build_info.h" SRTC_MBEDTLS_HAS_DTLS_SRTP)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    if (NOT SRTC_MBEDTLS_HAS_DTLS_SRTP)
+        message(FATAL_ERROR "mbedTLS has to be built with MBEDTLS_SSL_DTLS_SRTP enabled")
+    endif ()
 
     target_compile_definitions(srtc
             PUBLIC
@@ -320,6 +346,15 @@ elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
             MbedTLS::mbedtls
             MbedTLS::mbedx509
             MbedTLS::mbedcrypto
+    )
+    target_sources(srtc
+            PRIVATE
+            src/compat/crypto_dtls_session_mbedtls.h
+            src/compat/crypto_dtls_session_mbedtls.cpp
+            src/compat/crypto_provider_mbedtls.h
+            src/compat/crypto_provider_mbedtls.cpp
+            src/compat/crypto_util_mbedtls.h
+            src/compat/crypto_util_mbedtls.cpp
     )
 else ()
     message(FATAL_ERROR "Unknown crypto library: ${SRTC_CRYPTO_LIB}")
@@ -359,9 +394,30 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
 
     list(APPEND LIBSRTP_CMAKE_ARGS
             "-DLIBSRTP_TEST_APPS=OFF"
-            "-DENABLE_${SRTC_CRYPTO_LIB}=ON"
             "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
     )
+
+    # Set every libsrtp crypto option, not just ours, so that switching SRTC_CRYPTO_LIB
+    # in an existing build directory doesn't leave the old one enabled in libsrtp's cache.
+    # libsrtp copies ENABLE_<LIB> into its own cached <LIB> variable, but only ever sets it,
+    # never clears it, and without FORCE - so we set both.
+    foreach (LIBSRTP_CRYPTO_LIB OPENSSL MBEDTLS WOLFSSL NSS)
+        if (LIBSRTP_CRYPTO_LIB STREQUAL SRTC_CRYPTO_LIB)
+            set(LIBSRTP_CRYPTO_LIB_VALUE ON)
+        else ()
+            set(LIBSRTP_CRYPTO_LIB_VALUE OFF)
+        endif ()
+        list(APPEND LIBSRTP_CMAKE_ARGS
+                "-DENABLE_${LIBSRTP_CRYPTO_LIB}=${LIBSRTP_CRYPTO_LIB_VALUE}"
+                "-D${LIBSRTP_CRYPTO_LIB}=${LIBSRTP_CRYPTO_LIB_VALUE}"
+        )
+        if (LIBSRTP_CRYPTO_LIB STREQUAL "WOLFSSL")
+            list(APPEND LIBSRTP_CMAKE_ARGS "-DWOLFSSL_KDF=${LIBSRTP_CRYPTO_LIB_VALUE}")
+        endif ()
+    endforeach ()
+
+    # All of the above provide AES-GCM, which our tests need
+    list(APPEND LIBSRTP_CMAKE_ARGS "-DGCM=ON")
 
     if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         list(APPEND LIBSRTP_CMAKE_ARGS
@@ -389,6 +445,10 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
                 -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                 -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+            # So libsrtp finds the same crypto library as we do, e.g. from Homebrew.
+            # This is a list, and CMAKE_CACHE_ARGS passes lists through correctly
+            CMAKE_CACHE_ARGS
+                "-DCMAKE_PREFIX_PATH:STRING=${CMAKE_PREFIX_PATH}"
     )
 
     set(SRTP_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/libsrtp/include")
@@ -411,11 +471,13 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             test/test_packetizer.cpp
             test/test_sctp_crc32.cpp
             test/test_data_channel_receive_buffer.cpp
+            test/test_dtls_session.cpp
     )
 
     target_include_directories(
             srtc_test
             PRIVATE
+            src/compat
             "${SRTP_INCLUDE_DIR}"
             "${OPENSSL_INCLUDE_DIR}"
     )
@@ -442,11 +504,19 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
         )
     endif ()
 
+    # Also for libsrtp, which is built with the same crypto library
     if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         target_link_libraries(
                 srtc_test
                 OpenSSL::Crypto
                 OpenSSL::SSL
+        )
+    elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
+        target_link_libraries(
+                srtc_test
+                MbedTLS::mbedtls
+                MbedTLS::mbedx509
+                MbedTLS::mbedcrypto
         )
     endif ()
 

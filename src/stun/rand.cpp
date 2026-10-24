@@ -71,6 +71,62 @@ void nice_RAND_nonce (uint8_t *dst, int len)
 
 }
 
+#elif defined(HAVE_MBEDTLS)
+
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+
+#include <cassert>
+#include <mutex>
+
+namespace stun
+{
+
+namespace
+{
+
+const char kPersonalization[] = "srtc_stun_nonce";
+
+/* A process wide generator, ctr_drbg is not thread safe on its own */
+struct NonceGenerator
+{
+  std::mutex mutex;
+  mbedtls_entropy_context entropy;
+  mbedtls_ctr_drbg_context drbg;
+  bool isSeeded;
+
+  NonceGenerator ()
+  {
+    mbedtls_entropy_init (&entropy);
+    mbedtls_ctr_drbg_init (&drbg);
+
+    isSeeded = mbedtls_ctr_drbg_seed (&drbg, mbedtls_entropy_func, &entropy,
+        (const unsigned char *) kPersonalization, sizeof (kPersonalization) - 1) == 0;
+  }
+
+  ~NonceGenerator ()
+  {
+    mbedtls_ctr_drbg_free (&drbg);
+    mbedtls_entropy_free (&entropy);
+  }
+};
+
+}
+
+void nice_RAND_nonce (uint8_t *dst, int len)
+{
+  static NonceGenerator generator;
+  std::lock_guard<std::mutex> lock (generator.mutex);
+
+  assert (generator.isSeeded);
+
+  const int ret = mbedtls_ctr_drbg_random (&generator.drbg, dst, (size_t) len);
+  assert (ret == 0);
+  (void) ret;
+}
+
+}
+
 #elif defined(HAVE_GNUTLS)
 
 #include <sys/types.h>

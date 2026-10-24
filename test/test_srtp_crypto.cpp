@@ -6,16 +6,17 @@
 #include "srtc/rtp_extension.h"
 #include "srtc/rtp_packet.h"
 #include "srtc/srtp_crypto.h"
-#include "srtc/srtp_openssl.h"
+#include "srtc/srtp_keys.h"
 #include "srtc/srtp_util.h"
 #include "srtc/track.h"
+
+#include "crypto_provider.h"
+#include "crypto_util.h"
 
 #include <cstring>
 #include <ctime>
 #include <mutex>
 
-#include <openssl/rand.h>
-#include <openssl/srtp.h>
 #include <srtp.h>
 
 // Init Cisco's libSRTP
@@ -33,7 +34,7 @@ void initLibSRTP()
 uint32_t randomU32()
 {
     uint32_t value;
-    RAND_bytes((unsigned char*)&value, sizeof(value));
+    srtc::compat::randomBytes((unsigned char*)&value, sizeof(value));
     return value;
 }
 
@@ -46,37 +47,38 @@ TEST(SrtpCrypto, SendMedia)
     std::cout << "SrtpCrypto SendMedia" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -91,25 +93,26 @@ TEST(SrtpCrypto, SendMedia)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
@@ -146,7 +149,7 @@ TEST(SrtpCrypto, SendMedia)
         {
             // Edge case 1: empty payload with an extension, not valid in our library
             uint8_t extensionData[15];
-            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::compat::randomBytes(extensionData, sizeof(extensionData));
             srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData) } };
 
             srtc::ByteBuffer payload; // empty
@@ -162,11 +165,11 @@ TEST(SrtpCrypto, SendMedia)
         {
             // Edge case 2: 1 byte payload with an extension, valid in our library
             uint8_t extensionData[15];
-            RAND_bytes(extensionData, sizeof(extensionData));
+            srtc::compat::randomBytes(extensionData, sizeof(extensionData));
             srtc::RtpExtension extension = { 1, { extensionData, sizeof(extensionData) } };
 
             uint8_t payloadData[1];
-            RAND_bytes(payloadData, sizeof(payloadData));
+            srtc::compat::randomBytes(payloadData, sizeof(payloadData));
 
             srtc::ByteBuffer payload = { payloadData, sizeof(payloadData) };
 
@@ -181,7 +184,7 @@ TEST(SrtpCrypto, SendMedia)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             // Rollover counter
@@ -198,7 +201,7 @@ TEST(SrtpCrypto, SendMedia)
                 const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
                 srtc::ByteBuffer extensionData(extensionLen);
                 extensionData.resize(extensionLen);
-                RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+                srtc::compat::randomBytes(extensionData.data(), static_cast<int>(extensionLen));
 
                 extension = { extensionId, std::move(extensionData) };
             }
@@ -246,37 +249,38 @@ TEST(SrtpCrypto, ReceiveMedia)
     std::cout << "SrtpCrypto ReceiveMedia" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -291,25 +295,26 @@ TEST(SrtpCrypto, ReceiveMedia)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto_decrypt, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto_decrypt, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto_decrypt);
 
@@ -357,7 +362,7 @@ TEST(SrtpCrypto, ReceiveMedia)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             // Rollover counter
@@ -374,7 +379,7 @@ TEST(SrtpCrypto, ReceiveMedia)
                 const auto extensionLen = static_cast<size_t>(1 + randomU32() % 200);
                 srtc::ByteBuffer extensionData(extensionLen);
                 extensionData.resize(extensionLen);
-                RAND_bytes(extensionData.data(), static_cast<int>(extensionLen));
+                srtc::compat::randomBytes(extensionData.data(), static_cast<int>(extensionLen));
 
                 extension = { extensionId, std::move(extensionData) };
             }
@@ -423,37 +428,38 @@ TEST(SrtpCrypto, SendControl)
     std::cout << "SrtpCrypto SendControl" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -468,25 +474,26 @@ TEST(SrtpCrypto, SendControl)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
@@ -516,7 +523,7 @@ TEST(SrtpCrypto, SendControl)
         for (auto repeatIndex = 0; repeatIndex < 5000; repeatIndex += 1) {
             const auto payloadSize = 5 + randomU32() % 1000;
             srtc::ByteBuffer payload(payloadSize);
-            RAND_bytes(payload.data(), static_cast<int>(payload.capacity()));
+            srtc::compat::randomBytes(payload.data(), static_cast<int>(payload.capacity()));
             payload.resize(payloadSize);
 
             const auto packet = std::make_shared<srtc::RtcpPacket>(ssrc, 0x11, 0x22, std::move(payload));
@@ -556,37 +563,38 @@ TEST(SrtpCrypto, SendControlMulti)
     std::cout << "SrtpCrypto SendControlMulti" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -601,25 +609,26 @@ TEST(SrtpCrypto, SendControlMulti)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
@@ -650,7 +659,7 @@ TEST(SrtpCrypto, SendControlMulti)
             // Packet 1
             const auto payloadSize1 = 5 + randomU32() % 200;
             srtc::ByteBuffer payload1(payloadSize1);
-            RAND_bytes(payload1.data(), static_cast<int>(payload1.capacity()));
+            srtc::compat::randomBytes(payload1.data(), static_cast<int>(payload1.capacity()));
             payload1.resize(payloadSize1);
 
             const auto packet1 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x01, 0x22, std::move(payload1));
@@ -658,7 +667,7 @@ TEST(SrtpCrypto, SendControlMulti)
             // Packet 2
             const auto payloadSize2 = 5 + randomU32() % 200;
             srtc::ByteBuffer payload2(payloadSize2);
-            RAND_bytes(payload2.data(), static_cast<int>(payload2.capacity()));
+            srtc::compat::randomBytes(payload2.data(), static_cast<int>(payload2.capacity()));
             payload2.resize(payloadSize2);
 
             const auto packet2 = std::make_shared<srtc::RtcpPacket>(ssrc, 0x03, 0x44, std::move(payload2));
@@ -705,37 +714,38 @@ TEST(SrtpCrypto, ReceiveControl)
     std::cout << "SrtpCrypto ReceiveControl" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -750,25 +760,26 @@ TEST(SrtpCrypto, ReceiveControl)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
@@ -813,7 +824,7 @@ TEST(SrtpCrypto, ReceiveControl)
             const auto sourcePacketDataSize = 4 * sourcePacketDataSizeDiv4;
             ASSERT_LE(sourcePacketDataSize, 64);
             uint8_t randomBytes[64];
-            RAND_bytes(randomBytes, sizeof(randomBytes));
+            srtc::compat::randomBytes(randomBytes, sizeof(randomBytes));
             sourceWriter.write(randomBytes, sourcePacketDataSize);
 
             // Encrypt
@@ -848,37 +859,38 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
     std::cout << "SrtpCrypto RtcpReceiveMulti" << std::endl;
 
     initLibSRTP();
-    srtc::initOpenSSL();
+    srtc::compat::initCryptoProvider();
 
-    static constexpr uint16_t kOpenSslProfileList[] = {
-        SRTP_AEAD_AES_256_GCM, SRTP_AEAD_AES_128_GCM, SRTP_AES128_CM_SHA1_80, SRTP_AES128_CM_SHA1_32
-    };
+    static constexpr srtc::ProfileId kProfileList[] = { srtc::ProfileId::kAES_256_GCM,
+                                                        srtc::ProfileId::kAES_128_GCM,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_80,
+                                                        srtc::ProfileId::kAES_128_CM_SHA1_32 };
 
-    for (const auto openSSlProfile : kOpenSslProfileList) {
+    for (const auto profileId : kProfileList) {
         const char* srtpProfileName;
         srtp_profile_t srtpProfileId;
         size_t srtpKeySize = { 0 }, srtpSaltSize = { 0 };
 
-        switch (openSSlProfile) {
-        case SRTP_AEAD_AES_256_GCM:
+        switch (profileId) {
+        case srtc::ProfileId::kAES_256_GCM:
             srtpProfileName = "SRTP_AEAD_AES_256_GCM";
             srtpProfileId = srtp_profile_aead_aes_256_gcm;
             srtpKeySize = SRTP_AES_256_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AEAD_AES_128_GCM:
+        case srtc::ProfileId::kAES_128_GCM:
             srtpProfileName = "SRTP_AEAD_AES_128_GCM";
             srtpProfileId = srtp_profile_aead_aes_128_gcm;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_AEAD_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_80:
+        case srtc::ProfileId::kAES_128_CM_SHA1_80:
             srtpProfileName = "SRTP_AES128_CM_SHA1_80";
             srtpProfileId = srtp_profile_aes128_cm_sha1_80;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
             srtpSaltSize = SRTP_SALT_LEN;
             break;
-        case SRTP_AES128_CM_SHA1_32:
+        case srtc::ProfileId::kAES_128_CM_SHA1_32:
             srtpProfileName = "SRTP_AES128_CM_SHA1_32";
             srtpProfileId = srtp_profile_aes128_cm_sha1_32;
             srtpKeySize = SRTP_AES_128_KEY_LEN;
@@ -893,25 +905,26 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
 
         // Generate random keys and salts
         uint8_t bufSendMasterKey[32], bufSendMasterSalt[32];
-        RAND_bytes(bufSendMasterKey, sizeof(bufSendMasterKey));
-        RAND_bytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
+        srtc::compat::randomBytes(bufSendMasterKey, sizeof(bufSendMasterKey));
+        srtc::compat::randomBytes(bufSendMasterSalt, sizeof(bufSendMasterSalt));
 
         uint8_t bufReceiveMasterKey[32], bufReceiveMasterSalt[32];
-        RAND_bytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
-        RAND_bytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
+        srtc::compat::randomBytes(bufReceiveMasterKey, sizeof(bufReceiveMasterKey));
+        srtc::compat::randomBytes(bufReceiveMasterSalt, sizeof(bufReceiveMasterSalt));
 
-        // Convert to our objects
-        srtc::CryptoBytes sendMasterKey, sendMasterSalt;
-        sendMasterKey.assign(bufSendMasterKey, srtpKeySize);
-        sendMasterSalt.assign(bufSendMasterSalt, srtpSaltSize);
-
-        srtc::CryptoBytes receiveMasterKey, receiveMasterSalt;
-        receiveMasterKey.assign(bufReceiveMasterKey, srtpKeySize);
-        receiveMasterSalt.assign(bufReceiveMasterSalt, srtpSaltSize);
+        // Convert to our objects, not setup active so client is send and server is receive
+        const srtc::SrtpKeys srtpKeys(profileId,
+                                      srtpProfileName,
+                                      false,
+                                      bufSendMasterKey,
+                                      bufReceiveMasterKey,
+                                      bufSendMasterSalt,
+                                      bufReceiveMasterSalt,
+                                      srtpKeySize,
+                                      srtpSaltSize);
 
         // Create our own crypto
-        const auto [crypto, error] = srtc::SrtpCrypto::create(
-            openSSlProfile, sendMasterKey, sendMasterSalt, receiveMasterKey, receiveMasterSalt);
+        const auto [crypto, error] = srtc::SrtpCrypto::create(srtpKeys);
         ASSERT_TRUE(error.isOk());
         ASSERT_TRUE(crypto);
 
@@ -957,7 +970,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
             const auto sourcePacket1DataSize = 4 * sourcePacket1DataSizeDiv4;
             ASSERT_LE(sourcePacket1DataSize, 64);
             uint8_t randomBytes1[64];
-            RAND_bytes(randomBytes1, sizeof(randomBytes1));
+            srtc::compat::randomBytes(randomBytes1, sizeof(randomBytes1));
             sourceWriter1.write(randomBytes1, sourcePacket1DataSize);
 
             // Packet 2
@@ -979,7 +992,7 @@ TEST(SrtpCrypto, RtcpReceiveMulti)
             const auto sourcePacket2DataSize = 4 * sourcePacket2DataSizeDiv4;
             ASSERT_LE(sourcePacket2DataSize, 64);
             uint8_t randomBytes2[64];
-            RAND_bytes(randomBytes2, sizeof(randomBytes2));
+            srtc::compat::randomBytes(randomBytes2, sizeof(randomBytes2));
             sourceWriter1.write(randomBytes2, sourcePacket2DataSize);
 
             // Combine into one

@@ -10,7 +10,7 @@ class Error
 public:
 	enum class Code {
 		OK,
-		InvalidData
+		InvalidData,
 	};
 
 	[[nodiscard]] bool isOk() const

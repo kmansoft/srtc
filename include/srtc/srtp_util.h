@@ -1,8 +1,7 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 namespace srtc
 {
@@ -18,6 +17,11 @@ public:
     uint8_t v8[32] = {};
 
     CryptoBytes();
+    // Wipes the bytes, these are keys and salts
+    ~CryptoBytes();
+
+    CryptoBytes(const CryptoBytes& other) = default;
+    CryptoBytes& operator=(const CryptoBytes& other) = default;
 
     void clear();
     void assign(const uint8_t* ptr, size_t size);
@@ -68,8 +72,18 @@ public:
     [[nodiscard]] static bool generate(const CryptoBytes& masterKey,
                                        const CryptoBytes& masterSalt,
                                        uint8_t label,
-                                       srtc::CryptoBytes& output,
+                                       CryptoBytes& output,
                                        size_t desiredOutputSize);
+};
+
+// ----- ProfileId
+
+enum class ProfileId
+{
+    kAES_256_GCM,
+    kAES_128_GCM,
+    kAES_128_CM_SHA1_80,
+    kAES_128_CM_SHA1_32
 };
 
 } // namespace srtc

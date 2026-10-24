@@ -1,12 +1,16 @@
 #include "srtc/srtp_util.h"
-#include "srtc/srtp_openssl.h"
 
+#include "crypto_util.h"
+
+#include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <mutex>
 
-#include <openssl/err.h>
+#if defined(SRTC_USE_OPENSSL)
 #include <openssl/evp.h>
+#elif defined(SRTC_USE_MBEDTLS)
+#include <mbedtls/aes.h>
+#endif
 
 namespace srtc
 {
@@ -18,9 +22,14 @@ CryptoBytes::CryptoBytes()
 {
 }
 
+CryptoBytes::~CryptoBytes()
+{
+    compat::secureZero(v8, sizeof(v8));
+}
+
 void CryptoBytes::clear()
 {
-    std::memset(v8, 0, sizeof(v8));
+    compat::secureZero(v8, sizeof(v8));
     mSize = 0;
 }
 
@@ -124,8 +133,6 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
                              srtc::CryptoBytes& output,
                              size_t desiredOutputSize)
 {
-    initOpenSSL();
-
     assert(masterKey.size() == 16 || masterKey.size() == 32);
     assert(masterSalt.size() == 12 || masterSalt.size() == 14);
 
@@ -137,20 +144,16 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
     std::memcpy(input, masterSalt.data(), masterSalt.size());
     input[7] ^= label;
 
-    uint8_t zeroes[16] = {};
-
     uint8_t outbuf[16];
-    int outlen = 0;
 
     const auto blockCount = (desiredOutputSize + 15) / 16;
     bool res = false;
 
-    srtc::CryptoWriter outputWriter(output);
+    CryptoWriter outputWriter(output);
 
-    const auto ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        goto fail;
-    }
+    // Each block is a single AES-ECB encryption with the master key
+#if defined(SRTC_USE_OPENSSL)
+    uint8_t zeroes[16] = {};
 
     const EVP_CIPHER* cipher;
     switch (masterKey.size()) {
@@ -161,13 +164,28 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
         cipher = EVP_aes_256_ecb();
         break;
     default:
-        goto fail;
+        return false;
     }
 
+    const auto ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        return false;
+    }
+#elif defined(SRTC_USE_MBEDTLS)
+    mbedtls_aes_context ctx;
+    mbedtls_aes_init(&ctx);
+
+    if (mbedtls_aes_setkey_enc(&ctx, masterKey.data(), static_cast<unsigned int>(masterKey.size() * 8)) != 0) {
+        goto fail;
+    }
+#endif
+
     for (auto blockIndex = 0u; blockIndex < blockCount; blockIndex += 1) {
-        input[14] = (blockIndex >> 16) & 0xff;
+        input[14] = (blockIndex >> 8) & 0xff;
         input[15] = blockIndex & 0xff;
 
+#if defined(SRTC_USE_OPENSSL)
+        int outlen = 0;
         if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), zeroes)) {
             goto fail;
         }
@@ -175,13 +193,22 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
             goto fail;
         }
         assert(outlen == 16);
+#elif defined(SRTC_USE_MBEDTLS)
+        if (mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_ENCRYPT, input, outbuf) != 0) {
+            goto fail;
+        }
+#endif
 
         outputWriter.append(outbuf, (blockIndex < blockCount - 1) ? 16 : (desiredOutputSize - 16 * blockIndex));
     }
     res = true;
 
 fail:
+#if defined(SRTC_USE_OPENSSL)
     EVP_CIPHER_CTX_free(ctx);
+#elif defined(SRTC_USE_MBEDTLS)
+    mbedtls_aes_free(&ctx);
+#endif
     return res;
 }
 

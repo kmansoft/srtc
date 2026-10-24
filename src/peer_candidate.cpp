@@ -30,19 +30,16 @@
 #include "srtc/sender_report.h"
 #include "srtc/sender_reports_history.h"
 #include "srtc/srtp_connection.h"
-#include "srtc/srtp_openssl.h"
 #include "srtc/track.h"
 #include "srtc/track_stats.h"
-#include "srtc/x509_certificate.h"
-
 #include "sctp/sctp_session.h"
+
+#include "crypto_dtls_session.h"
+#include "crypto_provider.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-
-#include <openssl/err.h>
-#include <openssl/ssl.h>
 
 #define LOG(level, ...) srtc::log(level, "PeerCandidate", __VA_ARGS__)
 
@@ -50,23 +47,6 @@ namespace
 {
 
 std::atomic<uint32_t> gNextUniqueId = 0;
-
-int verify_callback([[maybe_unused]] int ok, [[maybe_unused]] X509_STORE_CTX* store_ctx)
-{
-    // We verify cert has ourselves after the handshake has completed
-    return 1;
-}
-
-std::string get_openssl_error()
-{
-    BIO* bio = BIO_new(BIO_s_mem());
-    ERR_print_errors(bio);
-    char* buf;
-    size_t len = BIO_get_mem_data(bio, &buf);
-    std::string ret(buf, len);
-    BIO_free(bio);
-    return ret;
-}
 
 constexpr auto kMaxRtrrQueueSize = 100;
 constexpr auto kMaxDlrrResponseSize = 25;
@@ -81,9 +61,6 @@ constexpr auto kConnectRepeatIncrement = std::chrono::milliseconds(100);
 constexpr auto kMaxRecentEnough = std::chrono::milliseconds(5 * 1000);
 constexpr auto kIceKeepAliveSendTimeout = std::chrono::milliseconds(3 * 1000);
 constexpr auto kIceKeepAliveConnectionLostTimeout = std::chrono::milliseconds(15 * 1000);
-constexpr auto kDtlsMinRetransmitTimeout = std::chrono::milliseconds(50);
-constexpr auto kDtlsMaxInitialRetransmitTimeout = std::chrono::milliseconds(1000);
-constexpr auto kDtlsMaxRetransmitTimeout = std::chrono::milliseconds(2000);
 
 // https://datatracker.ietf.org/doc/html/rfc5245#section-4.1.2.1
 uint32_t make_stun_priority(int type_preference, int local_preference, uint8_t component_id)
@@ -264,7 +241,7 @@ PeerCandidate::PeerCandidate(PeerCandidateListener* const listener,
         to_string(host.addr).c_str(),
         static_cast<long>(startDelay.count()));
 
-    initOpenSSL();
+    compat::initCryptoProvider();
 
     if (mOffer->hasDataChannel() && mAnswer->hasDataChannel()) {
         SctpSessionListener* l = this;
@@ -294,7 +271,13 @@ PeerCandidate::~PeerCandidate()
 
     mEventLoop->unregisterSocket(mSocket);
 
-    freeDTLS();
+    if (mDtlsSession) {
+        // Sends close_notify if connected
+        mDtlsSession->close();
+        mDtlsSession.reset();
+
+        flushSendRaw();
+    }
 }
 
 void PeerCandidate::receiveFromSocket()
@@ -589,15 +572,13 @@ std::optional<float> PeerCandidate::getIceRtt() const
 
 void PeerCandidate::onSctpSendPacket(const ByteBuffer& packet)
 {
-    if (mDtlsState != DtlsState::Completed) {
+    if (!mDtlsSession || mDtlsSession->getState() != compat::DtlsState::Completed) {
         LOG(SRTC_LOG_E, "SCTP wants to send but DTLS is not connected");
         return;
     }
 
-    const auto r = SSL_write(mDtlsSsl, packet.data(), static_cast<int>(packet.size()));
-    if (r <= 0) {
-        const auto err = SSL_get_error(mDtlsSsl, r);
-        LOG(SRTC_LOG_E, "SSL_write failed for SCTP packet, ssl error = %d", err);
+    if (const auto error = mDtlsSession->send(packet); error.isError()) {
+        LOG(SRTC_LOG_E, "Failed to send SCTP packet: %s", error.message.c_str());
     }
 }
 
@@ -753,7 +734,7 @@ void PeerCandidate::run()
         if (is_stun_message(data.buf)) {
             LOG(SRTC_LOG_V, "Received STUN message %zd, %d, #%u", data.buf.size(), data.buf.front(), mUniqueId);
             onReceivedStunMessage(data);
-        } else if (mDtlsSsl && is_dtls_message(data.buf)) {
+        } else if (mDtlsSession && is_dtls_message(data.buf)) {
             LOG(SRTC_LOG_V, "Received DTLS message %zd, %d, #%u", data.buf.size(), data.buf.front(), mUniqueId);
             onReceivedDtlsMessage(std::move(data.buf));
         } else if (is_rtc_message(data.buf)) {
@@ -761,48 +742,6 @@ void PeerCandidate::run()
             onReceivedRtcMessage(std::move(data.buf));
         } else {
             LOG(SRTC_LOG_V, "Received unknown message %zd, %d", data.buf.size(), data.buf.front());
-        }
-    }
-
-    if (mDtlsState == DtlsState::Activating && mDtlsSsl == nullptr) {
-        LOG(SRTC_LOG_V, "Preparing for the DTLS handshake");
-
-        const auto cert = mOffer->getCertificate();
-        mDtlsCtx = SSL_CTX_new(mAnswer->isSetupActive() ? DTLS_server_method() : DTLS_client_method());
-
-        SSL_CTX_use_certificate(mDtlsCtx, cert->getCertificate());
-        SSL_CTX_use_PrivateKey(mDtlsCtx, cert->getPrivateKey());
-
-        if (!SSL_CTX_check_private_key(mDtlsCtx)) {
-            LOG(SRTC_LOG_V, "ERROR: invalid private key");
-            mDtlsState = DtlsState::Failed;
-            emitOnFailedToConnect({ Error::Code::InvalidData, "Invalid private key" });
-        } else {
-            SSL_CTX_set_verify(mDtlsCtx, SSL_VERIFY_PEER, verify_callback);
-
-            SSL_CTX_set_min_proto_version(mDtlsCtx, DTLS1_VERSION);
-            SSL_CTX_set_max_proto_version(mDtlsCtx, DTLS1_2_VERSION);
-            SSL_CTX_set_read_ahead(mDtlsCtx, 1);
-
-            mDtlsSsl = SSL_new(mDtlsCtx);
-
-            mDtlsBio = BIO_new_dgram(this);
-            SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
-
-            SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
-
-            SSL_set_app_data(mDtlsSsl, this);
-            DTLS_set_timer_cb(mDtlsSsl, dtls_timer_cb);
-
-            if (mAnswer->isSetupActive()) {
-                SSL_set_accept_state(mDtlsSsl);
-                SSL_accept(mDtlsSsl);
-            } else {
-                SSL_set_connect_state(mDtlsSsl);
-                SSL_do_handshake(mDtlsSsl);
-            }
-
-            scheduleDtlsRetransmit();
         }
     }
 
@@ -900,13 +839,13 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
             mIceRttFilter.update(rtt);
 
             if (errorCode == 0 && mIceAgent->verifyResponseMessage(&incomingMessage, mAnswer->getIcePassword())) {
-                if (mDtlsState == DtlsState::Inactive) {
+                if (!mDtlsSession) {
                     LOG(SRTC_LOG_V, "STUN binding response verification succeeded, sending use candidate request");
 
                     emitOnIceConnected();
                     sendStunBindingResponse(0);
 
-                    mDtlsState = DtlsState::Activating;
+                    startDtls();
                 } else {
                     updateIceKeepAliveTimeout();
                 }
@@ -917,135 +856,125 @@ void PeerCandidate::onReceivedStunMessage(const Socket::ReceivedData& data)
     }
 }
 
+void PeerCandidate::startDtls()
+{
+    const auto [session, error] = compat::DtlsSession::create(
+        mAnswer->isSetupActive(),
+        mOffer->getCertificate(),
+        mAnswer->getCertificateHash(),
+        mScheduler.getRealScheduler(),
+        mIceRttFilter.value(),
+        [this](const uint8_t* data, size_t size) { addSendRaw({ data, size }); },
+        [this]() { onDtlsConnected(); },
+        [this](const Error& failure) { onDtlsFailed(failure); });
+
+    if (error.isError()) {
+        // This may destroy us
+        onDtlsFailed(error);
+        return;
+    }
+
+    mDtlsSession = session;
+
+    if (const auto startError = mDtlsSession->start(); startError.isError()) {
+        // This may destroy us
+        onDtlsFailed(startError);
+    }
+}
+
+void PeerCandidate::onDtlsConnected()
+{
+    // The session has checked the remote certificate against the fingerprint in the SDP answer
+    const auto [srtpKeys, keysError] = mDtlsSession->getSrtpKeys();
+    if (!srtpKeys) {
+        // This may destroy us
+        onDtlsFailed(keysError);
+        return;
+    }
+
+    const auto [srtpConnection, srtpError] = SrtpConnection::create(srtpKeys.value());
+    if (srtpError.isError()) {
+        LOG(SRTC_LOG_E, "Failed to initialize SRTP: %d, %s", static_cast<int>(srtpError.code), srtpError.message.c_str());
+        // This may destroy us
+        onDtlsFailed(srtpError);
+        return;
+    }
+
+    mSrtpConnection = srtpConnection;
+    mSendPacer = std::make_shared<SendPacer>(mOffer->getConfig(),
+                                             mSrtpConnection,
+                                             mSocket,
+                                             mSendRtpHistory,
+                                             mExtensionSourceTWCC,
+                                             [this]() { mLastSendTime = std::chrono::steady_clock::now(); });
+
+    const auto addr = to_string(mHost.addr);
+    LOG(SRTC_LOG_V,
+        "Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
+        addr.c_str(),
+        mDtlsSession->getConnectionCipherName().c_str(),
+        srtpKeys->profileIdName.c_str(),
+        mIceRttFilter.value());
+
+    onConnectionEstablished();
+
+    if (mSctpSession) {
+        mSctpSession->start();
+    }
+}
+
+void PeerCandidate::onDtlsFailed(const Error& error)
+{
+    LOG(SRTC_LOG_E, "DTLS failed: %s", error.message.c_str());
+
+    Task::cancelHelper(mTaskConnectTimeout);
+
+    if (mDtlsSession) {
+        const auto state = mDtlsSession->getState();
+        if (state != compat::DtlsState::Failed && state != compat::DtlsState::Closed) {
+            // We failed after the handshake, e.g. with SRTP setup
+            mDtlsSession->close();
+        }
+    }
+
+    // This may destroy us, so it has to be the last thing we do
+    emitOnFailedToConnect(error);
+}
+
+void PeerCandidate::readDtlsData()
+{
+    while (mDtlsSession && mDtlsSession->getState() == compat::DtlsState::Completed) {
+        const auto [eof, error] = mDtlsSession->read(mDtlsReadBuf);
+
+        if (error.isError()) {
+            emitOnDtlsDisconnected(error);
+            return;
+        }
+        if (eof) {
+            emitOnDtlsDisconnected(Error::OK);
+            return;
+        }
+        if (mDtlsReadBuf.empty()) {
+            // No more data for now
+            return;
+        }
+
+        if (mSctpSession) {
+            mSctpSession->onReceiveData(mDtlsReadBuf);
+        }
+    }
+}
+
 void PeerCandidate::onReceivedDtlsMessage(ByteBuffer&& buf)
 {
     Task::cancelHelper(mTaskSendStunConnectRequest);
     Task::cancelHelper(mTaskSendStunConnectResponse);
 
-    mDtlsReceiveQueue.push_back(std::move(buf));
+    // This is called from run(), where the candidate is kept alive even if a callback releases it
+    mDtlsSession->received(std::move(buf));
 
-    // Try the handshake
-    if (mDtlsState == DtlsState::Activating) {
-        const auto r1 = SSL_do_handshake(mDtlsSsl);
-        const auto err = SSL_get_error(mDtlsSsl, r1);
-        LOG(SRTC_LOG_V, "DTLS handshake: %d, %d", r1, err);
-
-        if (err == SSL_ERROR_WANT_READ) {
-            LOG(SRTC_LOG_V, "Still in progress");
-            scheduleDtlsRetransmit();
-        } else if (r1 == 1 && err == 0) {
-            Task::cancelHelper(mTaskDtlsRetransmit);
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-            const auto cert = SSL_get1_peer_certificate(mDtlsSsl);
-#else
-            const auto cert = SSL_get_peer_certificate(mDtlsSsl);
-#endif
-            if (cert == nullptr) {
-                // Error, no certificate
-                LOG(SRTC_LOG_E, "There is no DTLS server certificate");
-                mDtlsState = DtlsState::Failed;
-
-                Task::cancelHelper(mTaskConnectTimeout);
-                emitOnFailedToConnect({ Error::Code::InvalidData, "There is no DTLS server certificate" });
-            } else {
-                uint8_t fpBuf[32] = {};
-                unsigned int fpSize = {};
-
-                const auto digest = EVP_get_digestbyname("sha256");
-                X509_digest(cert, digest, fpBuf, &fpSize);
-                X509_free(cert);
-
-                std::string hex = bin_to_hex(fpBuf, fpSize);
-                LOG(SRTC_LOG_V, "Remote certificate sha-256: %s", hex.c_str());
-
-                const auto expectedHash = mAnswer->getCertificateHash();
-                const auto actualHashBin = ByteBuffer{ fpBuf, fpSize };
-
-                if (expectedHash.getBin() == actualHashBin) {
-                    const auto [srtpConnection, srtpError] = SrtpConnection::create(mDtlsSsl, mAnswer->isSetupActive());
-
-                    if (srtpError.isOk()) {
-                        mSrtpConnection = srtpConnection;
-                        mSendPacer =
-                            std::make_shared<SendPacer>(mOffer->getConfig(),
-                                                        mSrtpConnection,
-                                                        mSocket,
-                                                        mSendRtpHistory,
-                                                        mExtensionSourceTWCC,
-                                                        [this]() { mLastSendTime = std::chrono::steady_clock::now(); });
-
-                        const auto addr = to_string(mHost.addr);
-                        const auto cipher = SSL_get_cipher(mDtlsSsl);
-                        const auto profile = SSL_get_selected_srtp_profile(mDtlsSsl);
-                        LOG(SRTC_LOG_V,
-                            "Connected to %s with cipher %s, profile %s, ice rtt = %.2f ms",
-                            addr.c_str(),
-                            cipher,
-                            profile->name,
-                            mIceRttFilter.value());
-
-                        mDtlsState = DtlsState::Completed;
-
-                        onConnectionEstablished();
-
-                        if (mSctpSession) {
-                            mSctpSession->start();
-                        }
-                    } else {
-                        // Error, failed to initialize SRTP
-                        LOG(SRTC_LOG_E,
-                            "Failed to initialize SRTP: %d, %s",
-                            static_cast<int>(srtpError.code),
-                            srtpError.message.c_str());
-                        mDtlsState = DtlsState::Failed;
-
-                        Task::cancelHelper(mTaskConnectTimeout);
-                        emitOnFailedToConnect(srtpError);
-                    }
-                } else {
-                    // Error, certificate hash does not match
-                    LOG(SRTC_LOG_E, "Server cert doesn't match the fingerprint");
-                    mDtlsState = DtlsState::Failed;
-
-                    Task::cancelHelper(mTaskConnectTimeout);
-                    emitOnFailedToConnect({ Error::Code::InvalidData, "Certificate hash doesn't match" });
-                }
-            }
-        } else {
-            // Error during DTLS handshake
-            const auto opensslError = get_openssl_error();
-            LOG(SRTC_LOG_E, "Failed during DTLS handshake: %s", opensslError.c_str());
-            mDtlsState = DtlsState::Failed;
-
-            Task::cancelHelper(mTaskConnectTimeout);
-            emitOnFailedToConnect({ Error::Code::InvalidData, "Failure during DTLS handshake: " + opensslError });
-        }
-
-        if (mDtlsState == DtlsState::Failed) {
-            freeDTLS();
-        }
-    } else if (mDtlsState == DtlsState::Completed) {
-        uint8_t tmp[4096];
-        const auto r = SSL_read(mDtlsSsl, tmp, sizeof(tmp));
-
-        if (r > 0) {
-            if (mSctpSession) {
-                mSctpSession->onReceiveData({ tmp, static_cast<size_t>(r) });
-            }
-        } else {
-            if ((SSL_get_shutdown(mDtlsSsl) & SSL_RECEIVED_SHUTDOWN) != 0) {
-                LOG(SRTC_LOG_V, "Received DTLS close_notify, peer disconnected gracefully");
-                emitOnDtlsDisconnected(Error::OK);
-            } else {
-                const auto err = SSL_get_error(mDtlsSsl, r);
-                if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-                    LOG(SRTC_LOG_V, "DTLS connection lost, ssl error = %d", err);
-                    emitOnDtlsDisconnected({ Error::Code::InvalidData, "DTLS connection lost unexpectedly" });
-                }
-            }
-        }
-    }
+    // Once connected, this delivers SCTP data, and also lets the session respond to retransmitted handshake flights
+    readDtlsData();
 }
 
 void PeerCandidate::onReceivedRtcMessage(ByteBuffer&& buf)
@@ -1452,197 +1381,6 @@ std::shared_ptr<Track> PeerCandidate::findReceiveTrack(ByteBuffer& packet) const
     return {};
 }
 
-// Custom BIO for DGRAM
-
-struct dgram_data {
-    PeerCandidate* pc;
-};
-
-int PeerCandidate::dgram_read(BIO* b, char* out, int outl)
-{
-    if (out == nullptr) {
-        return 0;
-    }
-
-    BIO_clear_retry_flags(b);
-
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data*>(ptr);
-
-    if (data->pc->mDtlsReceiveQueue.empty()) {
-        BIO_set_retry_read(b);
-        return -1;
-    }
-
-    const auto item = std::move(data->pc->mDtlsReceiveQueue.front());
-    data->pc->mDtlsReceiveQueue.erase(data->pc->mDtlsReceiveQueue.begin());
-
-    const auto ret = std::min(static_cast<int>(item.size()), outl);
-    std::memcpy(out, item.data(), static_cast<size_t>(ret));
-
-    return ret;
-}
-
-int PeerCandidate::dgram_write(BIO* b, const char* in, int inl)
-{
-    if (inl == 0) {
-        return 0;
-    }
-
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data*>(ptr);
-
-    data->pc->addSendRaw({ reinterpret_cast<const uint8_t*>(in), static_cast<size_t>(inl) });
-
-    return inl;
-}
-
-long PeerCandidate::dgram_ctrl([[maybe_unused]] BIO* b, int cmd, [[maybe_unused]] long num, [[maybe_unused]] void* ptr)
-{
-    switch (cmd) {
-    case BIO_CTRL_DGRAM_QUERY_MTU:
-        return 1200;
-    case BIO_CTRL_DUP:
-    case BIO_CTRL_FLUSH:
-        return 1;
-#ifdef BIO_CTRL_GET_KTLS_SEND
-    case BIO_CTRL_GET_KTLS_SEND:
-        // Fallthrough
-#endif
-#ifdef BIO_CTRL_GET_KTLS_RECV
-    case BIO_CTRL_GET_KTLS_RECV:
-        // Fallthrough
-#endif
-    default:
-        return 0;
-    }
-}
-
-int PeerCandidate::dgram_free(BIO* b)
-{
-    auto ptr = BIO_get_data(b);
-    auto data = reinterpret_cast<dgram_data*>(ptr);
-    delete data;
-    return 1;
-}
-
-std::once_flag PeerCandidate::dgram_once;
-BIO_METHOD* PeerCandidate::dgram_method = nullptr;
-
-BIO* PeerCandidate::BIO_new_dgram(PeerCandidate* pc)
-{
-    std::call_once(dgram_once, [] {
-        dgram_method = BIO_meth_new(BIO_TYPE_DGRAM, "dgram");
-        BIO_meth_set_read(dgram_method, dgram_read);
-        BIO_meth_set_write(dgram_method, dgram_write);
-        BIO_meth_set_ctrl(dgram_method, dgram_ctrl);
-        BIO_meth_set_destroy(dgram_method, dgram_free);
-    });
-
-    BIO* b = BIO_new(dgram_method);
-    if (b == nullptr) {
-        return nullptr;
-    }
-
-    BIO_set_init(b, 1);
-    BIO_set_shutdown(b, 0);
-
-    const auto ptr = new dgram_data{ pc };
-    BIO_set_data(b, ptr);
-    return b;
-}
-
-unsigned int PeerCandidate::dtls_timer_cb(SSL* ssl, unsigned int timer_us)
-{
-    std::chrono::microseconds timeout;
-
-    if (timer_us == 0) {
-        // Initial timeout for a new flight: twice the ICE round trip time
-        const auto pc = static_cast<PeerCandidate*>(SSL_get_app_data(ssl));
-        const auto iceRttMs = pc ? pc->mIceRttFilter.value() : 0.0f;
-        const auto iceRtt =
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float, std::milli>(iceRttMs));
-        timeout = std::clamp<std::chrono::microseconds>(
-            2 * iceRtt, kDtlsMinRetransmitTimeout, kDtlsMaxInitialRetransmitTimeout);
-    } else {
-        timeout =
-            std::min<std::chrono::microseconds>(2 * std::chrono::microseconds(timer_us), kDtlsMaxRetransmitTimeout);
-    }
-
-    LOG(SRTC_LOG_V,
-        "DTLS retransmit timeout: previous = %u us, next = %ld us",
-        timer_us,
-        static_cast<long>(timeout.count()));
-
-    return static_cast<unsigned int>(timeout.count());
-}
-
-void PeerCandidate::freeDTLS()
-{
-    Task::cancelHelper(mTaskDtlsRetransmit);
-
-    if (mDtlsSsl) {
-        SSL_shutdown(mDtlsSsl);
-        SSL_free(mDtlsSsl);
-        mDtlsSsl = nullptr;
-    }
-
-    if (mDtlsCtx) {
-        SSL_CTX_free(mDtlsCtx);
-        mDtlsCtx = nullptr;
-    }
-
-    mDtlsReceiveQueue.clear();
-    mDtlsBio = nullptr;
-
-    // Flush the send queue to send the DTLS_close message
-    flushSendRaw();
-}
-
-void PeerCandidate::scheduleDtlsRetransmit()
-{
-    Task::cancelHelper(mTaskDtlsRetransmit);
-
-    if (mDtlsSsl == nullptr || mDtlsState != DtlsState::Activating) {
-        return;
-    }
-
-    timeval tv = {};
-    if (DTLSv1_get_timeout(mDtlsSsl, &tv) != 1) {
-        return;
-    }
-
-    const auto delay =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(tv.tv_sec) + std::chrono::microseconds(tv.tv_usec));
-    LOG(SRTC_LOG_V, "DTLS retransmit timer in %lld ms, #%u", static_cast<long long>(delay.count()), mUniqueId);
-
-    mTaskDtlsRetransmit = mScheduler.submit(delay, __FILE__, __LINE__, [this] { onDtlsRetransmitTimeout(); });
-}
-
-void PeerCandidate::onDtlsRetransmitTimeout()
-{
-    if (mDtlsSsl == nullptr || mDtlsState != DtlsState::Activating) {
-        return;
-    }
-
-    // Retransmits the last flight through our BIO (dgram_write -> addSendRaw)
-    const auto r = DTLSv1_handle_timeout(mDtlsSsl);
-    if (r < 0) {
-        const auto e = get_openssl_error();
-        LOG(SRTC_LOG_E, "DTLS handshake retransmit failed: %s", e.c_str());
-        mDtlsState = DtlsState::Failed;
-
-        Task::cancelHelper(mTaskConnectTimeout);
-        emitOnFailedToConnect({ Error::Code::InvalidData, "DTLS handshake retransmit failed: " + e });
-
-        freeDTLS();
-        return;
-    }
-
-    LOG(SRTC_LOG_V, "DTLS retransmit timeout handled: %d, #%u", static_cast<int>(r), mUniqueId);
-    scheduleDtlsRetransmit();
-}
-
 // RTT
 
 std::optional<float> PeerCandidate::calculateRtt(const std::chrono::steady_clock::time_point& now) const
@@ -1694,7 +1432,6 @@ void PeerCandidate::emitOnFailedToConnect(const Error& error)
 void PeerCandidate::emitOnConnectionLost(const Error& error)
 {
     mIsConnected = false;
-    mDtlsState = DtlsState::ConnectionLost;
 
     mListener->onCandidateConnectionLost(this, error);
 }

@@ -15,6 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-22.04, ubuntu-24.04, ubuntu-26.04 ]
+        crypto: [ OPENSSL, MBEDTLS ]
+        exclude:
+          # These ship mbedTLS 2.28, we need 3.x
+          - os: ubuntu-22.04
+            crypto: MBEDTLS
+          - os: ubuntu-24.04
+            crypto: MBEDTLS
 
     runs-on: ${{ matrix.os }}
 
@@ -28,9 +35,9 @@ jobs:
         which clang
         which clang++
 
-    - name: Install libcurl
+    - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev ninja-build
+        sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev ninja-build libmbedtls-dev
 
         if [ "${{ matrix.os }}" = "ubuntu-24.04" ]
         then
@@ -46,6 +53,7 @@ jobs:
           -DCMAKE_C_COMPILER=/usr/bin/gcc \
           -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DSRTC_CRYPTO_LIB=${{ matrix.crypto }} \
           -GNinja
 
     - name: Build
@@ -69,6 +77,7 @@ jobs:
           -DCMAKE_C_COMPILER=/usr/bin/clang \
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DSRTC_CRYPTO_LIB=${{ matrix.crypto }} \
           -GNinja
 
     - name: Build
@@ -86,6 +95,11 @@ jobs:
         ${{github.workspace}}/build-clang/srtc_test
 
   build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        crypto: [ OPENSSL, MBEDTLS ]
+
     runs-on: macos-latest
 
     steps:
@@ -93,14 +107,17 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install openssl curl ninja
+        # Plain mbedtls is 4.x, we need 3.x
+        brew install openssl mbedtls@3 curl ninja
 
     - name: Configure CMake
       run: |
         cmake \
           -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DSRTC_CRYPTO_LIB=${{ matrix.crypto }} \
           -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) \
+          -DCMAKE_PREFIX_PATH=$(brew --prefix mbedtls@3) \
           -GNinja
 
     - name: Build
@@ -110,8 +127,8 @@ jobs:
           --config ${{env.BUILD_TYPE}} \
           --target srtc \
           --target srtc_test \
-        --target srtc_publish \
-        --target srtc_subscribe
+          --target srtc_publish \
+          --target srtc_subscribe
 
     - name: Test
       run: |

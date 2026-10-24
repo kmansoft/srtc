@@ -16,10 +16,10 @@
 #include <mutex>
 #include <vector>
 
-struct ssl_st;
-struct ssl_ctx_st;
-struct bio_st;
-struct bio_method_st;
+namespace srtc::compat
+{
+class DtlsSession;
+}
 
 namespace srtc
 {
@@ -168,8 +168,6 @@ private:
     std::shared_ptr<SendPacer> mSendPacer;
     std::shared_ptr<sctp::SctpSession> mSctpSession;
 
-    std::list<ByteBuffer> mDtlsReceiveQueue;
-
     std::list<Socket::ReceivedData> mRawReceiveQueue;
 
     std::list<ByteBuffer> mRawSendQueue;
@@ -184,37 +182,14 @@ private:
 
     ByteBuffer mProtectedBuf;
 
-    // DTLS
-    enum class DtlsState {
-        Inactive,
-        Activating,
-        Failed,
-        Completed,
-        ConnectionLost
-    };
+    // DTLS, created when ICE connects, so no session means ICE is not connected yet
+    std::shared_ptr<compat::DtlsSession> mDtlsSession;
+    ByteBuffer mDtlsReadBuf;
 
-    ssl_ctx_st* mDtlsCtx = {};
-    ssl_st* mDtlsSsl = {};
-    bio_st* mDtlsBio = {};
-    DtlsState mDtlsState = { DtlsState::Inactive };
-
-    // OpenSSL BIO
-    static int dgram_read(struct bio_st* b, char* out, int outl);
-    static int dgram_write(struct bio_st* b, const char* in, int inl);
-    static long dgram_ctrl(struct bio_st* b, int cmd, long num, void* ptr);
-    static int dgram_free(struct bio_st* b);
-
-    static std::once_flag dgram_once;
-    static struct bio_method_st* dgram_method;
-
-    static struct bio_st* BIO_new_dgram(PeerCandidate* pc);
-
-    // OpenSSL DTLS retransmit timer
-    static unsigned int dtls_timer_cb(struct ssl_st* ssl, unsigned int timer_us);
-
-    void freeDTLS();
-    void scheduleDtlsRetransmit();
-    void onDtlsRetransmitTimeout();
+    void startDtls();
+    void onDtlsConnected();
+    void onDtlsFailed(const Error& error);
+    void readDtlsData();
 
     // RTT
     std::optional<float> calculateRtt(const std::chrono::steady_clock::time_point& now) const;
@@ -248,7 +223,6 @@ private:
     std::weak_ptr<Task> mTaskExpireStunRequests;
     std::weak_ptr<Task> mTaskIceKeepAlive;
     std::weak_ptr<Task> mTaskIceConnectionLost;
-    std::weak_ptr<Task> mTaskDtlsRetransmit;
 
     ScopedScheduler mScheduler;
 

@@ -3,26 +3,22 @@
 #include "srtc/byte_buffer.h"
 #include "srtc/error.h"
 #include "srtc/replay_protection.h"
-#include "srtc/rtp_packet_source.h"
 #include "srtc/srtp_util.h"
 
 #include <memory>
 #include <unordered_map>
 #include <optional>
 
-struct ssl_st;
-
 namespace srtc
 {
 
 class SrtpCrypto;
+class SrtpKeys;
 
 class SrtpConnection
 {
 public:
-	static const char* const kSrtpCipherList;
-
-	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
+	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(const SrtpKeys& srtpKeys);
 	~SrtpConnection();
 
 	void onPeerConnected();
@@ -42,11 +38,11 @@ public:
 	bool unprotectReceiveMedia(const ByteBuffer& packetData, ByteBuffer& output);
 
 	// Implementation
-	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, unsigned long profileId);
+	SrtpConnection(const std::shared_ptr<SrtpCrypto>& crypto, ProfileId profileId);
 
 private:
 	const std::shared_ptr<SrtpCrypto> mCrypto;
-	const unsigned long mProfileId;
+	const ProfileId mProfileId;
 
 	struct ChannelKey {
 		uint32_t ssrc;

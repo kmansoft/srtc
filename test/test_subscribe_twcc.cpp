@@ -3,12 +3,11 @@
 #include "srtc/logging.h"
 #include "srtc/twcc_subscribe.h"
 
+#include "crypto_util.h"
+
 #include <cassert>
-#include <cstdint>
 #include <cstring>
 #include <unordered_map>
-
-#include <openssl/rand.h>
 
 #define LOG(level, ...) srtc::log(level, "TWCC", __VA_ARGS__)
 
@@ -281,7 +280,7 @@ void processReport(PacketMap& packetMap,
 uint32_t randomU32()
 {
     uint32_t value;
-    RAND_bytes((unsigned char*)&value, sizeof(value));
+    srtc::compat::randomBytes((unsigned char*)&value, sizeof(value));
     return value;
 }
 

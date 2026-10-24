@@ -65,6 +65,8 @@ typedef struct _StunKeyBlob {
 #elif defined(HAVE_OPENSSL)
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
+#elif defined(HAVE_MBEDTLS)
+#include <mbedtls/md.h>
 #else
 #include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
@@ -221,6 +223,40 @@ void stun_sha1 (const uint8_t *msg, size_t len, size_t msg_len, uint8_t *sha,
 #endif /* OPENSSL_VERSION_NUMBER */
 #endif /* OPENSSL_VERSION_MAJOR */
 }
+#elif defined(HAVE_MBEDTLS)
+{
+#ifdef NDEBUG
+#define TRY(x) x;
+#else
+  int ret;
+#define TRY(x)                                  \
+  ret = x;                                      \
+  assert (ret == 0);
+#endif
+
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init (&ctx);
+
+  TRY (mbedtls_md_setup (&ctx, mbedtls_md_info_from_type (MBEDTLS_MD_SHA1), 1));
+  TRY (mbedtls_md_hmac_starts (&ctx, (const unsigned char *) key, keylen));
+  TRY (mbedtls_md_hmac_update (&ctx, msg, 2));
+  TRY (mbedtls_md_hmac_update (&ctx, (const unsigned char *) &fakelen, 2));
+  TRY (mbedtls_md_hmac_update (&ctx, msg + 4, len - 28));
+
+  /* RFC 3489 specifies that the message's size should be 64 bytes,
+     and \x00 padding should be done */
+  if (padding && ((len - 24) % 64) > 0) {
+    uint16_t pad_size = 64 - ((len - 24) % 64);
+
+    TRY (mbedtls_md_hmac_update (&ctx, pad_char, pad_size));
+  }
+
+  TRY (mbedtls_md_hmac_finish (&ctx, sha));
+
+  mbedtls_md_free (&ctx);
+
+#undef TRY
+}
 #else
 {
   gnutls_hmac_hd_t handle;
@@ -326,6 +362,25 @@ void stun_hash_creds (const uint8_t *realm, size_t realm_len,
 #else
   EVP_MD_CTX_free (ctx);
 #endif /* OPENSSL_VERSION_NUMBER */
+
+#elif defined(HAVE_MBEDTLS)
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init (&ctx);
+
+  /* MD5 can be compiled out of mbedTLS, then there is no info and setup fails */
+  if (mbedtls_md_setup (&ctx, mbedtls_md_info_from_type (MBEDTLS_MD_MD5), 0) == 0 &&
+      mbedtls_md_starts (&ctx) == 0) {
+    mbedtls_md_update (&ctx, username_trimmed, username_len);
+    mbedtls_md_update (&ctx, colon, 1);
+    mbedtls_md_update (&ctx, realm_trimmed, realm_len);
+    mbedtls_md_update (&ctx, colon, 1);
+    mbedtls_md_update (&ctx, password_trimmed, password_len);
+    mbedtls_md_finish (&ctx, md5);
+  } else {
+    memset (md5, 0, 16);
+  }
+
+  mbedtls_md_free (&ctx);
 
 #else
   gnutls_hash_hd_t handle;
