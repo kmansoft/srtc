@@ -19,8 +19,6 @@ class SrtpCrypto;
 class SrtpConnection
 {
 public:
-	static const char* const kSrtpCipherList;
-
 	static std::pair<std::shared_ptr<SrtpConnection>, Error> create(ssl_st* dtls_ssl, bool isSetupActive);
 	~SrtpConnection();
 

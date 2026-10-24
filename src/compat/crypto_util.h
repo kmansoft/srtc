@@ -4,4 +4,6 @@
 #include "crypto_util_openssl.h"
 #elif defined SRTC_USE_MBEDTLS
 #include "crypto_util_mbedtls.h"
+#else
+#error "Unsupported / invalid crypto backend"
 #endif

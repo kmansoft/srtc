@@ -313,6 +313,8 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
     )
     target_sources(srtc
             PRIVATE
+            src/compat/crypto_dtls_session_openssl.h
+            src/compat/crypto_dtls_session_openssl.cpp
             src/compat/crypto_provider_openssl.h
             src/compat/crypto_provider_openssl.cpp
             src/compat/crypto_util_openssl.h

@@ -68,6 +68,9 @@ std::string get_openssl_error()
     return ret;
 }
 
+const char* const kSrtpCipherList =
+    "SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM:SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32";
+
 constexpr auto kMaxRtrrQueueSize = 100;
 constexpr auto kMaxDlrrResponseSize = 25;
 
@@ -789,7 +792,7 @@ void PeerCandidate::run()
             mDtlsBio = BIO_new_dgram(this);
             SSL_set_bio(mDtlsSsl, mDtlsBio, mDtlsBio);
 
-            SSL_set_tlsext_use_srtp(mDtlsSsl, SrtpConnection::kSrtpCipherList);
+            SSL_set_tlsext_use_srtp(mDtlsSsl, kSrtpCipherList);
 
             SSL_set_app_data(mDtlsSsl, this);
             DTLS_set_timer_cb(mDtlsSsl, dtls_timer_cb);
@@ -1633,9 +1636,10 @@ void PeerCandidate::onDtlsRetransmitTimeout()
         mDtlsState = DtlsState::Failed;
 
         Task::cancelHelper(mTaskConnectTimeout);
-        emitOnFailedToConnect({ Error::Code::InvalidData, "DTLS handshake retransmit failed: " + e });
-
         freeDTLS();
+
+        // This may destroy us, so it has to be the last thing we do
+        emitOnFailedToConnect({ Error::Code::InvalidData, "DTLS handshake retransmit failed: " + e });
         return;
     }
 

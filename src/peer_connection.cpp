@@ -688,16 +688,19 @@ void PeerConnection::networkThreadWorkerFunc()
         }
 
         // Candidate processing
-        for (const auto& candidate : mConnectingCandidateList) {
-            candidate->run();
-            if (mConnectingCandidateList.empty()) {
-                // A candidate reached ICE connected, and we removed all connecting ones
-                break;
+        {
+            const auto connectingCandidateList = mConnectingCandidateList;
+            for (const auto& candidate : connectingCandidateList) {
+                candidate->run();
+                if (mConnectingCandidateList.empty()) {
+                    // A candidate reached ICE connected, and we removed all connecting ones
+                    break;
+                }
             }
         }
 
-        if (mSelectedCandidate) {
-            mSelectedCandidate->run();
+        if (const auto selected = mSelectedCandidate) {
+            selected->run();
         }
 
         // Jitter buffer processing
