@@ -12,6 +12,11 @@ endif ()
 set(SRTC_CRYPTO_LIB "OPENSSL" CACHE STRING "The crypto library to use: OPENSSL or MBEDTLS")
 set_property(CACHE SRTC_CRYPTO_LIB PROPERTY STRINGS OPENSSL MBEDTLS)
 
+# To use a locally built crypto library, e.g. one built by a project that includes srtc, set its install prefix.
+# Otherwise Linux and macOS use the system one, and on Windows we download our own prebuilt binaries.
+set(SRTC_OPENSSL_ROOT "" CACHE PATH "Install prefix of a local OpenSSL build to use")
+set(SRTC_MBEDTLS_ROOT "" CACHE PATH "Install prefix of a local mbedTLS build to use")
+
 option(SRTC_BUILD_TESTS "Build tests with Google Test" ON)
 option(SRTC_BUILD_TOOLS "Build the command line tools" ON)
 option(SRTC_BUILD_TOOL_PUBLISH "Build the publish command line tool" ON)
@@ -278,7 +283,13 @@ target_link_libraries(
 if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
     # OpenSSL
 
-    if (WIN32)
+    if (SRTC_OPENSSL_ROOT)
+        # A local build. OPENSSL_USE_STATIC_LIBS is up to the caller here
+        if (NOT EXISTS "${SRTC_OPENSSL_ROOT}")
+            message(FATAL_ERROR "SRTC_OPENSSL_ROOT does not exist: ${SRTC_OPENSSL_ROOT}")
+        endif ()
+        set(OPENSSL_ROOT_DIR "${SRTC_OPENSSL_ROOT}")
+    elseif (WIN32)
         # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
         # so we build it ourselves somewhere else and upload to a server, then fetch from there.
         set(OPENSSL_USE_STATIC_LIBS ON)
@@ -297,7 +308,7 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
             file(ARCHIVE_EXTRACT INPUT "${SRTC_OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
         endif ()
     endif ()
-    if (APPLE)
+    if (APPLE AND NOT SRTC_OPENSSL_ROOT)
         # OpenSSL comes from Homebrew which users may not have installed, so we want static linking
         set(OPENSSL_USE_STATIC_LIBS ON)
     endif ()
@@ -329,7 +340,13 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
 elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
     # MBED-TLS
 
-    if (WIN32)
+    if (SRTC_MBEDTLS_ROOT)
+        # A local build
+        if (NOT EXISTS "${SRTC_MBEDTLS_ROOT}")
+            message(FATAL_ERROR "SRTC_MBEDTLS_ROOT does not exist: ${SRTC_MBEDTLS_ROOT}")
+        endif ()
+        set(SRTC_MBEDTLS_ROOT_DIR "${SRTC_MBEDTLS_ROOT}")
+    elseif (WIN32)
         # We build it ourselves somewhere else and upload to a server, then fetch from there.
         # Our own names, find_package sets MbedTLS_VERSION
         set(SRTC_MBEDTLS_VERSION "3.6.7")
@@ -345,9 +362,22 @@ elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
                     EXPECTED_HASH SHA256=${SRTC_MBEDTLS_SHA256})
             file(ARCHIVE_EXTRACT INPUT "${SRTC_MBEDTLS_ZIP_FILE}" DESTINATION "${SRTC_MBEDTLS_ROOT_DIR}")
         endif ()
+    endif ()
 
-        # MbedTLS_DIR is what find_package reads. The prefix path also gets passed to libsrtp, see below.
-        set(MbedTLS_DIR "${SRTC_MBEDTLS_ROOT_DIR}/lib/cmake/MbedTLS")
+    if (SRTC_MBEDTLS_ROOT_DIR)
+        # Point find_package at exactly this build. MbedTLS_DIR is what it reads, and a normal variable
+        # takes precedence over a stale cached one. The prefix path also gets passed to libsrtp, see below.
+        set(MbedTLS_DIR "")
+        foreach (SRTC_MBEDTLS_CONFIG_DIR lib/cmake/MbedTLS lib64/cmake/MbedTLS share/cmake/MbedTLS)
+            if (EXISTS "${SRTC_MBEDTLS_ROOT_DIR}/${SRTC_MBEDTLS_CONFIG_DIR}/MbedTLSConfig.cmake")
+                set(MbedTLS_DIR "${SRTC_MBEDTLS_ROOT_DIR}/${SRTC_MBEDTLS_CONFIG_DIR}")
+                break()
+            endif ()
+        endforeach ()
+        if (NOT MbedTLS_DIR)
+            message(FATAL_ERROR "No MbedTLSConfig.cmake under ${SRTC_MBEDTLS_ROOT_DIR}, it has to be installed with cmake --install")
+        endif ()
+
         list(APPEND CMAKE_PREFIX_PATH "${SRTC_MBEDTLS_ROOT_DIR}")
     endif ()
 
@@ -446,7 +476,8 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
     # All of the above provide AES-GCM, which our tests need
     list(APPEND LIBSRTP_CMAKE_ARGS "-DGCM=ON")
 
-    if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
+    if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL" AND OPENSSL_ROOT_DIR)
+        # Our download on Windows, or SRTC_OPENSSL_ROOT, so libsrtp uses the same OpenSSL as we do
         list(APPEND LIBSRTP_CMAKE_ARGS
                 -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}
         )

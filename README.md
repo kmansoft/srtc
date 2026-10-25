@@ -103,6 +103,15 @@ Build the project using CMake.
 cmake . -B build
 ```
 
+The crypto library is OpenSSL by default, use `-DSRTC_CRYPTO_LIB=MBEDTLS` for Mbed TLS (3.4 or newer 3.x, built with
+`MBEDTLS_SSL_DTLS_SRTP`). Linux and macOS use the system's library, and on Windows the build downloads prebuilt binaries.
+To use a library you've built yourself, pass its install prefix:
+
+```bash
+cmake . -B build -DSRTC_CRYPTO_LIB=MBEDTLS -DSRTC_MBEDTLS_ROOT=/path/to/mbedtls/install
+cmake . -B build -DSRTC_CRYPTO_LIB=OPENSSL -DSRTC_OPENSSL_ROOT=/path/to/openssl/install
+```
+
 Change into the build directory and run:
 
 ```bash
