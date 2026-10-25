@@ -282,14 +282,15 @@ if (SRTC_CRYPTO_LIB STREQUAL "OPENSSL")
         # OpenSSL does not provide binary releases, and building from source takes about 10 minutes -
         # so we build it ourselves somewhere else and upload to a server, then fetch from there.
         set(OPENSSL_USE_STATIC_LIBS ON)
-        set(OPENSSL_VERSION "3.5.6")
-        set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}")
+        # Our own names, find_package sets OPENSSL_VERSION. OPENSSL_ROOT_DIR is the hint FindOpenSSL reads.
+        set(SRTC_OPENSSL_VERSION "3.5.6")
+        set(OPENSSL_ROOT_DIR "${CMAKE_BINARY_DIR}/openssl-bin-${SRTC_OPENSSL_VERSION}")
 
         if (NOT EXISTS "${OPENSSL_ROOT_DIR}")
             message(STATUS "Downloading OpenSSL binaries...")
-            set(OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${OPENSSL_VERSION}.zip")
-            file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${OPENSSL_VERSION}.zip" "${OPENSSL_ZIP_FILE}")
-            file(ARCHIVE_EXTRACT INPUT "${OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
+            set(SRTC_OPENSSL_ZIP_FILE "${CMAKE_BINARY_DIR}/openssl-bin-${SRTC_OPENSSL_VERSION}.zip")
+            file(DOWNLOAD "https://kman.mobi/download/openssl-bin-${SRTC_OPENSSL_VERSION}.zip" "${SRTC_OPENSSL_ZIP_FILE}")
+            file(ARCHIVE_EXTRACT INPUT "${SRTC_OPENSSL_ZIP_FILE}" DESTINATION "${OPENSSL_ROOT_DIR}")
         endif ()
     endif ()
     if (APPLE)
@@ -326,18 +327,20 @@ elseif (SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
 
     if (WIN32)
         # We build it ourselves somewhere else and upload to a server, then fetch from there.
-        set(MbedTLS_USE_STATIC_LIBS ON)
-        set(MbedTLS_VERSION "3.6.7")
-        set(MbedTLS_ROOT_DIR "${CMAKE_BINARY_DIR}/mbedtls-bin-${MbedTLS_VERSION}")
+        # Our own names, find_package sets MbedTLS_VERSION
+        set(SRTC_MBEDTLS_VERSION "3.6.7")
+        set(SRTC_MBEDTLS_ROOT_DIR "${CMAKE_BINARY_DIR}/mbedtls-bin-${SRTC_MBEDTLS_VERSION}")
 
-        if (NOT EXISTS "${MbedTLS_ROOT_DIR}")
+        if (NOT EXISTS "${SRTC_MBEDTLS_ROOT_DIR}")
             message(STATUS "Downloading MbedTLS binaries...")
-            set(MbedTLS_ZIP_FILE "${CMAKE_BINARY_DIR}/mbedtls-bin-${MbedTLS_VERSION}.zip")
-            file(DOWNLOAD "https://kman.mobi/download/mbedtls-bin-${MbedTLS_VERSION}.zip" "${MbedTLS_ZIP_FILE}")
-            file(ARCHIVE_EXTRACT INPUT "${MbedTLS_ZIP_FILE}" DESTINATION "${MbedTLS_ROOT_DIR}")
+            set(SRTC_MBEDTLS_ZIP_FILE "${CMAKE_BINARY_DIR}/mbedtls-bin-${SRTC_MBEDTLS_VERSION}.zip")
+            file(DOWNLOAD "https://kman.mobi/download/mbedtls-bin-${SRTC_MBEDTLS_VERSION}.zip" "${SRTC_MBEDTLS_ZIP_FILE}")
+            file(ARCHIVE_EXTRACT INPUT "${SRTC_MBEDTLS_ZIP_FILE}" DESTINATION "${SRTC_MBEDTLS_ROOT_DIR}")
         endif ()
 
-        set(MbedTLS_DIR "${MbedTLS_ROOT_DIR}/lib/cmake/MbedTLS")
+        # MbedTLS_DIR is what find_package reads. The prefix path also gets passed to libsrtp, see below.
+        set(MbedTLS_DIR "${SRTC_MBEDTLS_ROOT_DIR}/lib/cmake/MbedTLS")
+        list(APPEND CMAKE_PREFIX_PATH "${SRTC_MBEDTLS_ROOT_DIR}")
     endif ()
 
     # 3.4 for mbedtls_x509write_crt_set_serial_raw. 4.x moved the crypto into TF-PSA-Crypto and is not supported,
@@ -442,13 +445,13 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
     endif ()
     if (WIN32 AND SRTC_CRYPTO_LIB STREQUAL "MBEDTLS")
         list(APPEND LIBSRTP_CMAKE_ARGS
+                # libsrtp's mbedTLS backend has MSVC warnings, this only affects the test build of libsrtp
                 -DENABLE_WARNINGS_AS_ERRORS=OFF
-                -DMbedTLS_DIR=${MbedTLS_DIR}
-                -DMBEDTLS_INCLUDE_DIRS=${MbedTLS_ROOT_DIR}/include
-                -DMBEDTLS_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedtls.lib
-                -DMBEDX509_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedx509.lib
-                -DMBEDCRYPTO_LIBRARY=${MbedTLS_ROOT_DIR}/lib/mbedcrypto.lib
-                -DCMAKE_PREFIX_PATH=${MbedTLS_ROOT_DIR}
+                # libsrtp's FindMbedTLS.cmake uses these, CMAKE_PREFIX_PATH comes from CMAKE_CACHE_ARGS
+                -DMBEDTLS_INCLUDE_DIRS=${SRTC_MBEDTLS_ROOT_DIR}/include
+                -DMBEDTLS_LIBRARY=${SRTC_MBEDTLS_ROOT_DIR}/lib/mbedtls.lib
+                -DMBEDX509_LIBRARY=${SRTC_MBEDTLS_ROOT_DIR}/lib/mbedx509.lib
+                -DMBEDCRYPTO_LIBRARY=${SRTC_MBEDTLS_ROOT_DIR}/lib/mbedcrypto.lib
         )
     endif ()
     if (ANDROID)
@@ -506,8 +509,6 @@ if (NOT ANDROID AND SRTC_BUILD_TESTS)
             PRIVATE
             src/compat
             "${SRTP_INCLUDE_DIR}"
-            "${OPENSSL_INCLUDE_DIR}"
-            "${MBEDTLS_INCLUDE_DIRS}"
     )
 
     target_link_directories(
