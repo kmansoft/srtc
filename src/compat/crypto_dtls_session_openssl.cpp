@@ -40,9 +40,11 @@ constexpr long kMTU = 1200;
 // Max DTLS record plaintext size
 constexpr size_t kMaxReadSize = 16384;
 
+#if !defined(OPENSSL_IS_BORINGSSL)
 constexpr auto kMinRetransmitTimeout = std::chrono::milliseconds(50);
 constexpr auto kMaxInitialRetransmitTimeout = std::chrono::milliseconds(1000);
 constexpr auto kMaxRetransmitTimeout = std::chrono::milliseconds(2000);
+#endif
 
 struct SrtpProfileInfo {
     srtc::ProfileId id;
@@ -207,7 +209,9 @@ Error DtlsSession::init()
     }
 
     SSL_set_app_data(mSsl, this);
+#if !defined(OPENSSL_IS_BORINGSSL)
     DTLS_set_timer_cb(mSsl, timer_cb);
+#endif
 
     if (mIsSetupActive) {
         SSL_set_accept_state(mSsl);
@@ -472,7 +476,7 @@ void DtlsSession::onHandshakeCompleted()
     Task::cancelHelper(mTaskRetransmit);
 
     // The peer has to have a certificate, its fingerprint is checked by the caller.
-    // Both of these return a new reference, which we keep until freeSsl()
+    // Both return a new reference, which we keep until freeSsl()
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
     mPeerCertificate = SSL_get1_peer_certificate(mSsl);
 #else
@@ -572,6 +576,7 @@ void DtlsSession::onRetransmitTimeout()
     scheduleRetransmit();
 }
 
+#if !defined(OPENSSL_IS_BORINGSSL)
 unsigned int DtlsSession::timer_cb(SSL* ssl, unsigned int timer_us)
 {
     using namespace std::chrono;
@@ -596,6 +601,7 @@ unsigned int DtlsSession::timer_cb(SSL* ssl, unsigned int timer_us)
 
     return static_cast<unsigned int>(timeout.count());
 }
+#endif
 
 // OpenSSL BIO
 

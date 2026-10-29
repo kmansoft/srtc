@@ -105,7 +105,6 @@ void HmacSha1::final(uint8_t* out)
     unsigned int out_len;
     HMAC_Final(mCtx, out, &out_len);
 #endif
-
     assert(out_len == 20);
 #elif defined(SRTC_USE_MBEDTLS)
     [[maybe_unused]] const auto r = mbedtls_md_hmac_finish(&mCtx, out);

@@ -12,9 +12,7 @@
 #include "srtc/x509_certificate.h"
 
 #if defined(SRTC_USE_OPENSSL)
-#include <openssl/bio.h>
-#include <openssl/pem.h>
-#include <openssl/rsa.h>
+#include <openssl/evp.h>
 #include <openssl/x509.h>
 #elif defined(SRTC_USE_MBEDTLS)
 #include <mbedtls/ctr_drbg.h>
@@ -77,7 +75,6 @@ X509Certificate::X509Certificate()
 {
 	constexpr auto curveId = NID_X9_62_prime256v1;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	mImpl->pkey = nullptr;
 
 	const auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
@@ -85,13 +82,6 @@ X509Certificate::X509Certificate()
 	EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, curveId);
 
 	EVP_PKEY_keygen(ctx, &mImpl->pkey);
-#else
-	mImpl->pkey = EVP_PKEY_new();
-
-	auto ec = EC_KEY_new_by_curve_name(curveId);
-	EC_KEY_generate_key(ec);
-	EVP_PKEY_assign_EC_KEY(mImpl->pkey, ec);
-#endif
 
 	mImpl->x509 = X509_new();
 
@@ -125,9 +115,7 @@ X509Certificate::X509Certificate()
 	mImpl->fp256bin = { fpBuf, fpSize };
 	mImpl->fp256hex = bin_to_hex(fpBuf, fpSize);
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	EVP_PKEY_CTX_free(ctx);
-#endif
 }
 
 struct evp_pkey_st* X509Certificate::getPrivateKey() const

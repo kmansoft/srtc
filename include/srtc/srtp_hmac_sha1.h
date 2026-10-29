@@ -4,7 +4,11 @@
 #include <cstdint>
 
 #if defined(SRTC_USE_OPENSSL)
+#if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/evp.h>
+#else
 #include <openssl/hmac.h>
+#endif
 #elif defined(SRTC_USE_MBEDTLS)
 #include <mbedtls/md.h>
 #endif

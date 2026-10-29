@@ -17,15 +17,8 @@ namespace srtc::compat
 
 void initCryptoProvider()
 {
-    std::call_once(gInitFlag, [] {
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
-        // These are deprecated / removed in 3.x and 4.x
-        OpenSSL_add_all_algorithms();
-        OpenSSL_add_all_ciphers();
-        OpenSSL_add_all_digests();
-        ERR_load_crypto_strings();
-#endif
-    });
+    // Nothing to do for OpenSSL 3.0+
+    (void)gInitFlag;
 }
 
 CryptoProvider::CryptoProvider(ProfileId profileId)
