@@ -132,7 +132,9 @@ private:
     void scheduleRetransmit();
     void onRetransmitTimeout();
 
+#if !defined(OPENSSL_IS_BORINGSSL)
     static unsigned int timer_cb(struct ssl_st* ssl, unsigned int timer_us);
+#endif
 
     // OpenSSL BIO
     static int bio_read(struct bio_st* b, char* out, int outl);

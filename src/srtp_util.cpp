@@ -153,8 +153,6 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
 
     // Each block is a single AES-ECB encryption with the master key
 #if defined(SRTC_USE_OPENSSL)
-    uint8_t zeroes[16] = {};
-
     const EVP_CIPHER* cipher;
     switch (masterKey.size()) {
     case 16:
@@ -180,15 +178,19 @@ bool KeyDerivation::generate(const CryptoBytes& masterKey,
     }
 #endif
 
+#if defined(SRTC_USE_OPENSSL)
+    // AES-ECB: initialize once, each EVP_EncryptUpdate call is independent (no chaining)
+    if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), nullptr)) {
+        goto fail;
+    }
+#endif
+
     for (auto blockIndex = 0u; blockIndex < blockCount; blockIndex += 1) {
         input[14] = (blockIndex >> 8) & 0xff;
         input[15] = blockIndex & 0xff;
 
 #if defined(SRTC_USE_OPENSSL)
         int outlen = 0;
-        if (!EVP_EncryptInit_ex(ctx, cipher, nullptr, masterKey.data(), zeroes)) {
-            goto fail;
-        }
         if (!EVP_EncryptUpdate(ctx, outbuf, &outlen, input, 16)) {
             goto fail;
         }
